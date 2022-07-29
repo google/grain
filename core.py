@@ -11,3 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""Core Grain API."""
+
+# pylint: disable=g-multiple-import
+# pylint: disable=unused-import
+
+from ._src.core import random
+from ._src.core.config import config
+from ._src.core.constants import INDEX, RECORD_KEY, DATASET_INDEX, SEED, EPOCH
