@@ -11,11 +11,35 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Core Grain API."""
+"""APIs for using Grain on top of tf.data."""
 
 # pylint: disable=g-multiple-import
 # pylint: disable=unused-import
 
-from ._src.core import random
-from ._src.core.config import config
-from ._src.core.constants import INDEX, RECORD_KEY, DATASET_INDEX, SEED, EPOCH
+from ._src.tensorflow.batching import (
+    TfBatchFn,
+    TfNoBatchFn,
+    TfDefaultBatchFn,
+    TfPadDatasetAndBatchFn,
+)
+
+from ._src.tensorflow.data_loaders import (
+    load_from_tfds,
+    TfDataLoader,
+    TfMixtureDataLoader,
+)
+
+from ._src.tensorflow.data_sources import (
+    TfParseFn,
+    TfDataSource,
+    TfdsDataSource,
+)
+
+from ._src.tensorflow.index_dataset import (
+    Index,
+    FirstIndex,
+    NextIndex,
+    TfIndexSampler,
+    TfDefaultIndexSampler,
+    TfMixtureIndexSampler,
+)
