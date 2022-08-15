@@ -11,11 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Core Grain API."""
+"""Shared type definition for the Grain TF API."""
 
-# pylint: disable=g-multiple-import
-# pylint: disable=unused-import
+from typing import Sequence, Union
 
-from ._src.core import random
-from ._src.core.config import config
-from ._src.core.constants import INDEX, RECORD_KEY, DATASET_INDEX, SEED, EPOCH
+from clu import preprocess_spec
+
+LocalTransform = Union[preprocess_spec.MapTransform,
+                       preprocess_spec.FilterTransform,
+                       preprocess_spec.PreprocessOp]
+LocalTransforms = Sequence[LocalTransform]
