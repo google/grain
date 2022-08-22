@@ -11,3 +11,26 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""APIs for using Grain on top of tf.data."""
+
+# pylint: disable=g-multiple-import
+# pylint: disable=unused-import
+# pylint: disable=wildcard-import
+
+from ._src.tensorflow.batching import (
+    TfBatch,
+    TfBatchFn,
+    TfBatchNone,
+    TfBatchWithPadElements,
+)
+
+from ._src.tensorflow.index_dataset import (
+    Index,
+    FirstIndex,
+    NextIndex,
+    TfIndexSampler,
+    TfDefaultIndexSampler,
+    TfMixtureIndexSampler,
+)
+
+from .core import *
