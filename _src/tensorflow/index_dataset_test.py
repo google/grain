@@ -123,22 +123,22 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
     self.assertAllEqual(values,
                         # First epoch.
                         [{INDEX: 0, EPOCH: 1, RECORD_KEY: 0},
-                         {INDEX: 1, EPOCH: 1, RECORD_KEY: 2},
-                         {INDEX: 2, EPOCH: 1, RECORD_KEY: 5},
-                         {INDEX: 3, EPOCH: 1, RECORD_KEY: 4},
-                         {INDEX: 4, EPOCH: 1, RECORD_KEY: 3},
-                         {INDEX: 5, EPOCH: 1, RECORD_KEY: 1},
+                         {INDEX: 1, EPOCH: 1, RECORD_KEY: 5},
+                         {INDEX: 2, EPOCH: 1, RECORD_KEY: 1},
+                         {INDEX: 3, EPOCH: 1, RECORD_KEY: 3},
+                         {INDEX: 4, EPOCH: 1, RECORD_KEY: 4},
+                         {INDEX: 5, EPOCH: 1, RECORD_KEY: 2},
                          # Second epoch.
-                         {INDEX: 6, EPOCH: 2, RECORD_KEY: 4},
+                         {INDEX: 6, EPOCH: 2, RECORD_KEY: 5},
                          {INDEX: 7, EPOCH: 2, RECORD_KEY: 2},
-                         {INDEX: 8, EPOCH: 2, RECORD_KEY: 0},
-                         {INDEX: 9, EPOCH: 2, RECORD_KEY: 3},
+                         {INDEX: 8, EPOCH: 2, RECORD_KEY: 3},
+                         {INDEX: 9, EPOCH: 2, RECORD_KEY: 4},
                          {INDEX: 10, EPOCH: 2, RECORD_KEY: 1},
-                         {INDEX: 11, EPOCH: 2, RECORD_KEY: 5},
+                         {INDEX: 11, EPOCH: 2, RECORD_KEY: 0},
                          # Third epoch.
-                         {INDEX: 12, EPOCH: 3, RECORD_KEY: 1},
-                         {INDEX: 13, EPOCH: 3, RECORD_KEY: 2},
-                         {INDEX: 14, EPOCH: 3, RECORD_KEY: 4}])
+                         {INDEX: 12, EPOCH: 3, RECORD_KEY: 5},
+                         {INDEX: 13, EPOCH: 3, RECORD_KEY: 0},
+                         {INDEX: 14, EPOCH: 3, RECORD_KEY: 2}])
     # pyformat: enable
 
   @parameterized.parameters(
@@ -345,12 +345,12 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
     # pyformat: disable
     self.assertAllEqual(values,
                         [{INDEX: 0, EPOCH: 1, RECORD_KEY: 1},
-                         {INDEX: 2, EPOCH: 1, RECORD_KEY: 2},
-                         {INDEX: 4, EPOCH: 1, RECORD_KEY: 0},
+                         {INDEX: 2, EPOCH: 1, RECORD_KEY: 0},
+                         {INDEX: 4, EPOCH: 1, RECORD_KEY: 2},
                          # Second epoch.
-                         {INDEX: 6, EPOCH: 2, RECORD_KEY: 0},
-                         {INDEX: 8, EPOCH: 2, RECORD_KEY: 2},
-                         {INDEX: 10, EPOCH: 2, RECORD_KEY: 1}])
+                         {INDEX: 6, EPOCH: 2, RECORD_KEY: 2},
+                         {INDEX: 8, EPOCH: 2, RECORD_KEY: 1},
+                         {INDEX: 10, EPOCH: 2, RECORD_KEY: 0}])
     # pyformat: enable
     dataset = create_dataset(
         6,
@@ -361,13 +361,13 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
     values = list(dataset.take(6).as_numpy_iterator())
     # pyformat: disable
     self.assertAllEqual(values,
-                        [{INDEX: 1, EPOCH: 1, RECORD_KEY: 3},
+                        [{INDEX: 1, EPOCH: 1, RECORD_KEY: 5},
                          {INDEX: 3, EPOCH: 1, RECORD_KEY: 4},
-                         {INDEX: 5, EPOCH: 1, RECORD_KEY: 5},
+                         {INDEX: 5, EPOCH: 1, RECORD_KEY: 3},
                          # Second epoch.
                          {INDEX: 7, EPOCH: 2, RECORD_KEY: 3},
-                         {INDEX: 9, EPOCH: 2, RECORD_KEY: 5},
-                         {INDEX: 11, EPOCH: 2, RECORD_KEY: 4}])
+                         {INDEX: 9, EPOCH: 2, RECORD_KEY: 4},
+                         {INDEX: 11, EPOCH: 2, RECORD_KEY: 5}])
     # pyformat: enable
 
   def test_mixing_and_sharding(self):
