@@ -19,6 +19,7 @@
 
 from ._src.tensorflow.batching import (
     TfBatch,
+    TfBatchAndPack,
     TfBatchFn,
     TfBatchNone,
     TfBatchWithPadElements,
