@@ -71,10 +71,19 @@ class NextIndex:
 
 
 Index = Union[int, FirstIndex, NextIndex]
-
-
-tf_index_shuffle = tf.random.experimental.index_shuffle
 tf_random_fold_in = tf.random.experimental.stateless_fold_in
+
+
+def tf_index_shuffle(index, *, seed, max_index) -> tf.Tensor:
+  """Wrapper around tf.raw_ops.RandomIndexShuffle."""
+  # RandomIndexShuffle takes vector of size 3 as seed.
+  seed = tf.random.stateless_uniform([3],
+                                     seed,
+                                     minval=None,
+                                     maxval=None,
+                                     dtype=tf.int64)
+  return tf.raw_ops.RandomIndexShuffle(
+      index=index, seed=seed, max_index=max_index, rounds=8)
 
 
 def _shuffle(index: tf.Tensor, *, seed: tf.Tensor,
