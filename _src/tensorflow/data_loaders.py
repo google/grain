@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Data loaders create tf.data pipelines using DataSource and IndexSampler."""
-
+import collections
 import dataclasses
 import functools
 import itertools
@@ -25,6 +25,7 @@ from grain._src.core import sharding
 from grain._src.core.config import config
 import grain._src.core.constants as gc
 from grain._src.tensorflow import batching
+from grain._src.tensorflow import data_iterators
 from grain._src.tensorflow import data_sources
 from grain._src.tensorflow import index_dataset
 from grain._src.tensorflow.types import LocalTransforms
@@ -45,7 +46,7 @@ class _ParseFnTransformation:
     return self.parse_fn(features.pop(gc.RECORD)) | features
 
 
-class TfDataLoader:
+class TfDataLoader(collections.abc.Iterable):
   """Deterministic data loader for a single data source."""
 
   def __init__(self,
@@ -53,6 +54,7 @@ class TfDataLoader:
                source: data_sources.TfDataSource,
                sampler: index_dataset.TfIndexSampler,
                transformations: LocalTransforms = (),
+               drop_grain_meta_features: bool = False,
                batch_fn: batching.TfBatchFn):
     """Initializes a new data loader.
 
@@ -62,13 +64,23 @@ class TfDataLoader:
         the data source.
       transformations: Optional list of transformations to apply before
         batching.
+      drop_grain_meta_features: If True the Grain meta features will be drop
+        by the iterator.
       batch_fn: Function to use for batching the dataset. To disable batching
         pass `grain.TfBatchNone()`.
     """
     self.source = source
     self.sampler = sampler
     self._transformations = transformations
+    self._drop_grain_meta_features = drop_grain_meta_features
     self._batch_fn = batch_fn
+
+  @property
+  def drop_grain_meta_features(self) -> bool:
+    return self._drop_grain_meta_features
+
+  def __iter__(self):
+    return data_iterators.DataIterator(self)
 
   def as_dataset(self, *, start_index: index_dataset.Index) -> tf.data.Dataset:
     """Returns a the tf.data input pipeline.
@@ -170,7 +182,7 @@ def load_from_tfds(
       batch_fn=batch_fn)
 
 
-class TfMixtureDataLoader:
+class TfMixtureDataLoader(collections.abc.Iterable):
   """Data loader for loading mixtures deterministically.
 
   Limitations:
@@ -185,6 +197,7 @@ class TfMixtureDataLoader:
                transformations_per_source: Sequence[LocalTransforms],
                sampler: index_dataset.TfIndexSampler,
                transformations: LocalTransforms = (),
+               drop_grain_meta_features: bool = False,
                batch_fn: batching.TfBatchFn):
     """Initializes a new data loader.
 
@@ -195,6 +208,8 @@ class TfMixtureDataLoader:
         records within the dataset.
       transformations: Optional list of transformations to apply before
         batching.
+      drop_grain_meta_features: If True the Grain meta features will be drop
+        by the iterator.
       batch_fn: Function to use for batching the dataset. To disable batching
         pass `grain.TfBatchNone()`.
     """
@@ -215,7 +230,15 @@ class TfMixtureDataLoader:
         transformations_per_source)
 
     self._transformations = transformations
+    self._drop_grain_meta_features = drop_grain_meta_features
     self._batch_fn = batch_fn
+
+  @property
+  def drop_grain_meta_features(self) -> bool:
+    return self._drop_grain_meta_features
+
+  def __iter__(self):
+    return data_iterators.DataIterator(self)
 
   @property
   def _num_datasets(self):
