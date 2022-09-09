@@ -48,7 +48,7 @@ that records are keyed by an integer in [0, num_records_in_dataset).
 **For examples of the output for read the test cases.**
 """
 import dataclasses
-from typing import Sequence, List, Tuple, Union, Optional, Protocol
+from typing import Any, Sequence, List, Mapping, Tuple, Union, Optional, Protocol
 
 from grain._src.core import constants
 from grain._src.core import sharding
@@ -71,10 +71,19 @@ class NextIndex:
 
 
 Index = Union[int, FirstIndex, NextIndex]
-
-
-tf_index_shuffle = tf.random.experimental.index_shuffle
 tf_random_fold_in = tf.random.experimental.stateless_fold_in
+
+
+def tf_index_shuffle(index, *, seed, max_index) -> tf.Tensor:
+  """Wrapper around tf.raw_ops.RandomIndexShuffle."""
+  # RandomIndexShuffle takes vector of size 3 as seed.
+  seed = tf.random.stateless_uniform([3],
+                                     seed,
+                                     minval=None,
+                                     maxval=None,
+                                     dtype=tf.int64)
+  return tf.raw_ops.RandomIndexShuffle(
+      index=index, seed=seed, max_index=max_index, rounds=8)
 
 
 def _shuffle(index: tf.Tensor, *, seed: tf.Tensor,
@@ -552,6 +561,9 @@ class TfIndexSampler(Protocol):
   def get_index_dataset(self, start_index: Index) -> tf.data.Dataset:
     """Returns the index dataset starting at start_index."""
 
+  def as_dict(self) -> Mapping[str, Any]:
+    """Returns the configuration of the sampler as dictionary."""
+
 
 @dataclasses.dataclass(frozen=True)
 class TfDefaultIndexSampler:
@@ -566,6 +578,14 @@ class TfDefaultIndexSampler:
   num_epochs: Optional[int] = None
   seed: Optional[grain_random.RNGKeyLike] = None
 
+  def as_dict(self):
+    """Returns the configuration of the sampler as dictionary."""
+    result = dataclasses.asdict(self)
+    if self.seed:
+      # Convert seed to list in case it's a tuple or np.ndarray.
+      result["seed"] = list(result["seed"])
+    return result
+
   def get_index_dataset(self, start_index: Index) -> tf.data.Dataset:
     return _create_index_dataset(
         self.num_records,
@@ -576,6 +596,9 @@ class TfDefaultIndexSampler:
         shard_options=self.shard_options,
         emit_epoch=True,
         emit_seed=self.seed is not None)
+
+  def __repr__(self) -> str:
+    return f"TfDefaultIndexSampler({self.as_dict()})"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -591,6 +614,14 @@ class TfMixtureIndexSampler:
   shuffle: bool = False
   seed: Optional[grain_random.RNGKeyLike] = None
 
+  def as_dict(self):
+    """Returns the configuration of the sampler as dictionary."""
+    result = dataclasses.asdict(self)
+    if self.seed:
+      # Convert seed to list in case it's a tuple or np.ndarray.
+      result["seed"] = list(result["seed"])
+    return result
+
   def get_index_dataset(self, start_index: Index) -> tf.data.Dataset:
     return _create_index_dataset(
         self.records_per_dataset,
@@ -601,3 +632,6 @@ class TfMixtureIndexSampler:
         shard_options=self.shard_options,
         emit_epoch=True,
         emit_seed=self.seed is not None)
+
+  def __repr__(self) -> str:
+    return f"TfMixtureIndexSampler({self.as_dict()})"

@@ -77,3 +77,6 @@ class TfArrayRecordDataSource:
   # For easy integration with Grain. Subclasses should override this.
   def get_parse_fn(self) -> Optional[TfParseFn]:
     return None
+
+  def __repr__(self) -> str:
+    return f"TfArrayRecordDataSource({self._paths!r})"
