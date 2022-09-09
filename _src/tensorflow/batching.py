@@ -19,9 +19,10 @@ to the dataset or packing multiple small elemnts together).
 """
 
 import dataclasses
-from typing import Callable
+from typing import Any, Callable, Mapping
 
 from grain._src.core import constants
+from grain._src.tensorflow.ops import batch_and_pack
 from jax.experimental import multihost_utils
 import tensorflow as tf
 
@@ -100,3 +101,45 @@ class TfBatchWithPadElements:
         drop_remainder=True,
         num_parallel_calls=self.num_parallel_calls,
         deterministic=True)
+
+
+@dataclasses.dataclass(frozen=True)
+class TfBatchAndPack:
+  """Fused operation that batches to packed examples.
+
+  See batch_and_pack.py.
+  """
+
+  batch_size: int
+  sequence_lengths: Any  # Must have the same structure as dataset elements.
+
+  segment_ids_suffix: str = "_segment_ids"
+  positions_suffix: str = "_positions"
+
+  def __call__(self, ds: tf.data.Dataset) -> tf.data.Dataset:
+    if not isinstance(ds.element_spec, Mapping):
+      raise ValueError(
+          "TfBatchAndPack expects elements of the dataset to be dictionaries "
+          f"but got {ds.element_spec()}.")
+    for k, v in ds.element_spec():
+      if not isinstance(v, tf.Tensor):
+        raise ValueError(
+            "TfBatchAndPack expects elements of the dataset to be "
+            f"dictionaries containing tensors but got {v} for feature {k}.")
+
+    ds = batch_and_pack.BatchAndPackDataset(
+        ds, batch_size=self.batch_size, sequence_lengths=self.sequence_lengths)
+
+    # BatchAndPackDataset will replace each feature with 3 features:
+    # (values, segment_ids, positions). This is very generic but here we convert
+    # back into a flat dictionary.
+    def flatten_dict(features):
+      result = {}
+      for k, (values, segment_ids, positions) in features.items():
+        result[k] = values
+        result[f"{k}{self.segment_ids_suffix}"] = segment_ids
+        result[f"{k}{self.positions_suffix}"] = positions
+      return result
+
+    ds = ds.map(flatten_dict, num_parallel_calls=tf.data.AUTOTUNE)
+    return ds
