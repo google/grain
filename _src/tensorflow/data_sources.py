@@ -135,3 +135,8 @@ class TfdsDataSource:
     # immutabledicts
     decoders = dict(self._decoders) if self._decoders else None
     return _ParseAndDecodeExample(self._tfds_info.features, decoders=decoders)
+
+  def __repr__(self) -> str:
+    return (f"TfdsDataSource(builder_directory={self._tfds_info.data_dir!r}, "
+            f"split={self._split!r}, "
+            f"decoders={self._decoders!r})")
