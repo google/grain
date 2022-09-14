@@ -92,7 +92,7 @@ static Status ArrayRecordLookupShape(InferenceContext* c) {
   TF_RETURN_IF_ERROR(c->WithRankAtMost(c->input(1), 1, &input_shape));
   // Set output shape.
   c->set_output(0, input_shape);
-  return Status::OK();
+  return OkStatus();
 }
 
 REGISTER_OP("ArrayRecordLookup")
@@ -142,7 +142,7 @@ Status GetReadInstructions(const std::string& path,
         std::forward_as_tuple(filename));
     read_instructions.push_back({filename, 0, reader.NumRecords()});
   }
-  return Status::OK();
+  return OkStatus();
 }
 
 // Resource that holds the file reader objects and implements the lookup logic.
@@ -163,8 +163,7 @@ class ArrayRecordResource : public ResourceBase {
       if (RE2::FullMatch(path, pattern, &filename, &start, &end)) {
         read_instructions_.push_back({filename, start, end});
       } else {
-        std::string path_copy = path;
-        TF_RETURN_IF_ERROR(GetReadInstructions(path_copy, read_instructions_));
+        TF_RETURN_IF_ERROR(GetReadInstructions(path, read_instructions_));
       }
     }
     total_num_records_ = 0;
@@ -172,7 +171,7 @@ class ArrayRecordResource : public ResourceBase {
       total_num_records_ += ri.NumRecords();
     }
     readers_.resize(read_instructions_.size());
-    return Status::OK();
+    return OkStatus();
   }
 
   string DebugString() const override {
@@ -248,7 +247,7 @@ class ArrayRecordResource : public ResourceBase {
     context->device()->tensorflow_cpu_worker_threads()->workers->ParallelFor(
         readers_with_reads.size(), scheduling_params, perform_lookups);
 
-    return Status::OK();
+    return OkStatus();
   }
 
  private:
@@ -280,7 +279,8 @@ class ArrayRecordResource : public ResourceBase {
       // Set buffer size to 32 KiB. The default of 1 MiB doesn't work well for
       // random access pattern when individual records are small (<= 100 KiB).
       file_reader_options.set_buffer_size(1 << 15);
-      const auto& filename = read_instructions_[reader_index].filename;
+      // Copy is on purpose.
+      std::string filename = read_instructions_[reader_index].filename;
       readers_[reader_index] = std::make_unique<
           array_record::ArrayRecordReader<riegeli::FileReader<>>>(
           std::forward_as_tuple(filename, file_reader_options),
