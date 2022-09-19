@@ -19,6 +19,7 @@ import pathlib
 from typing import Any, Callable, Mapping, Optional, Sequence, Union
 
 from etils import epath
+from grain._src.core import usage_logging
 from grain._src.tensorflow.ops import gen_array_record_ops
 import tensorflow as tf
 
@@ -66,6 +67,7 @@ class TfArrayRecordDataSource:
     self._shared_name = shared_name
     self._handle = gen_array_record_ops.array_record_resource_handle(
         paths=self._paths, shared_name=self._shared_name)
+    usage_logging.log_event("TfArrayRecordDataSource")
 
   def __len__(self) -> int:
     t = gen_array_record_ops.array_record_num_records(self._handle)
@@ -77,3 +79,6 @@ class TfArrayRecordDataSource:
   # For easy integration with Grain. Subclasses should override this.
   def get_parse_fn(self) -> Optional[TfParseFn]:
     return None
+
+  def __repr__(self) -> str:
+    return f"TfArrayRecordDataSource({self._paths!r})"
