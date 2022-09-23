@@ -19,9 +19,17 @@
 
 from ._src.tensorflow.batching import (
     TfBatch,
+    TfBatchAndPack,
     TfBatchFn,
     TfBatchNone,
     TfBatchWithPadElements,
+)
+
+from ._src.tensorflow.checkpoint_handlers import OrbaxCheckpointHandler
+
+from ._src.tensorflow.data_iterators import (
+    IteratorOptions,
+    TfDataIterator,
 )
 
 from ._src.tensorflow.data_loaders import (
