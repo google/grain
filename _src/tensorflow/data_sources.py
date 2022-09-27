@@ -26,6 +26,7 @@ import dataclasses
 from typing import Any, Callable, Mapping, Optional, Protocol
 
 from etils import epath
+from grain._src.core import usage_logging
 from grain._src.tensorflow.ops import array_record_data_source
 import tensorflow as tf
 import tensorflow_datasets as tfds
@@ -103,6 +104,7 @@ class TfdsDataSource:
     else:
       raise NotImplementedError("No random access data source for file format "
                                 f"{dataset_info.file_format}.")
+    usage_logging.log_event("TfdsDataSource", tag_2=file_format.name)
 
   @classmethod
   def from_name(cls,
@@ -135,3 +137,8 @@ class TfdsDataSource:
     # immutabledicts
     decoders = dict(self._decoders) if self._decoders else None
     return _ParseAndDecodeExample(self._tfds_info.features, decoders=decoders)
+
+  def __repr__(self) -> str:
+    return (f"TfdsDataSource(builder_directory={self._tfds_info.data_dir!r}, "
+            f"split={self._split!r}, "
+            f"decoders={self._decoders!r})")
