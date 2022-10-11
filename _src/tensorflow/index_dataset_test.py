@@ -13,6 +13,7 @@
 # limitations under the License.
 """Unit tests for the index_dataset module."""
 import collections
+import contextlib
 import functools
 import itertools
 from typing import List, Sequence, Union
@@ -37,7 +38,7 @@ def create_dataset(records_per_dataset: Union[int, Sequence[int]],
                    /,
                    *,
                    emit_epoch: bool = True,
-                   seed=(32, 73),
+                   seed=32,
                    **kwargs):
   """Shortcut for create_index_dataset() that sets emit_epoch and seed."""
   if "shard_options" not in kwargs:
@@ -106,6 +107,11 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
                          {INDEX: 7, EPOCH: 2, RECORD_KEY: 3}])
     # pyformat: enable
 
+  def test_num_epochs_none(self):
+    """Setting the number of epochs yields a finite dataset."""
+    dataset = create_dataset(4, num_epochs=None)
+    self.assertEqual(dataset.cardinality(), tf.data.INFINITE_CARDINALITY)
+
   def test_num_epochs_with_mixture_fails(self):
     """Mixing datasets with fixed number epochs is not allowed."""
     with self.assertRaisesRegex(
@@ -117,28 +123,22 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
 
   def test_shuffle_simple(self):
     """Shuffling, no sharding, no mixing."""
-    dataset = create_dataset(6, shuffle=True, seed=(32, 73))
-    values = list(dataset.take(15).as_numpy_iterator())
+    dataset = create_dataset(5, shuffle=True, seed=32)
+    values = list(dataset.take(10).as_numpy_iterator())
     # pyformat: disable
     self.assertAllEqual(values,
                         # First epoch.
-                        [{INDEX: 0, EPOCH: 1, RECORD_KEY: 0},
-                         {INDEX: 1, EPOCH: 1, RECORD_KEY: 2},
-                         {INDEX: 2, EPOCH: 1, RECORD_KEY: 5},
-                         {INDEX: 3, EPOCH: 1, RECORD_KEY: 4},
-                         {INDEX: 4, EPOCH: 1, RECORD_KEY: 3},
-                         {INDEX: 5, EPOCH: 1, RECORD_KEY: 1},
+                        [{INDEX: 0, EPOCH: 1, RECORD_KEY: 4},
+                         {INDEX: 1, EPOCH: 1, RECORD_KEY: 3},
+                         {INDEX: 2, EPOCH: 1, RECORD_KEY: 2},
+                         {INDEX: 3, EPOCH: 1, RECORD_KEY: 1},
+                         {INDEX: 4, EPOCH: 1, RECORD_KEY: 0},
                          # Second epoch.
-                         {INDEX: 6, EPOCH: 2, RECORD_KEY: 4},
-                         {INDEX: 7, EPOCH: 2, RECORD_KEY: 2},
-                         {INDEX: 8, EPOCH: 2, RECORD_KEY: 0},
-                         {INDEX: 9, EPOCH: 2, RECORD_KEY: 3},
-                         {INDEX: 10, EPOCH: 2, RECORD_KEY: 1},
-                         {INDEX: 11, EPOCH: 2, RECORD_KEY: 5},
-                         # Third epoch.
-                         {INDEX: 12, EPOCH: 3, RECORD_KEY: 1},
-                         {INDEX: 13, EPOCH: 3, RECORD_KEY: 2},
-                         {INDEX: 14, EPOCH: 3, RECORD_KEY: 4}])
+                         {INDEX: 5, EPOCH: 2, RECORD_KEY: 2},
+                         {INDEX: 6, EPOCH: 2, RECORD_KEY: 0},
+                         {INDEX: 7, EPOCH: 2, RECORD_KEY: 1},
+                         {INDEX: 8, EPOCH: 2, RECORD_KEY: 3},
+                         {INDEX: 9, EPOCH: 2, RECORD_KEY: 4}])
     # pyformat: enable
 
   @parameterized.parameters(
@@ -162,27 +162,60 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
         self.assertNotIn(epoch, seen_orders)
         seen_orders.add(epoch)
 
-  @parameterized.parameters([1, 2])
-  def test_shuffle_other_argument_types(self, shard_count: int):
+  @parameterized.parameters(
+      itertools.product(
+          [1, 2],
+          [
+              # No context.
+              (None, None),
+              # Each separately.
+              ("custom", None),
+              ("threefry2x32", None),
+              ("rbg", None),
+              # implementation frist, custom afterwards.
+              ("threefry2x32", "custom"),
+              ("rbg", "custom"),
+              # custom first, implementation afterwards.
+              ("custom", "threefry2x32"),
+              ("custom", "rbg"),
+          ]))
+  def test_shuffle_other_argument_types(self, shard_count: int, contexts):
     """Test we can pass TF and JAX random keys."""
-    tuple_seed = (32, 73)
-    # Seed is a tensor.
-    tf_seed, _ = tf.unstack(tf.random.experimental.stateless_split((32, 73)))
-    # Seed is a JAX PRNGKey.
-    jax_seed = jax.random.PRNGKey(32)
-    for seed in [tuple_seed, tf_seed, jax_seed]:
-      dataset = create_dataset(
-          6,
-          shuffle=True,
-          seed=seed,
-          shard_options=ShardOptions(0, shard_count))
-      values = list(dataset.take(6).as_numpy_iterator())
-      if shard_count == 1:
-        self.assertCountEqual([r[RECORD_KEY] for r in values],
-                              [0, 1, 2, 3, 4, 5])
-      else:
-        self.assertCountEqual([r[RECORD_KEY] for r in values],
-                              [0, 0, 1, 1, 2, 2])
+
+    def get_ctx(name):
+      if name is None:
+        return contextlib.nullcontext()
+      if name == "threefry2x32":
+        return jax.default_prng_impl("threefry2x32")
+      if name == "rbg":
+        return jax.default_prng_impl("rbg")
+      if name == "custom":
+        return jax.enable_custom_prng()
+      assert False
+
+    with get_ctx(contexts[0]):
+      with get_ctx(contexts[1]):
+        int_seed = 42
+        tuple_seed = (32, 73)
+        # Seed is a tensor.
+        tf_seed, _ = tf.unstack(
+            tf.random.experimental.stateless_split((32, 73)))
+        # Seed is a JAX PRNGKey.
+        jax_seed = jax.random.PRNGKey(32)
+        # Users might have custom PRNG enabled. We test both combinations.
+        for seed in [int_seed, tuple_seed, tf_seed, jax_seed]:
+          dataset = create_dataset(
+              6,
+              shuffle=True,
+              seed=seed,
+              shard_options=ShardOptions(0, shard_count))
+          values = list(dataset.take(6).as_numpy_iterator())
+          if shard_count == 1:
+            self.assertCountEqual([r[RECORD_KEY] for r in values],
+                                  [0, 1, 2, 3, 4, 5])
+          else:
+            self.assertCountEqual([r[RECORD_KEY] for r in values],
+                                  [0, 0, 1, 1, 2, 2])
 
   def test_sharding_drop_remainder(self):
     dataset = create_dataset(
@@ -340,34 +373,34 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
 
   def test_shuffle_and_sharding(self):
     dataset = create_dataset(
-        6, shuffle=True, seed=(32, 73), shard_options=ShardOptions(0, 2))
+        6, shuffle=True, seed=32, shard_options=ShardOptions(0, 2))
     values = list(dataset.take(6).as_numpy_iterator())
     # pyformat: disable
     self.assertAllEqual(values,
-                        [{INDEX: 0, EPOCH: 1, RECORD_KEY: 1},
-                         {INDEX: 2, EPOCH: 1, RECORD_KEY: 2},
-                         {INDEX: 4, EPOCH: 1, RECORD_KEY: 0},
+                        [{INDEX: 0, EPOCH: 1, RECORD_KEY: 2},
+                         {INDEX: 2, EPOCH: 1, RECORD_KEY: 0},
+                         {INDEX: 4, EPOCH: 1, RECORD_KEY: 1},
                          # Second epoch.
-                         {INDEX: 6, EPOCH: 2, RECORD_KEY: 0},
-                         {INDEX: 8, EPOCH: 2, RECORD_KEY: 2},
-                         {INDEX: 10, EPOCH: 2, RECORD_KEY: 1}])
+                         {INDEX: 6, EPOCH: 2, RECORD_KEY: 2},
+                         {INDEX: 8, EPOCH: 2, RECORD_KEY: 1},
+                         {INDEX: 10, EPOCH: 2, RECORD_KEY: 0}])
     # pyformat: enable
     dataset = create_dataset(
         6,
         shuffle=True,
-        seed=(42, 73),
+        seed=42,
         start_index=1,
         shard_options=ShardOptions(1, 2))
     values = list(dataset.take(6).as_numpy_iterator())
     # pyformat: disable
     self.assertAllEqual(values,
-                        [{INDEX: 1, EPOCH: 1, RECORD_KEY: 3},
-                         {INDEX: 3, EPOCH: 1, RECORD_KEY: 4},
-                         {INDEX: 5, EPOCH: 1, RECORD_KEY: 5},
+                        [{INDEX: 1, EPOCH: 1, RECORD_KEY: 4},
+                         {INDEX: 3, EPOCH: 1, RECORD_KEY: 5},
+                         {INDEX: 5, EPOCH: 1, RECORD_KEY: 3},
                          # Second epoch.
-                         {INDEX: 7, EPOCH: 2, RECORD_KEY: 3},
-                         {INDEX: 9, EPOCH: 2, RECORD_KEY: 5},
-                         {INDEX: 11, EPOCH: 2, RECORD_KEY: 4}])
+                         {INDEX: 7, EPOCH: 2, RECORD_KEY: 5},
+                         {INDEX: 9, EPOCH: 2, RECORD_KEY: 4},
+                         {INDEX: 11, EPOCH: 2, RECORD_KEY: 3}])
     # pyformat: enable
 
   def test_mixing_and_sharding(self):
@@ -501,7 +534,7 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
   def test_determinism(self, records_per_dataset, proportions, shuffle: bool,
                        shard_count: int):
     """Creating the dataset twice gives the same result."""
-    seed = (3, 84) if shuffle else None
+    seed = 3 if shuffle else None
     dataset = create_dataset(
         records_per_dataset,
         proportions=proportions,
@@ -524,7 +557,7 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
   def test_start_index(self, records_per_dataset, proportions, shuffle: bool,
                        shard_count: int):
     """We can start anyway and get the same elements."""
-    seed = (3, 84) if shuffle else None
+    seed = 3 if shuffle else None
     dataset = create_dataset(
         records_per_dataset,
         proportions=proportions,
