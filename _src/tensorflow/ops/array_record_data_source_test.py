@@ -16,6 +16,7 @@ import pathlib
 import random
 
 from absl import flags
+from absl.testing import parameterized
 from grain._src.tensorflow.ops import array_record_data_source
 import tensorflow as tf
 
@@ -29,7 +30,7 @@ def _get_value(serialized_example):
   return example.features.feature["value"].bytes_list.value[0].decode("utf-8")
 
 
-class TfArrayRecordTest(tf.test.TestCase):
+class TfArrayRecordTest(tf.test.TestCase, parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
@@ -65,8 +66,10 @@ class TfArrayRecordTest(tf.test.TestCase):
       actual_value = _get_value(record.numpy())
       self.assertEqual(actual_value, chr(97 + i))
 
-  def test_getitem_random_order(self):
-    ar = TfArrayRecordDataSource(self.testdata_dir / "alphabet.array_record@2")
+  @parameterized.parameters([False, True])
+  def test_getitem_random_order(self, cache: bool):
+    ar = TfArrayRecordDataSource(
+        self.testdata_dir / "alphabet.array_record@2", cache=cache)
     expected_values = [(i, chr(97 + i)) for i in range(26)]
     random.shuffle(expected_values)
     for i, expected_value in expected_values:
