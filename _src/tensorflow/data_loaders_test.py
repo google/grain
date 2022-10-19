@@ -70,11 +70,11 @@ class DataLoadersTest(tf.test.TestCase, parameterized.TestCase):
           shard_options=sharding.NoSharding())
 
   @parameterized.parameters([
-      (True, (12, 34), None),
-      (True, (12, 34), 7),
-      (False, (12, 34), 7),
+      (True, 34, None),
+      (True, 34, 7),
+      (False, 34, 7),
   ])
-  def test_load_from_tfds_sampler(self, shuffle: bool, seed: tuple[int, int],
+  def test_load_from_tfds_sampler(self, shuffle: bool, seed: int,
                                   num_epochs: Optional[int]):
     with mock.patch.object(tfds.core, "DatasetInfo") as tfds_info_mock:
       tfds_info_mock.file_format = (
