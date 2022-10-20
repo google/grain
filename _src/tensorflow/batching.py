@@ -17,33 +17,35 @@ Batching is usually the last step in an input pipeline. In certain use cases
 it can be useful to fuse other operations with batching (e.g padding elements
 to the dataset or packing multiple small elemnts together).
 """
-
 import dataclasses
-from typing import Callable
+from typing import Any, Mapping, Union
 
 from grain._src.core import constants
+from grain._src.core import usage_logging
+from grain._src.tensorflow import transforms
+from grain._src.tensorflow.ops import batch_and_pack
 from jax.experimental import multihost_utils
 import tensorflow as tf
 
-TfBatchFn = Callable[[tf.data.Dataset], tf.data.Dataset]
 
-
-class TfBatchNone:
+class TfBatchNone(transforms.GlobalTfDataTransform):
   """Dummy function to not perform batching."""
 
-  def __call__(self, ds: tf.data.Dataset) -> tf.data.Dataset:
+  def apply_to_dataset(self, ds: tf.data.Dataset) -> tf.data.Dataset:
+    usage_logging.log_event("TfBatchNone")
     return ds
 
 
 @dataclasses.dataclass(frozen=True)
-class TfBatch:
+class TfBatch(transforms.GlobalTfDataTransform):
   """Simple batching operation. See tf.data.Dataset.batch() for details."""
 
   batch_size: int
   drop_remainder: bool
   num_parallel_calls: int = tf.data.AUTOTUNE
 
-  def __call__(self, ds: tf.data.Dataset) -> tf.data.Dataset:
+  def apply_to_dataset(self, ds: tf.data.Dataset) -> tf.data.Dataset:
+    usage_logging.log_event("TfBatch")
     return ds.batch(
         self.batch_size,
         drop_remainder=self.drop_remainder,
@@ -52,7 +54,7 @@ class TfBatch:
 
 
 @dataclasses.dataclass(frozen=True)
-class TfBatchWithPadElements:
+class TfBatchWithPadElements(transforms.GlobalTfDataTransform):
   """Pad dataset to have the same cardinality across all hosts before batching.
 
   This is mostly useful for evaluation in a multihost environment (like TPU
@@ -67,7 +69,8 @@ class TfBatchWithPadElements:
   mask_key: str
   num_parallel_calls: int = tf.data.AUTOTUNE
 
-  def __call__(self, ds: tf.data.Dataset) -> tf.data.Dataset:
+  def apply_to_dataset(self, ds: tf.data.Dataset) -> tf.data.Dataset:
+    usage_logging.log_event("TfBatchWithPadElements")
     local_cardinality = ds.cardinality().numpy()
     if local_cardinality == tf.data.UNKNOWN_CARDINALITY:
       raise ValueError(
@@ -100,3 +103,67 @@ class TfBatchWithPadElements:
         drop_remainder=True,
         num_parallel_calls=self.num_parallel_calls,
         deterministic=True)
+
+
+@dataclasses.dataclass(frozen=True)
+class TfBatchAndPack(transforms.GlobalTfDataTransform):
+  """Fused operation that batches to packed examples.
+
+  See batch_and_pack.py.
+
+  The op has special behavior for the grain.INDEX feature and will always pack
+  it, even you it's not included in sequence_lengths. Grains needs the
+  grain.INDEX feature to track progress.
+  """
+
+  batch_size: int
+  sequence_lengths: Any  # Must have the same structure as dataset elements.
+
+  segment_ids_suffix: str = "_segment_ids"
+  positions_suffix: str = "_positions"
+
+  def apply_to_dataset(self, ds: tf.data.Dataset) -> tf.data.Dataset:
+    usage_logging.log_event("TfBatchAndPack")
+    if not isinstance(ds.element_spec, Mapping):
+      raise ValueError(
+          "TfBatchAndPack expects elements of the dataset to be dictionaries "
+          f"but got {ds.element_spec}.")
+    for k, v in ds.element_spec.items():
+      if not isinstance(v, tf.TensorSpec):
+        raise ValueError(
+            "TfBatchAndPack expects elements of the dataset to be "
+            f"dictionaries containing tensors but got {v} for feature {k}.")
+
+    sequence_lengths = dict(self.sequence_lengths)
+    if constants.INDEX not in sequence_lengths:
+      sequence_lengths[constants.INDEX] = max(tf.nest.flatten(sequence_lengths))
+    drop_features = set()
+    for k in constants.META_FEATURES:
+      if k in ds.element_spec and k not in sequence_lengths:
+        drop_features.add(k)
+    if drop_features:
+      ds = ds.map(
+          lambda d: {k: v for k, v in d.items() if k not in drop_features},
+          num_parallel_calls=tf.data.AUTOTUNE)
+
+    ds = batch_and_pack.BatchAndPackDataset(
+        ds, batch_size=self.batch_size, sequence_lengths=sequence_lengths)
+
+    # BatchAndPackDataset will replace each feature with 3 features:
+    # (values, segment_ids, positions). This is very generic but here we convert
+    # back into a flat dictionary.
+    def flatten_dict(features):
+      result = {}
+      for k, (values, segment_ids, positions) in features.items():
+        result[k] = values
+        # For the INDEX feature we don't need the segmend IDs and positions.
+        if k != constants.INDEX:
+          result[f"{k}{self.segment_ids_suffix}"] = segment_ids
+          result[f"{k}{self.positions_suffix}"] = positions
+      return result
+
+    ds = ds.map(flatten_dict, num_parallel_calls=tf.data.AUTOTUNE)
+    return ds
+
+
+TfBatchFn = Union[TfBatchNone, TfBatch, TfBatchWithPadElements, TfBatchAndPack]
