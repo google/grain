@@ -16,8 +16,8 @@ from typing import Mapping, Optional
 from unittest import mock
 from absl.testing import parameterized
 
+from grain._src.core import constants
 from grain._src.core import sharding
-from grain._src.core.constants import DATASET_INDEX, RECORD_KEY  # pylint: disable=g-multiple-import
 from grain._src.tensorflow import data_loaders
 import numpy as np
 import tensorflow as tf
@@ -41,8 +41,10 @@ class DataLoadersTest(tf.test.TestCase, parameterized.TestCase):
     records_per_dataset = (3, 8, 5)
     num_records = sum(records_per_dataset)
     index = {
-        RECORD_KEY: np.concatenate((range(3), range(8), range(5)), axis=0),
-        DATASET_INDEX: np.asarray(3 * [0] + 8 * [1] + 5 * [2], np.int64),
+        constants.RECORD_KEY:
+            np.concatenate((range(3), range(8), range(5)), axis=0),
+        constants.DATASET_INDEX:
+            np.asarray(3 * [0] + 8 * [1] + 5 * [2], np.int64),
     }
     index_ds = _dict_to_dataset(index)
     actual_ds = data_loaders._add_global_record_key(
@@ -70,11 +72,11 @@ class DataLoadersTest(tf.test.TestCase, parameterized.TestCase):
           shard_options=sharding.NoSharding())
 
   @parameterized.parameters([
-      (True, (12, 34), None),
-      (True, (12, 34), 7),
-      (False, (12, 34), 7),
+      (True, 34, None),
+      (True, 34, 7),
+      (False, 34, 7),
   ])
-  def test_load_from_tfds_sampler(self, shuffle: bool, seed: tuple[int, int],
+  def test_load_from_tfds_sampler(self, shuffle: bool, seed: int,
                                   num_epochs: Optional[int]):
     with mock.patch.object(tfds.core, "DatasetInfo") as tfds_info_mock:
       tfds_info_mock.file_format = (
