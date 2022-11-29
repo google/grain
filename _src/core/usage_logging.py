@@ -10,14 +10,9 @@
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
-# limitations under the License.
-"""Shared type definition for the Grain TF API."""
+# limitations under the License
+"""Internal usage logging."""
 
-from typing import Sequence, Union
 
-from clu import preprocess_spec
-
-LocalTransform = Union[preprocess_spec.MapTransform,
-                       preprocess_spec.FilterTransform,
-                       preprocess_spec.PreprocessOp]
-LocalTransforms = Sequence[LocalTransform]
+def log_event(tag: str, *, tag_2: str = "", tag_3: str = "") -> None:
+  return
