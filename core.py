@@ -18,5 +18,5 @@
 
 from ._src.core import random
 from ._src.core.config import config
-from ._src.core.constants import INDEX, RECORD_KEY, DATASET_INDEX, SEED, EPOCH
+from ._src.core.constants import INDEX, META_FEATURES, RECORD_KEY, DATASET_INDEX, SEED, EPOCH
 from ._src.core.sharding import NoSharding, ShardByJaxProcess, ShardOptions
