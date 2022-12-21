@@ -19,24 +19,30 @@
 
 from ._src.tensorflow.batching import (
     TfBatch,
+    TfBatchAndPack,
     TfBatchFn,
     TfBatchNone,
     TfBatchWithPadElements,
 )
-
+from ._src.tensorflow.checkpoint_handlers import OrbaxCheckpointHandler
+from ._src.tensorflow.data_iterators import (
+    ArraySpec,
+    IteratorOptions,
+    DatasetIterator,
+    TfGrainDatasetIterator,
+)
 from ._src.tensorflow.data_loaders import (
     load_from_tfds,
     TfDataLoader,
     TfMixtureDataLoader,
 )
-
 from ._src.tensorflow.data_sources import (
     TfArrayRecordDataSource,
     TfDataSource,
     TfdsDataSource,
+    TfInMemoryDataSource,
     TfParseFn,
 )
-
 from ._src.tensorflow.index_dataset import (
     Index,
     FirstIndex,
@@ -44,6 +50,14 @@ from ._src.tensorflow.index_dataset import (
     TfIndexSampler,
     TfDefaultIndexSampler,
     TfMixtureIndexSampler,
+)
+from ._src.tensorflow.transforms import (
+    CacheTransform,
+    FilterTransform,
+    MapTransform,
+    RandomMapTransform,
+    Transformation,
+    Transformations,
 )
 
 from .core import *
