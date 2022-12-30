@@ -27,7 +27,9 @@ limitations under the License.
 // Key 40 will map to the record at position 40 in my_file-00000-of-00002 and
 // key 121 would map to the record at position 21 in my_file-00000-of-00002.
 
+#include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -64,12 +66,14 @@ namespace tensorflow {
 using shape_inference::InferenceContext;
 using shape_inference::ShapeHandle;
 using TfThreadPool = ::tensorflow::thread::ThreadPool;
+using ArrayRecordReaderOptions = ::array_record::ArrayRecordReaderBase::Options;
 
 namespace {
 
 REGISTER_OP("ArrayRecordResourceHandle")
     .Output("handle: resource")
     .Attr("paths: list(string)")
+    .Attr("cache: bool")
     .Attr("container: string = ''")
     .Attr("shared_name: string = ''")
     .SetIsStateful()
@@ -92,7 +96,7 @@ static Status ArrayRecordLookupShape(InferenceContext* c) {
   TF_RETURN_IF_ERROR(c->WithRankAtMost(c->input(1), 1, &input_shape));
   // Set output shape.
   c->set_output(0, input_shape);
-  return Status::OK();
+  return OkStatus();
 }
 
 REGISTER_OP("ArrayRecordLookup")
@@ -142,8 +146,51 @@ Status GetReadInstructions(const std::string& path,
         std::forward_as_tuple(filename));
     read_instructions.push_back({filename, 0, reader.NumRecords()});
   }
-  return Status::OK();
+  return OkStatus();
 }
+
+// Threadsafe cache for values of type tstring.
+class RecordCache {
+ public:
+  bool Lookup(const uint64_t key, tstring& value) {
+    std::lock_guard<mutex> lock(mu_);
+    auto entry = cache_.find(key);
+    if (entry == cache_.end()) {
+      return false;
+    }
+    value = entry->second;
+    return true;
+  }
+
+  void Insert(const uint64_t key, absl::string_view value) {
+    std::lock_guard<mutex> lock(mu_);
+    const auto [it, inserted] = cache_.insert({key, tstring(value)});
+    if (inserted) {
+      num_cached_bytes_ += it->second.size() * sizeof(char);
+      const int64_t cache_memory_usage =
+          cache_.bucket_count() * sizeof(std::pair<uint64_t, tstring>) +
+          num_cached_bytes_;
+      LOG_EVERY_N_SEC(INFO, 60)
+          << "ArrayRecordResource cache uses " << cache_memory_usage
+          << " bytes of memory for " << cache_.size() << " elements.";
+    } else {
+      // Element already in cache. This can happen if multiple threads requested
+      // `key` before it was in the cache.
+      if (it->second == value) {
+        LOG(WARNING) << "Element with key " << key << " already in cache.";
+      } else {
+        LOG(FATAL) << "Element with key " << key
+                   << " already in cache but value changed.\nOld value: "
+                   << it->second << "\nNew value: " << value;
+      }
+    }
+  }
+
+ private:
+  absl::flat_hash_map<uint64_t, tstring> cache_;
+  int64_t num_cached_bytes_ = 0;
+  mutex mu_;
+};
 
 // Resource that holds the file reader objects and implements the lookup logic.
 // Init() constructs the global index by reading the number of records per file.
@@ -152,8 +199,8 @@ Status GetReadInstructions(const std::string& path,
 // will open file readers.
 class ArrayRecordResource : public ResourceBase {
  public:
-  explicit ArrayRecordResource(const std::vector<string>& path)
-      : ResourceBase(), paths_(path) {}
+  explicit ArrayRecordResource(const std::vector<string>& path, bool use_cache)
+      : ResourceBase(), paths_(path), use_cache_(use_cache) {}
 
   Status Init() {
     RE2 pattern(R"((.+)\[(\d+):(\d+)\])");
@@ -163,8 +210,7 @@ class ArrayRecordResource : public ResourceBase {
       if (RE2::FullMatch(path, pattern, &filename, &start, &end)) {
         read_instructions_.push_back({filename, start, end});
       } else {
-        std::string path_copy = path;
-        TF_RETURN_IF_ERROR(GetReadInstructions(path_copy, read_instructions_));
+        TF_RETURN_IF_ERROR(GetReadInstructions(path, read_instructions_));
       }
     }
     total_num_records_ = 0;
@@ -172,7 +218,7 @@ class ArrayRecordResource : public ResourceBase {
       total_num_records_ += ri.NumRecords();
     }
     readers_.resize(read_instructions_.size());
-    return Status::OK();
+    return OkStatus();
   }
 
   string DebugString() const override {
@@ -183,15 +229,12 @@ class ArrayRecordResource : public ResourceBase {
   uint64_t NumRecords() const { return total_num_records_; }
 
   Status Lookup(OpKernelContext* context, const std::vector<uint64_t> keys,
-                std::vector<std::string>& records) {
+                absl::Span<tstring> records) {
     // Read records pointed to by keys and put them into records.
     // **key** is the global key of a record over all files.
     // **position** is the position of a record in a specific file/reader.
     // **idx** is the in the keys vector. records should be filled with the
     // corresponding values (in the same order).
-
-    records.clear();
-    records.resize(keys.size());
 
     // Get the positions and the indices each reader should read.
     // There is one reader per file.
@@ -200,6 +243,9 @@ class ArrayRecordResource : public ResourceBase {
     indices_per_reader.resize(readers_.size());
     positions_per_reader.resize(readers_.size());
     for (size_t i = 0; i < keys.size(); ++i) {
+      if (use_cache_ && cache_.Lookup(keys[i], records[i])) {
+        continue;
+      }
       int reader_index;
       uint64_t position;
       std::tie(reader_index, position) = GetReaderIndexAndPosition(keys[i]);
@@ -230,6 +276,9 @@ class ArrayRecordResource : public ResourceBase {
                 [&](uint64_t read_idx,
                     absl::string_view record) -> absl::Status {
                   const size_t idx = indices_per_reader[reader_index][read_idx];
+                  if (use_cache_) {
+                    cache_.Insert(keys[idx], record);
+                  }
                   records[idx] = record;
                   return absl::OkStatus();
                 });
@@ -248,7 +297,7 @@ class ArrayRecordResource : public ResourceBase {
     context->device()->tensorflow_cpu_worker_threads()->workers->ParallelFor(
         readers_with_reads.size(), scheduling_params, perform_lookups);
 
-    return Status::OK();
+    return OkStatus();
   }
 
  private:
@@ -258,6 +307,9 @@ class ArrayRecordResource : public ResourceBase {
   const std::vector<string> paths_;
   std::vector<ReadInstruction> read_instructions_;
   uint64_t total_num_records_;
+
+  const bool use_cache_;
+  RecordCache cache_;
 
   std::vector<Reader> readers_;
   mutex create_reader_mutex_;
@@ -276,16 +328,17 @@ class ArrayRecordResource : public ResourceBase {
   void CreateReader(const int reader_index) {
     const std::lock_guard<mutex> lock(create_reader_mutex_);
     if (readers_[reader_index] == nullptr) {
+      // See b/262550570 for the readahead buffer size.
+      ArrayRecordReaderOptions array_record_reader_options;
+      array_record_reader_options.set_readahead_buffer_size(0);
       riegeli::FileReaderBase::Options file_reader_options;
-      // Set buffer size to 32 KiB. The default of 1 MiB doesn't work well for
-      // random access pattern when individual records are small (<= 100 KiB).
       file_reader_options.set_buffer_size(1 << 15);
-      const auto& filename = read_instructions_[reader_index].filename;
+      // Copy is on purpose.
+      std::string filename = read_instructions_[reader_index].filename;
       readers_[reader_index] = std::make_unique<
           array_record::ArrayRecordReader<riegeli::FileReader<>>>(
           std::forward_as_tuple(filename, file_reader_options),
-          array_record::ArrayRecordReaderBase::Options(),
-          array_record::ArrayRecordGlobalPool());
+          array_record_reader_options, array_record::ArrayRecordGlobalPool());
     }
   }
 
@@ -299,16 +352,18 @@ class ArrayRecordResourceHandleOp
   explicit ArrayRecordResourceHandleOp(OpKernelConstruction* context)
       : ResourceOpKernel(context) {
     OP_REQUIRES_OK(context, context->GetAttr("paths", &paths_));
+    OP_REQUIRES_OK(context, context->GetAttr("cache", &use_cache_));
   }
 
  private:
   Status CreateResource(ArrayRecordResource** ret) override
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_) {
-    *ret = new ArrayRecordResource(paths_);
+    *ret = new ArrayRecordResource(paths_, use_cache_);
     return (*ret)->Init();
   }
 
   std::vector<string> paths_;
+  bool use_cache_;
 
   TF_DISALLOW_COPY_AND_ASSIGN(ArrayRecordResourceHandleOp);
 };
@@ -362,15 +417,12 @@ class ArrayRecordLookupOp : public OpKernel {
       const uint64_t key = static_cast<uint64_t>(keys_t.flat<KeyType>()(i));
       keys.push_back(key);
     }
-    std::vector<std::string> records;
-    OP_REQUIRES_OK(context, resource->Lookup(context, keys, records));
-
     Tensor* records_t;
     OP_REQUIRES_OK(context, context->allocate_output(0, shape, &records_t));
+    auto records_flat = records_t->flat<tstring>();
+    absl::Span<tstring> records(records_flat.data(), records_flat.size());
 
-    for (int i = 0; i < num_keys; i++) {
-      records_t->flat<tensorflow::tstring>()(i) = std::move(records[i]);
-    }
+    OP_REQUIRES_OK(context, resource->Lookup(context, keys, records));
   }
 
  private:
