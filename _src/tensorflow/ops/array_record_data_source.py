@@ -19,6 +19,7 @@ import pathlib
 from typing import Any, Callable, Mapping, Optional, Sequence, Union
 
 from etils import epath
+from grain._src.core import usage_logging
 from grain._src.tensorflow.ops import gen_array_record_ops
 import tensorflow as tf
 
@@ -39,6 +40,8 @@ class TfArrayRecordDataSource:
 
   def __init__(self,
                paths: Union[epath.PathLike, Sequence[epath.PathLike]],
+               parse_fn: Optional[TfParseFn] = None,
+               cache: bool = False,
                shared_name: Optional[str] = None):
     """Creates a new TfArrayRecordDataSource object.
 
@@ -49,6 +52,11 @@ class TfArrayRecordDataSource:
         only records within the range [start, end) should be read. When you want
         to read subsets or have a large number of files prefer to path read
         instructions. This makes the initialization faster.
+      parse_fn: Optional function to parse records.
+      cache: Whether to cache values in memory.
+        This will cache uncompressed (but still serialized) values after they
+        are read the first time. This can use a lot of memory but can improve
+        performance when iterating over the data source many time.
       shared_name: Name for the resource. If a resource with the name already
         exists it will be reused. If not set will use a hash of the paths. This
         should the resource if you create multiple ArrayRecord objects for the
@@ -63,9 +71,12 @@ class TfArrayRecordDataSource:
       h.update(str(paths).encode())
       shared_name = h.hexdigest()
     self._paths = paths
+    self._parse_fn = parse_fn
     self._shared_name = shared_name
     self._handle = gen_array_record_ops.array_record_resource_handle(
-        paths=self._paths, shared_name=self._shared_name)
+        paths=self._paths, cache=cache, shared_name=self._shared_name)
+    usage_logging.log_event(
+        "TfArrayRecordDataSource", tag_2="ARRAY_RECORD", tag_3="TfGrain")
 
   def __len__(self) -> int:
     t = gen_array_record_ops.array_record_num_records(self._handle)
@@ -76,4 +87,7 @@ class TfArrayRecordDataSource:
 
   # For easy integration with Grain. Subclasses should override this.
   def get_parse_fn(self) -> Optional[TfParseFn]:
-    return None
+    return self._parse_fn
+
+  def __repr__(self) -> str:
+    return f"TfArrayRecordDataSource({self._paths!r})"

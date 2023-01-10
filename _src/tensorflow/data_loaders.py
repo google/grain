@@ -12,48 +12,60 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Data loaders create tf.data pipelines using DataSource and IndexSampler."""
-
+import collections
 import dataclasses
 import functools
-import itertools
 from typing import Any, Mapping, Optional, Sequence, Tuple
 
 from absl import logging
-from clu import preprocess_spec
 from etils import epath
 from grain._src.core import sharding
+from grain._src.core import usage_logging
 from grain._src.core.config import config
 import grain._src.core.constants as gc
 from grain._src.tensorflow import batching
+from grain._src.tensorflow import data_iterators
 from grain._src.tensorflow import data_sources
 from grain._src.tensorflow import index_dataset
-from grain._src.tensorflow.types import LocalTransforms
+from grain._src.tensorflow import transforms
+
 import numpy as np
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
 _RECORD_KEY_IN_MERGED_DATA_SOURCE = "_record_key_in_merged_data_source"
+IteratorOptions = data_iterators.IteratorOptions
+Transformations = transforms.Transformations
 
 
 @dataclasses.dataclass
-class _ParseFnTransformation:
+class _ParseTransform(transforms.MapTransform):
+  """Transform for applying an optional parsing function."""
 
-  parse_fn: data_sources.TfParseFn
+  parse_fn: Optional[data_sources.TfParseFn]
 
-  def __call__(self,
-               features: preprocess_spec.Features) -> preprocess_spec.Features:
-    return self.parse_fn(features.pop(gc.RECORD)) | features
+  def map(self, features):
+    record = features.pop(gc.RECORD)
+    if self.parse_fn:
+      record = self.parse_fn(record)
+    if isinstance(record, Mapping):
+      return record | features
+    features[gc.RECORD] = record
+    return features
 
 
-class TfDataLoader:
+class TfDataLoader(collections.abc.Iterable):
   """Deterministic data loader for a single data source."""
 
   def __init__(self,
                *,
                source: data_sources.TfDataSource,
                sampler: index_dataset.TfIndexSampler,
-               transformations: LocalTransforms = (),
-               batch_fn: batching.TfBatchFn):
+               transformations: Transformations = (),
+               batch_fn: Optional[batching.TfBatchFn] = None,
+               iterator_options: Optional[IteratorOptions] = None,
+               strict_transformations: bool = True,
+               tf_data_options: Optional[tf.data.Options] = None):
     """Initializes a new data loader.
 
     Args:
@@ -64,11 +76,29 @@ class TfDataLoader:
         batching.
       batch_fn: Function to use for batching the dataset. To disable batching
         pass `grain.TfBatchNone()`.
+      iterator_options: Options passed to the data iterator.
+      strict_transformations: If True (default) Grain will only apply valid
+        transformations and fail if it cannot verify that a transformation is
+        valid (see the rules for transformation in the documentation). For a
+        transition period you can set this to False and Grain will apply all
+        transformations. However this might make the input non-deterministic.
+      tf_data_options: Options passed to tf.data.
     """
+    usage_logging.log_event("TfDataLoader", tag_3="TfGrain")
     self.source = source
     self.sampler = sampler
-    self._transformations = transformations
-    self._batch_fn = batch_fn
+    self._transformations = tuple(transformations)
+    if batch_fn is not None:
+      logging.warning(
+          "Please pass the batching function in the list of transformations.")
+      self._transformations += (batch_fn,)
+    self._iterator_options = iterator_options
+    self._strict_transformations = strict_transformations
+    self._tf_data_options = tf_data_options
+
+  def __iter__(self):
+    return data_iterators.TfGrainDatasetIterator(
+        self, options=self._iterator_options)
 
   def as_dataset(self, *, start_index: index_dataset.Index) -> tf.data.Dataset:
     """Returns a the tf.data input pipeline.
@@ -92,28 +122,29 @@ class TfDataLoader:
     ds = _map_index_dataset_using_data_source(self.source, index_ds)
 
     transformations = list(self._transformations)
-    parse_fn = self.source.get_parse_fn()
-    if parse_fn is not None:
-      transformations.insert(0, _ParseFnTransformation(parse_fn))
-    ds = _apply_local_transforms(ds, transformations)
-    ds = self._batch_fn(ds)
+    transformations.insert(0, _ParseTransform(self.source.get_parse_fn()))
+    ds = transforms.apply_transformations(
+        ds, transformations, strict=self._strict_transformations)
+    if self._tf_data_options is not None:
+      ds = ds.with_options(self._tf_data_options)
     return ds
 
 
-def load_from_tfds(
-    *,
-    name: Optional[str] = None,
-    split: str,
-    data_dir: Optional[epath.PathLike] = None,
-    tfds_info: Optional[tfds.core.DatasetInfo] = None,
-    num_epochs: Optional[int] = None,
-    shuffle: bool = False,
-    seed: Optional[Any] = None,
-    shard_options: sharding.ShardOptions,
-    decoders: Optional[Any] = None,
-    transformations: LocalTransforms = (),
-    batch_size: Optional[int] = None,
-    batch_fn: Optional[batching.TfBatchFn] = None) -> TfDataLoader:
+def load_from_tfds(*,
+                   name: Optional[str] = None,
+                   split: str,
+                   data_dir: Optional[epath.PathLike] = None,
+                   tfds_info: Optional[tfds.core.DatasetInfo] = None,
+                   num_epochs: Optional[int] = None,
+                   shuffle: bool = False,
+                   seed: Optional[Any] = None,
+                   shard_options: sharding.ShardOptions,
+                   decoders: Optional[Any] = None,
+                   transformations: Transformations = (),
+                   batch_size: Optional[int] = None,
+                   batch_fn: Optional[batching.TfBatchFn] = None,
+                   tf_data_options: Optional[tf.data.Options] = None,
+                   cache_data_source: bool = False) -> TfDataLoader:
   """Create a data loader for a TFDS dataset.
 
   Name, split and data_dir are forwarded to TFDS. See the documentation there.
@@ -134,22 +165,31 @@ def load_from_tfds(
     batch_size: Optional batch size. If provided will apply TfBatch() with
       drop_remainder=False at the end.
     batch_fn: Custom batching function.
+    tf_data_options: Options passed to tf.data.
+    cache_data_source: Whether to cache the data source in memory.
 
   Returns:
     TfDataLoader for this dataset.
   """
+  usage_logging.log_event("load_from_tfds", tag_3="TfGrain")
   if (name is None) == (tfds_info is None):
     raise ValueError("Please provide either `name` or `tfds_info`.")
   if name:
     source = data_sources.TfdsDataSource.from_name(
-        name, data_dir=data_dir, split=split, decoders=decoders)
+        name,
+        data_dir=data_dir,
+        split=split,
+        decoders=decoders,
+        cache=cache_data_source)
   else:
     if data_dir:
-      logging.error(
-          "Ignoring data_dir in `load_from_tfds()` since `tfds_info` was provided."
-      )
+      logging.error("Ignoring data_dir in `load_from_tfds()` since `tfds_info` "
+                    "was provided.")
     source = data_sources.TfdsDataSource(
-        dataset_info=tfds_info, split=split, decoders=decoders)
+        dataset_info=tfds_info,
+        split=split,
+        decoders=decoders,
+        cache=cache_data_source)
   sampler = index_dataset.TfDefaultIndexSampler(
       num_records=len(source),
       shuffle=shuffle,
@@ -161,16 +201,15 @@ def load_from_tfds(
                      "exclusive. Only use one of them.")
   if batch_size is not None:
     batch_fn = batching.TfBatch(batch_size, drop_remainder=num_epochs is None)
-  elif batch_fn is None:
-    batch_fn = batching.TfBatchNone()
   return TfDataLoader(
       source=source,
       sampler=sampler,
       transformations=transformations,
-      batch_fn=batch_fn)
+      batch_fn=batch_fn,
+      tf_data_options=tf_data_options)
 
 
-class TfMixtureDataLoader:
+class TfMixtureDataLoader(collections.abc.Iterable):
   """Data loader for loading mixtures deterministically.
 
   Limitations:
@@ -181,11 +220,13 @@ class TfMixtureDataLoader:
 
   def __init__(self,
                *,
-               sources: Sequence[data_sources.TfArrayRecordDataSource],
-               transformations_per_source: Sequence[LocalTransforms],
+               sources: Sequence[data_sources.TfDataSource],
+               transformations_per_source: Sequence[Transformations],
                sampler: index_dataset.TfIndexSampler,
-               transformations: LocalTransforms = (),
-               batch_fn: batching.TfBatchFn):
+               transformations: Transformations = (),
+               batch_fn: Optional[batching.TfBatchFn] = None,
+               strict_transformations: bool = True,
+               iterator_options: Optional[IteratorOptions] = None):
     """Initializes a new data loader.
 
     Args:
@@ -195,27 +236,45 @@ class TfMixtureDataLoader:
         records within the dataset.
       transformations: Optional list of transformations to apply before
         batching.
-      batch_fn: Function to use for batching the dataset. To disable batching
-        pass `grain.TfBatchNone()`.
+      batch_fn: Deprecated. Function to use for batching the dataset. Please
+        add the batching transformation to the list of transformations.
+      strict_transformations: See TfDataLoader.
+      iterator_options: Options passed to the data iterator.
     """
+    usage_logging.log_event("TfMixtureDataLoader", tag_3="TfGrain")
     assert len(sources) == len(transformations_per_source)
 
-    all_paths = itertools.chain.from_iterable([s._paths for s in sources])
+    all_paths = []
+    for s in sources:
+      if isinstance(s, data_sources.TfArrayRecordDataSource):
+        all_paths.extend(s._paths)
+      elif (isinstance(s, data_sources.TfdsDataSource) and
+            isinstance(s._source, data_sources.TfArrayRecordDataSource)):
+        all_paths.extend(s._source._paths)
+      else:
+        raise ValueError(f"Data source {s} is not yet supported in mixtures.")
     self.source = data_sources.TfArrayRecordDataSource(list(all_paths))
     self.sampler = sampler
     self._records_per_dataset = [len(s) for s in sources]
 
     transformations_per_source = [list(ts) for ts in transformations_per_source]
     for i in range(len(sources)):
-      parse_fn = sources[i].get_parse_fn()
-      if parse_fn is not None:
-        transformations_per_source[i].insert(0,
-                                             _ParseFnTransformation(parse_fn))
+      transformations_per_source[i].insert(
+          0, _ParseTransform(sources[i].get_parse_fn()))
     self._dataset_index_to_group, self._group_to_transformation = self._create_groups(
         transformations_per_source)
 
-    self._transformations = transformations
-    self._batch_fn = batch_fn
+    self._transformations = tuple(transformations)
+    if batch_fn is not None:
+      logging.warning(
+          "Please pass the batching function in the list of transformations.")
+      self._transformations += (batch_fn,)
+    self._iterator_options = iterator_options
+    self._strict_transformations = strict_transformations
+
+  def __iter__(self):
+    return data_iterators.TfGrainDatasetIterator(
+        self, options=self._iterator_options)
 
   @property
   def _num_datasets(self):
@@ -226,8 +285,8 @@ class TfMixtureDataLoader:
     return max(self._dataset_index_to_group) + 1
 
   def _create_groups(
-      self, transformations_per_source: Sequence[LocalTransforms]
-  ) -> Tuple[Sequence[int], Sequence[LocalTransforms]]:
+      self, transformations_per_source: Sequence[Transformations]
+  ) -> Tuple[Sequence[int], Sequence[Transformations]]:
     """Groups sources with the same transformations into groups."""
     key_to_group = {}
     dataset_index_to_group = []
@@ -283,14 +342,16 @@ class TfMixtureDataLoader:
       return task_index_to_group[x[gc.DATASET_INDEX]]
 
     def transform_group(ds: tf.data.Dataset, *, group: int) -> tf.data.Dataset:
-      return _apply_local_transforms(ds, self._group_to_transformation[group])
+      return transforms.apply_transformations(
+          ds,
+          self._group_to_transformation[group],
+          strict=self._strict_transformations)
 
     if self._num_groups == 1:
       # All data sources in the mixture have the same transformations. Apply
       # them and we are done.
       ds = transform_group(ds, group=0)
-      ds = _apply_local_transforms(ds, self._transformations)
-      ds = self._batch_fn(ds)
+      ds = transforms.apply_transformations(ds, self._transformations)
       return ds
 
     # We treat each set of tasks with the same preprocessors as a group and
@@ -320,26 +381,9 @@ class TfMixtureDataLoader:
           num_parallel_calls=tf.data.AUTOTUNE)
 
     ds = tf.data.Dataset.choose_from_datasets(dataset_per_group, choice_dataset)
-    ds = _apply_local_transforms(ds, self._transformations)
-    ds = self._batch_fn(ds)
+    ds = transforms.apply_transformations(
+        ds, self._transformations, strict=self._strict_transformations)
     return ds
-
-
-def _apply_local_transforms(ds: tf.data.Dataset,
-                            transforms: LocalTransforms) -> tf.data.Dataset:
-  """Applies the transformations to the dataset."""
-  for transform in transforms:
-    # The PreprocessOp should allow runtime checks.
-    # Everything else should be MapTransform/FilterTransform but for a
-    # transition period we will silently support anything that maps a dataset.
-    # This helps SeqIO users to transition.
-    if isinstance(transform, preprocess_spec.PreprocessOp):
-      ds = ds.map(transform, num_parallel_calls=tf.data.AUTOTUNE)
-    else:
-      # TODO(mrit): Add warning if transform is not a
-      # MapTransform/FilterTransform.
-      ds = transform(ds)
-  return ds
 
 
 def _add_global_record_key(index_ds: tf.data.Dataset, *,
