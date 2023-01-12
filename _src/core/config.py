@@ -52,10 +52,14 @@ _LOOKUP_FAST_WARMUP = flags.DEFINE_bool(
     "can help to provide initial elements fast while allowing when using a "
     "large tf_lookup_batch_size (which is usually better for throughput).")
 
+_PY_LOOKUP_BATCH_SIZE = flags.DEFINE_integer(
+    "grain_py_lookup_batch_size", 64,
+    "Number of keys to batch into a single lookup call in PyGrain. ")
+
 _GRAIN_FLAGS = (_INTERLEAVED_SHUFFLE, _INTERLEAVED_SHUFFLE_BLOCK_SIZE,
                 _INTERLEAVED_SHUFFLE_NUM_BLOCKS_PER_PARTITION,
                 _LOOKUP_BATCH_SIZE, _LOOKUP_NUM_PARALLEL_CALLS,
-                _LOOKUP_FAST_WARMUP)
+                _LOOKUP_FAST_WARMUP, _PY_LOOKUP_BATCH_SIZE)
 
 
 class Config:
