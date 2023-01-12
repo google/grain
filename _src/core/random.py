@@ -15,17 +15,17 @@
 
 Grain uses counter-based pseudorandom number generators (PRNGs) for fast and
 reproducible random numbers.
-This means that there is no random seed or a stateful PRNGs object. Instead,
-random seeds are always passed explicitly and users should understand the
-rules outlined below (this applies both to the internals of Grain as well as
-user defined preprocessing and extensions).
+This means that there is no global random seed or a global stateful PRNGs
+object. Instead, random seeds are always passed explicitly and users should
+understand the rules outlined below (this applies both to the internals of
+Grain as well as user defined preprocessing and extensions).
 
 ## Motivation
 We want Grain input pipelines to be reproducible while still being highly
 parallelizable. This very much overlaps with the design choices for JAX's PRNG
-([design notes](github.com/google/jax/blob/main/docs/design_notes/prng.md)).
-Hence, we use `jax.random` where possible and equivalents otherwise (e.g.
-stateless random ops in TF).
+([design notes](github.com/google/jax/blob/main/docs/design_notes/prng.md)) and
+their choice for counter-based PRNGs like ThreeFry and Philox.
+NumPy, JAX and TF all contain implementations of ThreeFry/Philox.
 
 ## General Rules
 If you are not familiar with `jax.random`, we recommend reading
@@ -38,46 +38,58 @@ to understand the concepts of counter-based PRNGs. You should be comfortable
 with splitting your random seeds.
 
 After that, just follow these rules:
-- Do not use the Python `random` module or `numpy.random`. Both use a global
-state.
-- Either use methods in `jax.random` or random methods in TensorFlow that start
-  with `stateless_` (e.g. `tf.random.stateless_uniform()`).
+- Never use the `random` module from the Python standard library.
+- Either use methods in `jax.random`, random methods in TensorFlow that start
+  with `stateless_` (e.g. `tf.random.stateless_uniform()`) or non-global
+  NumPy random generators.
+- Do not use the global RNG in `np.random`. Instead create a new generator
+  with appropiate bit generator: `np.random.default_rng(seed)` or
+  `np.random.Generator(np.random.Philox(seed))` and call random functions on it.
+  The generator (or more accurately the underlying bit generator) is stateful
+  and should not be used across between threads.
 - If you want to use a new random seed each time your program starts, you can
-use
-  `int.from_bytes(os.urandom(4), sys.byteorder)` and log the value.
+  use `int.from_bytes(os.urandom(4), sys.byteorder)` and log the value.
 - Do not re-use a random seed. Instead, split the random seed using
   `jax.random.split()` or `tf.random.experimental.stateless_split()`
 
 ## JAX
 JAX supports multiple RNG implementations. Since Grain operations run on CPU,
 we recommend the default (ThreeFry). It's stable across JAX/XLA versions.
-Internally, ThreeFry uses a uint32 type vector of shape [2].
+Internally, ThreeFry uses a uint32 type vector of shape [2] as state.
+
+## NumPy
+NumPy contains several suitable RNG implementations (aka bit generators). We
+recommend using `np.random.Philox` which is very similar to the ThreeFry
+implementation in JAX and TF. However `PCG64` (default as of writting) and
+`PCG64DXSM` are also suitable for input pipelines. Just don't use the global
+RNG and always construct your own `np.random.Generator`.
 
 ## TensorFlow
-TensorFlow implements multiple counter-based RNGs (ThreeFry and Pilox) but
+TensorFlow implements multiple counter-based RNGs (ThreeFry and Philox) but
 doesn't provide any guidance on which one to use. We recommend to not set the
-algorithm and simply pass a seed of dtype int32 (yes, not uint32!) and shape
-[2].
+algorithm explicitly and let TF select the RNG (on CPUs it seems to select
+Philox). You can derive a random seed for stateless random functions using
+`tf.random.Generator.from_seed(my_integer).make_seeds(1)[:, 0]`.
 Splitting seeds can be done using:
 ```
 seed, seed_for_my_op = tf.unstack(tf.random.experimental.stateless_split(seed))
 ```
-
-If you have a JAX RNG key, use `seed = tf.cast(seed, tf.int32)` before passing
-it to TensorFlow functions.
 """
-
 import os
 import sys
-from typing import Optional, Tuple, Union
+from typing import Optional, Sequence, Union
 
+from absl import logging
+import jax
+import jax.numpy as jnp
 import numpy as np
 
-# Currently, Grain uses NumPy arrays of dtype uint32 and shape [2] for RNG keys.
-# These are easy to create and can be used by TensorFlow by casting to tf.int32.
-# In the future, we might switch to `jax.random.KeyArray`.
-RNGKey = np.ndarray
-RNGKeyLike = Union[int, Tuple[int, int], np.ndarray]
+# As of 2022-09 JAX uses arrays of dtype uint32 and shape [2] for RNG keys.
+# However when custom RNGs are enabled by default keys are wrapped in a KeyArray
+# object and can have different internal state. This might become the default
+# in the future.
+RNGKey = jax.random.PRNGKeyArray
+RNGKeyLike = Union[RNGKey, int, Sequence[int], np.ndarray]
 
 
 def as_rng_key(seed: RNGKeyLike) -> RNGKey:
@@ -89,33 +101,22 @@ def as_rng_key(seed: RNGKeyLike) -> RNGKey:
   Returns:
     RNGKey which is currently a NumPy array of dtype uint32 and shape [2].
   """
-  if isinstance(seed, int):
-    seed = [0, seed]
+  if isinstance(seed, jax.random.PRNGKeyArray):
+    return seed
+  if isinstance(seed, (int, jnp.integer)):
+    return jax.random.PRNGKey(seed)
+  if isinstance(seed, jnp.ndarray):
+    # Assume that this is already a KeyArray.
+    return seed
   if len(seed) != 2:
-    raise ValueError('Random seed must be a single integer or a '
-                     f'Tuple[int, int] but got {seed!r}')
-  return np.asarray(seed, dtype=np.uint32)
+    raise ValueError("Random seed must be a single integer or a "
+                     f"Tuple[int, int] but got {seed!r}")
+  return jax.random.PRNGKey(sum(seed))
 
 
 def make_rng_key(seed: Optional[RNGKeyLike]) -> RNGKey:
-  """Returns an RNGKey from the input or from random bits.
-
-  Warning: If `seed` is None this will return a new value on each call. If you
-  are running this in a distributed setting (e.g. jax.process_count() > 1) and
-  you might want to use the same RNGKey for all processes. You can do this by
-  broadcasting the RNGKey of process 0 to all other processes:
-  from jax.experimental import multihost_utils
-  seed = multihost_utils.broadcast_one_to_all(seed)
-
-  Args:
-    seed: Optional random seed. If None, `os.urandom()` is used to create a new
-      seed.
-
-  Returns:
-    RNGKey which is currently a NumPy array of dtype uint32 and shape [2].
-    If no seed or a single integer was provided as the seed, the first entry
-    will be 0.
-  """
+  logging.error("Using deprecated method make_rng_key(). Please always pass "
+                "None or a single integer as random seed to Grain methods.")
   if seed is None:
     seed = int.from_bytes(os.urandom(4), sys.byteorder)
   return as_rng_key(seed)
