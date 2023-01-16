@@ -120,6 +120,19 @@ class CacheTransform(GlobalTfDataTransform):
     return dataset.cache()
 
 
+@final
+@dataclasses.dataclass(frozen=True)
+class IgnoreErrorsTransform(GlobalTfDataTransform):
+  """Silences errors that occur within tf.data.
+
+  Use with care. This will silently drop any elements that cause an error!
+  This is experimental and won't be supported when running outside of tf.data.
+  """
+
+  def apply_to_dataset(self, dataset: tf.data.Dataset) -> tf.data.Dataset:
+    return dataset.ignore_errors()
+
+
 LocalTransform = Union[MapTransform, RandomMapTransform, FilterTransform,
                        preprocess_spec.PreprocessFn]
 Transformation = Union[LocalTransform, GlobalTfDataTransform]
