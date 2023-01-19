@@ -22,17 +22,16 @@ import tensorflow as tf
 class Square(transforms.MapTransform):
 
   def map(self, features):
-    features["x"] = features["x"]**2
+    features["x"] = features["x"] ** 2
     return features
 
 
 class AddRandomNumber(transforms.RandomMapTransform):
 
   def random_map(self, features, seed):
-    features["y"] = tf.random.stateless_uniform([],
-                                                seed,
-                                                dtype=tf.int64,
-                                                maxval=100)
+    features["y"] = tf.random.stateless_uniform(
+        [], seed, dtype=tf.int64, maxval=100
+    )
     return features
 
 
@@ -45,13 +44,22 @@ class FilterOdd(transforms.FilterTransform):
 class SquareAsPreprocessOp:
 
   def __call__(self, features):
-    features["x"] = features["x"]**2
+    features["x"] = features["x"] ** 2
+    return features
+
+
+class AddInverse:
+
+  def __call__(self, features):
+    features["inverse"] = tf.debugging.check_numerics(
+        1.0 / float(features["x"]), ""
+    )
     return features
 
 
 @seqio.map_over_dataset
 def square_in_seqio(features):
-  features["x"] = features["x"]**2
+  features["x"] = features["x"] ** 2
   return features
 
 
@@ -107,6 +115,16 @@ class TransformsTest(tf.test.TestCase, parameterized.TestCase):
     ds = transforms.apply_transformations(ds, [transforms.CacheTransform()])
     ds = [element["x"] for element in ds.as_numpy_iterator()]
     self.assertAllEqual(ds, [0, 1, 2, 3])
+
+  def test_ignore_errors_transform(self):
+    ds = self._create_dataset()
+    ds = transforms.apply_transformations(
+        ds, [AddInverse(), transforms.IgnoreErrorsTransform()]
+    )
+    ds_x = [element["x"] for element in ds.as_numpy_iterator()]
+    self.assertAllEqual(ds_x, [1, 2, 3])
+    ds_inverse = [element["inverse"] for element in ds.as_numpy_iterator()]
+    self.assertAllClose(ds_inverse, [1, 1.0 / 2, 1.0 / 3])
 
 
 if __name__ == "__main__":

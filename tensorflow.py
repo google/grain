@@ -53,6 +53,7 @@ from ._src.tensorflow.index_dataset import (
 )
 from ._src.tensorflow.transforms import (
     CacheTransform,
+    IgnoreErrorsTransform,
     FilterTransform,
     MapTransform,
     RandomMapTransform,
