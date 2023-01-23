@@ -493,7 +493,7 @@ def _map_index_dataset_using_data_source(
     index_ds = index_ds.skip(config.tf_lookup_batch_size)
 
     # We will make 10 calls with smaller batches and only 2 in parallel.
-    warmup_batch_size = config.tf_lookup_batch_size // 10
+    warmup_batch_size = max(1, config.tf_lookup_batch_size // 10)
     warmup_dataset_cardinality = warmup_index_ds.cardinality()
     warmup_dataset = warmup_index_ds.batch(warmup_batch_size).map(
         lookup_fn, num_parallel_calls=2).unbatch().apply(
