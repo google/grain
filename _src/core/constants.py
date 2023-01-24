@@ -28,7 +28,7 @@ DATASET_INDEX = "_dataset_index"
 # Epoch for the record. When mixing datasets this is the epoch over the dataset,
 # not the mixture. Starts with 1.
 EPOCH = "_epoch"
-# Random random for stateless random operations. This is unique per record
+# Random seed for stateless random operations. This is unique per record
 # and changes every epoch.
 SEED = "_seed"
 # Serialized record.
