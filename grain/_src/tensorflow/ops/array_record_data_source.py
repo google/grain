@@ -13,6 +13,7 @@
 # limitations under the License.
 
 """TensorFlow ops for interacting with ArrayRecord files."""
+
 import hashlib
 import os
 import pathlib
@@ -20,9 +21,12 @@ from typing import Any, Callable, Mapping, Optional, Sequence, Union
 
 from etils import epath
 from grain._src.core import usage_logging
-from grain._src.tensorflow.ops import gen_array_record_ops
 import tensorflow as tf
 
+from tensorflow.python.platform import resource_loader
+from tensorflow.python.framework import load_library
+gen_array_record_ops = load_library.load_op_library(
+    resource_loader.get_path_to_datafile("array_record_ops.so"))
 
 TfParseFn = Callable[[tf.Tensor], Mapping[str, Any]]
 

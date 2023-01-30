@@ -16,7 +16,8 @@ import contextlib
 import itertools
 
 from absl.testing import parameterized
-import grain._src.core.random as grain_random
+# import grain._src.core.grain_random as grain_random
+from grain._src.core import grain_random
 import jax
 import numpy as np
 import tensorflow as tf

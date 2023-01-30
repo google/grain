@@ -28,6 +28,7 @@ limitations under the License.
 // key 121 would map to the record at position 21 in my_file-00000-of-00002.
 
 #include <cstdint>
+#include <filesystem>  // NOLINT 
 #include <memory>
 #include <optional>
 #include <string>
@@ -35,31 +36,31 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
-#include "third_party/absl/container/flat_hash_map.h"
-#include "third_party/absl/flags/flag.h"
-#include "third_party/absl/log/log.h"
-#include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/match.h"
-#include "third_party/absl/strings/str_format.h"
-#include "third_party/absl/strings/str_join.h"
-#include "third_party/array_record/cpp/array_record_reader.h"
-#include "third_party/array_record/cpp/thread_pool.h"
-#include "third_party/re2/re2.h"
-#include "third_party/riegeli/bytes/file_reader.h"
-#include "third_party/tensorflow/core/framework/common_shape_fns.h"
-#include "third_party/tensorflow/core/framework/op.h"
-#include "third_party/tensorflow/core/framework/op_kernel.h"
-#include "third_party/tensorflow/core/framework/op_requires.h"
-#include "third_party/tensorflow/core/framework/register_types.h"
-#include "third_party/tensorflow/core/framework/resource_op_kernel.h"
-#include "third_party/tensorflow/core/framework/shape_inference.h"
-#include "third_party/tensorflow/core/framework/tensor.h"
-#include "third_party/tensorflow/core/framework/tensor_shape.h"
-#include "third_party/tensorflow/core/platform/errors.h"
-#include "third_party/tensorflow/core/platform/mutex.h"
-#include "third_party/tensorflow/core/platform/threadpool.h"
-#include "third_party/tensorflow/core/platform/types.h"
+#include "absl/container/flat_hash_map.h"
+#include "absl/flags/flag.h"
+#include "absl/log/log.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/match.h"
+#include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
+#include "cpp/array_record_reader.h"
+#include "cpp/thread_pool.h"
+#include "re2/re2.h"
+#include "riegeli/bytes/fd_reader.h"
+#include "tensorflow/core/framework/common_shape_fns.h"
+#include "tensorflow/core/framework/op.h"
+#include "tensorflow/core/framework/op_kernel.h"
+#include "tensorflow/core/framework/op_requires.h"
+#include "tensorflow/core/framework/register_types.h"
+#include "tensorflow/core/framework/resource_op_kernel.h"
+#include "tensorflow/core/framework/shape_inference.h"
+#include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/framework/tensor_shape.h"
+#include "tensorflow/core/platform/errors.h"
+#include "tensorflow/core/platform/mutex.h"
+#include "tensorflow/core/platform/threadpool.h"
+#include "tensorflow/core/platform/types.h"
 
 namespace tensorflow {
 
@@ -121,31 +122,15 @@ struct ReadInstruction {
 
 Status GetReadInstructions(const std::string& path,
                            std::vector<ReadInstruction>& read_instructions) {
-  const string pattern = path;
-  // Find all matching filenames.
-  const auto status_or_filenames = file::Match(pattern, file::Defaults());
-  if (!status_or_filenames.ok() || status_or_filenames.value().empty()) {
-    return Status(
-        error::NOT_FOUND,
-        absl::StrFormat("Failed to find matching files pattern %s.", pattern));
+  const string filename = path;
+  if (!std::filesystem::exists(filename)){
+    return Status(error::NOT_FOUND,
+              absl::StrFormat("File %s not found.", filename));  
   }
-  auto filenames = status_or_filenames.value();
-  // Make sure we always read files in the same order.
-  absl::c_sort(filenames);
-  if (filenames.size() > 100) {
-    LOG(WARNING) << "Constructing a global index for over 100 files can be "
-                 << "slow. Consider providing read instruction strings "
-                 << "('filename[start:end]') to ArrayRecord to avoid this.";
-  }
-  for (const std::string& filename : filenames) {
-    if (!file::Exists(filename, file::Defaults()).ok()) {
-      return Status(error::NOT_FOUND,
-                    absl::StrFormat("File %s not found.", filename));
-    }
-    const array_record::ArrayRecordReader<riegeli::FileReader<>> reader(
-        std::forward_as_tuple(filename));
-    read_instructions.push_back({filename, 0, reader.NumRecords()});
-  }
+  const array_record::ArrayRecordReader<riegeli::FdReader<>> reader(
+      std::forward_as_tuple(filename));
+  read_instructions.push_back({filename, 0, reader.NumRecords()});
+
   return OkStatus();
 }
 
@@ -302,7 +287,7 @@ class ArrayRecordResource : public ResourceBase {
 
  private:
   using Reader =
-      std::unique_ptr<array_record::ArrayRecordReader<riegeli::FileReader<>>>;
+      std::unique_ptr<array_record::ArrayRecordReader<riegeli::FdReader<>>>;
 
   const std::vector<string> paths_;
   std::vector<ReadInstruction> read_instructions_;
@@ -328,17 +313,17 @@ class ArrayRecordResource : public ResourceBase {
   void CreateReader(const int reader_index) {
     const std::lock_guard<mutex> lock(create_reader_mutex_);
     if (readers_[reader_index] == nullptr) {
-      // See b/262550570 for the readahead buffer size.
-      ArrayRecordReaderOptions array_record_reader_options;
-      array_record_reader_options.set_readahead_buffer_size(0);
-      riegeli::FileReaderBase::Options file_reader_options;
+      riegeli::FdReaderBase::Options file_reader_options;
+      // Set buffer size to 32 KiB. The default of 1 MiB doesn't work well for
+      // random access pattern when individual records are small (<= 100 KiB).
       file_reader_options.set_buffer_size(1 << 15);
       // Copy is on purpose.
       std::string filename = read_instructions_[reader_index].filename;
       readers_[reader_index] = std::make_unique<
-          array_record::ArrayRecordReader<riegeli::FileReader<>>>(
+          array_record::ArrayRecordReader<riegeli::FdReader<>>>(
           std::forward_as_tuple(filename, file_reader_options),
-          array_record_reader_options, array_record::ArrayRecordGlobalPool());
+          array_record::ArrayRecordReaderBase::Options(),
+          array_record::ArrayRecordGlobalPool());
     }
   }
 

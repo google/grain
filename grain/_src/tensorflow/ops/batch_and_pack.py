@@ -22,8 +22,12 @@ For examples see the test cases.
 """
 from typing import Any
 
-from grain._src.tensorflow.ops import gen_batch_and_pack_op
 import tensorflow as tf
+
+from tensorflow.python.platform import resource_loader
+from tensorflow.python.framework import load_library
+gen_batch_and_pack_op = load_library.load_op_library(
+    resource_loader.get_path_to_datafile("batch_and_pack_op.so"))
 
 
 def _check_is_tensor_spec(component_spec):
