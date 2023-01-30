@@ -20,22 +20,22 @@ limitations under the License.
 #include <cstdint>
 #include <vector>
 
-#include "third_party/tensorflow/core/data/dataset_utils.h"
-#include "third_party/tensorflow/core/data/name_utils.h"
-#include "third_party/tensorflow/core/framework/dataset.h"
-#include "third_party/tensorflow/core/framework/op_kernel.h"
-#include "third_party/tensorflow/core/framework/partial_tensor_shape.h"
-#include "third_party/tensorflow/core/framework/tensor.h"
-#include "third_party/tensorflow/core/framework/tensor_shape.h"
-#include "third_party/tensorflow/core/framework/tensor_util.h"
-#include "third_party/tensorflow/core/framework/types.h"
-#include "third_party/tensorflow/core/kernels/fill_functor.h"
-#include "third_party/tensorflow/core/lib/core/errors.h"
-#include "third_party/tensorflow/core/lib/gtl/cleanup.h"
-#include "third_party/tensorflow/core/platform/blocking_counter.h"
-#include "third_party/tensorflow/core/platform/macros.h"
-#include "third_party/tensorflow/core/platform/status.h"
-#include "third_party/tensorflow/core/util/batch_util.h"
+#include "tensorflow/core/data/dataset_utils.h"
+#include "tensorflow/core/data/name_utils.h"
+#include "tensorflow/core/framework/dataset.h"
+#include "tensorflow/core/framework/op_kernel.h"
+#include "tensorflow/core/framework/partial_tensor_shape.h"
+#include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/framework/tensor_shape.h"
+#include "tensorflow/core/framework/tensor_util.h"
+#include "tensorflow/core/framework/types.h"
+#include "tensorflow/core/kernels/fill_functor.h"
+#include "tensorflow/core/lib/core/errors.h"
+#include "tensorflow/core/lib/gtl/cleanup.h"
+#include "tensorflow/core/platform/blocking_counter.h"
+#include "tensorflow/core/platform/macros.h"
+#include "tensorflow/core/platform/status.h"
+#include "tensorflow/core/util/batch_util.h"
 
 namespace tensorflow {
 namespace data {

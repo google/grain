@@ -52,10 +52,11 @@ from typing import Any, Sequence, List, Mapping, Tuple, Union, Optional, Protoco
 
 from absl import logging
 from grain._src.core import constants
+# import grain._src.core.grain_random as grain_random
+from grain._src.core import grain_random
 from grain._src.core import sharding
 from grain._src.core import usage_logging
 from grain._src.core.config import config
-import grain._src.core.random as grain_random
 import jax
 import numpy as np
 import tensorflow as tf

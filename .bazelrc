@@ -1,0 +1,23 @@
+build --define=using_cuda=true
+build --define=using_cuda_nvcc=true
+build:manylinux2014 --crosstool_top=@sigbuild-r2.9-python3.9_config_cuda//crosstool:toolchain
+build --spawn_strategy=standalone
+build --strategy=Genrule=standalone
+build -c opt
+build --cxxopt=-std=c++17
+build --host_cxxopt=-std=c++17
+build --experimental_repo_remote_exec
+build --experimental_cc_shared_library
+
+build --action_env=PYTHON_BIN_PATH="/usr/bin/python3.9"
+build --action_env=PYTHON_LIB_PATH="/usr/local/lib/python3.9/dist-packages"
+build --repo_env=PYTHON_BIN_PATH="/usr/bin/python3.9"
+build --python_path="/usr/bin/python3.9"
+
+build --action_env TF_HEADER_DIR="/usr/local/lib/python3.9/dist-packages/tensorflow/include"
+build --action_env TF_SHARED_LIBRARY_DIR="/usr/local/lib/python3.9/dist-packages/tensorflow"
+build --action_env TF_SHARED_LIBRARY_NAME="libtensorflow_framework.so"
+build --action_env TF_NEED_CUDA="0"
+
+build --config=manylinux2014
+test --config=manylinux2014
