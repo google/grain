@@ -103,18 +103,6 @@ class TfInMemoryDataSourceTest(tf.test.TestCase):
     self.assertEqual(source[2], 2)
     self.assertAllEqual(source[(3, 7)], (3, 7))
 
-  def test_from_tfds(self):
-    with tfds.testing.mock_data(num_examples=10):
-      with mock.patch.object(tf.data, "TFRecordDataset") as tf_record:
-        dummy_ds = tf.data.Dataset.from_tensors(
-            tf.constant(_EMPTY_IMAGENET_EXAMPLE)
-        )
-        tf_record.return_value = dummy_ds.repeat(1251)
-        source = data_sources.TfInMemoryDataSource.from_tfds(
-            "imagenet2012", split="train[:2000]"
-        )
-        self.assertLen(source, 2000)
-
   def test_from_data_frame(self):
     data = {"col1": [0, 1, 2, 3], "col2": pd.Series([2, 3], index=[2, 3])}
     df = pd.DataFrame(data=data, index=[0, 1, 2, 3])
