@@ -32,6 +32,7 @@ ArraySpec = dataset_iterator.ArraySpec
 
 @dataclasses.dataclass(frozen=True)
 class DummySampler:
+  """Dummy IndexSampler that samples range(0, 10)."""
 
   shard_index: int = 0
   shard_count: int = 1
@@ -46,7 +47,7 @@ class DummySampler:
     elif isinstance(start_index, index_dataset.NextIndex):
       start_index = start_index.last_seen_index + self.shard_count
     assert isinstance(start_index, int)
-    return tf.data.Dataset.range(start_index, tf.int64.max)
+    return tf.data.Dataset.range(start_index, 10)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -73,9 +74,12 @@ class DataIteratorsTest(tf.test.TestCase, parameterized.TestCase):
         INDEX: ArraySpec(np.int64, ()),
         "number": ArraySpec(np.uint32, ())
     })
+    for i in range(10):
+      self.assertAllEqual(next(it), {INDEX: i, "number": 2*i+1})
+    self.assertRaises(StopIteration, next, it)  # End of iterator.
+    self.assertRaises(StopIteration, next, it)  # Iterator stays invalid
+    it.reset()
     self.assertAllEqual(next(it), {INDEX: 0, "number": 1})
-    self.assertAllEqual(next(it), {INDEX: 1, "number": 3})
-    self.assertAllEqual(next(it), {INDEX: 2, "number": 5})
 
   def test_next_with_drop_grain_meta_features(self):
     options = data_iterators.IteratorOptions(drop_grain_meta_features=True)

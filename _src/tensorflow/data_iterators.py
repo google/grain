@@ -117,11 +117,7 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
 
   def __next__(self) -> dataset_iterator.Element:
     self._ensure_iterator()
-    try:
-      element = next(self._iterator)
-    except StopIteration as e:
-      self.reset()
-      raise e from None
+    element = next(self._iterator)  # Might raise StopIteration.
     self._last_seen_index = element[constants.INDEX].max().item()
     # Apply options.
     if self._options.drop_grain_meta_features:
