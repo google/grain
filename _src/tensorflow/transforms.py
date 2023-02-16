@@ -96,6 +96,29 @@ class GlobalTfDataTransform(abc.ABC):
     """Applies this transformation to the dataset."""
 
 
+class UnsafeTfDataTransform(GlobalTfDataTransform):
+  """Use this base class to implement your own tf.data transformation.
+
+  WARNING:
+  This should be your last resort. By subclassing this transform you get access
+  to the underlying `tf.data.Dataset` object and can modify it freely. Grain
+  will apply your transform as is but it cannot verify that your new dataset is
+  deterministic and follows the the rules for transformations. Your input
+  pipeline will run fine but most likely Grain will not recover from
+  checkpoints correctly and skip some elements (or worse).
+  That said, your use might be valid and we recommend to reach out to us to
+  check if using UnsafeTfDataTransform is your best option.
+
+  ```
+  class DummyTransform(grain.UnsafeTfDataTransform):
+
+    def apply_to_dataset(self, dataset: tf.data.Dataset) -> tf.data.Dataset:
+      del dataset
+      return tf.data.experimental.from_list(["I", "tricked", "Grain"])
+  ```
+  """
+
+
 @final
 @dataclasses.dataclass(frozen=True)
 class CacheTransform(GlobalTfDataTransform):

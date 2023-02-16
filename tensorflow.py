@@ -59,6 +59,7 @@ from ._src.tensorflow.transforms import (
     RandomMapTransform,
     Transformation,
     Transformations,
+    UnsafeTfDataTransform,
 )
 
 from .core import *
