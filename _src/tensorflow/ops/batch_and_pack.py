@@ -28,36 +28,43 @@ import tensorflow as tf
 
 def _check_is_tensor_spec(component_spec):
   if not isinstance(component_spec, tf.TensorSpec):
-    raise TypeError("`BatchAndPackDataset` is only supported for datasets "
-                    "that produce tensor elements but the input dataset "
-                    "produces elements of unsupported type "
-                    f"{component_spec.value_type}.")
+    raise TypeError(
+        "`BatchAndPackDataset` is only supported for datasets "
+        "that produce tensor elements but the input dataset "
+        "produces elements of unsupported type "
+        f"{component_spec.value_type}."
+    )
 
 
 class BatchAndPackDataset(tf.data.Dataset):
   """A `Dataset` that batches and packes continuous elements from its input."""
 
-  def __init__(self,
-               input_dataset: tf.data.Dataset,
-               *,
-               batch_size: int,
-               sequence_lengths: Any,
-               parallel_copy: bool = True):
+  def __init__(
+      self,
+      input_dataset: tf.data.Dataset,
+      *,
+      batch_size: int,
+      sequence_lengths: Any,
+      parallel_copy: bool = True,
+  ):
     self._name = None
     self._input_dataset = input_dataset
     self._batch_size = tf.convert_to_tensor(
-        batch_size, dtype=tf.int64, name="batch_size")
+        batch_size, dtype=tf.int64, name="batch_size"
+    )
     tf.nest.map_structure(_check_is_tensor_spec, input_dataset.element_spec)
 
     try:
-      tf.nest.assert_same_structure(input_dataset.element_spec,
-                                    sequence_lengths)
+      tf.nest.assert_same_structure(
+          input_dataset.element_spec, sequence_lengths
+      )
     except ValueError as e:
       raise ValueError(
           "Input dataset and sequence length must have the same structure. You "
           "must provide a sequence length for each feature. In the above "
           "error the first structure is the input dataset and the second "
-          "structure is the provided sequence length.") from e
+          "structure is the provided sequence length."
+      ) from e
 
     def _output_tensor_spec(ts: tf.TensorSpec, seq_len: int):
       # The first dimension must be the sequence dimension that gets packed to
@@ -69,15 +76,19 @@ class BatchAndPackDataset(tf.data.Dataset):
       return (
           tf.TensorSpec(shape=shape, dtype=ts.dtype),  # Values.
           tf.TensorSpec((batch_size, seq_len), tf.int64),  # Segment IDs.
-          tf.TensorSpec((batch_size, seq_len), tf.int64))  # Positions.
+          tf.TensorSpec((batch_size, seq_len), tf.int64),
+      )  # Positions.
 
     flat_sequence_lengths = tf.nest.flatten(sequence_lengths)
     flat_structure = [
-        _output_tensor_spec(ts, seq_len) for ts, seq_len in zip(
-            tf.nest.flatten(input_dataset.element_spec), flat_sequence_lengths)
+        _output_tensor_spec(ts, seq_len)
+        for ts, seq_len in zip(
+            tf.nest.flatten(input_dataset.element_spec), flat_sequence_lengths
+        )
     ]
-    self._structure = tf.nest.pack_sequence_as(input_dataset.element_spec,
-                                               flat_structure)
+    self._structure = tf.nest.pack_sequence_as(
+        input_dataset.element_spec, flat_structure
+    )
     flat_output_shapes = [ts.shape for ts in tf.nest.flatten(self._structure)]
     flat_output_types = [ts.dtype for ts in tf.nest.flatten(self._structure)]
 
@@ -88,7 +99,8 @@ class BatchAndPackDataset(tf.data.Dataset):
         parallel_copy=parallel_copy,
         output_shapes=flat_output_shapes,
         Toutput_types=flat_output_types,
-        metadata=self._metadata.SerializeToString())
+        metadata=self._metadata.SerializeToString(),
+    )
     super().__init__(variant_tensor)
 
   @property

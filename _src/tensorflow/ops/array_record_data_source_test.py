@@ -39,7 +39,7 @@ class TfArrayRecordTest(tf.test.TestCase, parameterized.TestCase):
   def test_len(self):
     ar = TfArrayRecordDataSource([
         self.testdata_dir / "alphabet.array_record-00000-of-00002[0:9]",
-        self.testdata_dir / "alphabet.array_record-00001-of-00002[0:6]"
+        self.testdata_dir / "alphabet.array_record-00001-of-00002[0:6]",
     ])
     self.assertLen(ar, 15)
 
@@ -48,14 +48,15 @@ class TfArrayRecordTest(tf.test.TestCase, parameterized.TestCase):
     self.assertLen(ar, 26)
 
   def test_len_from_shard_pattern(self):
-    ar = TfArrayRecordDataSource(self.testdata_dir /
-                                 "alphabet.array_record-?????-of-?????")
+    ar = TfArrayRecordDataSource(
+        self.testdata_dir / "alphabet.array_record-?????-of-?????"
+    )
     self.assertLen(ar, 26)
 
   def test_len_from_list_of_files(self):
     ar = TfArrayRecordDataSource([
         self.testdata_dir / "alphabet.array_record-00000-of-00002",
-        self.testdata_dir / "alphabet.array_record-00001-of-00002"
+        self.testdata_dir / "alphabet.array_record-00001-of-00002",
     ])
     self.assertLen(ar, 26)
 
@@ -69,7 +70,8 @@ class TfArrayRecordTest(tf.test.TestCase, parameterized.TestCase):
   @parameterized.parameters([False, True])
   def test_getitem_random_order(self, cache: bool):
     ar = TfArrayRecordDataSource(
-        self.testdata_dir / "alphabet.array_record@2", cache=cache)
+        self.testdata_dir / "alphabet.array_record@2", cache=cache
+    )
     expected_values = [(i, chr(97 + i)) for i in range(26)]
     random.shuffle(expected_values)
     for i, expected_value in expected_values:
@@ -80,7 +82,7 @@ class TfArrayRecordTest(tf.test.TestCase, parameterized.TestCase):
   def test_getitem_from_read_instructions(self):
     ar = TfArrayRecordDataSource([
         self.testdata_dir / "alphabet.array_record-00000-of-00002[2:8]",
-        self.testdata_dir / "alphabet.array_record-00001-of-00002[1:7]"
+        self.testdata_dir / "alphabet.array_record-00001-of-00002[1:7]",
     ])
     indices = list(range(2, 8)) + list(range(14, 20))
     expected_values = enumerate([chr(97 + i) for i in indices])

@@ -88,6 +88,7 @@ class FilterTransform(abc.ABC):
 
 class GlobalTfDataTransform(abc.ABC):
   """Base class for global transformations."""
+
   # This is not a public API since it would allow transformations that violate
   # Grain's restriction and guarantees.
 
@@ -160,34 +161,43 @@ class IgnoreErrorsTransform(GlobalTfDataTransform):
     return dataset.ignore_errors()
 
 
-LocalTransform = Union[MapTransform, RandomMapTransform, FilterTransform,
-                       preprocess_spec.PreprocessFn]
+LocalTransform = Union[
+    MapTransform,
+    RandomMapTransform,
+    FilterTransform,
+    preprocess_spec.PreprocessFn,
+]
 Transformation = Union[LocalTransform, GlobalTfDataTransform]
 Transformations = Sequence[Transformation]
 
 
-def _random_map_fn(features: Element, *,
-                   transform: RandomMapTransform) -> Element:
+def _random_map_fn(
+    features: Element, *, transform: RandomMapTransform
+) -> Element:
   """Calls transform.random_map() with a random seed."""
   if not isinstance(features, dict):
     raise ValueError(
         "In Grain elements must be dictionaries but transformation "
-        f"{transform} got {features}.")
+        f"{transform} got {features}."
+    )
   if constants.SEED not in features:
     raise ValueError(
         f"Random seed feature not present to apply {transform}. Either this "
         "was not created (by not passing a seed to the index sampler or a "
         "previous transformations removed it. Please do not remove Grain meta "
-        "features (feature names starting with '_'.")
+        "features (feature names starting with '_'."
+    )
   next_seed, seed = tf.unstack(
-      tf.random.experimental.stateless_split(features.pop(constants.SEED)))
+      tf.random.experimental.stateless_split(features.pop(constants.SEED))
+  )
   features = transform.random_map(features, seed)
   features[constants.SEED] = next_seed
   return features
 
 
 def _try_apply_clu_preprocess_op(
-    ds: tf.data.Dataset, preprocess_op) -> Union[tf.data.Dataset, Exception]:
+    ds: tf.data.Dataset, preprocess_op
+) -> Union[tf.data.Dataset, Exception]:
   """Tries to apply a clu.preprocess_spec.PreprocessOp to the dataset.
 
   Args:
@@ -205,13 +215,18 @@ def _try_apply_clu_preprocess_op(
   except Exception as e:  # pylint: disable=broad-except
     return e
   logging.warning(
-      "Applied deprecated PreprocessOp %s. Please subclass "
-      "`grain.MapTransform.`", preprocess_op)
+      (
+          "Applied deprecated PreprocessOp %s. Please subclass "
+          "`grain.MapTransform.`"
+      ),
+      preprocess_op,
+  )
   return ds
 
 
 def _try_apply_seqio_preprocessor(
-    ds: tf.data.Dataset, preprocessor) -> Union[tf.data.Dataset, Exception]:
+    ds: tf.data.Dataset, preprocessor
+) -> Union[tf.data.Dataset, Exception]:
   """Tries to apply a SeqIO preprocessor to the dataset.
 
   Args:
@@ -233,15 +248,18 @@ def _try_apply_seqio_preprocessor(
   except Exception as e:  # pylint: disable=broad-except
     return e
   logging.warning(
-      "Applied potential unsafe preprocessor %s. Are you "
-      "using plain SeqIO preprocessors?", preprocessor)
+      (
+          "Applied potential unsafe preprocessor %s. Are you "
+          "using plain SeqIO preprocessors?"
+      ),
+      preprocessor,
+  )
   return ds
 
 
-def apply_transformations(ds: tf.data.Dataset,
-                          transforms: Transformations,
-                          *,
-                          strict: bool = True) -> tf.data.Dataset:
+def apply_transformations(
+    ds: tf.data.Dataset, transforms: Transformations, *, strict: bool = True
+) -> tf.data.Dataset:
   """Applies the transformations to the dataset.
 
   Args:
@@ -259,13 +277,15 @@ def apply_transformations(ds: tf.data.Dataset,
     raise ValueError(
         "Cannot apply random transformations without a random seed feature. "
         "Passing a seed to the IndexSampler should create a SEED feature. List "
-        f"of trainsformations: {transforms}.")
+        f"of trainsformations: {transforms}."
+    )
 
   for i, t in enumerate(transforms):
     if not isinstance(ds.element_spec, Mapping):
       raise ValueError(
           "Grain expects dataset elements to be dictionaries but got "
-          f"{ds.element_spec}.")
+          f"{ds.element_spec}."
+      )
     if isinstance(t, MapTransform):
       ds = ds.map(t.map, num_parallel_calls=tf.data.AUTOTUNE)
     elif isinstance(t, RandomMapTransform):
@@ -277,36 +297,46 @@ def apply_transformations(ds: tf.data.Dataset,
       ds = t.apply_to_dataset(ds)
     elif isinstance(t, preprocess_spec.PreprocessFn):
       logging.warning(
-          "Applying deprecated PreprocessFn (%s). Please pass a sequence of "
-          "`grain.MapTransform.`s instead.", t)
+          (
+              "Applying deprecated PreprocessFn (%s). Please pass a sequence of"
+              " `grain.MapTransform.`s instead."
+          ),
+          t,
+      )
       ds = ds.map(t, num_parallel_calls=tf.data.AUTOTUNE)
     else:
       ds_or_exception = _try_apply_clu_preprocess_op(ds, t)
       if isinstance(ds_or_exception, Exception) and not strict:
         ds_or_exception = _try_apply_seqio_preprocessor(ds, t)
       if isinstance(ds_or_exception, Exception):
-        raise ValueError(f"Could not apply transform {t} to dataset {ds}."
-                        ) from ds_or_exception
+        raise ValueError(
+            f"Could not apply transform {t} to dataset {ds}."
+        ) from ds_or_exception
       ds = ds_or_exception
     if not isinstance(ds.element_spec, Mapping):
       raise ValueError(
           "Grain expects dataset elements to be dictionaries but got "
-          f"{ds.element_spec} after transform {t}.")
+          f"{ds.element_spec} after transform {t}."
+      )
     if constants.INDEX not in ds.element_spec:
       raise ValueError(
           f"Transform {t} removed the INDEX feature. Please do not remove "
           "features with keys in grain.META_FEATURES. Grain needs these for "
-          "correctness.")
+          "correctness."
+      )
     if ds.element_spec[constants.INDEX].dtype != tf.int64:
       raise ValueError(
           f"Transform {t} changed the dtype of the INDEX feature to "
           f"{ds.element_spec[constants.INDEX].dtype}. Please do not change "
-          "types of the features with keys in grain.META_FEATURES")
+          "types of the features with keys in grain.META_FEATURES"
+      )
     seed_required = any(
-        isinstance(t, RandomMapTransform) for t in transforms[i + 1:])
+        isinstance(t, RandomMapTransform) for t in transforms[i + 1 :]
+    )
     if seed_required and constants.SEED not in ds.element_spec:
       raise ValueError(
           f"Transform {t} removed the SEED feature but a later transform needs "
           "it. Please do not remove features with keys in grain.META_FEATURES. "
-          "Grain needs these for correctness.")
+          "Grain needs these for correctness."
+      )
   return ds

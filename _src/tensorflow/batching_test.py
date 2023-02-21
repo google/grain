@@ -44,18 +44,21 @@ class BatchingTest(tf.test.TestCase, parameterized.TestCase):
   def test_batch(self, num_parallel_calls: int):
     ds = tf.data.Dataset.range(11)
     batch_fn = batching.TfBatch(
-        2, drop_remainder=False, num_parallel_calls=num_parallel_calls)
+        2, drop_remainder=False, num_parallel_calls=num_parallel_calls
+    )
     ds = batch_fn.apply_to_dataset(ds)
     elements = list(ds)
     self.assertLen(elements, 6)
-    self.assertAllClose(elements, [(0, 1), (2, 3), (4, 5), (6, 7), (8, 9),
-                                   (10,)])
+    self.assertAllClose(
+        elements, [(0, 1), (2, 3), (4, 5), (6, 7), (8, 9), (10,)]
+    )
 
   @parameterized.parameters(1, 2, tf.data.AUTOTUNE)
   def test_batch_drop_remainder(self, num_parallel_calls: int):
     ds = tf.data.Dataset.range(11)
     batch_fn = batching.TfBatch(
-        2, drop_remainder=True, num_parallel_calls=num_parallel_calls)
+        2, drop_remainder=True, num_parallel_calls=num_parallel_calls
+    )
     ds = batch_fn.apply_to_dataset(ds)
     elements = list(ds)
     self.assertLen(elements, 5)
@@ -65,34 +68,40 @@ class BatchingTest(tf.test.TestCase, parameterized.TestCase):
       multihost_utils,
       "process_allgather",
       autospec=True,
-      return_value=np.asarray([5, 7]))
+      return_value=np.asarray([5, 7]),
+  )
   def test_batch_with_pad_elements_process_0(self, mock_process_allgather):
     ds = tf.data.Dataset.range(5).map(lambda i: {"index": i})
     batch_fn = batching.TfBatchWithPadElements(2, mask_key="mask")
     ds = batch_fn.apply_to_dataset(ds)
     elements = _dataset_to_dict(ds)
     self.assertAllClose(
-        elements, {
+        elements,
+        {
             "index": [(0, 1), (2, 3), (4, 0), (0, 0)],
             "mask": [(True, True), (True, True), (True, False), (False, False)],
-        })
+        },
+    )
     mock_process_allgather.assert_called_once()
 
   @mock.patch.object(
       multihost_utils,
       "process_allgather",
       autospec=True,
-      return_value=np.asarray([5, 7]))
+      return_value=np.asarray([5, 7]),
+  )
   def test_batch_with_pad_elements_process_1(self, mock_process_allgather):
     ds = tf.data.Dataset.range(7).map(lambda i: {"index": i})
     batch_fn = batching.TfBatchWithPadElements(2, mask_key="mask")
     ds = batch_fn.apply_to_dataset(ds)
     elements = _dataset_to_dict(ds)
     self.assertAllClose(
-        elements, {
+        elements,
+        {
             "index": [(0, 1), (2, 3), (4, 5), (6, 0)],
             "mask": [(True, True), (True, True), (True, True), (True, False)],
-        })
+        },
+    )
     mock_process_allgather.assert_called_once()
 
   def test_batch_with_pad_element_unknown_cardinality(self):
@@ -100,25 +109,32 @@ class BatchingTest(tf.test.TestCase, parameterized.TestCase):
     self.assertEqual(ds.cardinality(), tf.data.UNKNOWN_CARDINALITY)
     batch_fn = batching.TfBatchWithPadElements(2, mask_key="mask")
     with self.assertRaisesRegex(
-        ValueError, r"Dataset has unknown cardinality before batching.+"):
+        ValueError, r"Dataset has unknown cardinality before batching.+"
+    ):
       batch_fn.apply_to_dataset(ds)
 
   def test_batch_and_pack(self):
-    ds = tf.data.experimental.from_list([{
-        constants.INDEX: 1,
-        "values": [34, 2],
-    }, {
-        constants.INDEX: 2,
-        "values": [2, 49, 99],
-    }, {
-        constants.INDEX: 3,
-        "values": [2, 3, 5, 6],
-    }, {
-        constants.INDEX: 4,
-        "values": [2],
-    }])
+    ds = tf.data.experimental.from_list([
+        {
+            constants.INDEX: 1,
+            "values": [34, 2],
+        },
+        {
+            constants.INDEX: 2,
+            "values": [2, 49, 99],
+        },
+        {
+            constants.INDEX: 3,
+            "values": [2, 3, 5, 6],
+        },
+        {
+            constants.INDEX: 4,
+            "values": [2],
+        },
+    ])
     batch_fn = batching.TfBatchAndPack(
-        batch_size=2, sequence_lengths={"values": 6})
+        batch_size=2, sequence_lengths={"values": 6}
+    )
     # TfBatchAndBack will implicitly also pack INDEX to sequence length 6.
     ds = batch_fn.apply_to_dataset(ds)
     ds = next(ds.as_numpy_iterator())
@@ -128,15 +144,18 @@ class BatchingTest(tf.test.TestCase, parameterized.TestCase):
             # We have batch_size=2. The first row contains the element with
             # index 1, 2 and 4. The second row has the element 3. Both rows are
             # padded to have 6 values.
-            constants.INDEX:
-                np.asarray([[1, 2, 4, 0, 0, 0], [3, 0, 0, 0, 0, 0]]),
-            "values":
-                np.asarray([[34, 2, 2, 49, 99, 2], [2, 3, 5, 6, 0, 0]]),
-            "values_segment_ids":
-                np.asarray([[1, 1, 2, 2, 2, 3], [1, 1, 1, 1, 0, 0]]),
-            "values_positions":
-                np.asarray([[0, 1, 0, 1, 2, 0], [0, 1, 2, 3, 0, 0]]),
-        })
+            constants.INDEX: np.asarray(
+                [[1, 2, 4, 0, 0, 0], [3, 0, 0, 0, 0, 0]]
+            ),
+            "values": np.asarray([[34, 2, 2, 49, 99, 2], [2, 3, 5, 6, 0, 0]]),
+            "values_segment_ids": np.asarray(
+                [[1, 1, 2, 2, 2, 3], [1, 1, 1, 1, 0, 0]]
+            ),
+            "values_positions": np.asarray(
+                [[0, 1, 0, 1, 2, 0], [0, 1, 2, 3, 0, 0]]
+            ),
+        },
+    )
 
 
 if __name__ == "__main__":

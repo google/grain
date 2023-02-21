@@ -37,12 +37,15 @@ class ShardOptions:
 
   def __post_init__(self):
     if self.shard_count <= 0:
-      raise ValueError("Number of shards must be a positive integer but got "
-                       f"{self.shard_count}.")
+      raise ValueError(
+          "Number of shards must be a positive integer but got "
+          f"{self.shard_count}."
+      )
     if self.shard_index < 0 or self.shard_index >= self.shard_count:
       raise ValueError(
           "Shard shard_index must be in [0, shard_count - 1], shard_count was "
-          f"{self.shard_count} and shard_index was {self.shard_index}.")
+          f"{self.shard_count} and shard_index was {self.shard_index}."
+      )
 
 
 class NoSharding(ShardOptions):
@@ -59,7 +62,8 @@ class ShardByJaxProcess(ShardOptions):
     super().__init__(
         shard_index=jax.process_index(),
         shard_count=jax.process_count(),
-        drop_remainder=drop_remainder)
+        drop_remainder=drop_remainder,
+    )
 
 
 def even_split(num_examples: int, options: ShardOptions) -> tuple[int, int]:
@@ -87,8 +91,12 @@ def even_split(num_examples: int, options: ShardOptions) -> tuple[int, int]:
 
   if num_unused_examples > 0:
     if options.drop_remainder:
-      logging.warning("Dropping %d examples of %d examples (shard %d).",
-                      num_unused_examples, num_examples, options.shard_count)
+      logging.warning(
+          "Dropping %d examples of %d examples (shard %d).",
+          num_unused_examples,
+          num_examples,
+          options.shard_count,
+      )
     else:
       shard_start += min(options.shard_index, num_unused_examples)
       shard_end += min(options.shard_index + 1, num_unused_examples)

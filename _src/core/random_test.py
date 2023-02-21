@@ -55,9 +55,10 @@ class RandomTest(tf.test.TestCase, parameterized.TestCase):
               # custom first, implementation afterwards.
               ("custom", "threefry2x32"),
               ("custom", "rbg"),
-          ]))
+          ],
+      )
+  )
   def test_rng_for_jax_custom(self, seed, contexts):
-
     def get_ctx(name):
       if name is None:
         return contextlib.nullcontext()

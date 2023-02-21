@@ -41,16 +41,19 @@ class DataLoadersTest(tf.test.TestCase, parameterized.TestCase):
     records_per_dataset = (3, 8, 5)
     num_records = sum(records_per_dataset)
     index = {
-        constants.RECORD_KEY:
-            np.concatenate((range(3), range(8), range(5)), axis=0),
-        constants.DATASET_INDEX:
-            np.asarray(3 * [0] + 8 * [1] + 5 * [2], np.int64),
+        constants.RECORD_KEY: np.concatenate(
+            (range(3), range(8), range(5)), axis=0
+        ),
+        constants.DATASET_INDEX: np.asarray(
+            3 * [0] + 8 * [1] + 5 * [2], np.int64
+        ),
     }
     index_ds = _dict_to_dataset(index)
     actual_ds = data_loaders._add_global_record_key(
         index_ds,
         records_per_dataset=records_per_dataset,
-        output_key="my_output_key")
+        output_key="my_output_key",
+    )
     actual = _dataset_to_dict(actual_ds)
     expected = index | {"my_output_key": np.arange(num_records, dtype=np.int64)}
     self.assertAllClose(actual, expected)
@@ -58,36 +61,43 @@ class DataLoadersTest(tf.test.TestCase, parameterized.TestCase):
   @mock.patch.object(tfds.core, "DatasetInfo")
   def test_load_from_tfds_invalid_args(self, tfds_info_mock):
     # Neither name nor tfds_info.
-    with self.assertRaisesRegex(ValueError,
-                                "Please provide either `name` or `tfds_info`."):
+    with self.assertRaisesRegex(
+        ValueError, "Please provide either `name` or `tfds_info`."
+    ):
       data_loaders.load_from_tfds(
-          split="train", shard_options=sharding.NoSharding())
+          split="train", shard_options=sharding.NoSharding()
+      )
     # Name and tfds_info.
-    with self.assertRaisesRegex(ValueError,
-                                "Please provide either `name` or `tfds_info`."):
+    with self.assertRaisesRegex(
+        ValueError, "Please provide either `name` or `tfds_info`."
+    ):
       data_loaders.load_from_tfds(
           name="my_dataset",
           split="train",
           tfds_info=tfds_info_mock,
-          shard_options=sharding.NoSharding())
+          shard_options=sharding.NoSharding(),
+      )
 
   @parameterized.parameters([
       (True, 34, None),
       (True, 34, 7),
       (False, 34, 7),
   ])
-  def test_load_from_tfds_sampler(self, shuffle: bool, seed: int,
-                                  num_epochs: Optional[int]):
+  def test_load_from_tfds_sampler(
+      self, shuffle: bool, seed: int, num_epochs: Optional[int]
+  ):
     with mock.patch.object(tfds.core, "DatasetInfo") as tfds_info_mock:
       tfds_info_mock.file_format = (
-          tfds.core.file_adapters.FileFormat.ARRAY_RECORD)
+          tfds.core.file_adapters.FileFormat.ARRAY_RECORD
+      )
       loader = data_loaders.load_from_tfds(
           tfds_info=tfds_info_mock,
           split="train",
           shard_options=sharding.NoSharding(),
           seed=seed,
           num_epochs=num_epochs,
-          shuffle=shuffle)
+          shuffle=shuffle,
+      )
       self.assertEqual(loader.sampler.shuffle, shuffle)
       self.assertEqual(loader.sampler.seed, seed)
       self.assertEqual(loader.sampler.num_epochs, num_epochs)

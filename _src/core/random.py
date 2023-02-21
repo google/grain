@@ -109,14 +109,18 @@ def as_rng_key(seed: RNGKeyLike) -> RNGKey:
     # Assume that this is already a KeyArray.
     return seed
   if len(seed) != 2:
-    raise ValueError("Random seed must be a single integer or a "
-                     f"Tuple[int, int] but got {seed!r}")
+    raise ValueError(
+        "Random seed must be a single integer or a "
+        f"Tuple[int, int] but got {seed!r}"
+    )
   return jax.random.PRNGKey(sum(seed))
 
 
 def make_rng_key(seed: Optional[RNGKeyLike]) -> RNGKey:
-  logging.error("Using deprecated method make_rng_key(). Please always pass "
-                "None or a single integer as random seed to Grain methods.")
+  logging.error(
+      "Using deprecated method make_rng_key(). Please always pass "
+      "None or a single integer as random seed to Grain methods."
+  )
   if seed is None:
     seed = int.from_bytes(os.urandom(4), sys.byteorder)
   return as_rng_key(seed)

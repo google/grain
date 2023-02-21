@@ -21,12 +21,19 @@ class ShardingTest(parameterized.TestCase):
       (8, 1, 3, False, (3, 6)),
       (8, 2, 3, False, (6, 8)),
   )
-  def test_sharding(self, num_examples: int, shard_index: int, shard_count: int,
-                    drop_remainder, expected_output: tuple[int, int]):
+  def test_sharding(
+      self,
+      num_examples: int,
+      shard_index: int,
+      shard_count: int,
+      drop_remainder,
+      expected_output: tuple[int, int],
+  ):
     shard_options = sharding.ShardOptions(
         shard_index=shard_index,
         shard_count=shard_count,
-        drop_remainder=drop_remainder)
+        drop_remainder=drop_remainder,
+    )
     actual_output = sharding.even_split(num_examples, shard_options)
     self.assertEqual(actual_output, expected_output)
 

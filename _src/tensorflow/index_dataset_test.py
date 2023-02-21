@@ -34,17 +34,20 @@ _SHUFFLE = (True, False)
 _SHARD_COUNT = (1, 3)
 
 
-def create_dataset(records_per_dataset: Union[int, Sequence[int]],
-                   /,
-                   *,
-                   emit_epoch: bool = True,
-                   seed=32,
-                   **kwargs):
+def create_dataset(
+    records_per_dataset: Union[int, Sequence[int]],
+    /,
+    *,
+    emit_epoch: bool = True,
+    seed=32,
+    **kwargs,
+):
   """Shortcut for create_index_dataset() that sets emit_epoch and seed."""
   if "shard_options" not in kwargs:
     kwargs["shard_options"] = ShardOptions(0, 1)
   return index_dataset._create_index_dataset(
-      records_per_dataset, emit_epoch=emit_epoch, seed=seed, **kwargs)
+      records_per_dataset, emit_epoch=emit_epoch, seed=seed, **kwargs
+  )
 
 
 class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
@@ -116,10 +119,11 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
     """Mixing datasets with fixed number epochs is not allowed."""
     with self.assertRaisesRegex(
         ValueError,
-        "Using fixed number of epochs is not allowed when mixing datasets."):
-      index_dataset._create_index_dataset([4, 8],
-                                          num_epochs=2,
-                                          shard_options=ShardOptions(0, 1))
+        "Using fixed number of epochs is not allowed when mixing datasets.",
+    ):
+      index_dataset._create_index_dataset(
+          [4, 8], num_epochs=2, shard_options=ShardOptions(0, 1)
+      )
 
   def test_shuffle_simple(self):
     """Shuffling, no sharding, no mixing."""
@@ -178,7 +182,9 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
               # custom first, implementation afterwards.
               ("custom", "threefry2x32"),
               ("custom", "rbg"),
-          ]))
+          ],
+      )
+  )
   def test_shuffle_other_argument_types(self, shard_count: int, contexts):
     """Test we can pass TF and JAX random keys."""
 
@@ -199,7 +205,8 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
         tuple_seed = (32, 73)
         # Seed is a tensor.
         tf_seed, _ = tf.unstack(
-            tf.random.experimental.stateless_split((32, 73)))
+            tf.random.experimental.stateless_split((32, 73))
+        )
         # Seed is a JAX PRNGKey.
         jax_seed = jax.random.PRNGKey(32)
         # Users might have custom PRNG enabled. We test both combinations.
@@ -208,18 +215,22 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
               6,
               shuffle=True,
               seed=seed,
-              shard_options=ShardOptions(0, shard_count))
+              shard_options=ShardOptions(0, shard_count),
+          )
           values = list(dataset.take(6).as_numpy_iterator())
           if shard_count == 1:
-            self.assertCountEqual([r[RECORD_KEY] for r in values],
-                                  [0, 1, 2, 3, 4, 5])
+            self.assertCountEqual(
+                [r[RECORD_KEY] for r in values], [0, 1, 2, 3, 4, 5]
+            )
           else:
-            self.assertCountEqual([r[RECORD_KEY] for r in values],
-                                  [0, 0, 1, 1, 2, 2])
+            self.assertCountEqual(
+                [r[RECORD_KEY] for r in values], [0, 0, 1, 1, 2, 2]
+            )
 
   def test_sharding_drop_remainder(self):
     dataset = create_dataset(
-        8, shard_options=ShardOptions(0, 3, drop_remainder=True))
+        8, shard_options=ShardOptions(0, 3, drop_remainder=True)
+    )
     values = list(dataset.take(4).as_numpy_iterator())
     # pyformat: disable
     self.assertAllEqual(values,
@@ -229,7 +240,8 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
                          {INDEX: 9, EPOCH: 2, RECORD_KEY: 1}])
     # pyformat: enable
     dataset = create_dataset(
-        8, start_index=1, shard_options=ShardOptions(1, 3, drop_remainder=True))
+        8, start_index=1, shard_options=ShardOptions(1, 3, drop_remainder=True)
+    )
     values = list(dataset.take(4).as_numpy_iterator())
     # pyformat: disable
     self.assertAllEqual(values,
@@ -239,7 +251,8 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
                          {INDEX: 10, EPOCH: 2, RECORD_KEY: 3}])
     # pyformat: enable
     dataset = create_dataset(
-        8, start_index=2, shard_options=ShardOptions(2, 3, drop_remainder=True))
+        8, start_index=2, shard_options=ShardOptions(2, 3, drop_remainder=True)
+    )
     values = list(dataset.take(4).as_numpy_iterator())
     # pyformat: disable
     self.assertAllEqual(values,
@@ -251,7 +264,8 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
 
   def test_sharding_no_drop_remainder(self):
     dataset = create_dataset(
-        8, shard_options=ShardOptions(0, 3, drop_remainder=False))
+        8, shard_options=ShardOptions(0, 3, drop_remainder=False)
+    )
     values = list(dataset.take(4).as_numpy_iterator())
     # pyformat: disable
     self.assertAllEqual(values,
@@ -261,9 +275,8 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
                          {INDEX: 9, EPOCH: 2, RECORD_KEY: 0}])
     # pyformat: enable
     dataset = create_dataset(
-        8,
-        start_index=1,
-        shard_options=ShardOptions(1, 3, drop_remainder=False))
+        8, start_index=1, shard_options=ShardOptions(1, 3, drop_remainder=False)
+    )
     values = list(dataset.take(4).as_numpy_iterator())
     # pyformat: disable
     self.assertAllEqual(values,
@@ -273,9 +286,8 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
                          {INDEX: 10, EPOCH: 2, RECORD_KEY: 3}])
     # pyformat: enable
     dataset = create_dataset(
-        8,
-        start_index=2,
-        shard_options=ShardOptions(2, 3, drop_remainder=False))
+        8, start_index=2, shard_options=ShardOptions(2, 3, drop_remainder=False)
+    )
     values = list(dataset.take(4).as_numpy_iterator())
     # pyformat: disable
     self.assertAllEqual(values,
@@ -373,7 +385,8 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
 
   def test_shuffle_and_sharding(self):
     dataset = create_dataset(
-        6, shuffle=True, seed=32, shard_options=ShardOptions(0, 2))
+        6, shuffle=True, seed=32, shard_options=ShardOptions(0, 2)
+    )
     values = list(dataset.take(6).as_numpy_iterator())
     # pyformat: disable
     self.assertAllEqual(values,
@@ -390,7 +403,8 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
         shuffle=True,
         seed=42,
         start_index=1,
-        shard_options=ShardOptions(1, 2))
+        shard_options=ShardOptions(1, 2),
+    )
     values = list(dataset.take(6).as_numpy_iterator())
     # pyformat: disable
     self.assertAllEqual(values,
@@ -422,9 +436,9 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
                          {INDEX: 18, EPOCH: 2, RECORD_KEY: 1, DATASET_INDEX: 1},
                         ])
     # pyformat: enable
-    dataset = create_dataset([4, 6],
-                             start_index=1,
-                             shard_options=ShardOptions(1, 2))
+    dataset = create_dataset(
+        [4, 6], start_index=1, shard_options=ShardOptions(1, 2)
+    )
     values = list(dataset.take(10).as_numpy_iterator())
     # pyformat: disable
     self.assertAllEqual(values,
@@ -468,7 +482,8 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
           num_records_per_dataset,
           shard_options=ShardOptions(shard_index, shard_count),
           shuffle=True,
-          seed=123)
+          seed=123,
+      )
       # 2 epochs.
       dataset = dataset.take(num_elements)
       # Separate record keys orders but dataset index and epoch.
@@ -484,7 +499,8 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
         # Otherwise the logic for this test case is wrong.
         record_order = tuple(np.asarray(record_order) - np.min(record_order))
         self.assertAllEqual(
-            sorted(record_order), list(range(64 // shard_count)))
+            sorted(record_order), list(range(64 // shard_count))
+        )
 
         # Unless we are very unlucky we should have a new unseen order.
         self.assertNotIn(record_order, seen_orders)
@@ -516,7 +532,8 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
       seeds_3 |= get_record_to_seed_map(
           shuffle=False,
           start_index=i,
-          shard_options=ShardOptions(i, 2, drop_remainder=False))
+          shard_options=ShardOptions(i, 2, drop_remainder=False),
+      )
     self.assertAllEqual(seeds_1, seeds_3)
 
     # shuffling, sharding.
@@ -525,14 +542,18 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
       seeds_4 |= get_record_to_seed_map(
           shuffle=True,
           start_index=i,
-          shard_options=ShardOptions(i, 2, drop_remainder=False))
+          shard_options=ShardOptions(i, 2, drop_remainder=False),
+      )
     self.assertAllEqual(seeds_1, seeds_4)
 
   @parameterized.parameters(
-      itertools.product(_RECORDS_PER_DATASET, _PROPORTIONS, _SHUFFLE,
-                        _SHARD_COUNT))
-  def test_determinism(self, records_per_dataset, proportions, shuffle: bool,
-                       shard_count: int):
+      itertools.product(
+          _RECORDS_PER_DATASET, _PROPORTIONS, _SHUFFLE, _SHARD_COUNT
+      )
+  )
+  def test_determinism(
+      self, records_per_dataset, proportions, shuffle: bool, shard_count: int
+  ):
     """Creating the dataset twice gives the same result."""
     seed = 3 if shuffle else None
     dataset = create_dataset(
@@ -540,22 +561,27 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
         proportions=proportions,
         shuffle=shuffle,
         seed=seed,
-        shard_options=ShardOptions(0, shard_count))
+        shard_options=ShardOptions(0, shard_count),
+    )
     values_1 = list(dataset.take(50).as_numpy_iterator())
     dataset = create_dataset(
         records_per_dataset,
         proportions=proportions,
         shuffle=shuffle,
         seed=seed,
-        shard_options=ShardOptions(0, shard_count))
+        shard_options=ShardOptions(0, shard_count),
+    )
     values_2 = list(dataset.take(50).as_numpy_iterator())
     self.assertAllEqual(values_1, values_2)
 
   @parameterized.parameters(
-      itertools.product(_RECORDS_PER_DATASET, _PROPORTIONS, _SHUFFLE,
-                        _SHARD_COUNT))
-  def test_start_index(self, records_per_dataset, proportions, shuffle: bool,
-                       shard_count: int):
+      itertools.product(
+          _RECORDS_PER_DATASET, _PROPORTIONS, _SHUFFLE, _SHARD_COUNT
+      )
+  )
+  def test_start_index(
+      self, records_per_dataset, proportions, shuffle: bool, shard_count: int
+  ):
     """We can start anyway and get the same elements."""
     seed = 3 if shuffle else None
     dataset = create_dataset(
@@ -563,7 +589,8 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
         proportions=proportions,
         shuffle=shuffle,
         seed=seed,
-        shard_options=ShardOptions(0, shard_count))
+        shard_options=ShardOptions(0, shard_count),
+    )
     all_values = list(dataset.take(50).as_numpy_iterator())
     for step in range(1, 30):
       dataset = create_dataset(
@@ -572,7 +599,8 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
           shuffle=shuffle,
           seed=seed,
           shard_options=ShardOptions(0, shard_count),
-          start_index=step * shard_count)
+          start_index=step * shard_count,
+      )
       values = list(dataset.take(50 - step).as_numpy_iterator())
       self.assertAllEqual(all_values[step:], values)
 
@@ -582,20 +610,23 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
       (1, 2, {1, 3, 5, 7, 9}),
       (2, 3, {2, 5, 8}),
   ])
-  def test_invalid_start_index(self, shard_index: int, shard_count: int,
-                               valid_start_indices):
+  def test_invalid_start_index(
+      self, shard_index: int, shard_count: int, valid_start_indices
+  ):
     for start_index in range(10):
       if start_index in valid_start_indices:
         index_dataset._create_index_dataset(
             100,
             start_index=start_index,
-            shard_options=ShardOptions(shard_index, shard_count))
+            shard_options=ShardOptions(shard_index, shard_count),
+        )
       else:
         with self.assertRaises(ValueError, msg=f"start_index={start_index}"):
           index_dataset._create_index_dataset(
               100,
               start_index=start_index,
-              shard_options=ShardOptions(shard_index, shard_count))
+              shard_options=ShardOptions(shard_index, shard_count),
+          )
 
   @parameterized.parameters([
       (0, 0, 2, [0, 2, 4, 6, 8]),
@@ -605,13 +636,19 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
       (index_dataset.NextIndex(2), 0, 2, [4, 6, 8]),
       (index_dataset.NextIndex(5), 1, 2, [7, 9]),
   ])
-  def test_special_start_indices(self, start_index, shard_index: int,
-                                 shard_count: int, expected_indices: List[int]):
+  def test_special_start_indices(
+      self,
+      start_index,
+      shard_index: int,
+      shard_count: int,
+      expected_indices: List[int],
+  ):
     ds = index_dataset._create_index_dataset(
         10,
         start_index=start_index,
         shard_options=ShardOptions(shard_index, shard_count),
-        num_epochs=1)
+        num_epochs=1,
+    )
     actual_indices = [e[INDEX].numpy().item() for e in ds]
     self.assertAllEqual(actual_indices, expected_indices)
 
@@ -620,11 +657,13 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
       ((3, 55), 550, 1),
       ((2, 77), 320, 2),
   ])
-  def test_shuffle_is_permutation(self, seed: tuple[int, int], num_records: int,
-                                  num_epochs: int):
+  def test_shuffle_is_permutation(
+      self, seed: tuple[int, int], num_records: int, num_epochs: int
+  ):
     ds = tf.data.Dataset.range(num_records * num_epochs)
     shuffle_fn = functools.partial(
-        index_dataset._shuffle, seed=seed, num_records=num_records)
+        index_dataset._shuffle, seed=seed, num_records=num_records
+    )
     ds = ds.map(shuffle_fn, num_parallel_calls=tf.data.AUTOTUNE)
     shuffled_indices = [x.numpy().item() for x in ds]
     self.assertLen(shuffled_indices, num_records * num_epochs)
@@ -637,12 +676,13 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
       ((3, 55), 550, 1),
       ((2, 77), 320, 2),
   ])
-  def test_interleaved_shuffle_is_permutation(self, seed: tuple[int, int],
-                                              num_records: int,
-                                              num_epochs: int):
+  def test_interleaved_shuffle_is_permutation(
+      self, seed: tuple[int, int], num_records: int, num_epochs: int
+  ):
     ds = tf.data.Dataset.range(num_records * num_epochs)
     shuffle_fn = functools.partial(
-        index_dataset._interleaved_shuffle, seed=seed, num_records=num_records)
+        index_dataset._interleaved_shuffle, seed=seed, num_records=num_records
+    )
     ds = ds.map(shuffle_fn, num_parallel_calls=tf.data.AUTOTUNE)
     shuffled_indices = [x.numpy().item() for x in ds]
     self.assertLen(shuffled_indices, num_records * num_epochs)

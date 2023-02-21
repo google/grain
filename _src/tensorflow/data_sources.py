@@ -87,18 +87,21 @@ class _ParseAndDecodeExample:
 
   def __call__(self, record: tf.Tensor) -> Mapping[str, Any]:
     return self.tfds_features.deserialize_example(
-        record, decoders=self.decoders)
+        record, decoders=self.decoders
+    )
 
 
 class TfdsDataSource:
   """Data source for TFDS datasets."""
 
-  def __init__(self,
-               dataset_info: tfds.core.DatasetInfo,
-               *,
-               split: str,
-               decoders: Optional[Mapping[str, Any]] = None,
-               cache: bool = False):
+  def __init__(
+      self,
+      dataset_info: tfds.core.DatasetInfo,
+      *,
+      split: str,
+      decoders: Optional[Mapping[str, Any]] = None,
+      cache: bool = False,
+  ):
     self._tfds_info = dataset_info
     self._split = split
     self._decoders = decoders
@@ -111,17 +114,18 @@ class TfdsDataSource:
     if file_format == tfds.core.file_adapters.FileFormat.ARRAY_RECORD:
       self._source = TfArrayRecordDataSource(paths, cache=cache)
     else:
-      raise NotImplementedError("No random access data source for file format "
-                                f"{dataset_info.file_format}.")
+      raise NotImplementedError(
+          "No random access data source for file format "
+          f"{dataset_info.file_format}."
+      )
     usage_logging.log_event(
-        "TfdsDataSource", tag_2=file_format.name, tag_3="TfGrain")
+        "TfdsDataSource", tag_2=file_format.name, tag_3="TfGrain"
+    )
 
   @classmethod
-  def from_name(cls,
-                name: str,
-                *,
-                data_dir: Optional[epath.PathLike] = None,
-                **kwargs):
+  def from_name(
+      cls, name: str, *, data_dir: Optional[epath.PathLike] = None, **kwargs
+  ):
     dataset_info = tfds.builder(name, data_dir=data_dir).info
     return cls(dataset_info, **kwargs)
 
@@ -147,9 +151,11 @@ class TfdsDataSource:
     decoders = self._decoders
     if decoders:
       decoders = jax.tree_map(type, decoders)
-    return (f"TfdsDataSource(builder_directory={self._tfds_info.data_dir!r}, "
-            f"split={self._split!r}, "
-            f"decoders={decoders})")
+    return (
+        f"TfdsDataSource(builder_directory={self._tfds_info.data_dir!r}, "
+        f"split={self._split!r}, "
+        f"decoders={decoders})"
+    )
 
 
 @dataclasses.dataclass
@@ -165,7 +171,8 @@ class TfInMemoryDataSource:
 
   def __post_init__(self):
     usage_logging.log_event(
-        "TfInMemoryDataSource", tag_2="IN_MEMORY", tag_3="TfGrain")
+        "TfInMemoryDataSource", tag_2="IN_MEMORY", tag_3="TfGrain"
+    )
 
   def __len__(self) -> int:
     return tf.nest.flatten(self.values)[0].shape[0]
@@ -178,13 +185,16 @@ class TfInMemoryDataSource:
       return tf.map_fn(
           lambda r: tf.nest.map_structure(lambda x: x[r], self.values),
           record_keys,
-          dtype=tf.nest.map_structure(lambda x: x.dtype, self.values))
+          dtype=tf.nest.map_structure(lambda x: x.dtype, self.values),
+      )
     raise ValueError(
-        f"Record keys must be a scalar or vector but got {record_keys.rank}.")
+        f"Record keys must be a scalar or vector but got {record_keys.rank}."
+    )
 
   def __repr__(self) -> str:
     element_spec = tf.nest.map_structure(
-        lambda x: f"{repr(x.dtype)}{list(x.shape)}", self.values)
+        lambda x: f"{repr(x.dtype)}{list(x.shape)}", self.values
+    )
     return f"TfInMemoryDataSource({element_spec=}, len={len(self)})"
 
   def get_parse_fn(self):
@@ -192,10 +202,8 @@ class TfInMemoryDataSource:
 
   @classmethod
   def from_dataset(
-      cls,
-      dataset: tf.data.Dataset,
-      *,
-      parse_fn: Optional[TfParseFn] = None) -> TfInMemoryDataSource:
+      cls, dataset: tf.data.Dataset, *, parse_fn: Optional[TfParseFn] = None
+  ) -> TfInMemoryDataSource:
     """Constructs an in memory data source from a tf.data.Dataset.
 
     Args:
@@ -212,15 +220,17 @@ class TfInMemoryDataSource:
       raise ValueError("Cannot construct copy an infinite dataset into memory.")
     if dataset.cardinality() > _MAX_ROWS_IN_MEMORY:
       raise ValueError(
-          f"Only datasets with at most {_MAX_ROWS_IN_MEMORY!r} elements are "
-          f"support but got dataset with cardinality {dataset.cardinality().numpy()}."
+          f"Only datasets with at most {_MAX_ROWS_IN_MEMORY!r} elements are"
+          " support but got dataset with cardinality"
+          f" {dataset.cardinality().numpy()}."
       )
     try:
       values = next(iter(dataset.batch(_MAX_ROWS_IN_MEMORY)))
     except Exception as e:
       raise ValueError(
           f"Failed to load {dataset} into memory. Please ensure that the "
-          "dataset is valid and all elements have the same shape.") from e
+          "dataset is valid and all elements have the same shape."
+      ) from e
     return cls(values=values, parse_fn=parse_fn)
 
   @classmethod
@@ -231,7 +241,8 @@ class TfInMemoryDataSource:
       split: str,
       data_dir: Optional[epath.PathLike] = None,
       tfds_info: Optional[tfds.core.DatasetInfo] = None,
-      decoders: Optional[Mapping[str, Any]] = None) -> TfInMemoryDataSource:
+      decoders: Optional[Mapping[str, Any]] = None,
+  ) -> TfInMemoryDataSource:
     """Constructs an in memory data source from a TFDS dataset."""
     # We cannot use tfds.load() here because we need to separate the raw dataset
     # from the from the parsing.
@@ -245,17 +256,20 @@ class TfInMemoryDataSource:
         read_config=tfds.ReadConfig(),
         shuffle_files=False,
         disable_shuffling=True,
-        file_format=tfds_info.file_format)
+        file_format=tfds_info.file_format,
+    )
     decoders = dict(decoders) if decoders else None
     parse_fn = _ParseAndDecodeExample(tfds_info.features, decoders=decoders)
     return cls.from_dataset(ds, parse_fn=parse_fn)
 
   @classmethod
-  def from_files(cls,
-                 filenames: Union[epath.PathLike, Sequence[epath.PathLike]],
-                 *,
-                 reader_cls: Callable[[tf.Tensor], tf.data.Dataset],
-                 parse_fn: Optional[TfParseFn] = None) -> TfInMemoryDataSource:
+  def from_files(
+      cls,
+      filenames: Union[epath.PathLike, Sequence[epath.PathLike]],
+      *,
+      reader_cls: Callable[[tf.Tensor], tf.data.Dataset],
+      parse_fn: Optional[TfParseFn] = None,
+  ) -> TfInMemoryDataSource:
     """Constructs an in memory data source from a list of files.
 
     Args:
@@ -281,7 +295,9 @@ class TfInMemoryDataSource:
   def from_data_frame(cls, data_frame) -> TfInMemoryDataSource:
     """Constructs an in memory data source from a Pandas DataFrame."""
     if len(data_frame) > _MAX_ROWS_IN_MEMORY:
-      raise ValueError(f"Only DataFrames with at most {_MAX_ROWS_IN_MEMORY!r} "
-                       f"rows are support but got {len(data_frame)} rows.")
+      raise ValueError(
+          f"Only DataFrames with at most {_MAX_ROWS_IN_MEMORY!r} "
+          f"rows are support but got {len(data_frame)} rows."
+      )
     ds = tf.data.Dataset.from_tensor_slices(dict(data_frame))
     return cls.from_dataset(ds)

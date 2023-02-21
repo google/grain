@@ -27,16 +27,21 @@ class OrbaxCheckpointHandler(orbax.checkpoint.CheckpointHandler):
   """Orbax CheckpointHandler for DataIterator."""
 
   def save(self, directory: epath.Path, item: TfGrainDatasetIterator):
-    filename = directory / (
-        f"process_{jax.process_index()}-of-{jax.process_count()}.json")
+    filename = (
+        directory
+        / f"process_{jax.process_index()}-of-{jax.process_count()}.json"
+    )
     item.save(filename)
 
-  def restore(self, directory: epath.Path,
-              item: TfGrainDatasetIterator) -> TfGrainDatasetIterator:
+  def restore(
+      self, directory: epath.Path, item: TfGrainDatasetIterator
+  ) -> TfGrainDatasetIterator:
     if item is None:
       raise ValueError("OrbaxCheckpointHandler requires `item`.")
-    filename = directory / (
-        f"process_{jax.process_index()}-of-{jax.process_count()}.json")
+    filename = (
+        directory
+        / f"process_{jax.process_index()}-of-{jax.process_count()}.json"
+    )
     if not filename.exists():
       raise ValueError(f"File {filename} does not exist.")
     item = copy.deepcopy(item)

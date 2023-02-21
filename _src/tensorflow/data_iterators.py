@@ -44,6 +44,7 @@ class IteratorOptions:
       for data parallelism where each process will load data for several JAX
       devices on the same machine.
   """
+
   drop_grain_meta_features: bool = False
   reshape_for_local_devices: bool = False
 
@@ -67,7 +68,8 @@ def _reshape_for_local_devices(element: Any) -> Any:
     elif x.shape[0] % device_count != 0:
       raise ValueError(
           f"Cannot reshape {x} for {device_count} local devices. First "
-          "dimension must be a multiple of the number of local devices")
+          "dimension must be a multiple of the number of local devices"
+      )
     else:
       shape = (device_count, x.shape[0] // device_count) + x.shape[1:]
     if isinstance(x, dataset_iterator.ArraySpec):
@@ -79,7 +81,8 @@ def _reshape_for_local_devices(element: Any) -> Any:
 
 def _tensor_spec_to_array_spec(x: tf.TensorSpec) -> dataset_iterator.ArraySpec:
   return dataset_iterator.ArraySpec(
-      dtype=x.dtype.as_numpy_dtype, shape=tuple(x.shape))
+      dtype=x.dtype.as_numpy_dtype, shape=tuple(x.shape)
+  )
 
 
 class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
@@ -112,7 +115,8 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
       if not isinstance(self._dataset.element_spec, Mapping):
         raise ValueError(
             "IndexBasedDatasetIterator expect dataset elements to be "
-            f"dictionaries but got {self._dataset.element_spec}.")
+            f"dictionaries but got {self._dataset.element_spec}."
+        )
       self._iterator = self._dataset.as_numpy_iterator()
 
   def __next__(self) -> dataset_iterator.Element:
@@ -133,8 +137,9 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
   @property
   def element_spec(self) -> dataset_iterator.ElementSpec:
     self._ensure_iterator()
-    element_spec = jax.tree_map(_tensor_spec_to_array_spec,
-                                self._dataset.element_spec)
+    element_spec = jax.tree_map(
+        _tensor_spec_to_array_spec, self._dataset.element_spec
+    )
     # Apply options.
     if self._options.drop_grain_meta_features:
       element_spec = _drop_grain_meta_features(element_spec)
@@ -179,16 +184,20 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
           "specification. Restoring checkpoints for different source is not "
           "supported.\n"
           f"Source:               {repr(self._data_loader.source)}\n"
-          f"Source in checkpoint: {state[_SOURCE]}")
+          f"Source in checkpoint: {state[_SOURCE]}"
+      )
     if self._data_loader.sampler.as_dict() != state[_SAMPLER]:
       raise ValueError(
           "Sampler specification in checkpoint doesn't match expected "
           "specification. Restoring checkpoints for different samplers is "
           "currently not supported.\n"
           f"Sampler: {self._data_loader.sampler.as_dict()}\n"
-          f"Sampler in checkpoint: {state[_SAMPLER]}")
+          f"Sampler in checkpoint: {state[_SAMPLER]}"
+      )
 
   def __repr__(self) -> str:
-    return (f"DataIterator(data_loader={self._data_loader!r}, "
-            f"options={self._options!r}, "
-            f"last_seen_index={self._last_seen_index!r})")
+    return (
+        f"DataIterator(data_loader={self._data_loader!r}, "
+        f"options={self._options!r}, "
+        f"last_seen_index={self._last_seen_index!r})"
+    )

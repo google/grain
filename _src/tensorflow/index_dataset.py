@@ -68,7 +68,6 @@ class FirstIndex:
 
 @dataclasses.dataclass(frozen=True)
 class NextIndex:
-
   last_seen_index: int
 
 
@@ -85,17 +84,24 @@ def make_tf_seed(seed: grain_random.RNGKeyLike) -> tf.Tensor:
     gen = tf.random.Generator.from_seed(seed)
   else:
     logging.warning(
-        "Grain got %r as random seed. Please migrate to passing a "
-        "single integer as random seed to Grain.", seed)
+        (
+            "Grain got %r as random seed. Please migrate to passing a "
+            "single integer as random seed to Grain."
+        ),
+        seed,
+    )
     # Use whatever seed we got to create a JAX RNG key and derive a seed for
     # the generator it. This makes it easy for users to pass in tuples and
     # JAX RNG keys.
     key = grain_random.as_rng_key(seed)
     gen = tf.random.Generator.from_seed(
         jax.random.randint(
-            key, [],
+            key,
+            [],
             minval=np.iinfo(np.int32).min,
-            maxval=np.iinfo(np.int32).max))
+            maxval=np.iinfo(np.int32).max,
+        )
+    )
   return gen.make_seeds(1)[:, 0]
 
 
@@ -109,17 +115,17 @@ def tf_random_split(seed, num: int = 2) -> tf.Tensor:
 def tf_index_shuffle(index, *, seed, max_index) -> tf.Tensor:
   """Wrapper around tf.raw_ops.RandomIndexShuffle."""
   # RandomIndexShuffle takes vector of size 3 as seed.
-  seed = tf.random.stateless_uniform([3],
-                                     seed,
-                                     minval=None,
-                                     maxval=None,
-                                     dtype=tf.int64)
+  seed = tf.random.stateless_uniform(
+      [3], seed, minval=None, maxval=None, dtype=tf.int64
+  )
   return tf.raw_ops.RandomIndexShuffle(
-      index=index, seed=seed, max_index=max_index, rounds=8)
+      index=index, seed=seed, max_index=max_index, rounds=8
+  )
 
 
-def _shuffle(index: tf.Tensor, *, seed: tf.Tensor,
-             num_records: tf.Tensor) -> tf.Tensor:
+def _shuffle(
+    index: tf.Tensor, *, seed: tf.Tensor, num_records: tf.Tensor
+) -> tf.Tensor:
   """Shuffles the `index` within the interval [0, num_records - 1].
 
   Args:
@@ -141,15 +147,18 @@ def _shuffle(index: tf.Tensor, *, seed: tf.Tensor,
   index %= num_records
   # max_index is inclusive.
   return tf_index_shuffle(
-      index, seed=seed, max_index=tf.cast(num_records - 1, tf.int64))
+      index, seed=seed, max_index=tf.cast(num_records - 1, tf.int64)
+  )
 
 
-def _interleaved_shuffle(index: tf.Tensor,
-                         *,
-                         seed: tf.Tensor,
-                         num_records: tf.Tensor,
-                         block_size: Optional[int] = None,
-                         parallel_blocks: Optional[int] = None) -> tf.Tensor:
+def _interleaved_shuffle(
+    index: tf.Tensor,
+    *,
+    seed: tf.Tensor,
+    num_records: tf.Tensor,
+    block_size: Optional[int] = None,
+    parallel_blocks: Optional[int] = None,
+) -> tf.Tensor:
   """Approximate global shuffle by interleaving random blocks.
 
   # Motivation
@@ -214,7 +223,7 @@ def _interleaved_shuffle(index: tf.Tensor,
   if block_size is None:
     block_size = config.tf_interleaved_shuffle_block_size
   if parallel_blocks is None:
-    parallel_blocks = (config.tf_interleaved_shuffle_parallel_blocks)
+    parallel_blocks = config.tf_interleaved_shuffle_parallel_blocks
 
   epoch = index // num_records
   seed = tf_random_fold_in(seed, epoch)
@@ -233,7 +242,8 @@ def _interleaved_shuffle(index: tf.Tensor,
     num_remaining_indices = num_records - offset
     index -= offset
     index = tf_index_shuffle(
-        index, seed=seed, max_index=num_remaining_indices - 1)
+        index, seed=seed, max_index=num_remaining_indices - 1
+    )
     return index + offset
 
   partition_index = index // partition_size
@@ -241,25 +251,31 @@ def _interleaved_shuffle(index: tf.Tensor,
 
   index_in_partition = index % partition_size
   index_in_partition = tf_index_shuffle(
-      index_in_partition, seed=partition_seed, max_index=partition_size - 1)
+      index_in_partition, seed=partition_seed, max_index=partition_size - 1
+  )
   index_in_block = index_in_partition % block_size
 
   num_blocks = num_partitions * parallel_blocks
-  block_index = index_in_partition // block_size + partition_index * parallel_blocks
+  block_index = (
+      index_in_partition // block_size + partition_index * parallel_blocks
+  )
   block_index = tf_index_shuffle(
-      block_index, seed=seed, max_index=num_blocks - 1)
+      block_index, seed=seed, max_index=num_blocks - 1
+  )
   return block_index * block_size + index_in_block
 
 
-def _float_to_int_proportions(values: Sequence[Union[float, int]],
-                              scale_min_to: int = 100) -> List[int]:
+def _float_to_int_proportions(
+    values: Sequence[Union[float, int]], scale_min_to: int = 100
+) -> List[int]:
   """Scales at values by `scale_min_to/min(proportions)` and cast to int."""
   scale_factor = scale_min_to / min(values)
   return [int(p * scale_factor) for p in values]
 
 
-def _counts_per_dataset(k: tf.Tensor,
-                        proportions: Sequence[int]) -> List[tf.Tensor]:
+def _counts_per_dataset(
+    k: tf.Tensor, proportions: Sequence[int]
+) -> List[tf.Tensor]:
   """Calculates the counts per dataset at n elements accordings to proportions.
 
   We are interleaving n infinite datasets into one combined dataset.
@@ -302,7 +318,8 @@ def _counts_per_dataset(k: tf.Tensor,
 
 
 def _dataset_and_key_of_next_element(
-    k: tf.Tensor, proportions: Sequence[int]) -> Tuple[tf.Tensor, tf.Tensor]:
+    k: tf.Tensor, proportions: Sequence[int]
+) -> Tuple[tf.Tensor, tf.Tensor]:
   """Compute the dataset and the key for interleaved datasets at position k.
 
   We are interleaving n infinite datasets into one combined dataset.
@@ -326,34 +343,37 @@ def _dataset_and_key_of_next_element(
 
 
 def _get_shard_size_and_offset(
-    num_records: int, options: sharding.ShardOptions) -> tuple[int, int]:
+    num_records: int, options: sharding.ShardOptions
+) -> tuple[int, int]:
   shard_start, shard_end = sharding.even_split(num_records, options)
   return shard_end - shard_start, shard_start
 
 
 def _get_shard_sizes_and_offsets_for_mixture(
-    records_per_dataset: Sequence[int],
-    options: sharding.ShardOptions) -> tuple[Sequence[int], Sequence[int]]:
+    records_per_dataset: Sequence[int], options: sharding.ShardOptions
+) -> tuple[Sequence[int], Sequence[int]]:
   # Shard each dataset separately.
   shard_starts, shard_ends = zip(
-      *[sharding.even_split(n, options) for n in records_per_dataset])  # pylint: disable=missing-kwoa
+      *[sharding.even_split(n, options) for n in records_per_dataset]
+  )  # pylint: disable=missing-kwoa
   records_per_dataset = [
       end - start for start, end in zip(shard_starts, shard_ends)
   ]
   return records_per_dataset, shard_starts
 
 
-def _create_index_dataset(records_per_dataset: Union[int, Sequence[int]],
-                          *,
-                          proportions: Optional[Sequence[Union[int,
-                                                               float]]] = None,
-                          start_index: Index = FirstIndex(),
-                          num_epochs: Optional[int] = None,
-                          shuffle: bool = False,
-                          seed: Optional[grain_random.RNGKeyLike] = None,
-                          shard_options: sharding.ShardOptions,
-                          emit_epoch: bool = False,
-                          emit_seed: bool = False) -> tf.data.Dataset:
+def _create_index_dataset(
+    records_per_dataset: Union[int, Sequence[int]],
+    *,
+    proportions: Optional[Sequence[Union[int, float]]] = None,
+    start_index: Index = FirstIndex(),
+    num_epochs: Optional[int] = None,
+    shuffle: bool = False,
+    seed: Optional[grain_random.RNGKeyLike] = None,
+    shard_options: sharding.ShardOptions,
+    emit_epoch: bool = False,
+    emit_seed: bool = False,
+) -> tf.data.Dataset:
   """Creates a new index dataset.
 
   See the module description for an explanation of the idea.
@@ -397,13 +417,12 @@ def _create_index_dataset(records_per_dataset: Union[int, Sequence[int]],
       dataset.
     proportions: Proportions when mixing multiple datasets. If not provided all
       datasets will be mixed with equal proportions. Proportions are relative to
-      the sum of all proportions. Float and integers values are allowed.
-      E.g. when mixing two datasets [0.25, 0.75], [0.5, 1.5] and [1, 3] would
-      all result in the same ratio of 1:3 between the first and the second
-      dataset.
-      Internally the values are converted to integers after scaling values
-      such that the smallest value is 100. Please reach out if your use case
-      requires matching the proportions more precisely.
+      the sum of all proportions. Float and integers values are allowed. E.g.
+      when mixing two datasets [0.25, 0.75], [0.5, 1.5] and [1, 3] would all
+      result in the same ratio of 1:3 between the first and the second dataset.
+      Internally the values are converted to integers after scaling values such
+      that the smallest value is 100. Please reach out if your use case requires
+      matching the proportions more precisely.
     start_index: Where to start the input pipeline. This can be an integer,
       FirstIndex() or NextIndex(last_seen_index). The latter 2 to are handy for
       distributed settings that shard the data between processes (shard_count >
@@ -413,8 +432,8 @@ def _create_index_dataset(records_per_dataset: Union[int, Sequence[int]],
       will be finite and have known size. Not supported when mixing multiple
       datasets.
     shuffle: Whether to shuffle record keys. If True you need to provide `seed`.
-    seed: Random seed to use for shuffling and emitting per example seeds.
-      This should be a single integer but for convenience we also accept a
+    seed: Random seed to use for shuffling and emitting per example seeds. This
+      should be a single integer but for convenience we also accept a
       `jax.random.PRNGKeyArray` or a sequence of 2 integers.
     shard_options: Options for sharding the data. Use `grain.NoSharding()` if
       you don't want to shard the data.
@@ -449,8 +468,12 @@ def _create_index_dataset(records_per_dataset: Union[int, Sequence[int]],
     assert seed is not None  # See if statements above.
     if not isinstance(seed, int):
       logging.warning(
-          "Please use a single integer as random seed for Grain (got %r). We "
-          "will soon remove support for tuples, tensors and arrays.", seed)
+          (
+              "Please use a single integer as random seed for Grain (got %r)."
+              " We will soon remove support for tuples, tensors and arrays."
+          ),
+          seed,
+      )
     seed = make_tf_seed(seed)
     # Split seed for each dataset.
     if is_mixture:
@@ -481,7 +504,8 @@ def _create_index_dataset(records_per_dataset: Union[int, Sequence[int]],
   if start_index < 0 or start_index % shard_count != shard_index:
     raise ValueError(
         f"Start index {start_index} is not valid index for {shard_options=} "
-        f"start_index % shard_count should equal the shard_index.")
+        "start_index % shard_count should equal the shard_index."
+    )
 
   if num_epochs is None:
     end_index = np.iinfo(np.int64).max
@@ -490,7 +514,8 @@ def _create_index_dataset(records_per_dataset: Union[int, Sequence[int]],
       # What is an epoch when mixing multiple datasetsw with different number
       # of records or proportions?
       raise ValueError(
-          "Using fixed number of epochs is not allowed when mixing datasets.")
+          "Using fixed number of epochs is not allowed when mixing datasets."
+      )
     assert isinstance(records_per_dataset, int)
     assert num_epochs is not None
     end_index = records_per_dataset * num_epochs
@@ -502,7 +527,8 @@ def _create_index_dataset(records_per_dataset: Union[int, Sequence[int]],
     else:
       shard_fn = _get_shard_size_and_offset
     records_per_dataset, position_offset_per_dataset = shard_fn(
-        records_per_dataset, options=shard_options)
+        records_per_dataset, options=shard_options
+    )
 
   # Preparations for mixing by turning several parameters into vectors.
   if is_mixture:
@@ -514,13 +540,13 @@ def _create_index_dataset(records_per_dataset: Union[int, Sequence[int]],
       proportions = _float_to_int_proportions(proportions)
 
   shuffle_fn = (
-      _interleaved_shuffle if config.tf_interleaved_shuffle else _shuffle)
+      _interleaved_shuffle if config.tf_interleaved_shuffle else _shuffle
+  )
 
   # We define one map function that goes from index to global index, position
   # and dataset_index.
   # Note: Please use tf.int64 everywhere to avoid type mismatch errors.
   if is_mixture:
-
     # Turn lists into tensors. This way we can do lookup using slicing.
     records_per_dataset = tf.stack(records_per_dataset)
     if shard_count > 1:
@@ -533,20 +559,24 @@ def _create_index_dataset(records_per_dataset: Union[int, Sequence[int]],
       local_index = index // shard_count
 
       dataset_index, index_in_dataset = _dataset_and_key_of_next_element(
-          local_index, proportions)
-      num_records_in_dataset = tf.cast(records_per_dataset[dataset_index],
-                                       tf.int64)
+          local_index, proportions
+      )
+      num_records_in_dataset = tf.cast(
+          records_per_dataset[dataset_index], tf.int64
+      )
       if shuffle:
         record_key = shuffle_fn(
             index_in_dataset,
             seed=shuffle_seed[dataset_index],
-            num_records=num_records_in_dataset)
+            num_records=num_records_in_dataset,
+        )
       else:
         record_key = index_in_dataset % num_records_in_dataset
       if shard_count > 1:
         # Make index global.
-        record_key += tf.cast(position_offset_per_dataset[dataset_index],
-                              tf.int64)
+        record_key += tf.cast(
+            position_offset_per_dataset[dataset_index], tf.int64
+        )
       metadata = {
           constants.DATASET_INDEX: dataset_index,
           constants.INDEX: index,
@@ -559,9 +589,11 @@ def _create_index_dataset(records_per_dataset: Union[int, Sequence[int]],
         metadata[constants.EPOCH] = epoch
       if emit_seed:
         metadata[constants.SEED] = tf.random.experimental.stateless_fold_in(
-            preprocess_seed[dataset_index], record_key * 2**20 + epoch)
+            preprocess_seed[dataset_index], record_key * 2**20 + epoch
+        )
 
       return metadata
+
   else:
 
     def map_fn(index):
@@ -574,7 +606,8 @@ def _create_index_dataset(records_per_dataset: Union[int, Sequence[int]],
         # shuffle_seed is a list of seeds for each dataset but we only have one
         # dataset here.
         record_key = shuffle_fn(
-            local_index, seed=shuffle_seed[0], num_records=records_per_dataset)
+            local_index, seed=shuffle_seed[0], num_records=records_per_dataset
+        )
       else:
         record_key = local_index % records_per_dataset
       if shard_count > 1:
@@ -589,7 +622,8 @@ def _create_index_dataset(records_per_dataset: Union[int, Sequence[int]],
         metadata[constants.EPOCH] = epoch
       if emit_seed:
         metadata[constants.SEED] = tf.random.experimental.stateless_fold_in(
-            preprocess_seed[0], record_key * 2**20 + epoch)
+            preprocess_seed[0], record_key * 2**20 + epoch
+        )
 
       return metadata
 
@@ -602,7 +636,8 @@ def _create_index_dataset(records_per_dataset: Union[int, Sequence[int]],
     # This will cause an clear error if the user iterates over more than 2^63-1
     # elements.
     ds = ds.apply(
-        tf.data.experimental.assert_cardinality(tf.data.INFINITE_CARDINALITY))
+        tf.data.experimental.assert_cardinality(tf.data.INFINITE_CARDINALITY)
+    )
   ds = ds.map(map_fn)
   return ds
 
@@ -647,7 +682,8 @@ class TfDefaultIndexSampler:
         seed=self.seed,
         shard_options=self.shard_options,
         emit_epoch=True,
-        emit_seed=self.seed is not None)
+        emit_seed=self.seed is not None,
+    )
 
   def __repr__(self) -> str:
     return f"TfDefaultIndexSampler({self.as_dict()})"
@@ -684,7 +720,8 @@ class TfMixtureIndexSampler:
         seed=self.seed,
         shard_options=self.shard_options,
         emit_epoch=True,
-        emit_seed=self.seed is not None)
+        emit_seed=self.seed is not None,
+    )
 
   def __repr__(self) -> str:
     return f"TfMixtureIndexSampler({self.as_dict()})"

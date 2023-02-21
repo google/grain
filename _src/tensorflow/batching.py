@@ -47,7 +47,8 @@ class TfBatch(transforms.GlobalTfDataTransform):
         self.batch_size,
         drop_remainder=self.drop_remainder,
         num_parallel_calls=self.num_parallel_calls,
-        deterministic=True)
+        deterministic=True,
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -73,16 +74,19 @@ class TfBatchWithPadElements(transforms.GlobalTfDataTransform):
           "Dataset has unknown cardinality before batching. This is not "
           "allowed since we statically pad filler elements to get the same "
           "number of batches in all process. Please remove any transformations "
-          "that erase the cardinality (e.g. filter).")
+          "that erase the cardinality (e.g. filter)."
+      )
     max_cardinality = multihost_utils.process_allgather(local_cardinality).max()
     # Round up to the next full batch.
     max_cardinality = -(-max_cardinality // self.batch_size) * self.batch_size
     padding = max_cardinality - local_cardinality
-    assert padding >= 0, (
-        f"Invalid {padding=} for {local_cardinality=} and {max_cardinality=}")
+    assert (
+        padding >= 0
+    ), f"Invalid {padding=} for {local_cardinality=} and {max_cardinality=}"
 
     filler_element = tf.nest.map_structure(
-        lambda spec: tf.zeros(spec.shape, spec.dtype), ds.element_spec)
+        lambda spec: tf.zeros(spec.shape, spec.dtype), ds.element_spec
+    )
     filler_element[self.mask_key] = False
     if constants.INDEX in filler_element:
       filler_element[constants.INDEX] = tf.cast(-1, tf.int64)
@@ -91,14 +95,16 @@ class TfBatchWithPadElements(transforms.GlobalTfDataTransform):
 
     ds = ds.map(
         lambda features: features | {self.mask_key: True},
-        num_parallel_calls=tf.data.AUTOTUNE)
+        num_parallel_calls=tf.data.AUTOTUNE,
+    )
     ds = ds.concatenate(filler_dataset)
     assert ds.cardinality().numpy() % self.batch_size == 0
     return ds.batch(
         self.batch_size,
         drop_remainder=True,
         num_parallel_calls=self.num_parallel_calls,
-        deterministic=True)
+        deterministic=True,
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -122,12 +128,14 @@ class TfBatchAndPack(transforms.GlobalTfDataTransform):
     if not isinstance(ds.element_spec, Mapping):
       raise ValueError(
           "TfBatchAndPack expects elements of the dataset to be dictionaries "
-          f"but got {ds.element_spec}.")
+          f"but got {ds.element_spec}."
+      )
     for k, v in ds.element_spec.items():
       if not isinstance(v, tf.TensorSpec):
         raise ValueError(
             "TfBatchAndPack expects elements of the dataset to be "
-            f"dictionaries containing tensors but got {v} for feature {k}.")
+            f"dictionaries containing tensors but got {v} for feature {k}."
+        )
 
     sequence_lengths = dict(self.sequence_lengths)
     if constants.INDEX not in sequence_lengths:
@@ -139,10 +147,12 @@ class TfBatchAndPack(transforms.GlobalTfDataTransform):
     if drop_features:
       ds = ds.map(
           lambda d: {k: v for k, v in d.items() if k not in drop_features},
-          num_parallel_calls=tf.data.AUTOTUNE)
+          num_parallel_calls=tf.data.AUTOTUNE,
+      )
 
     ds = batch_and_pack.BatchAndPackDataset(
-        ds, batch_size=self.batch_size, sequence_lengths=sequence_lengths)
+        ds, batch_size=self.batch_size, sequence_lengths=sequence_lengths
+    )
 
     # BatchAndPackDataset will replace each feature with 3 features:
     # (values, segment_ids, positions). This is very generic but here we convert

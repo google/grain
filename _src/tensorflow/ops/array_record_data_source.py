@@ -38,11 +38,13 @@ class TfArrayRecordDataSource:
     dataset = keys_dataset.batch(128).map(lambda i: ar[i]).unbatch()
   """
 
-  def __init__(self,
-               paths: Union[epath.PathLike, Sequence[epath.PathLike]],
-               parse_fn: Optional[TfParseFn] = None,
-               cache: bool = False,
-               shared_name: Optional[str] = None):
+  def __init__(
+      self,
+      paths: Union[epath.PathLike, Sequence[epath.PathLike]],
+      parse_fn: Optional[TfParseFn] = None,
+      cache: bool = False,
+      shared_name: Optional[str] = None,
+  ):
     """Creates a new TfArrayRecordDataSource object.
 
     Args:
@@ -53,10 +55,10 @@ class TfArrayRecordDataSource:
         to read subsets or have a large number of files prefer to path read
         instructions. This makes the initialization faster.
       parse_fn: Optional function to parse records.
-      cache: Whether to cache values in memory.
-        This will cache uncompressed (but still serialized) values after they
-        are read the first time. This can use a lot of memory but can improve
-        performance when iterating over the data source many time.
+      cache: Whether to cache values in memory. This will cache uncompressed
+        (but still serialized) values after they are read the first time. This
+        can use a lot of memory but can improve performance when iterating over
+        the data source many time.
       shared_name: Name for the resource. If a resource with the name already
         exists it will be reused. If not set will use a hash of the paths. This
         should the resource if you create multiple ArrayRecord objects for the
@@ -74,9 +76,11 @@ class TfArrayRecordDataSource:
     self._parse_fn = parse_fn
     self._shared_name = shared_name
     self._handle = gen_array_record_ops.array_record_resource_handle(
-        paths=self._paths, cache=cache, shared_name=self._shared_name)
+        paths=self._paths, cache=cache, shared_name=self._shared_name
+    )
     usage_logging.log_event(
-        "TfArrayRecordDataSource", tag_2="ARRAY_RECORD", tag_3="TfGrain")
+        "TfArrayRecordDataSource", tag_2="ARRAY_RECORD", tag_3="TfGrain"
+    )
 
   def __len__(self) -> int:
     t = gen_array_record_ops.array_record_num_records(self._handle)
