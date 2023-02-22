@@ -16,6 +16,7 @@ import dataclasses
 import json
 from typing import Any, Mapping, Optional
 
+from absl import logging
 from clu.data import dataset_iterator
 from etils import epath
 from grain._src.core import constants
@@ -161,6 +162,7 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
       filename: Path to filename. Parent directory must exist. Checkpoints are
         json files.
     """
+    logging.info("Saving TfGrainDatasetIterator to %s", filename)
     state = {
         _LAST_SEEN_INDEX: self._last_seen_index,
         _SOURCE: repr(self._data_loader.source),
@@ -170,6 +172,7 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
     filename.write_text(json.dumps(state, indent=4))
 
   def restore(self, filename: epath.PathLike):
+    logging.info("Restoring TfGrainDatasetIterator from %s", filename)
     self.reset()
     filename = epath.Path(filename)
     if not filename.exists():
