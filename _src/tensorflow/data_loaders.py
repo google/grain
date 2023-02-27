@@ -28,6 +28,7 @@ from grain._src.tensorflow import data_iterators
 from grain._src.tensorflow import data_sources
 from grain._src.tensorflow import index_dataset
 from grain._src.tensorflow import transforms
+from grain._src.tensorflow.ops import merge_by_min_value
 
 import numpy as np
 import tensorflow as tf
@@ -370,9 +371,6 @@ class TfMixtureDataLoader(collections.abc.Iterable):
     def is_group(x: Mapping[str, Any], group: int):
       return task_index_to_group[x[gc.DATASET_INDEX]] == group
 
-    def get_group(x: Mapping[str, Any]):
-      return task_index_to_group[x[gc.DATASET_INDEX]]
-
     def transform_group(ds: tf.data.Dataset, *, group: int) -> tf.data.Dataset:
       return transforms.apply_transformations(
           ds,
@@ -390,9 +388,6 @@ class TfMixtureDataLoader(collections.abc.Iterable):
     # We treat each set of tasks with the same preprocessors as a group and
     # apply the preprocessors per group separately before merging the dataset
     # again. Construct `Dataset` for each group and merge back together later.
-    choice_dataset = index_ds.map(
-        get_group, num_parallel_calls=tf.data.AUTOTUNE
-    )
 
     dataset_per_group = []
     # SeqIO mixture only keep the output features of the first tasks. We keep
@@ -415,7 +410,9 @@ class TfMixtureDataLoader(collections.abc.Iterable):
           num_parallel_calls=tf.data.AUTOTUNE,
       )
 
-    ds = tf.data.Dataset.choose_from_datasets(dataset_per_group, choice_dataset)
+    ds = merge_by_min_value.MergeByMinValueDataset(
+        dataset_per_group, merge_field=gc.INDEX
+    )
     ds = transforms.apply_transformations(
         ds, self._transformations, strict=self._strict_transformations
     )

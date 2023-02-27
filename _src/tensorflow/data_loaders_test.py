@@ -23,6 +23,7 @@ from grain._src.tensorflow import batching
 from grain._src.tensorflow import data_loaders
 from grain._src.tensorflow import data_sources
 from grain._src.tensorflow import index_dataset
+from grain._src.tensorflow import transforms
 import numpy as np
 import tensorflow as tf
 import tensorflow_datasets as tfds
@@ -43,6 +44,12 @@ class _DummyParseFn:
 
   def __call__(self, record: tf.Tensor):
     return {"value": tf.fill([2, 3], record)}
+
+
+class _FilterEvenIndices(transforms.FilterTransform):
+
+  def filter(self, features):
+    return features[constants.INDEX] % 2 != 0
 
 
 class DataLoadersTest(tf.test.TestCase, parameterized.TestCase):
@@ -137,6 +144,34 @@ class DataLoadersTest(tf.test.TestCase, parameterized.TestCase):
     batch = next(it)
     self.assertAllEqual(batch[constants.INDEX], [0, 1, 2, 3])
     self.assertAllEqual(batch[constants.DATASET_INDEX], [0, 1, 0, 1])
+
+  def test_mixture_data_loader_with_filter(self):
+    values1 = np.random.random((10,))
+    values2 = np.random.random((15,))
+    sources = [
+        data_sources.TfInMemoryDataSource(values1, _DummyParseFn()),
+        data_sources.TfInMemoryDataSource(values2, _DummyParseFn()),
+    ]
+    sampler = index_dataset.TfMixtureIndexSampler(
+        [len(s) for s in sources],
+        proportions=[0.6, 0.3],
+        shard_options=sharding.NoSharding(),
+        shuffle=False,
+    )
+    loader = data_loaders.TfMixtureDataLoader(
+        sources=sources,
+        transformations_per_source=[[_FilterEvenIndices()], []],
+        sampler=sampler,
+        transformations=[batching.TfBatch(8, drop_remainder=False)],
+    )
+    self.assertLen(loader.source, 25)
+    it = iter(loader)
+    batch = next(it)
+    self.assertAllEqual(
+        batch[constants.DATASET_INDEX], [0, 1, 0, 1, 0, 1, 0, 1]
+    )
+    self.assertAllEqual(batch[constants.INDEX], [1, 2, 3, 5, 7, 8, 9, 11])
+    self.assertAllEqual(batch["value"].shape, (8, 2, 3))
 
 
 if __name__ == "__main__":
