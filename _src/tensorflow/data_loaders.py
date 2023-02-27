@@ -244,6 +244,7 @@ class TfMixtureDataLoader(collections.abc.Iterable):
       batch_fn: Optional[batching.TfBatchFn] = None,
       strict_transformations: bool = True,
       iterator_options: Optional[IteratorOptions] = None,
+      tf_data_options: Optional[tf.data.Options] = None,
   ):
     """Initializes a new data loader.
 
@@ -258,6 +259,7 @@ class TfMixtureDataLoader(collections.abc.Iterable):
         the batching transformation to the list of transformations.
       strict_transformations: See TfDataLoader.
       iterator_options: Options passed to the data iterator.
+      tf_data_options: Options passed to tf.data.
     """
     usage_logging.log_event("TfMixtureDataLoader", tag_3="TfGrain")
     assert len(sources) == len(transformations_per_source)
@@ -300,6 +302,7 @@ class TfMixtureDataLoader(collections.abc.Iterable):
       self._transformations += (batch_fn,)
     self._iterator_options = iterator_options
     self._strict_transformations = strict_transformations
+    self._tf_data_options = tf_data_options
 
   def __iter__(self):
     return data_iterators.TfGrainDatasetIterator(
@@ -383,6 +386,8 @@ class TfMixtureDataLoader(collections.abc.Iterable):
       # them and we are done.
       ds = transform_group(ds, group=0)
       ds = transforms.apply_transformations(ds, self._transformations)
+      if self._tf_data_options is not None:
+        ds = ds.with_options(self._tf_data_options)
       return ds
 
     # We treat each set of tasks with the same preprocessors as a group and
@@ -416,6 +421,8 @@ class TfMixtureDataLoader(collections.abc.Iterable):
     ds = transforms.apply_transformations(
         ds, self._transformations, strict=self._strict_transformations
     )
+    if self._tf_data_options is not None:
+      ds = ds.with_options(self._tf_data_options)
     return ds
 
 
