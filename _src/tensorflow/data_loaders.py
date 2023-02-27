@@ -261,25 +261,32 @@ class TfMixtureDataLoader(collections.abc.Iterable):
     usage_logging.log_event("TfMixtureDataLoader", tag_3="TfGrain")
     assert len(sources) == len(transformations_per_source)
 
-    all_paths = []
-    for s in sources:
-      if isinstance(s, data_sources.TfArrayRecordDataSource):
-        all_paths.extend(s._paths)
-      elif isinstance(s, data_sources.TfdsDataSource) and isinstance(
-          s._source, data_sources.TfArrayRecordDataSource
-      ):
-        all_paths.extend(s._source._paths)
-      else:
-        raise ValueError(f"Data source {s} is not yet supported in mixtures.")
-    self.source = data_sources.TfArrayRecordDataSource(list(all_paths))
+    # Combine all data sources into one.
+    if all(isinstance(s, data_sources.TfInMemoryDataSource) for s in sources):
+      self.source = data_sources.TfInMemoryDataSource(
+          values=tf.concat([s.values for s in sources], axis=0),  # pytype: disable=attribute-error
+          parse_fn=None,  # Handled in transformpations per source.
+      )
+    else:
+      # Try to combine all data sources to TfArrayRecordDataSource.
+      all_paths = []
+      for s in sources:
+        if isinstance(s, data_sources.TfArrayRecordDataSource):
+          all_paths.extend(s._paths)
+        elif isinstance(s, data_sources.TfdsDataSource) and isinstance(
+            s._source, data_sources.TfArrayRecordDataSource
+        ):
+          all_paths.extend(s._source._paths)
+        else:
+          raise ValueError(f"Data source {s} is not yet supported in mixtures.")
+      self.source = data_sources.TfArrayRecordDataSource(list(all_paths))
     self.sampler = sampler
     self._records_per_dataset = [len(s) for s in sources]
 
     transformations_per_source = [list(ts) for ts in transformations_per_source]
-    for i in range(len(sources)):
-      transformations_per_source[i].insert(
-          0, _ParseTransform(sources[i].get_parse_fn())
-      )
+    for i, source in enumerate(sources):
+      if parse_fn := source.get_parse_fn():
+        transformations_per_source[i].insert(0, _ParseTransform(parse_fn))
     self._dataset_index_to_group, self._group_to_transformation = (
         self._create_groups(transformations_per_source)
     )

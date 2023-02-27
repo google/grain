@@ -12,13 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Unit tests for the data_loaders module."""
+import dataclasses
 from typing import Mapping, Optional
 from unittest import mock
-from absl.testing import parameterized
 
+from absl.testing import parameterized
 from grain._src.core import constants
 from grain._src.core import sharding
+from grain._src.tensorflow import batching
 from grain._src.tensorflow import data_loaders
+from grain._src.tensorflow import data_sources
+from grain._src.tensorflow import index_dataset
 import numpy as np
 import tensorflow as tf
 import tensorflow_datasets as tfds
@@ -31,6 +35,14 @@ def _dict_to_dataset(d: Mapping[str, np.ndarray]) -> tf.data.Dataset:
 def _dataset_to_dict(ds: tf.data.Dataset) -> Mapping[str, np.ndarray]:
   assert ds.cardinality() > 0 and ds.cardinality() < 1000
   return next(ds.batch(1000).as_numpy_iterator())
+
+
+@dataclasses.dataclass(frozen=True)
+class _DummyParseFn:
+  """Dummy ParseFn for TfDataSource."""
+
+  def __call__(self, record: tf.Tensor):
+    return {"value": tf.fill([2, 3], record)}
 
 
 class DataLoadersTest(tf.test.TestCase, parameterized.TestCase):
@@ -101,6 +113,30 @@ class DataLoadersTest(tf.test.TestCase, parameterized.TestCase):
       self.assertEqual(loader.sampler.shuffle, shuffle)
       self.assertEqual(loader.sampler.seed, seed)
       self.assertEqual(loader.sampler.num_epochs, num_epochs)
+
+  def test_mixture_data_loader(self):
+    values1 = np.random.random((10,))
+    values2 = np.random.random((15,))
+    sources = [
+        data_sources.TfInMemoryDataSource(values1, _DummyParseFn()),
+        data_sources.TfInMemoryDataSource(values2, _DummyParseFn()),
+    ]
+    sampler = index_dataset.TfMixtureIndexSampler(
+        [len(s) for s in sources],
+        shard_options=sharding.NoSharding(),
+        shuffle=False,
+    )
+    loader = data_loaders.TfMixtureDataLoader(
+        sources=sources,
+        transformations_per_source=2 * [[]],
+        sampler=sampler,
+        transformations=[batching.TfBatch(4, drop_remainder=False)],
+    )
+    self.assertLen(loader.source, 25)
+    it = iter(loader)
+    batch = next(it)
+    self.assertAllEqual(batch[constants.INDEX], [0, 1, 2, 3])
+    self.assertAllEqual(batch[constants.DATASET_INDEX], [0, 1, 0, 1])
 
 
 if __name__ == "__main__":
