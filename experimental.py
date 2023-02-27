@@ -17,4 +17,4 @@
 # pylint: disable=unused-import
 # pylint: disable=wildcard-import
 
-from ._src.python.experimental.python.index_shuffle import index_shuffle
+from ._src.python.experimental.index_shuffle.python.index_shuffle import index_shuffle
