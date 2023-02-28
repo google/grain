@@ -60,8 +60,10 @@ limitations under the License.
 #include "third_party/tensorflow/core/platform/mutex.h"
 #include "third_party/tensorflow/core/platform/threadpool.h"
 #include "third_party/tensorflow/core/platform/types.h"
+#include "third_party/tensorflow/tsl/platform/statusor.h"
 
 namespace tensorflow {
+namespace data {
 
 using shape_inference::InferenceContext;
 using shape_inference::ShapeHandle;
@@ -69,6 +71,8 @@ using TfThreadPool = ::tensorflow::thread::ThreadPool;
 using ArrayRecordReaderOptions = ::array_record::ArrayRecordReaderBase::Options;
 
 namespace {
+
+constexpr int kNumThreadsForReadInstructions = 64;
 
 REGISTER_OP("ArrayRecordResourceHandle")
     .Output("handle: resource")
@@ -112,41 +116,110 @@ Reads a list of keys from the ArrayRecord resource.
 // Holds a filename and a range [start, end) to read.
 // The file needs to contain at least `end` records.
 struct ReadInstruction {
-  const std::string filename;
-  const uint64_t start;
-  const uint64_t end;
+  std::string filename;
+  int64_t start = 0;  // Always >= 0.
+  // Must be >= start or -1. -1 indicates that the end of the file.
+  int64_t end = -1;
 
-  uint64_t NumRecords() const { return end - start; }
+  static StatusOr<ReadInstruction> Parse(absl::string_view path) {
+    static const LazyRE2 kPattern = {R"((.+)\[(\d+):(\d+)\])"};
+    std::string filename;
+    int64_t start, end;
+    if (RE2::FullMatch(path, *kPattern, &filename, &start, &end)) {
+      return ReadInstruction{filename, start, end};
+    }
+    return errors::InvalidArgument("Can't parse ", path, " as ReadInstruction");
+  }
+  int64_t NumRecords() const { return end - start; }
 };
 
-Status GetReadInstructions(const std::string& path,
-                           std::vector<ReadInstruction>& read_instructions) {
-  const string pattern = path;
-  // Find all matching filenames.
-  const auto status_or_filenames = file::Match(pattern, file::Defaults());
-  if (!status_or_filenames.ok() || status_or_filenames.value().empty()) {
-    return Status(
-        error::NOT_FOUND,
-        absl::StrFormat("Failed to find matching files pattern %s.", pattern));
-  }
-  auto filenames = status_or_filenames.value();
-  // Make sure we always read files in the same order.
-  absl::c_sort(filenames);
-  if (filenames.size() > 100) {
-    LOG(WARNING) << "Constructing a global index for over 100 files can be "
-                 << "slow. Consider providing read instruction strings "
-                 << "('filename[start:end]') to ArrayRecord to avoid this.";
-  }
-  for (const std::string& filename : filenames) {
-    if (!file::Exists(filename, file::Defaults()).ok()) {
-      return Status(error::NOT_FOUND,
-                    absl::StrFormat("File %s not found.", filename));
+// Get the read instructions for a list of paths where each path can be:
+// - A normal filename.
+// - A filename with read instructions: filename[start:end].
+// Unless the filename is given with read instruction, the file will be opened
+// to get the total number of records.
+StatusOr<std::vector<ReadInstruction>> GetReadInstructions(
+    const std::vector<std::string>& paths) {
+  std::vector<ReadInstruction> read_instructions;
+
+  // Step 1: Parse potential read instructions.
+  bool missing_num_records = false;
+  for (const string& path : paths) {
+    StatusOr<ReadInstruction> read_instruction = ReadInstruction::Parse(path);
+    if (read_instruction.ok()) {
+      read_instructions.push_back(read_instruction.value());
+    } else {
+      missing_num_records = true;
+      const std::string pattern = path;
+      read_instructions.push_back({pattern});
     }
-    const array_record::ArrayRecordReader<riegeli::FileReader<>> reader(
-        std::forward_as_tuple(filename));
-    read_instructions.push_back({filename, 0, reader.NumRecords()});
   }
-  return OkStatus();
+  if (!missing_num_records) {
+    return read_instructions;
+  }
+
+  thread::ThreadPool thread_pool(Env::Default(), "get_read_instructions",
+                                 kNumThreadsForReadInstructions);
+  const TfThreadPool::SchedulingParams scheduling_params(
+      TfThreadPool::SchedulingStrategy::kFixedBlockSize,
+      /*cost_per_unit=*/std::nullopt,
+      /* block_size= */ 1);
+
+  std::vector<std::vector<ReadInstruction>> filled_instructions;
+  filled_instructions.resize(read_instructions.size());
+
+  // Step 2: Match any patterns.
+  auto match_pattern = [&](int start, int end) {
+    for (int i = start; i < end; ++i) {
+      if (read_instructions[i].end >= 0) {
+        filled_instructions[i].push_back(read_instructions[i]);
+        continue;
+      }
+      const std::string& pattern = read_instructions[i].filename;
+      const auto status_or_filenames = file::Match(pattern, file::Defaults());
+      if (!status_or_filenames.ok() || status_or_filenames->empty()) {
+        LOG(ERROR) << "Failed to find matching files for pattern " << pattern;
+        continue;
+      }
+      auto filenames = *status_or_filenames;
+      // Make sure we always read files in the same order.
+      absl::c_sort(filenames);
+      filled_instructions[i].reserve(filenames.size());
+      for (const std::string& filename : filenames) {
+        filled_instructions[i].push_back({filename, 0, -1});
+      }
+    }
+  };
+
+  thread_pool.ParallelFor(read_instructions.size(), scheduling_params,
+                          match_pattern);
+
+  // Flatten filled_instructions into read_instructions;
+  read_instructions.clear();
+  for (const auto& instructions : filled_instructions) {
+    read_instructions.insert(read_instructions.end(), instructions.begin(),
+                             instructions.end());
+  }
+
+  // Step 3: Get number of records.
+  auto add_num_records = [&](int start, int end) {
+    for (int i = start; i < end; ++i) {
+      if (read_instructions[i].end >= 0) {
+        continue;
+      }
+      const std::string& filename = read_instructions[i].filename;
+      if (!file::Exists(filename, file::Defaults()).ok()) {
+        LOG(ERROR) << "File " << filename << " not found.";
+        continue;
+      }
+      const array_record::ArrayRecordReader<riegeli::FileReader<>> reader(
+          std::forward_as_tuple(filename));
+      read_instructions[i].end = reader.NumRecords();
+    }
+  };
+  thread_pool.ParallelFor(read_instructions.size(), scheduling_params,
+                          add_num_records);
+  return read_instructions;
 }
 
 // Threadsafe cache for values of type tstring.
@@ -174,8 +247,8 @@ class RecordCache {
           << "ArrayRecordResource cache uses " << cache_memory_usage
           << " bytes of memory for " << cache_.size() << " elements.";
     } else {
-      // Element already in cache. This can happen if multiple threads requested
-      // `key` before it was in the cache.
+      // Element already in cache. This can happen if multiple threads
+      // requested `key` before it was in the cache.
       if (it->second == value) {
         LOG(WARNING) << "Element with key " << key << " already in cache.";
       } else {
@@ -192,27 +265,18 @@ class RecordCache {
   mutex mu_;
 };
 
-// Resource that holds the file reader objects and implements the lookup logic.
-// Init() constructs the global index by reading the number of records per file.
-// NumRecords() returns the total number of records.
-// Lookup() looks up the provided keys and returns the records. If needed it
-// will open file readers.
+// Resource that holds the file reader objects and implements the lookup
+// logic. Init() constructs the global index by reading the number of records
+// per file. NumRecords() returns the total number of records. Lookup() looks
+// up the provided keys and returns the records. If needed it will open file
+// readers.
 class ArrayRecordResource : public ResourceBase {
  public:
   explicit ArrayRecordResource(const std::vector<string>& path, bool use_cache)
       : ResourceBase(), paths_(path), use_cache_(use_cache) {}
 
   Status Init() {
-    RE2 pattern(R"((.+)\[(\d+):(\d+)\])");
-    for (const string& path : paths_) {
-      std::string filename;
-      uint64_t start, end;
-      if (RE2::FullMatch(path, pattern, &filename, &start, &end)) {
-        read_instructions_.push_back({filename, start, end});
-      } else {
-        TF_RETURN_IF_ERROR(GetReadInstructions(path, read_instructions_));
-      }
-    }
+    TF_ASSIGN_OR_RETURN(read_instructions_, GetReadInstructions(paths_));
     total_num_records_ = 0;
     for (const auto& ri : read_instructions_) {
       total_num_records_ += ri.NumRecords();
@@ -441,4 +505,5 @@ TF_CALL_uint32(REGISTER);
 TF_CALL_uint64(REGISTER);
 
 }  // namespace
+}  // namespace data
 }  // namespace tensorflow
