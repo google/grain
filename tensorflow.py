@@ -17,6 +17,8 @@
 # pylint: disable=unused-import
 # pylint: disable=wildcard-import
 
+from . import experimental
+
 from ._src.tensorflow.batching import (
     TfBatch,
     TfBatchAndPack,
