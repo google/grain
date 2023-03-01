@@ -72,7 +72,9 @@ using ArrayRecordReaderOptions = ::array_record::ArrayRecordReaderBase::Options;
 
 namespace {
 
-constexpr int kNumThreadsForReadInstructions = 64;
+// Getting the read instructions is cheap but IO bound. We create a temporary
+// thread pool to get the number of records.
+constexpr int kNumThreadsForReadInstructions = 256;
 
 REGISTER_OP("ArrayRecordResourceHandle")
     .Output("handle: resource")
@@ -171,11 +173,11 @@ StatusOr<std::vector<ReadInstruction>> GetReadInstructions(
   // Step 2: Match any patterns.
   auto match_pattern = [&](int start, int end) {
     for (int i = start; i < end; ++i) {
-      if (read_instructions[i].end >= 0) {
-        filled_instructions[i].push_back(read_instructions[i]);
+      const std::string& pattern = read_instructions[i].filename;
+      if (read_instructions[i].end >= 0 || !absl::StrContains(pattern, '?')) {
+        filled_instructions[i].push_back(std::move(read_instructions[i]));
         continue;
       }
-      const std::string& pattern = read_instructions[i].filename;
       const auto status_or_filenames = file::Match(pattern, file::Defaults());
       if (!status_or_filenames.ok() || status_or_filenames->empty()) {
         LOG(ERROR) << "Failed to find matching files for pattern " << pattern;
