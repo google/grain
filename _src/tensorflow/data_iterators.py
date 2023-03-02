@@ -25,6 +25,7 @@ import jax
 import tensorflow as tf
 
 # Dictionary keys used in checkpoints.
+_VERSION = "version"
 _LAST_SEEN_INDEX = "last_seen_index"
 _SOURCE = "source"
 _SAMPLER = "sampler"
@@ -164,6 +165,7 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
     """
     logging.info("Saving TfGrainDatasetIterator to %s", filename)
     state = {
+        _VERSION: 1,
         _LAST_SEEN_INDEX: self._last_seen_index,
         _SOURCE: repr(self._data_loader.source),
         _SAMPLER: self._data_loader.sampler.as_dict(),
@@ -179,6 +181,19 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
       raise ValueError(f"File {filename} does not exist.")
     state = json.loads(filename.read_text())
     self._last_seen_index = state[_LAST_SEEN_INDEX]
+
+    version = state.get(_VERSION, 0)
+
+    # Fix state of TfArrayRecordDataSource to version 1.
+    if version == 0 and state[_SOURCE].startswith(
+        "TfArrayRecordDataSource(paths=['"
+    ):
+      # Extract '[...]' from 'TfArrayRecordDataSource(paths=[...])' and replace
+      # ' and " to get a valid JSON list.
+      paths = state[_SOURCE][30:-1].replace("'", '"')
+      paths = json.loads(paths)
+      h = sum(hash(p) for p in paths)
+      state[_SOURCE] = f"TfArrayRecordDataSource(hash_of_paths={h})"
 
     # Check that checkpoint is valid.
     if repr(self._data_loader.source) != state[_SOURCE]:

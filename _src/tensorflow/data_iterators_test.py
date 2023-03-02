@@ -23,6 +23,7 @@ from clu.data import dataset_iterator
 from etils import epath
 from grain._src.core.constants import INDEX  # pylint: disable=g-multiple-import
 from grain._src.tensorflow import data_iterators
+from grain._src.tensorflow import data_sources
 from grain._src.tensorflow import index_dataset
 import numpy as np
 import tensorflow as tf
@@ -148,6 +149,7 @@ class DataIteratorsTest(tf.test.TestCase, parameterized.TestCase):
     self.assertEqual(
         checkpoint0.read_text(),
         """{
+    "version": 1,
     "last_seen_index": null,
     "source": "'DummySource'",
     "sampler": {
@@ -163,6 +165,7 @@ class DataIteratorsTest(tf.test.TestCase, parameterized.TestCase):
     self.assertEqual(
         checkpoint2.read_text(),
         """{
+    "version": 1,
     "last_seen_index": 1,
     "source": "'DummySource'",
     "sampler": {
@@ -179,6 +182,7 @@ class DataIteratorsTest(tf.test.TestCase, parameterized.TestCase):
     checkpoint3 = testdir / "step3.json"
     checkpoint3.write_text(
         """{
+    "version": 1,
     "last_seen_index": 2,
     "source": "'DummySource'",
     "sampler": {
@@ -190,6 +194,30 @@ class DataIteratorsTest(tf.test.TestCase, parameterized.TestCase):
     it.restore(checkpoint3)
     self.assertAllEqual(next(it), {INDEX: 3, "number": 7})
 
+  def test_save_and_restore_array_record(self):
+    testdir = epath.Path(tempfile.mkdtemp()) / "test"
+    testdir.mkdir(parents=True, exist_ok=False)
+    source = data_sources.TfArrayRecordDataSource(["filename1", "filename2"])
+    it = data_iterators.TfGrainDatasetIterator(DummyDataLoader(source=source))
+    checkpoint = testdir / "step0.json"
+    it.save(checkpoint)
+    it.restore(checkpoint)
+    print(3 * "\n")
+    print(checkpoint.read_text())
+    print(3 * "\n")
+    # Old checkpoint format.
+    checkpoint.write_text(
+        """{
+    "last_seen_index": 2,
+    "source": "TfArrayRecordDataSource(paths=['filename1', 'filename2'])",
+    "sampler": {
+        "shard_index": 0,
+        "shard_count": 1
+    }
+}"""
+    )
+    it.restore(checkpoint)
+
   def test_restore_fails_for_different_shard_options(self):
     testdir = epath.Path(tempfile.mkdtemp()) / "test"
     testdir.mkdir(parents=True, exist_ok=False)
@@ -197,6 +225,7 @@ class DataIteratorsTest(tf.test.TestCase, parameterized.TestCase):
     checkpoint3 = testdir / "step3.json"
     checkpoint3.write_text(
         """{
+    "version": 1,
     "last_seen_index": 2,
     "source": "'DummySource'",
     "sampler": {

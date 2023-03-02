@@ -94,4 +94,5 @@ class TfArrayRecordDataSource:
     return self._parse_fn
 
   def __repr__(self) -> str:
-    return f"TfArrayRecordDataSource({self._paths!r})"
+    h = sum(hash(p) for p in self._paths)
+    return f"TfArrayRecordDataSource(hash_of_paths={h})"

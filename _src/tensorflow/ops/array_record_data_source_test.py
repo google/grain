@@ -91,6 +91,15 @@ class TfArrayRecordTest(tf.test.TestCase, parameterized.TestCase):
       actual_value = _get_value(record.numpy())
       self.assertEqual(actual_value, expected_value)
 
+  def test_repr(self):
+    ar = TfArrayRecordDataSource([
+        "alphabet.array_record-00000-of-00002[2:8]",
+        "alphabet.array_record-00001-of-00002[1:7]",
+    ])
+    self.assertRegex(
+        repr(ar), r"TfArrayRecordDataSource\(hash_of_paths=-?\d+\)"
+    )
+
 
 if __name__ == "__main__":
   tf.test.main()
