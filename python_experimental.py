@@ -11,11 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Experimental Grain APIs."""
+"""Experimental PyGrain APIs."""
 
 # pylint: disable=g-multiple-import
 # pylint: disable=unused-import
 # pylint: disable=wildcard-import
 
 from ._src.python.experimental.index_shuffle.python.index_shuffle import index_shuffle
-from ._src.tensorflow.transforms import apply_transformations
