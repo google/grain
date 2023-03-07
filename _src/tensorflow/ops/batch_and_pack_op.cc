@@ -415,8 +415,9 @@ class BatchAndPackDatasetOp::Dataset : public DatasetBase {
     return name_utils::DatasetDebugString(kDatasetType, params);
   }
 
-  int64_t CardinalityInternal() const override {
-    int64_t n = input_->Cardinality();
+  int64_t CardinalityInternal(
+      tensorflow::data::CardinalityOptions options) const override {
+    int64_t n = input_->Cardinality(options);
     // Infinite datasets stay infinite.
     if (n == kInfiniteCardinality) {
       return n;
