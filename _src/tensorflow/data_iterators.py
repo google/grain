@@ -23,6 +23,7 @@ from grain._src.core import constants
 from grain._src.tensorflow import index_dataset
 import jax
 import tensorflow as tf
+import tensorflow_datasets as tfds
 
 # Dictionary keys used in checkpoints.
 _VERSION = "version"
@@ -119,7 +120,7 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
             "IndexBasedDatasetIterator expect dataset elements to be "
             f"dictionaries but got {self._dataset.element_spec}."
         )
-      self._iterator = self._dataset.as_numpy_iterator()
+      self._iterator = iter(tfds.as_numpy(self._dataset))
 
   def __next__(self) -> dataset_iterator.Element:
     self._ensure_iterator()
