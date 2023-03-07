@@ -142,11 +142,6 @@ class MergeByMinValueDatasetOp::Dataset : public DatasetBase {
     return name_utils::DatasetDebugString(kDatasetType, params);
   }
 
-  int64_t CardinalityInternal() const override {
-    CardinalityOptions options;
-    return CardinalityInternal(options);
-  }
-
   int64_t CardinalityInternal(CardinalityOptions options) const override {
     int64_t total = 0;
     for (const auto& input : inputs_) {
