@@ -539,6 +539,9 @@ def _map_index_dataset_using_data_source(
       del features[input_key]
     return features
 
+  if config.tf_lookup_batch_size == 1:
+    return index_ds.map(lookup_fn, num_parallel_calls=tf.data.AUTOTUNE)
+
   if config.tf_lookup_fast_warmup:
     # Split the first batch into a separate dataset. Will be concatenated at
     # the end again.

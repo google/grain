@@ -59,6 +59,7 @@ limitations under the License.
 #include "third_party/tensorflow/core/platform/errors.h"
 #include "third_party/tensorflow/core/platform/mutex.h"
 #include "third_party/tensorflow/core/platform/threadpool.h"
+#include "third_party/tensorflow/core/platform/tstring.h"
 #include "third_party/tensorflow/core/platform/types.h"
 #include "third_party/tensorflow/tsl/platform/statusor.h"
 
@@ -294,6 +295,28 @@ class ArrayRecordResource : public ResourceBase {
 
   uint64_t NumRecords() const { return total_num_records_; }
 
+  Status At(OpKernelContext* context, uint64_t key, tstring& record) {
+    if (use_cache_ && cache_.Lookup(key, record)) {
+      return OkStatus();
+    }
+    int reader_index;
+    uint64_t position;
+    std::tie(reader_index, position) = GetReaderIndexAndPosition(key);
+    if (readers_[reader_index] == nullptr) {
+      CreateReader(reader_index);
+    }
+    return FromAbslStatus(
+        readers_[reader_index]->ParallelReadRecordsWithIndices(
+            {position},
+            [&](uint64_t read_idx, absl::string_view value) -> absl::Status {
+              if (use_cache_) {
+                cache_.Insert(key, value);
+              }
+              record = tstring(value);
+              return absl::OkStatus();
+            }));
+  }
+
   Status Lookup(OpKernelContext* context, const std::vector<uint64_t> keys,
                 absl::Span<tstring> records) {
     // Read records pointed to by keys and put them into records.
@@ -475,6 +498,17 @@ class ArrayRecordLookupOp : public OpKernel {
     const Tensor keys_t = context->input(1);
     const TensorShape& shape = keys_t.shape();
     const int num_keys = shape.num_elements();
+
+    if (num_keys == 1) {
+      Tensor* records_t;
+      OP_REQUIRES_OK(context, context->allocate_output(0, shape, &records_t));
+      OP_REQUIRES_OK(
+          context,
+          resource->At(context,
+                       static_cast<uint64_t>(keys_t.flat<KeyType>()(0)),
+                       records_t->flat<tstring>()(0)));
+      return;
+    }
 
     std::vector<uint64_t> keys;
     keys.reserve(num_keys);
