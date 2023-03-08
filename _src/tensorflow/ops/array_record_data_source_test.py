@@ -96,8 +96,9 @@ class TfArrayRecordTest(tf.test.TestCase, parameterized.TestCase):
         "alphabet.array_record-00000-of-00002[2:8]",
         "alphabet.array_record-00001-of-00002[1:7]",
     ])
-    self.assertRegex(
-        repr(ar), r"TfArrayRecordDataSource\(hash_of_paths=-?\d+\)"
+    self.assertEqual(
+        repr(ar),
+        "TfArrayRecordDataSource(hash_of_paths=5e4eae7728f51bec290bea4d44a608e83a426d1b)",
     )
 
 

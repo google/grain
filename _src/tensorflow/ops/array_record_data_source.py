@@ -69,7 +69,7 @@ class TfArrayRecordDataSource:
     # Convert Path objects to strings.
     paths = [os.fspath(p) for p in paths]
     if shared_name is None:
-      h = hashlib.md5()
+      h = hashlib.sha1()
       h.update(str(paths).encode())
       shared_name = h.hexdigest()
     self._paths = paths
@@ -94,5 +94,7 @@ class TfArrayRecordDataSource:
     return self._parse_fn
 
   def __repr__(self) -> str:
-    h = sum(hash(p) for p in self._paths)
-    return f"TfArrayRecordDataSource(hash_of_paths={h})"
+    h = hashlib.sha1()
+    for p in self._paths:
+      h.update(p.encode())
+    return f"TfArrayRecordDataSource(hash_of_paths={h.hexdigest()})"

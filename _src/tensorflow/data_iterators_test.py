@@ -149,7 +149,7 @@ class DataIteratorsTest(tf.test.TestCase, parameterized.TestCase):
     self.assertEqual(
         checkpoint0.read_text(),
         """{
-    "version": 1,
+    "version": 2,
     "last_seen_index": null,
     "source": "'DummySource'",
     "sampler": {
@@ -165,7 +165,7 @@ class DataIteratorsTest(tf.test.TestCase, parameterized.TestCase):
     self.assertEqual(
         checkpoint2.read_text(),
         """{
-    "version": 1,
+    "version": 2,
     "last_seen_index": 1,
     "source": "'DummySource'",
     "sampler": {
@@ -182,7 +182,7 @@ class DataIteratorsTest(tf.test.TestCase, parameterized.TestCase):
     checkpoint3 = testdir / "step3.json"
     checkpoint3.write_text(
         """{
-    "version": 1,
+    "version": 2,
     "last_seen_index": 2,
     "source": "'DummySource'",
     "sampler": {
@@ -201,10 +201,19 @@ class DataIteratorsTest(tf.test.TestCase, parameterized.TestCase):
     it = data_iterators.TfGrainDatasetIterator(DummyDataLoader(source=source))
     checkpoint = testdir / "step0.json"
     it.save(checkpoint)
+    self.assertEqual(
+        checkpoint.read_text(),
+        """{
+    "version": 2,
+    "last_seen_index": null,
+    "source": "TfArrayRecordDataSource(hash_of_paths=d6adb1a73554732f130c320b8d99efd482e2b30b)",
+    "sampler": {
+        "shard_index": 0,
+        "shard_count": 1
+    }
+}""",
+    )
     it.restore(checkpoint)
-    print(3 * "\n")
-    print(checkpoint.read_text())
-    print(3 * "\n")
     # Old checkpoint format.
     checkpoint.write_text(
         """{
@@ -225,7 +234,7 @@ class DataIteratorsTest(tf.test.TestCase, parameterized.TestCase):
     checkpoint3 = testdir / "step3.json"
     checkpoint3.write_text(
         """{
-    "version": 1,
+    "version": 2,
     "last_seen_index": 2,
     "source": "'DummySource'",
     "sampler": {

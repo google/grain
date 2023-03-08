@@ -13,6 +13,7 @@
 # limitations under the License.
 """Data iterators."""
 import dataclasses
+import hashlib
 import json
 from typing import Any, Mapping, Optional
 
@@ -166,7 +167,7 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
     """
     logging.info("Saving TfGrainDatasetIterator to %s", filename)
     state = {
-        _VERSION: 1,
+        _VERSION: 2,
         _LAST_SEEN_INDEX: self._last_seen_index,
         _SOURCE: repr(self._data_loader.source),
         _SAMPLER: self._data_loader.sampler.as_dict(),
@@ -193,8 +194,12 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
       # ' and " to get a valid JSON list.
       paths = state[_SOURCE][30:-1].replace("'", '"')
       paths = json.loads(paths)
-      h = sum(hash(p) for p in paths)
-      state[_SOURCE] = f"TfArrayRecordDataSource(hash_of_paths={h})"
+      h = hashlib.sha1()
+      for p in paths:
+        h.update(p.encode())
+      state[_SOURCE] = f"TfArrayRecordDataSource(hash_of_paths={h.hexdigest()})"
+    if version == 1:
+      state[_SOURCE] = repr(self._data_loader.source)
 
     # Check that checkpoint is valid.
     if repr(self._data_loader.source) != state[_SOURCE]:
