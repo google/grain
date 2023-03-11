@@ -17,7 +17,6 @@ import hashlib
 import json
 from typing import Any, Mapping, Optional
 
-from absl import logging
 from clu.data import dataset_iterator
 from etils import epath
 from grain._src.core import constants
@@ -151,39 +150,21 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
       element_spec = _reshape_for_local_devices(element_spec)
     return element_spec
 
-  def save(self, filename: epath.PathLike):
-    """Saves the state of this iterator to filename.
+  def get_state(self) -> str:
+    return json.dumps(
+        {
+            _VERSION: 2,
+            _LAST_SEEN_INDEX: self._last_seen_index,
+            _SOURCE: repr(self._data_loader.source),
+            _SAMPLER: self._data_loader.sampler.as_dict(),
+        },
+        indent=4,
+    )
 
-    We store the last seen index. This is enough to restore the iterator.
-
-    We do not serialize the data loader (which can contain arbitrary Python
-    objects). The checkpoint can only be restored from an equivalent data
-    loader. Especially the data source and the sampler must match.
-    To catch some user errors we store some info about the source and sampler.
-
-    Args:
-      filename: Path to filename. Parent directory must exist. Checkpoints are
-        json files.
-    """
-    logging.info("Saving TfGrainDatasetIterator to %s", filename)
-    state = {
-        _VERSION: 2,
-        _LAST_SEEN_INDEX: self._last_seen_index,
-        _SOURCE: repr(self._data_loader.source),
-        _SAMPLER: self._data_loader.sampler.as_dict(),
-    }
-    filename = epath.Path(filename)
-    filename.write_text(json.dumps(state, indent=4))
-
-  def restore(self, filename: epath.PathLike):
-    logging.info("Restoring TfGrainDatasetIterator from %s", filename)
+  def set_state(self, serialized_state: str):
     self.reset()
-    filename = epath.Path(filename)
-    if not filename.exists():
-      raise ValueError(f"File {filename} does not exist.")
-    state = json.loads(filename.read_text())
+    state = json.loads(serialized_state)
     self._last_seen_index = state[_LAST_SEEN_INDEX]
-
     version = state.get(_VERSION, 0)
 
     # Fix state of TfArrayRecordDataSource to version 1.
@@ -218,6 +199,29 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
           f"Sampler: {self._data_loader.sampler.as_dict()}\n"
           f"Sampler in checkpoint: {state[_SAMPLER]}"
       )
+
+  def save(self, filename: epath.PathLike):
+    """Saves the state of this iterator to filename.
+
+    We store the last seen index. This is enough to restore the iterator.
+
+    We do not serialize the data loader (which can contain arbitrary Python
+    objects). The checkpoint can only be restored from an equivalent data
+    loader. Especially the data source and the sampler must match.
+    To catch some user errors we store some info about the source and sampler.
+
+    Args:
+      filename: Path to filename. Parent directory must exist. Checkpoints are
+        json files.
+    """
+    filename = epath.Path(filename)
+    filename.write_text(self.get_state())
+
+  def restore(self, filename: epath.PathLike):
+    filename = epath.Path(filename)
+    if not filename.exists():
+      raise ValueError(f"File {filename} does not exist.")
+    self.set_state(filename.read_text())
 
   def __repr__(self) -> str:
     return (
