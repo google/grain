@@ -18,12 +18,12 @@ from typing import Any
 from etils import epath
 from grain._src.tensorflow import data_iterators
 import jax
-import orbax.checkpoint
 
 TfGrainDatasetIterator = data_iterators.TfGrainDatasetIterator
 
 
-class OrbaxCheckpointHandler(orbax.checkpoint.CheckpointHandler):
+# Implements orbax.checkpoint.CheckpointHandler
+class OrbaxCheckpointHandler:
   """Orbax CheckpointHandler for DataIterator."""
 
   def save(self, directory: epath.Path, item: TfGrainDatasetIterator):
@@ -36,6 +36,7 @@ class OrbaxCheckpointHandler(orbax.checkpoint.CheckpointHandler):
   def restore(
       self, directory: epath.Path, item: TfGrainDatasetIterator
   ) -> TfGrainDatasetIterator:
+    """Restores the given iterator from the checkpoint in `directory`."""
     if item is None:
       raise ValueError("OrbaxCheckpointHandler requires `item`.")
     filename = (
@@ -50,4 +51,5 @@ class OrbaxCheckpointHandler(orbax.checkpoint.CheckpointHandler):
 
   # Required by interface but not supported by Grain checkpoints.
   def structure(self, directory: epath.Path) -> Any:
+    del directory
     return None
