@@ -113,6 +113,26 @@ class BatchingTest(tf.test.TestCase, parameterized.TestCase):
     ):
       batch_fn.apply_to_dataset(ds)
 
+  def test_batch_with_pad_preserves_existing_mask(self):
+    ds = tf.data.Dataset.from_tensor_slices({
+        "index": [1, 2, 3],
+        "mask": [False, True, True],
+    })
+    batch_fn = batching.TfBatchWithPadElements(2, mask_key="mask")
+    ds = batch_fn.apply_to_dataset(ds)
+    elements = _dataset_to_dict(ds)
+    self.assertAllClose(
+        elements,
+        {"index": [(1, 2), (3, 0)], "mask": [(False, True), (True, False)]},
+    )
+
+  def test_batch_with_pad_raises_type_error(self):
+    ds = tf.data.Dataset.range(7).map(lambda i: {"index": i, "mask": i})
+    batch_fn = batching.TfBatchWithPadElements(2, mask_key="mask")
+    with self.assertRaises(ValueError):
+      ds = batch_fn.apply_to_dataset(ds)
+      _ = _dataset_to_dict(ds)
+
   def test_batch_and_pack(self):
     ds = tf.data.experimental.from_list([
         {

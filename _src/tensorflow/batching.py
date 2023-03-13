@@ -93,10 +93,16 @@ class TfBatchWithPadElements(transforms.GlobalTfDataTransform):
     filler_dataset = tf.data.Dataset.from_tensors(filler_element)
     filler_dataset = filler_dataset.repeat(padding)
 
-    ds = ds.map(
-        lambda features: features | {self.mask_key: True},
-        num_parallel_calls=tf.data.AUTOTUNE,
-    )
+    def mask_fn(features):
+      mask_value = tf.convert_to_tensor(features.get(self.mask_key, True))
+      if mask_value.dtype != tf.bool or mask_value.shape.rank != 0:
+        raise ValueError(
+            f"The key {self.mask_key} already exists but its value is not a "
+            "boolean scalar."
+        )
+      return features | {self.mask_key: mask_value}
+
+    ds = ds.map(mask_fn, num_parallel_calls=tf.data.AUTOTUNE)
     ds = ds.concatenate(filler_dataset)
     assert ds.cardinality().numpy() % self.batch_size == 0
     return ds.batch(
