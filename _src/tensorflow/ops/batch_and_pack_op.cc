@@ -62,12 +62,12 @@ REGISTER_OP("BatchAndPackDataset")
     .Input("sequence_lengths: N * int64")
     .Output("handle: variant")
     .Attr("parallel_copy: bool = false")
-    .Attr("Toutput_types: list(type) >= 1")
+    .Attr("output_types: list(type) >= 1")
     .Attr("output_shapes: list(shape) >= 1")
     .Attr("N: int >= 1")
     .Attr("metadata: string = ''")
     .SetTypeConstructor(full_type::VariadicTensorContainer(TFT_DATASET,
-                                                           "Toutput_types"))
+                                                           "output_types"))
     .SetShapeFn([](shape_inference::InferenceContext* c) {
       shape_inference::ShapeHandle unused;
       // batch_size should be a scalar.
@@ -79,7 +79,7 @@ constexpr char kDatasetType[] = "BatchAndPack";
 constexpr char kBatchSize[] = "batch_size";
 constexpr char kSequenceLengths[] = "sequence_lengths";
 constexpr char kParallelCopy[] = "parallel_copy";
-constexpr char kToutputTypes[] = "Toutput_types";
+constexpr char kToutputTypes[] = "output_types";
 constexpr char kNumPaddedShapes[] = "N";
 constexpr char kExhausted[] = "exhausted";
 

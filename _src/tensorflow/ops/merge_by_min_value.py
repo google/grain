@@ -44,7 +44,7 @@ class MergeByMinValueDataset(tf.data.Dataset):
       if not isinstance(spec, dict) or merge_field not in spec:
         raise ValueError(
             "Elements in input datasets must be dictionaries containing "
-            "{merge_field} but got {spec} for input dataset {i}."
+            f"{merge_field} but got {spec} for input dataset {i}."
         )
       if not spec[merge_field].shape or spec[merge_field].dtype != tf.int64:
         raise ValueError(

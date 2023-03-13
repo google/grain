@@ -89,17 +89,13 @@ class BatchAndPackDataset(tf.data.Dataset):
     self._structure = tf.nest.pack_sequence_as(
         input_dataset.element_spec, flat_structure
     )
-    flat_output_shapes = [ts.shape for ts in tf.nest.flatten(self._structure)]
-    flat_output_types = [ts.dtype for ts in tf.nest.flatten(self._structure)]
 
     variant_tensor = gen_batch_and_pack_op.batch_and_pack_dataset(
         input_dataset._variant_tensor,  # pylint: disable=protected-access
         batch_size=self._batch_size,
         sequence_lengths=flat_sequence_lengths,
         parallel_copy=parallel_copy,
-        output_shapes=flat_output_shapes,
-        Toutput_types=flat_output_types,
-        metadata=self._metadata.SerializeToString(),
+        **self._common_args,
     )
     super().__init__(variant_tensor)
 
