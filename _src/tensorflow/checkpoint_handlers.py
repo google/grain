@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """This module provides a CheckpointHandler for integration with Orbax."""
-import copy
 from typing import Any
 
 from etils import epath
@@ -45,7 +44,6 @@ class OrbaxCheckpointHandler:
     )
     if not filename.exists():
       raise ValueError(f"File {filename} does not exist.")
-    item = copy.deepcopy(item)
     item.restore(filename)
     return item
 
