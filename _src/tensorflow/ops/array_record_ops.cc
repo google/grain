@@ -303,19 +303,23 @@ class ArrayRecordResource : public ResourceBase {
   }
 
   void CreateReader(const int reader_index) {
-    const std::lock_guard<mutex> lock(create_reader_mutex_);
-    if (readers_[reader_index] == nullptr) {
-      // See b/262550570 for the readahead buffer size.
-      ArrayRecordReaderOptions array_record_reader_options;
-      array_record_reader_options.set_readahead_buffer_size(0);
-      riegeli::FileReaderBase::Options file_reader_options;
-      file_reader_options.set_buffer_size(1 << 15);
-      // Copy is on purpose.
-      std::string filename = read_instructions_[reader_index].filename;
-      readers_[reader_index] = std::make_unique<
-          array_record::ArrayRecordReader<riegeli::FileReader<>>>(
-          std::forward_as_tuple(filename, file_reader_options),
-          array_record_reader_options, array_record::ArrayRecordGlobalPool());
+    // See b/262550570 for the readahead buffer size.
+    ArrayRecordReaderOptions array_record_reader_options;
+    array_record_reader_options.set_max_parallelism(0);
+    array_record_reader_options.set_readahead_buffer_size(0);
+    riegeli::FileReaderBase::Options file_reader_options;
+    file_reader_options.set_buffer_size(1 << 15);
+    // Copy is on purpose.
+    std::string filename = read_instructions_[reader_index].filename;
+    auto reader = std::make_unique<
+        array_record::ArrayRecordReader<riegeli::FileReader<>>>(
+        std::forward_as_tuple(filename, file_reader_options),
+        array_record_reader_options, array_record::ArrayRecordGlobalPool());
+    {
+      const std::lock_guard<mutex> lock(create_reader_mutex_);
+      if (readers_[reader_index] == nullptr) {
+        readers_[reader_index] = std::move(reader);
+      }
     }
   }
 
