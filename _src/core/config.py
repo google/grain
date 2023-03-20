@@ -45,7 +45,7 @@ _INTERLEAVED_SHUFFLE_NUM_BLOCKS_PER_PARTITION = flags.DEFINE_integer(
 
 _LOOKUP_BATCH_SIZE = flags.DEFINE_integer(
     "grain_tf_lookup_batch_size",
-    1024,
+    100,
     (
         "Number of keys to batch into a single lookup call."
         " --grain_tf_num_parallel_calls controls on how many lookups to perform"
@@ -64,7 +64,7 @@ _LOOKUP_NUM_PARALLEL_CALLS = flags.DEFINE_integer(
 )
 _LOOKUP_FAST_WARMUP = flags.DEFINE_bool(
     "grain_tf_lookup_fast_warmup",
-    True,
+    False,
     (
         "If True will split up the first batch lookup into smaller chunks. This"
         " can help to provide initial elements fast while allowing when using a"

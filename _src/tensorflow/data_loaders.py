@@ -540,7 +540,10 @@ def _map_index_dataset_using_data_source(
     return features
 
   if config.tf_lookup_batch_size == 1:
-    return index_ds.map(lookup_fn, num_parallel_calls=tf.data.AUTOTUNE)
+    dataset = index_ds.map(
+        lookup_fn, num_parallel_calls=config.tf_lookup_num_parallel_calls
+    )
+    return dataset.prefetch(tf.data.AUTOTUNE)
 
   if config.tf_lookup_fast_warmup:
     # Split the first batch into a separate dataset. Will be concatenated at
@@ -571,4 +574,4 @@ def _map_index_dataset_using_data_source(
   if config.tf_lookup_fast_warmup:
     dataset = warmup_dataset.concatenate(dataset)
 
-  return dataset
+  return dataset.prefetch(tf.data.AUTOTUNE)

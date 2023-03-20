@@ -638,7 +638,7 @@ def _create_index_dataset(
     ds = ds.apply(
         tf.data.experimental.assert_cardinality(tf.data.INFINITE_CARDINALITY)
     )
-  ds = ds.map(map_fn)
+  ds = ds.map(map_fn, num_parallel_calls=tf.data.AUTOTUNE)
   return ds
 
 
