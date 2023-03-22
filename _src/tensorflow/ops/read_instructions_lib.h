@@ -1,6 +1,7 @@
 #ifndef THIRD_PARTY_PY_GRAIN__SRC_TENSORFLOW_OPS_READ_INSTRUCTIONS_LIB_H_
 #define THIRD_PARTY_PY_GRAIN__SRC_TENSORFLOW_OPS_READ_INSTRUCTIONS_LIB_H_
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -20,13 +21,16 @@ struct ReadInstruction {
   int64_t NumRecords() const { return end - start; }
 };
 
+using GetNumRecords = std::function<uint64_t(const std::string&)>;
+
 // Get the read instructions for a list of paths where each path can be:
 // - A normal filename.
 // - A filename with read instructions: filename[start:end].
 // Unless the filename is given with read instruction the file will be opened
 // to get the total number of records.
 tsl::StatusOr<std::vector<ReadInstruction>> GetReadInstructions(
-    const std::vector<std::string>& paths);
+    const std::vector<std::string>& paths,
+    const GetNumRecords& get_num_records);
 
 }  // namespace data
 }  // namespace tensorflow

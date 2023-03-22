@@ -31,7 +31,8 @@ tsl::StatusOr<ReadInstruction> ReadInstruction::Parse(absl::string_view path) {
 // Unless the filename is given with read instruction, the file will be opened
 // to get the total number of records.
 tsl::StatusOr<std::vector<ReadInstruction>> GetReadInstructions(
-    const std::vector<std::string>& paths) {
+    const std::vector<std::string>& paths,
+    const GetNumRecords& get_num_records) {
   std::vector<ReadInstruction> read_instructions;
 
   // Step 1: Parse potential read instructions.
@@ -105,9 +106,8 @@ tsl::StatusOr<std::vector<ReadInstruction>> GetReadInstructions(
         LOG(ERROR) << "File " << filename << " not found.";
         continue;
       }
-      const array_record::ArrayRecordReader<riegeli::FileReader<>> reader(
-          std::forward_as_tuple(filename));
-      read_instructions[i].end = reader.NumRecords();
+      read_instructions[i].end =
+          static_cast<int64_t>(get_num_records(filename));
     }
   };
   thread_pool.ParallelFor(read_instructions.size(), scheduling_params,

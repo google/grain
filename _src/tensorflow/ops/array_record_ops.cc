@@ -27,6 +27,8 @@ limitations under the License.
 // Key 40 will map to the record at position 40 in my_file-00000-of-00002 and
 // key 121 would map to the record at position 21 in my_file-00000-of-00002.
 
+#include <stddef.h>
+
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -35,20 +37,23 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
+#include "third_party/absl/base/thread_annotations.h"
 #include "third_party/absl/container/flat_hash_map.h"
 #include "third_party/absl/flags/flag.h"
+#include "third_party/absl/log/check.h"
 #include "third_party/absl/log/log.h"
+#include "third_party/absl/meta/type_traits.h"
 #include "third_party/absl/status/status.h"
-#include "third_party/absl/status/statusor.h"
-#include "third_party/absl/strings/match.h"
-#include "third_party/absl/strings/str_format.h"
 #include "third_party/absl/strings/str_join.h"
+#include "third_party/absl/types/span.h"
 #include "third_party/array_record/cpp/array_record_reader.h"
 #include "third_party/array_record/cpp/thread_pool.h"
+#include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "third_party/py/grain/_src/tensorflow/ops/read_instructions_lib.h"
-#include "third_party/re2/re2.h"
 #include "third_party/riegeli/bytes/file_reader.h"
 #include "third_party/tensorflow/core/framework/common_shape_fns.h"
+#include "third_party/tensorflow/core/framework/device_base.h"
+#include "third_party/tensorflow/core/framework/kernel_def_builder.h"
 #include "third_party/tensorflow/core/framework/op.h"
 #include "third_party/tensorflow/core/framework/op_kernel.h"
 #include "third_party/tensorflow/core/framework/op_requires.h"
@@ -57,12 +62,22 @@ limitations under the License.
 #include "third_party/tensorflow/core/framework/shape_inference.h"
 #include "third_party/tensorflow/core/framework/tensor.h"
 #include "third_party/tensorflow/core/framework/tensor_shape.h"
-#include "third_party/tensorflow/core/platform/errors.h"
+#include "third_party/tensorflow/core/framework/tensor_types.h"
+#include "third_party/tensorflow/core/framework/types.h"
 #include "third_party/tensorflow/core/platform/mutex.h"
+#include "third_party/tensorflow/core/platform/refcount.h"
+#include "third_party/tensorflow/core/platform/status.h"
+#include "third_party/tensorflow/core/platform/strcat.h"
 #include "third_party/tensorflow/core/platform/threadpool.h"
 #include "third_party/tensorflow/core/platform/tstring.h"
 #include "third_party/tensorflow/core/platform/types.h"
+#include "third_party/tensorflow/tsl/platform/errors.h"
+#include "third_party/tensorflow/tsl/platform/macros.h"
+#include "third_party/tensorflow/tsl/platform/status.h"
 #include "third_party/tensorflow/tsl/platform/statusor.h"
+#include "third_party/tensorflow/tsl/platform/stringpiece.h"
+#include "third_party/tensorflow/tsl/platform/threadpool.h"
+#include "third_party/tensorflow/tsl/platform/tstring.h"
 
 namespace tensorflow {
 namespace data {
@@ -156,6 +171,12 @@ class RecordCache {
   mutex mu_;
 };
 
+uint64_t ArrayRecordGetNumRecords(const std::string& filename) {
+  const array_record::ArrayRecordReader<riegeli::FileReader<>> reader(
+      std::forward_as_tuple(filename));
+  return reader.NumRecords();
+}
+
 // Resource that holds the file reader objects and implements the lookup
 // logic. Init() constructs the global index by reading the number of records
 // per file. NumRecords() returns the total number of records. Lookup() looks
@@ -167,7 +188,8 @@ class ArrayRecordResource : public ResourceBase {
       : ResourceBase(), paths_(path), use_cache_(use_cache) {}
 
   Status Init() {
-    TF_ASSIGN_OR_RETURN(read_instructions_, GetReadInstructions(paths_));
+    TF_ASSIGN_OR_RETURN(read_instructions_,
+                        GetReadInstructions(paths_, ArrayRecordGetNumRecords));
     total_num_records_ = 0;
     for (const auto& ri : read_instructions_) {
       total_num_records_ += ri.NumRecords();
