@@ -138,6 +138,9 @@ class CacheTransform(GlobalTfDataTransform):
   you should cache in the data source (if supported) or TfInMemoryDatasource.
   """
 
+  def __call__(self, dataset: tf.data.Dataset) -> tf.data.Dataset:
+    return self.apply_to_dataset(dataset)
+
   def apply_to_dataset(self, dataset: tf.data.Dataset) -> tf.data.Dataset:
     if dataset.cardinality() == tf.data.INFINITE_CARDINALITY:
       raise ValueError("Cannot cache infinite dataset in memory.")
