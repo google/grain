@@ -146,6 +146,13 @@ class TfBatchAndPack(transforms.GlobalTfDataTransform):
     sequence_lengths = dict(self.sequence_lengths)
     if constants.INDEX not in sequence_lengths:
       sequence_lengths[constants.INDEX] = max(tf.nest.flatten(sequence_lengths))
+
+    if constants.INDEX not in ds.element_spec:
+      raise ValueError(
+          f"The index (key {constants.INDEX}) must still be present for "
+          "TfBatchAndPack, else datasets cannot be checkpointed."
+      )
+
     drop_features = set()
     for k in constants.META_FEATURES:
       if k in ds.element_spec and k not in sequence_lengths:
