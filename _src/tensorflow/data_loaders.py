@@ -100,7 +100,7 @@ class TfDataLoader(collections.abc.Iterable):
     self._strict_transformations = strict_transformations
     self._tf_data_options = tf_data_options
 
-  def __iter__(self):
+  def __iter__(self) -> data_iterators.TfGrainDatasetIterator:
     return data_iterators.TfGrainDatasetIterator(
         self, options=self._iterator_options
     )

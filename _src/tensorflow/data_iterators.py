@@ -150,7 +150,7 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
       element_spec = _reshape_for_local_devices(element_spec)
     return element_spec
 
-  def get_state(self) -> str:
+  def get_state(self) -> bytes:
     return json.dumps(
         {
             _VERSION: 2,
@@ -159,11 +159,11 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
             _SAMPLER: self._data_loader.sampler.as_dict(),
         },
         indent=4,
-    )
+    ).encode()
 
-  def set_state(self, serialized_state: str):
+  def set_state(self, state: bytes):
     self.reset()
-    state = json.loads(serialized_state)
+    state = json.loads(state.decode())
     self._last_seen_index = state[_LAST_SEEN_INDEX]
     version = state.get(_VERSION, 0)
 
@@ -215,13 +215,13 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
         json files.
     """
     filename = epath.Path(filename)
-    filename.write_text(self.get_state())
+    filename.write_text(self.get_state().decode())
 
   def restore(self, filename: epath.PathLike):
     filename = epath.Path(filename)
     if not filename.exists():
       raise ValueError(f"File {filename} does not exist.")
-    self.set_state(filename.read_text())
+    self.set_state(filename.read_text().encode())
 
   def __repr__(self) -> str:
     return (
