@@ -50,8 +50,48 @@ def create_dataset(
   )
 
 
+class StartIndexTest(tf.test.TestCase, parameterized.TestCase):
+  """Tests for StartIndex subclasses."""
+
+  def test_first_index(self):
+    rng = np.random.default_rng()
+    for _ in range(20):
+      shard_count = rng.integers(1, 4, size=1)[0]
+      shard_index = rng.integers(shard_count, size=1)[0]
+      start_index = index_dataset.FirstIndex()
+      start_index = start_index.get_start_index(shard_index, shard_count)
+      self.assertEqual(start_index, shard_index)
+
+  def test_next_index(self):
+    rng = np.random.default_rng()
+    for _ in range(20):
+      shard_count = rng.integers(1, 4, size=1)[0]
+      shard_index = rng.integers(shard_count, size=1)[0]
+      last_seen_index = rng.integers(100, size=1)[0]
+      start_index = index_dataset.NextIndex(last_seen_index)
+      if last_seen_index % shard_count == shard_index:
+        # last_seen_index is valid!
+        start_index = start_index.get_start_index(shard_index, shard_count)
+        self.assertEqual(start_index, last_seen_index + shard_count)
+        self.assertEqual(start_index % shard_count, shard_index)
+      else:
+        with self.assertRaises(ValueError):
+          start_index = start_index.get_start_index(shard_index, shard_count)
+
+  def test_next_valid_index(self):
+    rng = np.random.default_rng()
+    for _ in range(20):
+      shard_count = rng.integers(1, 4, size=1)[0]
+      shard_index = rng.integers(shard_count, size=1)[0]
+      last_seen_index = rng.integers(100, size=1)[0]
+      start_index = index_dataset.NextValidIndex(last_seen_index)
+      start_index = start_index.get_start_index(shard_index, shard_count)
+      self.assertGreater(start_index, last_seen_index)
+      self.assertEqual(start_index % shard_count, shard_index)
+
+
 class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
-  """Tests for the index_dataset module."""
+  """Tests for create_index_dataset method."""
 
   def test_simple(self):
     """No shuffling, no sharding, no mixing."""

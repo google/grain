@@ -47,6 +47,7 @@ that records are keyed by an integer in [0, num_records_in_dataset).
 
 **For examples of the output for read the test cases.**
 """
+import abc
 import dataclasses
 from typing import Any, Sequence, List, Mapping, Tuple, Union, Optional, Protocol
 
@@ -61,17 +62,68 @@ import numpy as np
 import tensorflow as tf
 
 
-@dataclasses.dataclass(frozen=True)
-class FirstIndex:
-  pass
+class StartIndex(abc.ABC):
+
+  @abc.abstractmethod
+  def get_start_index(self, shard_index: int, shard_count: int) -> int:
+    """Returns a valid start_index for the given shard settings."""
 
 
 @dataclasses.dataclass(frozen=True)
-class NextIndex:
+class FirstIndex(StartIndex):
+  """Always point to the first index for the shard."""
+
+  def get_start_index(self, shard_index: int, shard_count: int) -> int:
+    del shard_count
+    return shard_index
+
+
+@dataclasses.dataclass(frozen=True)
+class NextIndex(StartIndex):
+  """Points to the next index after last_seen_index in this shard.
+
+  Attributes:
+    last_seen_index: The previously seen index for this shard. Must be valid for
+      the shard.
+  """
+
   last_seen_index: int
 
+  def get_start_index(self, shard_index: int, shard_count: int) -> int:
+    if self.last_seen_index % shard_count != shard_index:
+      raise ValueError(
+          f"{self} does not contain a valid last_seen_index for the given "
+          f"sharding configutation {shard_index=} and {shard_count=}."
+      )
+    return self.last_seen_index + shard_count
 
-Index = Union[int, FirstIndex, NextIndex]
+
+@dataclasses.dataclass(frozen=True)
+class NextValidIndex(StartIndex):
+  """Points to the next valid index after last_seen_index for the shard.
+
+  Warning: Do not use this in combination with transformations that filter/skip
+  examples or combine a variable number of of elements (e.g. TfBatchAndPack).
+  Grain will silently skip examples on restarts.
+
+  This is experimental and an intermediate solution for changing TPU topology
+  during training. It should only be used in combination of
+  shard_after_shuffle=True.
+
+  Attributes:
+    last_seen_index: This should be the maximum last seen index for all previous
+      shards.
+  """
+
+  last_seen_index: int
+
+  def get_start_index(self, shard_index: int, shard_count: int) -> int:
+    start_index = self.last_seen_index + 1
+    start_index += (shard_index - start_index) % shard_count
+    return start_index
+
+
+Index = Union[int, StartIndex]
 
 
 # Below we wrap some TF random functions to make seem easier to use. We should
@@ -493,14 +545,9 @@ def _create_index_dataset(
   # When sharding the dataset (`shard_count>1`) indices are global and each
   # process will start with its `shard_index` and step by `shard_count`.
   # To make it easier for users to specify a valid `start_index` we allow to
-  # special values (and convert them to their integer value below):
-  # - FirstIndex() always points to the very first index for the shard.
-  # - NextIndex() contains the previus index and will start from the following
-  #   index.
-  if isinstance(start_index, FirstIndex):
-    start_index = shard_index
-  elif isinstance(start_index, NextIndex):
-    start_index = start_index.last_seen_index + shard_count
+  # special values (and convert them to their integer value below).
+  if isinstance(start_index, StartIndex):
+    start_index = start_index.get_start_index(shard_index, shard_count)
   if start_index < 0 or start_index % shard_count != shard_index:
     raise ValueError(
         f"Start index {start_index} is not valid index for {shard_options=} "
