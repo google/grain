@@ -40,12 +40,17 @@ def create_dataset(
     *,
     emit_epoch: bool = True,
     seed=32,
+    shard_before_shuffle: bool = True,
     **kwargs,
 ):
   """Shortcut for create_index_dataset() that sets emit_epoch and seed."""
   if "shard_options" not in kwargs:
     kwargs["shard_options"] = ShardOptions(0, 1)
-  return index_dataset._create_index_dataset(
+  if shard_before_shuffle:
+    return index_dataset._create_index_dataset(
+        records_per_dataset, emit_epoch=emit_epoch, seed=seed, **kwargs
+    )
+  return index_dataset._create_index_dataset_v2(
       records_per_dataset, emit_epoch=emit_epoch, seed=seed, **kwargs
   )
 
@@ -423,7 +428,7 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
                         ])
     # pyformat: enable
 
-  def test_shuffle_and_sharding(self):
+  def test_shard_before_shuffle(self):
     dataset = create_dataset(
         6, shuffle=True, seed=32, shard_options=ShardOptions(0, 2)
     )
@@ -441,7 +446,7 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
     dataset = create_dataset(
         6,
         shuffle=True,
-        seed=42,
+        seed=32,
         start_index=1,
         shard_options=ShardOptions(1, 2),
     )
@@ -449,13 +454,116 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
     # pyformat: disable
     self.assertAllEqual(values,
                         [{INDEX: 1, EPOCH: 1, RECORD_KEY: 4},
-                         {INDEX: 3, EPOCH: 1, RECORD_KEY: 5},
-                         {INDEX: 5, EPOCH: 1, RECORD_KEY: 3},
+                         {INDEX: 3, EPOCH: 1, RECORD_KEY: 3},
+                         {INDEX: 5, EPOCH: 1, RECORD_KEY: 5},
                          # Second epoch.
-                         {INDEX: 7, EPOCH: 2, RECORD_KEY: 5},
+                         {INDEX: 7, EPOCH: 2, RECORD_KEY: 3},
                          {INDEX: 9, EPOCH: 2, RECORD_KEY: 4},
-                         {INDEX: 11, EPOCH: 2, RECORD_KEY: 3}])
+                         {INDEX: 11, EPOCH: 2, RECORD_KEY: 5}])
     # pyformat: enable
+
+  def test_shard_after_shuffle(self):
+    dataset = create_dataset(
+        6,
+        shuffle=True,
+        seed=32,
+        shard_options=ShardOptions(0, 2),
+        shard_before_shuffle=False,
+    )
+    values = list(dataset.take(6).as_numpy_iterator())
+    # pyformat: disable
+    self.assertAllEqual(values,
+                        [{INDEX: 0, EPOCH: 1, RECORD_KEY: 4},
+                         {INDEX: 2, EPOCH: 1, RECORD_KEY: 2},
+                         {INDEX: 4, EPOCH: 1, RECORD_KEY: 5},
+                         # Second epoch.
+                         {INDEX: 6, EPOCH: 2, RECORD_KEY: 2},
+                         {INDEX: 8, EPOCH: 2, RECORD_KEY: 1},
+                         {INDEX: 10, EPOCH: 2, RECORD_KEY: 5}])
+    # pyformat: enable
+    dataset = create_dataset(
+        6,
+        shuffle=True,
+        seed=32,
+        start_index=1,
+        shard_options=ShardOptions(1, 2),
+        shard_before_shuffle=False,
+    )
+    values = list(dataset.take(6).as_numpy_iterator())
+    # pyformat: disable
+    self.assertAllEqual(values,
+                        [{INDEX: 1, EPOCH: 1, RECORD_KEY: 3},
+                         {INDEX: 3, EPOCH: 1, RECORD_KEY: 1},
+                         {INDEX: 5, EPOCH: 1, RECORD_KEY: 0},
+                         # Second epoch.
+                         {INDEX: 7, EPOCH: 2, RECORD_KEY: 0},
+                         {INDEX: 9, EPOCH: 2, RECORD_KEY: 3},
+                         {INDEX: 11, EPOCH: 2, RECORD_KEY: 4}])
+    # pyformat: enable
+
+  def test_shard_after_shuffle_change_sharding(self):
+    # We iterate for exactly 2 epochs, switching from shard_count=2 to
+    # shard_count=3 after a few steps. We should still see every element exactly
+    # twice.
+    def _create_datasets(shard_count: int, start_index_base=0):
+      datasets = []
+      for shard_index in range(shard_count):
+        ds = create_dataset(
+            12,
+            shuffle=True,
+            seed=32,
+            start_index=start_index_base + shard_index,
+            shard_options=ShardOptions(shard_index, shard_count),
+            shard_before_shuffle=False,
+            emit_seed=True,
+        )
+        datasets.append(ds.as_numpy_iterator())
+      return datasets
+
+    # We use the order in which we see elements using a single shard as ground
+    # truth.
+    ds1 = _create_datasets(1)[0]
+    # 24 steps is exactly 2 epochs.
+    expected_record_keys, expected_seeds = zip(
+        *[(e[RECORD_KEY], tuple(e[SEED])) for _, e in zip(range(24), ds1)]
+    )
+
+    record_keys = []
+    seeds = []
+
+    # Iterate with 2 shards for 3 steps.
+    ds1, ds2 = _create_datasets(2)  # pylint: disable=unbalanced-tuple-unpacking
+    for _, e1, e2 in zip(range(3), ds1, ds2):
+      record_keys.append(e1[RECORD_KEY])
+      seeds.append(tuple(e1[SEED]))
+      record_keys.append(e2[RECORD_KEY])
+      seeds.append(tuple(e2[SEED]))
+    # We saw 6 elements so far, our next valid index will be 6 + shard_index.
+
+    # Iterate with 3 shards for the remaining 6 steps to see 2 full epochs.
+    ds1, ds2, ds3 = _create_datasets(3, start_index_base=6)  # pylint: disable=unbalanced-tuple-unpacking
+    for _, e1, e2, e3 in zip(range(6), ds1, ds2, ds3):
+      record_keys.append(e1[RECORD_KEY])
+      seeds.append(tuple(e1[SEED]))
+      record_keys.append(e2[RECORD_KEY])
+      seeds.append(tuple(e2[SEED]))
+      record_keys.append(e3[RECORD_KEY])
+      seeds.append(tuple(e3[SEED]))
+
+    # All records keys are valid.
+    for x in record_keys:
+      self.assertBetween(x, 0, 11)
+    self.assertLen(record_keys, 24)
+    # We saw exactly 2 epochs.
+    self.assertLen(set(record_keys), 12)
+    self.assertLen(set(record_keys[:12]), 12)
+    self.assertLen(set(record_keys[12:]), 12)
+    # All random seeds are unique.
+    self.assertLen(set(seeds), 24)
+    # Order matches what we expect.
+    self.assertAllEqual(expected_record_keys, record_keys)
+    # Sharding does not change random seeds.
+    self.assertAllEqual(expected_seeds, seeds)
 
   def test_mixing_and_sharding(self):
     dataset = create_dataset([4, 6], shard_options=ShardOptions(0, 2))
