@@ -36,6 +36,8 @@ from typing import Mapping, Sequence, TypeVar, Union
 from absl import logging
 from clu import preprocess_spec
 from grain._src.core import constants
+from grain._src.core import transforms
+import numpy as np
 import tensorflow as tf
 from typing_extensions import final
 
@@ -62,7 +64,7 @@ TfSeed = tf.Tensor
 TfBool = tf.Tensor
 
 
-class MapTransform(abc.ABC):
+class MapTransform(transforms.MapTransform):
   """Abstract base class for all 1:1 transformations of elements."""
 
   @abc.abstractmethod
@@ -70,19 +72,29 @@ class MapTransform(abc.ABC):
     """Maps a single element."""
 
 
-class RandomMapTransform(abc.ABC):
+class RandomMapTransform(transforms.TfRandomMapTransform):
   """Abstract base class for all random 1:1 transformations of elements."""
 
   @abc.abstractmethod
   def random_map(self, element: Element, rng: TfSeed) -> Element:
     """Maps a single element."""
 
+  def np_random_map(
+      self, element: Element, rng: np.random.Generator
+  ) -> Element:
+    rng = tf.convert_to_tensor(
+        rng.integers(
+            low=0, high=np.iinfo(np.int32).max, size=(2,), dtype=np.int32
+        )
+    )
+    return self.random_map(element, rng)
 
-class FilterTransform(abc.ABC):
+
+class FilterTransform(transforms.FilterTransform):
   """Abstract base class for filter operations for individual elements."""
 
   @abc.abstractmethod
-  def filter(self, element: Element) -> TfBool:
+  def filter(self, element: Element) -> TfBool:  # pytype: disable=signature-mismatch
     """Filters a single element."""
 
 
@@ -258,7 +270,7 @@ def _try_apply_seqio_preprocessor(
 
 
 def apply_transformations(
-    ds: tf.data.Dataset, transforms: Transformations, *, strict: bool = True
+    ds: tf.data.Dataset, transforms: Transformations, *, strict: bool = True  # pylint: disable=redefined-outer-name
 ) -> tf.data.Dataset:
   """Applies the transformations to the dataset.
 
