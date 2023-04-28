@@ -27,6 +27,8 @@ limitations under the License.
 // Key 40 will map to the record at position 40 in my_file-00000-of-00002 and
 // key 121 would map to the record at position 21 in my_file-00000-of-00002.
 
+#include "third_party/py/grain/_src/tensorflow/ops/array_record_ops.h"
+
 #include <stddef.h>
 
 #include <cstdint>
@@ -47,6 +49,7 @@ limitations under the License.
 #include "third_party/absl/strings/str_join.h"
 #include "third_party/absl/types/span.h"
 #include "third_party/array_record/cpp/array_record_reader.h"
+#include "third_party/array_record/cpp/array_record_writer.h"
 #include "third_party/array_record/cpp/thread_pool.h"
 #include "third_party/eigen3/unsupported/Eigen/CXX11/Tensor"
 #include "third_party/py/grain/_src/tensorflow/ops/read_instructions_lib.h"
@@ -86,6 +89,28 @@ using shape_inference::InferenceContext;
 using shape_inference::ShapeHandle;
 using TfThreadPool = ::tensorflow::thread::ThreadPool;
 using ArrayRecordReaderOptions = ::array_record::ArrayRecordReaderBase::Options;
+using ArrayRecordWriterOptions = ::array_record::ArrayRecordWriterBase::Options;
+
+absl::Status CheckGroupSize(const absl::string_view filename,
+                            const std::optional<std::string> options_string) {
+  // Check that ArrayRecord files were created with group_size=1. Old files
+  // (prior 2022-10) don't have this info.
+  if (!options_string.has_value()) {
+    return absl::OkStatus();
+  }
+  auto maybe_options = ArrayRecordWriterOptions::FromString(*options_string);
+  if (!maybe_options.ok()) {
+    return maybe_options.status();
+  }
+  const int group_size = maybe_options->group_size();
+  if (group_size != 1) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "File ", filename, " was created with group size ", group_size,
+        ". Grain requires group size 1 for good performance. Please "
+        "re-generate your ArrayRecord files with 'group_size:1'."));
+  }
+  return absl::OkStatus();
+}
 
 namespace {
 
@@ -337,6 +362,10 @@ class ArrayRecordResource : public ResourceBase {
         array_record::ArrayRecordReader<riegeli::FileReader<>>>(
         std::forward_as_tuple(filename, file_reader_options),
         array_record_reader_options, array_record::ArrayRecordGlobalPool());
+    const auto status = CheckGroupSize(filename, reader->WriterOptionsString());
+    if (!status.ok()) {
+      LOG(ERROR) << status;
+    }
     {
       const std::lock_guard<mutex> lock(create_reader_mutex_);
       if (readers_[reader_index] == nullptr) {
