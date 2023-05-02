@@ -48,8 +48,10 @@ from ._src.tensorflow.data_sources import (
 from ._src.tensorflow.index_dataset import (
     Index,
     FirstIndex,
+    InterleavedShuffle,
     NextIndex,
     NextValidIndex,
+    Shuffle,
     TfIndexSampler,
     TfDefaultIndexSampler,
     TfMixtureIndexSampler,

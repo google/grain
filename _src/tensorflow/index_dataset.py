@@ -175,42 +175,49 @@ def tf_index_shuffle(index, *, seed, max_index) -> tf.Tensor:
   )
 
 
-def _shuffle(
-    index: tf.Tensor, *, seed: tf.Tensor, num_records: tf.Tensor
-) -> tf.Tensor:
-  """Shuffles the `index` within the interval [0, num_records - 1].
+class ShuffleFn(abc.ABC):
 
-  Args:
-    index: An integer scalar tensor >= 0.
-    seed: The seed for shuffling as tensor of shape [2] and dtype
-      int32/uint32/int64/uint64.
-    num_records: The number of records in an epoch. Indices fall into epochs.
-      Epoch n contains the indices [n * num_records, (n + 1) * num_records - 1].
-      Each epoch is shuffled differently by alternating the `seed`. fold it into
-      the `seed`.
-
-  Returns:
-    The value at `index` in a random permutation of [0, num_record - 1]. The
-    permutation is fixed by `seed` and `epoch = index // num_records`.
-  """
-  # We use a different random seed per epoch.
-  epoch = index // num_records
-  seed = tf_random_fold_in(seed, epoch)
-  index %= num_records
-  # max_index is inclusive.
-  return tf_index_shuffle(
-      index, seed=seed, max_index=tf.cast(num_records - 1, tf.int64)
-  )
+  @abc.abstractmethod
+  def index_shuffle(
+      self, index: tf.Tensor, *, seed: tf.Tensor, num_records: tf.Tensor
+  ) -> tf.Tensor:
+    """Returns the value of `index` in a permutation [0, num_records-1].
 
 
-def _interleaved_shuffle(
-    index: tf.Tensor,
-    *,
-    seed: tf.Tensor,
-    num_records: tf.Tensor,
-    block_size: Optional[int] = None,
-    parallel_blocks: Optional[int] = None,
-) -> tf.Tensor:
+    Args:
+      index: Scalar tensor of type tf.int64. The index in the permuation.
+        `index` is allowed to be larger than `num_records` to represent multiple
+        epochs that should lead to different shuffle order.
+      seed: Vector of shape [2] and type tf.int64. This is a base seed,
+        implementations might derive separate seeds for epoch epochs.
+      num_records: Scalar tensor of type tf.int64. The size of a single epoch.
+        Epoch n contains the indices [n * num_records, (n + 1) * num_records -
+        1]. Each epoch is shuffled differently by alternating the `seed`. fold
+        it into the `seed`.
+
+    Returns:
+      The value at `index` in a random permutation of [0, num_record - 1]. The
+      permutation is fixed by `seed` and `epoch = index // num_records`.
+    """
+
+
+class Shuffle(ShuffleFn):
+  """Normal global shuffle."""
+
+  def index_shuffle(
+      self, index, *, seed: tf.Tensor, num_records: tf.Tensor
+  ) -> tf.Tensor:
+    # We use a different random seed per epoch.
+    epoch = index // num_records
+    seed = tf_random_fold_in(seed, epoch)
+    index %= num_records
+    # max_index is inclusive.
+    return tf_index_shuffle(
+        index, seed=seed, max_index=tf.cast(num_records - 1, tf.int64)
+    )
+
+
+class InterleavedShuffle(ShuffleFn):
   """Approximate global shuffle by interleaving random blocks.
 
   # Motivation
@@ -257,64 +264,66 @@ def _interleaved_shuffle(
   To read full blocks the consumer of the shuffled indices should batch
   roughly block_size * parallel_blocks reads together.
 
-  Args:
-    index: See _shuffle()
-    seed: See _shuffle().
-    num_records: See _shuffle().
+  Attributes:
     block_size: Size of a block. Larger blocks result in longer sequential reads
       but worse shuffle performane. Defaults to
       grain.config.tf_interleaved_shuffle_block_size.
     parallel_blocks: Number of blocks to read in parallel and interleave.
       Defaults to grain.config.tf_interleaved_shuffle_parallel_blocks.
-
-  Returns:
-    The value at `index` in a permutation of [0, num_record - 1]. The
-    permutation approximates a random permutation but depending on
-    `block_size` and `parallel_blocks` can contain patterns.
   """
-  if block_size is None:
-    block_size = config.tf_interleaved_shuffle_block_size
-  if parallel_blocks is None:
-    parallel_blocks = config.tf_interleaved_shuffle_parallel_blocks
 
-  epoch = index // num_records
-  seed = tf_random_fold_in(seed, epoch)
-  index %= num_records
+  def __init__(
+      self, block_size: int | None = None, parallel_blocks: int | None = None
+  ):
+    if block_size is None:
+      block_size = config.tf_interleaved_shuffle_block_size
+    if parallel_blocks is None:
+      parallel_blocks = config.tf_interleaved_shuffle_parallel_blocks
+    self.block_size = block_size
+    self.parallel_blocks = parallel_blocks
 
-  # We partition the indices in partitions. The last partition might be
-  # incomplete and we handle it separately.
-  partition_size = block_size * parallel_blocks
-  num_partitions = num_records // partition_size
+  def index_shuffle(
+      self, index, *, seed: tf.Tensor, num_records: tf.Tensor
+  ) -> tf.Tensor:
+    epoch = index // num_records
+    seed = tf_random_fold_in(seed, epoch)
+    index %= num_records
 
-  if index >= num_partitions * partition_size:
-    # Handle last incomplete partition by simply doing global shuffle within it.
-    # This should be a tiny fraction of the dataset (block_size and
-    # parallel_blocks should be small values compared to max_index).
-    offset = num_partitions * partition_size
-    num_remaining_indices = num_records - offset
-    index -= offset
-    index = tf_index_shuffle(
-        index, seed=seed, max_index=num_remaining_indices - 1
+    # We partition the indices in partitions. The last partition might be
+    # incomplete and we handle it separately.
+    partition_size = self.block_size * self.parallel_blocks
+    num_partitions = num_records // partition_size
+
+    if index >= num_partitions * partition_size:
+      # Handle last incomplete partition by simply doing global shuffle within
+      # it. This should be a tiny fraction of the dataset (block_size and
+      # parallel_blocks should be small values compared to max_index).
+      offset = num_partitions * partition_size
+      num_remaining_indices = num_records - offset
+      index -= offset
+      index = tf_index_shuffle(
+          index, seed=seed, max_index=num_remaining_indices - 1
+      )
+      return index + offset
+
+    partition_index = index // partition_size
+    partition_seed = tf_random_fold_in(seed, partition_index)
+
+    index_in_partition = index % partition_size
+    index_in_partition = tf_index_shuffle(
+        index_in_partition, seed=partition_seed, max_index=partition_size - 1
     )
-    return index + offset
+    index_in_block = index_in_partition % self.block_size
 
-  partition_index = index // partition_size
-  partition_seed = tf_random_fold_in(seed, partition_index)
-
-  index_in_partition = index % partition_size
-  index_in_partition = tf_index_shuffle(
-      index_in_partition, seed=partition_seed, max_index=partition_size - 1
-  )
-  index_in_block = index_in_partition % block_size
-
-  num_blocks = num_partitions * parallel_blocks
-  block_index = (
-      index_in_partition // block_size + partition_index * parallel_blocks
-  )
-  block_index = tf_index_shuffle(
-      block_index, seed=seed, max_index=num_blocks - 1
-  )
-  return block_index * block_size + index_in_block
+    num_blocks = num_partitions * self.parallel_blocks
+    block_index = (
+        index_in_partition // self.block_size
+        + partition_index * self.parallel_blocks
+    )
+    block_index = tf_index_shuffle(
+        block_index, seed=seed, max_index=num_blocks - 1
+    )
+    return block_index * self.block_size + index_in_block
 
 
 def _float_to_int_proportions(
@@ -421,6 +430,7 @@ def _create_index_dataset(
     start_index: Index = FirstIndex(),
     num_epochs: Optional[int] = None,
     shuffle: bool = False,
+    shuffle_fn: ShuffleFn | None = None,
     seed: Optional[grain_random.RNGKeyLike] = None,
     shard_options: sharding.ShardOptions,
     emit_epoch: bool = False,
@@ -484,6 +494,9 @@ def _create_index_dataset(
       will be finite and have known size. Not supported when mixing multiple
       datasets.
     shuffle: Whether to shuffle record keys. If True you need to provide `seed`.
+    shuffle_fn: Optional object that implements the shuffle algorithm. If not
+      provided Grain will choose between `Shuffle()` and `InterleavedShuffle()`
+      based on the global grain config.
     seed: Random seed to use for shuffling and emitting per example seeds. This
       should be a single integer but for convenience we also accept a
       `jax.random.PRNGKeyArray` or a sequence of 2 integers.
@@ -586,9 +599,10 @@ def _create_index_dataset(
       assert len(proportions) == num_datasets
       proportions = _float_to_int_proportions(proportions)
 
-  shuffle_fn = (
-      _interleaved_shuffle if config.tf_interleaved_shuffle else _shuffle
-  )
+  if shuffle and shuffle_fn is None:
+    shuffle_fn = (
+        InterleavedShuffle() if config.tf_interleaved_shuffle else Shuffle()
+    )
 
   # We define one map function that goes from index to global index, position
   # and dataset_index.
@@ -612,7 +626,8 @@ def _create_index_dataset(
           records_per_dataset[dataset_index], tf.int64
       )
       if shuffle:
-        record_key = shuffle_fn(
+        assert shuffle_fn is not None
+        record_key = shuffle_fn.index_shuffle(
             index_in_dataset,
             seed=shuffle_seed[dataset_index],
             num_records=num_records_in_dataset,
@@ -650,9 +665,10 @@ def _create_index_dataset(
       local_index = index // shard_count
 
       if shuffle:
+        assert shuffle_fn is not None
         # shuffle_seed is a list of seeds for each dataset but we only have one
         # dataset here.
-        record_key = shuffle_fn(
+        record_key = shuffle_fn.index_shuffle(
             local_index, seed=shuffle_seed[0], num_records=records_per_dataset
         )
       else:
@@ -696,6 +712,7 @@ def _create_index_dataset_v2(
     start_index: Index = FirstIndex(),
     num_epochs: Optional[int] = None,
     shuffle: bool = False,
+    shuffle_fn: ShuffleFn | None = None,
     seed: Optional[grain_random.RNGKeyLike] = None,
     shard_options: sharding.ShardOptions,
     emit_epoch: bool = False,
@@ -757,6 +774,9 @@ def _create_index_dataset_v2(
       will be finite and have known size. Not supported when mixing multiple
       datasets.
     shuffle: Whether to shuffle record keys. If True you need to provide `seed`.
+    shuffle_fn: Optional object that implements the shuffle algorithm. If not
+      provided Grain will choose between `Shuffle()` and `InterleavedShuffle()`
+      based on the global grain config.
     seed: Random seed to use for shuffling and emitting per example seeds. This
       should be a single integer but for convenience we also accept a
       `jax.random.PRNGKeyArray` or a sequence of 2 integers.
@@ -844,9 +864,10 @@ def _create_index_dataset_v2(
       assert len(proportions) == num_datasets
       proportions = _float_to_int_proportions(proportions)
 
-  shuffle_fn = (
-      _interleaved_shuffle if config.tf_interleaved_shuffle else _shuffle
-  )
+  if shuffle and shuffle_fn is None:
+    shuffle_fn = (
+        InterleavedShuffle() if config.tf_interleaved_shuffle else Shuffle()
+    )
 
   # We define one map function that goes from index to global index, position
   # and dataset_index.
@@ -864,7 +885,8 @@ def _create_index_dataset_v2(
           records_per_dataset[dataset_index], tf.int64
       )
       if shuffle:
-        record_key = shuffle_fn(
+        assert shuffle_fn is not None
+        record_key = shuffle_fn.index_shuffle(
             index_in_dataset,
             seed=shuffle_seed[dataset_index],
             num_records=num_records_in_dataset,
@@ -893,9 +915,10 @@ def _create_index_dataset_v2(
     def map_fn(index):
       assert index.dtype == tf.int64
       if shuffle:
+        assert shuffle_fn is not None
         # shuffle_seed is a list of seeds for each dataset but we only have one
         # dataset here.
-        record_key = shuffle_fn(
+        record_key = shuffle_fn.index_shuffle(
             index, seed=shuffle_seed[0], num_records=records_per_dataset
         )
       else:
@@ -948,6 +971,7 @@ class TfDefaultIndexSampler:
   num_records: int
   shard_options: sharding.ShardOptions
   shuffle: bool = False
+  shuffle_fn: ShuffleFn | None = None
   num_epochs: Optional[int] = None
   seed: Optional[grain_random.RNGKeyLike] = None
   shard_before_shuffle: bool = True  # Turning this off is experimental!
@@ -972,6 +996,7 @@ class TfDefaultIndexSampler:
         start_index=start_index,
         num_epochs=self.num_epochs,
         shuffle=self.shuffle,
+        shuffle_fn=self.shuffle_fn,
         seed=self.seed,
         shard_options=self.shard_options,
         emit_epoch=True,
@@ -993,6 +1018,7 @@ class TfMixtureIndexSampler:
   shard_options: sharding.ShardOptions
   proportions: Optional[Sequence[Union[int, float]]] = None
   shuffle: bool = False
+  shuffle_fn: ShuffleFn | None = None
   seed: Optional[grain_random.RNGKeyLike] = None
   shard_before_shuffle: bool = True  # Turning this off is experimental!
 
@@ -1016,6 +1042,7 @@ class TfMixtureIndexSampler:
         proportions=self.proportions,
         start_index=start_index,
         shuffle=self.shuffle,
+        shuffle_fn=self.shuffle_fn,
         seed=self.seed,
         shard_options=self.shard_options,
         emit_epoch=True,
