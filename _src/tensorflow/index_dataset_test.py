@@ -809,8 +809,9 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
       self, seed: tuple[int, int], num_records: int, num_epochs: int
   ):
     ds = tf.data.Dataset.range(num_records * num_epochs)
+    shuffle_fn = index_dataset.Shuffle()
     shuffle_fn = functools.partial(
-        index_dataset._shuffle, seed=seed, num_records=num_records
+        shuffle_fn.index_shuffle, seed=seed, num_records=num_records
     )
     ds = ds.map(shuffle_fn, num_parallel_calls=tf.data.AUTOTUNE)
     shuffled_indices = [x.numpy().item() for x in ds]
@@ -828,8 +829,9 @@ class IndexDatasetTest(tf.test.TestCase, parameterized.TestCase):
       self, seed: tuple[int, int], num_records: int, num_epochs: int
   ):
     ds = tf.data.Dataset.range(num_records * num_epochs)
+    shuffle_fn = index_dataset.InterleavedShuffle()
     shuffle_fn = functools.partial(
-        index_dataset._interleaved_shuffle, seed=seed, num_records=num_records
+        shuffle_fn.index_shuffle, seed=seed, num_records=num_records
     )
     ds = ds.map(shuffle_fn, num_parallel_calls=tf.data.AUTOTUNE)
     shuffled_indices = [x.numpy().item() for x in ds]
