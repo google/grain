@@ -23,7 +23,7 @@ the base classes below (examples: resize image, tokenize text, add padding).
 """
 
 import abc
-from typing import Union
+from typing import Sequence, Union
 
 import numpy as np
 
@@ -53,13 +53,14 @@ class TfRandomMapTransform(abc.ABC):
 
 
 class FilterTransform(abc.ABC):
-  """Abstract base class for filter operations for individual elements."""
+  """Abstract base class for filter transformations for individual elements."""
 
   @abc.abstractmethod
   def filter(self, element) -> bool:
     """Filters a single element."""
 
 
-LocalTransform = Union[
+Transformation = Union[
     MapTransform, RandomMapTransform, TfRandomMapTransform, FilterTransform
 ]
+Transformations = Sequence[Transformation]
