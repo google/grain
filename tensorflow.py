@@ -50,6 +50,7 @@ from ._src.tensorflow.index_dataset import (
     FirstIndex,
     NextIndex,
     NextValidIndex,
+    StartIndex,
     TfIndexSampler,
     TfDefaultIndexSampler,
     TfMixtureIndexSampler,
