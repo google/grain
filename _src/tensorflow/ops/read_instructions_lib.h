@@ -2,6 +2,7 @@
 #define THIRD_PARTY_PY_GRAIN__SRC_TENSORFLOW_OPS_READ_INSTRUCTIONS_LIB_H_
 
 #include <cstdint>
+#include <iostream>
 #include <string>
 #include <vector>
 
