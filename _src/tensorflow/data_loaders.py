@@ -29,7 +29,6 @@ from grain._src.tensorflow import data_sources
 from grain._src.tensorflow import index_dataset
 from grain._src.tensorflow import transforms
 from grain._src.tensorflow.ops import merge_by_min_value
-
 import numpy as np
 import tensorflow as tf
 import tensorflow_datasets as tfds
@@ -245,6 +244,7 @@ class TfMixtureDataLoader(collections.abc.Iterable):
       strict_transformations: bool = True,
       iterator_options: Optional[IteratorOptions] = None,
       tf_data_options: Optional[tf.data.Options] = None,
+      prefetch_buffer_size: Optional[int] = None,
   ):
     """Initializes a new data loader.
 
@@ -260,6 +260,7 @@ class TfMixtureDataLoader(collections.abc.Iterable):
       strict_transformations: See TfDataLoader.
       iterator_options: Options passed to the data iterator.
       tf_data_options: Options passed to tf.data.
+      prefetch_buffer_size: Size of prefetch buffer, if any. Autotuned if None.
     """
     usage_logging.log_event("TfMixtureDataLoader", tag_3="TfGrain")
     assert len(sources) == len(transformations_per_source)
@@ -271,10 +272,12 @@ class TfMixtureDataLoader(collections.abc.Iterable):
           parse_fn=None,  # Handled in transformpations per source.
       )
     else:
-      # Try to combine all data sources to TfArrayRecordDataSource.
+      # Combine data sources into a TfArrayRecordDataSource or TfBagDataSource.
       all_paths = []
       for s in sources:
-        if isinstance(s, data_sources.TfArrayRecordDataSource):
+        if isinstance(s, data_sources.TfArrayRecordDataSource) or isinstance(
+            s, data_sources.TfBagDataSource
+        ):
           all_paths.extend(s._paths)
         elif isinstance(s, data_sources.TfdsDataSource) and isinstance(
             s._source, data_sources.TfArrayRecordDataSource
@@ -282,7 +285,20 @@ class TfMixtureDataLoader(collections.abc.Iterable):
           all_paths.extend(s._source._paths)
         else:
           raise ValueError(f"Data source {s} is not yet supported in mixtures.")
-      self.source = data_sources.TfArrayRecordDataSource(list(all_paths))
+
+      if all(
+          isinstance(s, data_sources.TfArrayRecordDataSource) for s in sources
+      ) or all(isinstance(s, data_sources.TfdsDataSource) for s in sources):
+        self.source = data_sources.TfArrayRecordDataSource(list(all_paths))
+      elif all(isinstance(s, data_sources.TfBagDataSource) for s in sources):
+        self.source = data_sources.TfBagDataSource(list(all_paths))
+      else:
+        raise ValueError(
+            "Please use data sources of the same type (one of"
+            " TfArrayRecordDataSource, TfBagDataSource, or TfdsDataSource)"
+            " only."
+        )
+
     self.sampler = sampler
     self._records_per_dataset = [len(s) for s in sources]
 
@@ -303,6 +319,7 @@ class TfMixtureDataLoader(collections.abc.Iterable):
     self._iterator_options = iterator_options
     self._strict_transformations = strict_transformations
     self._tf_data_options = tf_data_options
+    self._prefetch_buffer_size = prefetch_buffer_size
 
   def __iter__(self):
     return data_iterators.TfGrainDatasetIterator(
@@ -364,6 +381,7 @@ class TfMixtureDataLoader(collections.abc.Iterable):
         index_ds,
         input_key=_RECORD_KEY_IN_MERGED_DATA_SOURCE,
         drop_input_key=True,
+        prefetch_buffer_size=self._prefetch_buffer_size,
     )
 
     # Convert Sequence[int] to tensor for lookups in TF.
@@ -507,6 +525,7 @@ def _map_index_dataset_using_data_source(
     input_key: str = gc.RECORD_KEY,
     output_key: str = gc.RECORD,
     drop_input_key: bool = False,
+    prefetch_buffer_size: Optional[int] = None,
 ) -> tf.data.Dataset:
   """Returns a dataset with the records matching for the provided keys.
 
@@ -518,6 +537,7 @@ def _map_index_dataset_using_data_source(
     output_key: The name of the feature where the record values should be
       stored.
     drop_input_key: Whether to drop the features in `input_key`.
+    prefetch_buffer_size: Size of prefetch buffer, if any. Autotuned if None.
 
   Returns:
     A dataset of the same cardinality as `index_ds`. The `output_key`
@@ -543,6 +563,8 @@ def _map_index_dataset_using_data_source(
     dataset = index_ds.map(
         lookup_fn, num_parallel_calls=config.tf_lookup_num_parallel_calls
     )
+    if prefetch_buffer_size:
+      return dataset.prefetch(prefetch_buffer_size)
     return dataset.prefetch(tf.data.AUTOTUNE)
 
   if config.tf_lookup_fast_warmup:
@@ -574,4 +596,6 @@ def _map_index_dataset_using_data_source(
   if config.tf_lookup_fast_warmup:
     dataset = warmup_dataset.concatenate(dataset)
 
+  if prefetch_buffer_size:
+    return dataset.prefetch(prefetch_buffer_size)
   return dataset.prefetch(tf.data.AUTOTUNE)
