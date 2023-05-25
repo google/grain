@@ -29,7 +29,6 @@ from grain._src.tensorflow import data_sources
 from grain._src.tensorflow import index_dataset
 from grain._src.tensorflow import transforms
 from grain._src.tensorflow.ops import merge_by_min_value
-
 import numpy as np
 import tensorflow as tf
 import tensorflow_datasets as tfds
@@ -229,8 +228,9 @@ class TfMixtureDataLoader(collections.abc.Iterable):
   """Data loader for loading mixtures deterministically.
 
   Limitations:
-    - Currently all data sources must be TfArrayRecordDataSources since we
-      combine all sources into one source for better resource utilization.
+    - Currently all data sources must be TfArrayRecordDataSources,
+    TfBagDataSources, or TfInMemoryDatasources since we combine all sources into
+    one source for better resource utilization.
     - The sampler needs to emit gc.DATASET_INDEX for each element.
   """
 
@@ -271,18 +271,34 @@ class TfMixtureDataLoader(collections.abc.Iterable):
           parse_fn=None,  # Handled in transformpations per source.
       )
     else:
-      # Try to combine all data sources to TfArrayRecordDataSource.
-      all_paths = []
+      # Combine data sources into a TfArrayRecordDataSource or TfBagDataSource.
+      array_record_paths = []
+      bag_paths = []
       for s in sources:
+        if isinstance(s, data_sources.TfdsDataSource):
+          s = s._source
+
         if isinstance(s, data_sources.TfArrayRecordDataSource):
-          all_paths.extend(s._paths)
-        elif isinstance(s, data_sources.TfdsDataSource) and isinstance(
-            s._source, data_sources.TfArrayRecordDataSource
-        ):
-          all_paths.extend(s._source._paths)
+          array_record_paths.extend(s._paths)
+        elif isinstance(s, data_sources.TfBagDataSource):
+          bag_paths.extend(s._paths)
         else:
           raise ValueError(f"Data source {s} is not yet supported in mixtures.")
-      self.source = data_sources.TfArrayRecordDataSource(list(all_paths))
+
+      if array_record_paths and bag_paths:
+        raise ValueError(
+            "Please only mix datasets of the same format (currently ArrayRecord"
+            " or Bag only)."
+        )
+
+      if not array_record_paths and not bag_paths:
+        raise ValueError("No datasets provided.")
+
+      if array_record_paths:
+        self.source = data_sources.TfArrayRecordDataSource(array_record_paths)
+      else:
+        self.source = data_sources.TfBagDataSource(bag_paths)
+
     self.sampler = sampler
     self._records_per_dataset = [len(s) for s in sources]
 
