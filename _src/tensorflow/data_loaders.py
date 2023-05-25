@@ -245,6 +245,7 @@ class TfMixtureDataLoader(collections.abc.Iterable):
       strict_transformations: bool = True,
       iterator_options: Optional[IteratorOptions] = None,
       tf_data_options: Optional[tf.data.Options] = None,
+      prefetch_buffer_size: int = tf.data.AUTOTUNE,
   ):
     """Initializes a new data loader.
 
@@ -260,6 +261,8 @@ class TfMixtureDataLoader(collections.abc.Iterable):
       strict_transformations: See TfDataLoader.
       iterator_options: Options passed to the data iterator.
       tf_data_options: Options passed to tf.data.
+      prefetch_buffer_size: Size of prefetch buffer, if any. Autotuned if not
+        specified.
     """
     usage_logging.log_event("TfMixtureDataLoader", tag_3="TfGrain")
     assert len(sources) == len(transformations_per_source)
@@ -319,6 +322,7 @@ class TfMixtureDataLoader(collections.abc.Iterable):
     self._iterator_options = iterator_options
     self._strict_transformations = strict_transformations
     self._tf_data_options = tf_data_options
+    self._prefetch_buffer_size = prefetch_buffer_size
 
   def __iter__(self):
     return data_iterators.TfGrainDatasetIterator(
@@ -380,6 +384,7 @@ class TfMixtureDataLoader(collections.abc.Iterable):
         index_ds,
         input_key=_RECORD_KEY_IN_MERGED_DATA_SOURCE,
         drop_input_key=True,
+        prefetch_buffer_size=self._prefetch_buffer_size,
     )
 
     # Convert Sequence[int] to tensor for lookups in TF.
@@ -523,6 +528,7 @@ def _map_index_dataset_using_data_source(
     input_key: str = gc.RECORD_KEY,
     output_key: str = gc.RECORD,
     drop_input_key: bool = False,
+    prefetch_buffer_size: int = tf.data.AUTOTUNE,
 ) -> tf.data.Dataset:
   """Returns a dataset with the records matching for the provided keys.
 
@@ -534,6 +540,7 @@ def _map_index_dataset_using_data_source(
     output_key: The name of the feature where the record values should be
       stored.
     drop_input_key: Whether to drop the features in `input_key`.
+    prefetch_buffer_size: Size of prefetch buffer, if any. Autotuned if None.
 
   Returns:
     A dataset of the same cardinality as `index_ds`. The `output_key`
@@ -559,7 +566,7 @@ def _map_index_dataset_using_data_source(
     dataset = index_ds.map(
         lookup_fn, num_parallel_calls=config.tf_lookup_num_parallel_calls
     )
-    return dataset.prefetch(tf.data.AUTOTUNE)
+    return dataset.prefetch(prefetch_buffer_size)
 
   if config.tf_lookup_fast_warmup:
     # Split the first batch into a separate dataset. Will be concatenated at
@@ -590,4 +597,4 @@ def _map_index_dataset_using_data_source(
   if config.tf_lookup_fast_warmup:
     dataset = warmup_dataset.concatenate(dataset)
 
-  return dataset.prefetch(tf.data.AUTOTUNE)
+  return dataset.prefetch(prefetch_buffer_size)
