@@ -138,6 +138,10 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
     self._last_seen_index = None
 
   @property
+  def last_seen_index(self):
+    return self._last_seen_index
+
+  @property
   def element_spec(self) -> dataset_iterator.ElementSpec:
     self._ensure_iterator()
     element_spec = jax.tree_map(
@@ -150,11 +154,20 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
       element_spec = _reshape_for_local_devices(element_spec)
     return element_spec
 
-  def get_state(self) -> bytes:
+  def get_state(self, state_index: Optional[int] = None) -> bytes:
+    if state_index == -1:
+      # get_state() called with default arg; use self.last_seen_index.
+      last_seen_index = self.last_seen_index
+    elif state_index == 0:
+      # Indicates we are at the beginning of the iterator; use None.
+      last_seen_index = None
+    else:
+      # Update to state_index.
+      last_seen_index = state_index
     return json.dumps(
         {
             _VERSION: 2,
-            _LAST_SEEN_INDEX: self._last_seen_index,
+            _LAST_SEEN_INDEX: last_seen_index,
             _SOURCE: repr(self._data_loader.source),
             _SAMPLER: self._data_loader.sampler.as_dict(),
         },
