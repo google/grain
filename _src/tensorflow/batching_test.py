@@ -137,18 +137,26 @@ class BatchingTest(tf.test.TestCase, parameterized.TestCase):
     ds = tf.data.experimental.from_list([
         {
             constants.INDEX: 1,
+            constants.RECORD_KEY: 2,
+            constants.SEED: 0,
             "values": [34, 2],
         },
         {
             constants.INDEX: 2,
+            constants.RECORD_KEY: 3,
+            constants.SEED: 0,
             "values": [2, 49, 99],
         },
         {
             constants.INDEX: 3,
+            constants.RECORD_KEY: 4,
+            constants.SEED: 0,
             "values": [2, 3, 5, 6],
         },
         {
             constants.INDEX: 4,
+            constants.RECORD_KEY: 5,
+            constants.SEED: 0,
             "values": [2],
         },
     ])
@@ -166,6 +174,12 @@ class BatchingTest(tf.test.TestCase, parameterized.TestCase):
             # padded to have 6 values.
             constants.INDEX: np.asarray(
                 [[1, 2, 4, 0, 0, 0], [3, 0, 0, 0, 0, 0]]
+            ),
+            constants.RECORD_KEY: np.asarray(
+                [[2, 3, 5, 0, 0, 0], [4, 0, 0, 0, 0, 0]]
+            ),
+            constants.SEED: np.asarray(
+                [[0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]]
             ),
             "values": np.asarray([[34, 2, 2, 49, 99, 2], [2, 3, 5, 6, 0, 0]]),
             "values_segment_ids": np.asarray(
