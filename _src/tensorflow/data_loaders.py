@@ -67,6 +67,9 @@ class TfDataLoader(collections.abc.Iterable):
       iterator_options: Optional[IteratorOptions] = None,
       strict_transformations: bool = True,
       tf_data_options: Optional[tf.data.Options] = None,
+      fewshot: bool = False,
+      num_shots: Optional[int] = 1,
+      fewshot_processors: Optional[Sequence[Any]] = None,
   ):
     """Initializes a new data loader.
 
@@ -85,6 +88,9 @@ class TfDataLoader(collections.abc.Iterable):
         transition period you can set this to False and Grain will apply all
         transformations. However this might make the input non-deterministic.
       tf_data_options: Options passed to tf.data.
+      fewshot: whether data loader is setup for in context learning
+      num_shots: number of shots/fewshot examples
+      fewshot_processors: processors to modify fewshot examples.
     """
     usage_logging.log_event("TfDataLoader", tag_3="TfGrain")
     self.source = source
@@ -99,9 +105,17 @@ class TfDataLoader(collections.abc.Iterable):
     self._strict_transformations = strict_transformations
     self._tf_data_options = tf_data_options
 
+    self._fewshot = fewshot
+    self._num_shots = num_shots or 1
+    self._fewshot_processors = fewshot_processors or []
+
   def __iter__(self) -> data_iterators.TfGrainDatasetIterator:
     return data_iterators.TfGrainDatasetIterator(
-        self, options=self._iterator_options
+        self,
+        options=self._iterator_options,
+        fewshot=self._fewshot,
+        num_shots=self._num_shots,
+        fewshot_processors=self._fewshot_processors,
     )
 
   def as_dataset(self, *, start_index: index_dataset.Index) -> tf.data.Dataset:
