@@ -174,8 +174,8 @@ class TfBatchAndPack(transforms.GlobalTfDataTransform):
       result = {}
       for k, (values, segment_ids, positions) in features.items():
         result[k] = values
-        # For the INDEX feature we don't need the segmend IDs and positions.
-        if k != constants.INDEX:
+        # For the META_FEATURES we don't need the segment IDs and positions.
+        if k not in constants.META_FEATURES:
           result[f"{k}{self.segment_ids_suffix}"] = segment_ids
           result[f"{k}{self.positions_suffix}"] = positions
       return result
