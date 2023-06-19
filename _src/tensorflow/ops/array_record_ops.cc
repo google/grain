@@ -340,7 +340,8 @@ class ArrayRecordResource : public ResourceBase {
 
   std::pair<int, uint64_t> GetReaderIndexAndPosition(uint64_t key) const {
     int reader_index = 0;
-    CHECK(key < NumRecords()) << "Invalid key " << key;
+    CHECK(key < NumRecords())
+        << "Invalid key " << key << ", num records " << NumRecords();
     while (key >= read_instructions_[reader_index].NumRecords()) {
       key -= read_instructions_[reader_index].NumRecords();
       reader_index++;
