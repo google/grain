@@ -95,7 +95,7 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
     self._data_loader = data_loader
     self._options = options or IteratorOptions()
     # We create these only when needed the first time.
-    self._dataset = None
+    self._dataset: tf.data.Dataset = None
     self._start_index = None
     self._iterator = None
     self._last_seen_index = None
