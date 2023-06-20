@@ -23,7 +23,7 @@ the base classes below (examples: resize image, tokenize text, add padding).
 """
 
 import abc
-from typing import Sequence, Union
+from typing import Any, Sequence, Union
 
 import numpy as np
 
@@ -60,7 +60,32 @@ class FilterTransform(abc.ABC):
     """Filters a single element."""
 
 
+class FlatMapTransform(abc.ABC):
+  """Abstract base class for splitting operations of individual elements.
+
+  Attributes
+    max_fan_out: Absolute maximum number of splits that an element can generate.
+    If element splits into number of sub-elements exceeding `max_fan_out`, an
+    error is raised. In the case of variable fan-out, for performance reasons,
+    please be mindful of the distribution in fan-outs. If the minimum and
+    maximum fan-out in this distribution differ by several orders of magnitude,
+    with a correspondingly very large `max_fan_out`, performance will degrade.
+    In this case please consider preprocessing your data to keep the
+    `max_fan_out` reasonable.
+  """
+
+  max_fan_out: int
+
+  @abc.abstractmethod
+  def flat_map(self, element) -> Sequence[Any]:
+    """splits a single element."""
+
+
 Transformation = Union[
-    MapTransform, RandomMapTransform, TfRandomMapTransform, FilterTransform
+    MapTransform,
+    RandomMapTransform,
+    TfRandomMapTransform,
+    FilterTransform,
+    FlatMapTransform,
 ]
 Transformations = Sequence[Transformation]
