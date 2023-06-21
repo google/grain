@@ -133,6 +133,9 @@ class BatchingTest(tf.test.TestCase, parameterized.TestCase):
       ds = batch_fn.apply_to_dataset(ds)
       _ = _dataset_to_dict(ds)
 
+
+class BatchAndPackTest(tf.test.TestCase, parameterized.TestCase):
+
   def test_batch_and_pack(self):
     ds = tf.data.experimental.from_list([
         {
@@ -167,6 +170,105 @@ class BatchingTest(tf.test.TestCase, parameterized.TestCase):
             constants.INDEX: np.asarray(
                 [[1, 2, 4, 0, 0, 0], [3, 0, 0, 0, 0, 0]]
             ),
+            "values": np.asarray([[34, 2, 2, 49, 99, 2], [2, 3, 5, 6, 0, 0]]),
+            "values_segment_ids": np.asarray(
+                [[1, 1, 2, 2, 2, 3], [1, 1, 1, 1, 0, 0]]
+            ),
+            "values_positions": np.asarray(
+                [[0, 1, 0, 1, 2, 0], [0, 1, 2, 3, 0, 0]]
+            ),
+        },
+    )
+
+  def test_batch_and_pack_drops_meta_feature(self):
+    # By default META_FEATURES are dropped.
+    ds = tf.data.experimental.from_list([
+        {
+            constants.INDEX: 1,
+            constants.RECORD_KEY: 21,
+            "values": [34, 2],
+        },
+        {
+            constants.INDEX: 2,
+            constants.RECORD_KEY: 22,
+            "values": [2, 49, 99],
+        },
+        {
+            constants.INDEX: 3,
+            constants.RECORD_KEY: 23,
+            "values": [2, 3, 5, 6],
+        },
+        {
+            constants.INDEX: 4,
+            constants.RECORD_KEY: 24,
+            "values": [2],
+        },
+    ])
+    batch_fn = batching.TfBatchAndPack(
+        batch_size=2, sequence_lengths={"values": 6}
+    )
+    # TfBatchAndBack will implicitly also pack INDEX to sequence length 6.
+    ds = batch_fn.apply_to_dataset(ds)
+    ds = next(ds.as_numpy_iterator())
+    chex.assert_trees_all_close(
+        ds,
+        {
+            # We have batch_size=2. The first row contains the element with
+            # index 1, 2 and 4. The second row has the element 3. Both rows are
+            # padded to have 6 values.
+            constants.INDEX: np.asarray(
+                [[1, 2, 4, 0, 0, 0], [3, 0, 0, 0, 0, 0]]
+            ),
+            "values": np.asarray([[34, 2, 2, 49, 99, 2], [2, 3, 5, 6, 0, 0]]),
+            "values_segment_ids": np.asarray(
+                [[1, 1, 2, 2, 2, 3], [1, 1, 1, 1, 0, 0]]
+            ),
+            "values_positions": np.asarray(
+                [[0, 1, 0, 1, 2, 0], [0, 1, 2, 3, 0, 0]]
+            ),
+        },
+    )
+
+  def test_batch_and_pack_drops_can_keep_meta_feature(self):
+    # By adding them to sequence_lengths we can keep META_FEATURES.
+    ds = tf.data.experimental.from_list([
+        {
+            constants.INDEX: 1,
+            constants.RECORD_KEY: 21,
+            "values": [34, 2],
+        },
+        {
+            constants.INDEX: 2,
+            constants.RECORD_KEY: 22,
+            "values": [2, 49, 99],
+        },
+        {
+            constants.INDEX: 3,
+            constants.RECORD_KEY: 23,
+            "values": [2, 3, 5, 6],
+        },
+        {
+            constants.INDEX: 4,
+            constants.RECORD_KEY: 24,
+            "values": [2],
+        },
+    ])
+    batch_fn = batching.TfBatchAndPack(
+        batch_size=2, sequence_lengths={"values": 6, constants.RECORD_KEY: 4}
+    )
+    # TfBatchAndBack will implicitly also pack INDEX to sequence length 6.
+    ds = batch_fn.apply_to_dataset(ds)
+    ds = next(ds.as_numpy_iterator())
+    chex.assert_trees_all_close(
+        ds,
+        {
+            # We have batch_size=2. The first row contains the element with
+            # index 1, 2 and 4. The second row has the element 3. Both rows are
+            # padded to have 6 values.
+            constants.INDEX: np.asarray(
+                [[1, 2, 4, 0, 0, 0], [3, 0, 0, 0, 0, 0]]
+            ),
+            constants.RECORD_KEY: np.asarray([[21, 22, 24, 0], [23, 0, 0, 0]]),
             "values": np.asarray([[34, 2, 2, 49, 99, 2], [2, 3, 5, 6, 0, 0]]),
             "values_segment_ids": np.asarray(
                 [[1, 1, 2, 2, 2, 3], [1, 1, 1, 1, 0, 0]]
