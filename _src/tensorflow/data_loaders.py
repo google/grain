@@ -305,12 +305,14 @@ class TfMixtureDataLoader(collections.abc.Iterable):
     self.sampler = sampler
     self._records_per_dataset = [len(s) for s in sources]
 
-    transformations_per_source = [list(ts) for ts in transformations_per_source]
+    self._transformations_per_source = [
+        list(ts) for ts in transformations_per_source
+    ]
     for i, source in enumerate(sources):
       if parse_fn := source.get_parse_fn():
-        transformations_per_source[i].insert(0, _ParseTransform(parse_fn))
+        self._transformations_per_source[i].insert(0, _ParseTransform(parse_fn))
     self._dataset_index_to_group, self._group_to_transformation = (
-        self._create_groups(transformations_per_source)
+        self._create_groups(self._transformations_per_source)
     )
 
     self._transformations = tuple(transformations)
@@ -386,6 +388,29 @@ class TfMixtureDataLoader(collections.abc.Iterable):
         drop_input_key=True,
         prefetch_buffer_size=self._prefetch_buffer_size,
     )
+
+    just_map_transforms = True
+    for g in range(self._num_groups):
+      for t in self._group_to_transformation[g]:
+        if isinstance(t, transforms.MapTransform) or isinstance(
+            t, transforms.RandomMapTransform
+        ):
+          continue
+        just_map_transforms = False
+        break
+      if not just_map_transforms:
+        break
+
+    if just_map_transforms:
+      ds = transforms.apply_transformations_by_dataset_index(
+          ds, self._transformations_per_source
+      )
+      ds = transforms.apply_transformations(
+          ds, self._transformations, strict=self._strict_transformations
+      )
+      if self._tf_data_options is not None:
+        ds = ds.with_options(self._tf_data_options)
+      return ds
 
     # Convert Sequence[int] to tensor for lookups in TF.
     task_index_to_group = tf.constant(

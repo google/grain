@@ -269,6 +269,56 @@ def _try_apply_seqio_preprocessor(
   return ds
 
 
+def _merge_map_transformations(
+    features, transformations: Sequence[MapTransform | RandomMapTransform]
+):
+  """Applies multiple map transformations in sequence."""
+  for t in transformations:
+    if isinstance(t, MapTransform):
+      features = t.map(features)
+    elif isinstance(t, RandomMapTransform):
+      features = _random_map_fn(features, transform=t)
+  return features
+
+
+def apply_transformations_by_dataset_index(
+    ds: tf.data.Dataset,
+    transformations_per_dataset: Sequence[
+        Sequence[MapTransform | RandomMapTransform]
+    ],
+) -> tf.data.Dataset:
+  """Applies the map transformations to the dataset.
+
+  Args:
+    ds: Input dataset which DATASET_INDEX feature in [0, n).
+    transformations_per_dataset: n sequences of map transformation to apply to
+      the corresponding elements. Each transformation list applied to the input
+      dataset must yield the same output structure.
+
+  Returns:
+    The transformed dataset.
+  """
+
+  def map_fn(features):
+    # pylint: disable=g-complex-comprehension
+    branch_fns = [
+        functools.partial(
+            _merge_map_transformations,
+            features={k: v for k, v in features.items()},
+            transformations=ts,
+        )
+        for ts in transformations_per_dataset
+    ]
+    # pylint: enable=g-complex-comprehension
+    features = tf.switch_case(
+        tf.cast(features[constants.DATASET_INDEX], tf.int32),
+        branch_fns=branch_fns,
+    )
+    return features
+
+  return ds.map(map_fn, num_parallel_calls=tf.data.AUTOTUNE)
+
+
 def apply_transformations(
     ds: tf.data.Dataset, transforms: Transformations, *, strict: bool = True  # pylint: disable=redefined-outer-name
 ) -> tf.data.Dataset:

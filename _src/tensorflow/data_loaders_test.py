@@ -52,6 +52,19 @@ class _FilterEvenIndices(transforms.FilterTransform):
     return features[constants.INDEX] % 2 != 0
 
 
+@dataclasses.dataclass(frozen=True)
+class _AddRandomValue(transforms.RandomMapTransform):
+  feature_name: str
+  minval: float
+  maxval: float
+
+  def random_map(self, features, seed):
+    features[self.feature_name] = tf.random.stateless_uniform(
+        [], seed, minval=self.minval, maxval=self.maxval
+    )
+    return features
+
+
 class DataLoadersTest(tf.test.TestCase, parameterized.TestCase):
   """Tests for the data_loaders module."""
 
@@ -144,6 +157,40 @@ class DataLoadersTest(tf.test.TestCase, parameterized.TestCase):
     batch = next(it)
     self.assertAllEqual(batch[constants.INDEX], [0, 1, 2, 3])
     self.assertAllEqual(batch[constants.DATASET_INDEX], [0, 1, 0, 1])
+
+  def test_mixture_data_loader_with_random_map(self):
+    values1 = np.random.random((10,))
+    values2 = np.random.random((15,))
+    sources = [
+        data_sources.TfInMemoryDataSource(values1, _DummyParseFn()),
+        data_sources.TfInMemoryDataSource(values2, _DummyParseFn()),
+    ]
+    sampler = index_dataset.TfMixtureIndexSampler(
+        [len(s) for s in sources],
+        shard_options=sharding.NoSharding(),
+        shuffle=False,
+        seed=32,
+    )
+    loader = data_loaders.TfMixtureDataLoader(
+        sources=sources,
+        transformations_per_source=[
+            [_AddRandomValue("x", 0, 1), _AddRandomValue("y", 0, 1)],
+            [_AddRandomValue("x", 1, 100), _AddRandomValue("y", 1, 100)],
+        ],
+        sampler=sampler,
+        transformations=[batching.TfBatch(4, drop_remainder=False)],
+    )
+    self.assertLen(loader.source, 25)
+    it = iter(loader)
+    batch = next(it)
+    self.assertAllEqual(batch[constants.INDEX], [0, 1, 2, 3])
+    self.assertAllEqual(batch[constants.DATASET_INDEX], [0, 1, 0, 1])
+    for i in range(4):
+      x = batch["x"][i]
+      if batch[constants.DATASET_INDEX][i] == 1:
+        self.assertBetween(x, 1, 100)
+      else:
+        self.assertBetween(x, 0, 1)
 
   def test_mixture_data_loader_with_filter(self):
     values1 = np.random.random((10,))
