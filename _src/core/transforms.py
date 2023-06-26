@@ -81,6 +81,20 @@ class FlatMapTransform(abc.ABC):
     """splits a single element."""
 
 
+class RaggedBatchTransform(abc.ABC):
+  """Abstract base class for batching elements that can be of different size.
+
+  Attributes
+    batch_size: Number of elements to batch.
+  """
+
+  batch_size: int
+
+  @abc.abstractmethod
+  def ragged_batch(self, elements: Sequence[Any]) -> Any:
+    """Batches a sequence of elements of length batch_size into a single element."""
+
+
 Transformation = Union[
     MapTransform,
     RandomMapTransform,
