@@ -23,7 +23,9 @@ the base classes below (examples: resize image, tokenize text, add padding).
 """
 
 import abc
-from typing import Any, Sequence, Union
+from collections.abc import Sequence
+import dataclasses
+from typing import Any, Union
 
 import numpy as np
 
@@ -81,7 +83,14 @@ class FlatMapTransform(abc.ABC):
     """splits a single element."""
 
 
+@dataclasses.dataclass(frozen=True)
+class BatchTransform:
+  batch_size: int
+  drop_remainder: bool = False
+
+
 Transformation = Union[
+    BatchTransform,
     MapTransform,
     RandomMapTransform,
     TfRandomMapTransform,
