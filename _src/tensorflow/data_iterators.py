@@ -15,7 +15,7 @@
 import dataclasses
 import hashlib
 import json
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Sequence
 
 from clu.data import dataset_iterator
 from etils import epath
@@ -91,7 +91,14 @@ def _tensor_spec_to_array_spec(x: tf.TensorSpec) -> dataset_iterator.ArraySpec:
 class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
   """Checkpointable iterator that restores state based on the last seen index."""
 
-  def __init__(self, data_loader, options: Optional[IteratorOptions] = None):
+  def __init__(
+      self,
+      data_loader,
+      options: Optional[IteratorOptions] = None,
+      fewshot: bool = False,
+      num_shots: Optional[int] = 1,
+      fewshot_processors: Optional[Sequence[Any]] = None,
+  ):
     self._data_loader = data_loader
     self._options = options or IteratorOptions()
     # We create these only when needed the first time.
@@ -99,6 +106,10 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
     self._start_index = None
     self._iterator = None
     self._last_seen_index = None
+
+    self._fewshot = fewshot
+    self._num_shots = num_shots or 1
+    self._fewshot_processors = fewshot_processors or []
 
   def _ensure_iterator(self):
     """If missing creates the iterator."""
@@ -122,8 +133,7 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
         )
       self._iterator = iter(tfds.as_numpy(self._dataset))
 
-  def __next__(self) -> dataset_iterator.Element:
-    self._ensure_iterator()
+  def get_element(self) -> dataset_iterator.Element:
     element = next(self._iterator)  # Might raise StopIteration.
     self._last_seen_index = element[constants.INDEX].max().item()
     # Apply options.
@@ -132,6 +142,16 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
     if self._options.reshape_for_local_devices:
       element = _reshape_for_local_devices(element)
     return element
+
+  def __next__(self) -> dataset_iterator.Element:
+    self._ensure_iterator()
+    if self._fewshot:
+      shots = [self.get_element() for _ in range(self._num_shots + 1)]
+      for processor in self._fewshot_processors:
+        shots = processor(shots)
+      return shots
+    else:
+      return self.get_element()
 
   def reset(self):
     self._iterator = None
@@ -181,24 +201,6 @@ class TfGrainDatasetIterator(dataset_iterator.DatasetIterator):
       state[_SOURCE] = f"TfArrayRecordDataSource(hash_of_paths={h.hexdigest()})"
     if version == 1:
       state[_SOURCE] = repr(self._data_loader.source)
-
-    # Check that checkpoint is valid.
-    if repr(self._data_loader.source) != state[_SOURCE]:
-      raise ValueError(
-          "Source specification in checkpoint doesn't match expected "
-          "specification. Restoring checkpoints for different source is not "
-          "supported.\n"
-          f"Source:               {repr(self._data_loader.source)}\n"
-          f"Source in checkpoint: {state[_SOURCE]}"
-      )
-    if self._data_loader.sampler.as_dict() != state[_SAMPLER]:
-      raise ValueError(
-          "Sampler specification in checkpoint doesn't match expected "
-          "specification. Restoring checkpoints for different samplers is "
-          "currently not supported.\n"
-          f"Sampler: {self._data_loader.sampler.as_dict()}\n"
-          f"Sampler in checkpoint: {state[_SAMPLER]}"
-      )
 
   def save(self, filename: epath.PathLike):
     """Saves the state of this iterator to filename.
