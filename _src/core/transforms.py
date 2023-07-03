@@ -23,6 +23,7 @@ the base classes below (examples: resize image, tokenize text, add padding).
 """
 
 import abc
+import dataclasses
 from typing import Any, Sequence, Union
 
 import numpy as np
@@ -81,11 +82,23 @@ class FlatMapTransform(abc.ABC):
     """splits a single element."""
 
 
+@dataclasses.dataclass
+class RaggedBatchTransform:
+  """Abstract base class for batching elements that can be of different size.
+
+  Attributes
+    batch_size: Number of elements to batch.
+  """
+
+  batch_size: int
+
+
 Transformation = Union[
     MapTransform,
     RandomMapTransform,
     TfRandomMapTransform,
     FilterTransform,
     FlatMapTransform,
+    RaggedBatchTransform,
 ]
 Transformations = Sequence[Transformation]
