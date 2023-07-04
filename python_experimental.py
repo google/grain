@@ -13,9 +13,11 @@
 # limitations under the License.
 """Experimental PyGrain APIs."""
 
+# pylint: disable=g-importing-member
 # pylint: disable=g-multiple-import
 # pylint: disable=unused-import
 # pylint: disable=wildcard-import
 
+from . import python_lazy_dataset as lazy_dataset
 from ._src.python.experimental.example_packing.packing import PackAndBatchOperation
 from ._src.python.experimental.index_shuffle.python.index_shuffle import index_shuffle
