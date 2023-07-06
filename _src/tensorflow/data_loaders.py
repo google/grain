@@ -67,6 +67,8 @@ class TfDataLoader(collections.abc.Iterable):
       iterator_options: Optional[IteratorOptions] = None,
       strict_transformations: bool = True,
       tf_data_options: Optional[tf.data.Options] = None,
+      tf_lookup_batch_size: int | None = None,
+      tf_lookup_num_parallel_calls: int | None = None,
   ):
     """Initializes a new data loader.
 
@@ -85,6 +87,8 @@ class TfDataLoader(collections.abc.Iterable):
         transition period you can set this to False and Grain will apply all
         transformations. However this might make the input non-deterministic.
       tf_data_options: Options passed to tf.data.
+      tf_lookup_batch_size: Batch size to read from disk.
+      tf_lookup_num_parallel_calls: Number of parallel read calls to disk.
     """
     usage_logging.log_event("TfDataLoader", tag_3="TfGrain")
     self.source = source
@@ -98,6 +102,8 @@ class TfDataLoader(collections.abc.Iterable):
     self._iterator_options = iterator_options
     self._strict_transformations = strict_transformations
     self._tf_data_options = tf_data_options
+    self._tf_lookup_batch_size = tf_lookup_batch_size
+    self._tf_lookup_num_parallel_calls = tf_lookup_num_parallel_calls
 
   def __iter__(self) -> data_iterators.TfGrainDatasetIterator:
     return data_iterators.TfGrainDatasetIterator(
@@ -123,7 +129,12 @@ class TfDataLoader(collections.abc.Iterable):
     """
     index_ds = self.sampler.get_index_dataset(start_index)
     _validate_index_dataset(index_ds, require_dataset_index=False)
-    ds = _map_index_dataset_using_data_source(self.source, index_ds)
+    ds = _map_index_dataset_using_data_source(
+        self.source,
+        index_ds,
+        tf_lookup_batch_size=self._tf_lookup_batch_size,
+        tf_lookup_num_parallel_calls=self._tf_lookup_num_parallel_calls,
+    )
 
     transformations = list(self._transformations)
     transformations.insert(0, _ParseTransform(self.source.get_parse_fn()))
@@ -246,6 +257,8 @@ class TfMixtureDataLoader(collections.abc.Iterable):
       iterator_options: Optional[IteratorOptions] = None,
       tf_data_options: Optional[tf.data.Options] = None,
       prefetch_buffer_size: int = tf.data.AUTOTUNE,
+      tf_lookup_batch_size: int | None = None,
+      tf_lookup_num_parallel_calls: int | None = None,
   ):
     """Initializes a new data loader.
 
@@ -263,6 +276,8 @@ class TfMixtureDataLoader(collections.abc.Iterable):
       tf_data_options: Options passed to tf.data.
       prefetch_buffer_size: Size of prefetch buffer, if any. Autotuned if not
         specified.
+      tf_lookup_batch_size: Batch size to read from disk.
+      tf_lookup_num_parallel_calls: Number of parallel read calls to disk.
     """
     usage_logging.log_event("TfMixtureDataLoader", tag_3="TfGrain")
     assert len(sources) == len(transformations_per_source)
@@ -325,6 +340,8 @@ class TfMixtureDataLoader(collections.abc.Iterable):
     self._strict_transformations = strict_transformations
     self._tf_data_options = tf_data_options
     self._prefetch_buffer_size = prefetch_buffer_size
+    self._tf_lookup_batch_size = tf_lookup_batch_size
+    self._tf_lookup_num_parallel_calls = tf_lookup_num_parallel_calls
 
   def __iter__(self):
     return data_iterators.TfGrainDatasetIterator(
@@ -387,6 +404,8 @@ class TfMixtureDataLoader(collections.abc.Iterable):
         input_key=_RECORD_KEY_IN_MERGED_DATA_SOURCE,
         drop_input_key=True,
         prefetch_buffer_size=self._prefetch_buffer_size,
+        tf_lookup_batch_size=self._tf_lookup_batch_size,
+        tf_lookup_num_parallel_calls=self._tf_lookup_num_parallel_calls,
     )
 
     just_map_transforms = True
@@ -554,6 +573,8 @@ def _map_index_dataset_using_data_source(
     output_key: str = gc.RECORD,
     drop_input_key: bool = False,
     prefetch_buffer_size: int = tf.data.AUTOTUNE,
+    tf_lookup_batch_size: int | None = None,
+    tf_lookup_num_parallel_calls: int | None = None,
 ) -> tf.data.Dataset:
   """Returns a dataset with the records matching for the provided keys.
 
@@ -566,6 +587,8 @@ def _map_index_dataset_using_data_source(
       stored.
     drop_input_key: Whether to drop the features in `input_key`.
     prefetch_buffer_size: Size of prefetch buffer, if any. Autotuned if None.
+    tf_lookup_batch_size: Batch size to read from disk.
+    tf_lookup_num_parallel_calls: Number of parallel read calls to disk.
 
   Returns:
     A dataset of the same cardinality as `index_ds`. The `output_key`
@@ -581,26 +604,31 @@ def _map_index_dataset_using_data_source(
         f"Feature {output_key} is already present in input dictionary."
     )
 
+  if tf_lookup_batch_size is None:
+    tf_lookup_batch_size = config.tf_lookup_batch_size
+  if tf_lookup_num_parallel_calls is None:
+    tf_lookup_num_parallel_calls = config.tf_lookup_num_parallel_calls
+
   def lookup_fn(features: dict[str, tf.Tensor]) -> dict[str, tf.Tensor]:
     features[output_key] = source[features[input_key]]
     if drop_input_key:
       del features[input_key]
     return features
 
-  if config.tf_lookup_batch_size == 1:
+  if tf_lookup_batch_size == 1:
     dataset = index_ds.map(
-        lookup_fn, num_parallel_calls=config.tf_lookup_num_parallel_calls
+        lookup_fn, num_parallel_calls=tf_lookup_num_parallel_calls
     )
     return dataset.prefetch(prefetch_buffer_size)
 
   if config.tf_lookup_fast_warmup:
     # Split the first batch into a separate dataset. Will be concatenated at
     # the end again.
-    warmup_index_ds = index_ds.take(config.tf_lookup_batch_size)
-    index_ds = index_ds.skip(config.tf_lookup_batch_size)
+    warmup_index_ds = index_ds.take(tf_lookup_batch_size)
+    index_ds = index_ds.skip(tf_lookup_batch_size)
 
     # We will make 10 calls with smaller batches and only 2 in parallel.
-    warmup_batch_size = max(1, config.tf_lookup_batch_size // 10)
+    warmup_batch_size = max(1, tf_lookup_batch_size // 10)
     warmup_dataset_cardinality = warmup_index_ds.cardinality()
     warmup_dataset = (
         warmup_index_ds.batch(warmup_batch_size)
@@ -613,8 +641,8 @@ def _map_index_dataset_using_data_source(
 
   dataset_cardinality = index_ds.cardinality()
   dataset = (
-      index_ds.batch(config.tf_lookup_batch_size)
-      .map(lookup_fn, num_parallel_calls=config.tf_lookup_num_parallel_calls)
+      index_ds.batch(tf_lookup_batch_size)
+      .map(lookup_fn, num_parallel_calls=tf_lookup_num_parallel_calls)
       .unbatch()
       .apply(tf.data.experimental.assert_cardinality(dataset_cardinality))
   )
