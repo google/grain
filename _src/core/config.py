@@ -72,12 +72,6 @@ _LOOKUP_FAST_WARMUP = flags.DEFINE_bool(
     ),
 )
 
-_PY_LOOKUP_BATCH_SIZE = flags.DEFINE_integer(
-    "grain_py_lookup_batch_size",
-    64,
-    "Number of keys to batch into a single lookup call in PyGrain. ",
-)
-
 _GRAIN_FLAGS = (
     _INTERLEAVED_SHUFFLE,
     _INTERLEAVED_SHUFFLE_BLOCK_SIZE,
@@ -85,7 +79,6 @@ _GRAIN_FLAGS = (
     _LOOKUP_BATCH_SIZE,
     _LOOKUP_NUM_PARALLEL_CALLS,
     _LOOKUP_FAST_WARMUP,
-    _PY_LOOKUP_BATCH_SIZE,
 )
 
 
