@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "grain"
+version = "0.0.1"
+description = "Grain: A library for loading and transforming data for neural network training."
+keywords = []
+authors = [
+    {name = "Grain team", email = "grain-dev@google.com"},
+]
+dependencies = [
+    'absl-py',
+    'array-record',
+    'dm-tree',
+    'etils[epath]',
+    'more-itertools>=9.1.0',
+    'numpy',
+]
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: Linux",
+]
+
+[project.optional-dependencies]
+testing = [
+    'dill',
+    'jax',
+    'jaxlib',
+    'tensorflow',
+    'tensorflow-datasets',
+]
+
+[project.urls]
+homepage = "https://github.com/google/grain"
+
+[tool.setuptools.packages.find]
+include = ["grain*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.so"]
