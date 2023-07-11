@@ -19,10 +19,12 @@
 # pylint: disable=wildcard-import
 
 from ._src.python.lazy_dataset.data_sources import SourceLazyMapDataset
+from ._src.python.lazy_dataset.grain_pool_v2 import GrainPool
 from ._src.python.lazy_dataset.lazy_dataset import (
     LazyMapDataset,
     LazyIterDataset,
     LazyDatasetIterator,
+    RangeLazyMapDataset,
 )
 from ._src.python.lazy_dataset.transformations.batch import (
     BatchLazyMapDataset,
