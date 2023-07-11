@@ -1,0 +1,205 @@
+# Copyright 2022 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""This module defines operations that can be applied by the data transformer.
+
+An operation takes as input an iterator and outputs an iterator. We provide
+implementation for basic operations like MapOperation and FilterOperation (and
+Batch to follow soon) but users can also implement their own operations.
+"""
+import dataclasses
+from multiprocessing import shared_memory
+from typing import Any, Callable, Generic, Iterator, Protocol, Sequence, TypeVar
+
+from grain._src.python import record
+import numpy as np
+import numpy.typing as npt
+import tree
+
+_IN = TypeVar("_IN")
+_OUT = TypeVar("_OUT")
+
+
+@dataclasses.dataclass
+class SharedMemoryMetadata:
+  name: str
+  shape: tuple[int, ...]
+  dtype: npt.DTypeLike
+
+
+class Operation(Protocol):
+
+  def __call__(
+      self, input_iterator: Iterator[record.Record]
+  ) -> Iterator[record.Record]:
+    ...
+
+
+@dataclasses.dataclass
+class MapOperation(Generic[_IN, _OUT]):
+  """Applies user-provided map_function to input records."""
+
+  map_function: Callable[[_IN], _OUT]
+
+  def __call__(
+      self, input_iterator: Iterator[record.Record[_IN]]
+  ) -> Iterator[record.Record[_OUT]]:
+    for input_record in input_iterator:
+      try:
+        map_result = self.map_function(input_record.data)
+      except Exception as e:
+        raise ValueError(
+            "PyGrain encountered an error when calling map function."
+        ) from e
+      yield record.Record(input_record.metadata.remove_record_key(), map_result)
+
+
+@dataclasses.dataclass
+class RandomMapOperation(Generic[_IN, _OUT]):
+  """Applies user-provided random_map_function with rng to input records."""
+
+  random_map_function: Callable[[_IN, np.random.Generator], _OUT]
+
+  def __call__(
+      self, input_iterator: Iterator[record.Record[_IN]]
+  ) -> Iterator[record.Record[_OUT]]:
+    for input_record in input_iterator:
+      try:
+        random_map_result = self.random_map_function(
+            input_record.data, input_record.metadata.rng
+        )
+      except Exception as e:
+        raise ValueError(
+            "PyGrain encountered an error when calling random map function."
+        ) from e
+      yield record.Record(
+          input_record.metadata.remove_record_key(), random_map_result
+      )
+
+
+@dataclasses.dataclass
+class FilterOperation(Generic[_IN]):
+  """Yields records from input iterator satisfying user-provided condition."""
+
+  condition_function: Callable[[_IN], bool]
+
+  def __call__(
+      self, input_iterator: Iterator[record.Record[_IN]]
+  ) -> Iterator[record.Record[_IN]]:
+    for input_record in input_iterator:
+      try:
+        filter_result = self.condition_function(input_record.data)
+      except Exception as e:
+        raise ValueError(
+            "PyGrain encountered an error when calling condition function."
+        ) from e
+      if filter_result:
+        yield record.Record(
+            input_record.metadata.remove_record_key(), input_record.data
+        )
+
+
+@dataclasses.dataclass
+class BatchOperation(Generic[_IN, _OUT]):
+  """Batches input examples into batches with given batch_size.
+
+  Internally, examples are interpreted as JAX Pytrees. To batch records
+  together, they must be of the same structure. Corresponding leaves are batched
+  together into NumPy arrays. For more info about PyTrees, please refer to:
+  https://jax.readthedocs.io/en/latest/pytrees.html.
+
+  By default, we put Numpy arrays into Shared Memory. For more info about shared
+  memory, please refer to:
+  https://docs.python.org/3/library/multiprocessing.shared_memory.html
+  """
+
+  batch_size: int
+  drop_remainder: bool = False
+
+  def __post_init__(self):
+    if self.batch_size <= 0:
+      raise ValueError(
+          f"batch_size must be a positive integer. Got {self.batch_size}."
+      )
+    self._use_shared_memory = False
+
+  def __call__(
+      self, input_iterator: Iterator[record.Record[_IN]]
+  ) -> Iterator[record.Record[_OUT]]:
+    records_to_batch = []
+    last_record_metadata = None
+    for input_record in input_iterator:
+      last_record_metadata = input_record.metadata
+      records_to_batch.append(input_record.data)
+      if len(records_to_batch) == self.batch_size:
+        batch = self._batch(records_to_batch)
+        records_to_batch = []
+        yield record.Record(last_record_metadata.remove_record_key(), batch)
+    if records_to_batch and not self.drop_remainder:
+      yield record.Record(
+          last_record_metadata.remove_record_key(),  # pytype: disable=attribute-error
+          self._batch(records_to_batch),
+      )
+
+  def _enable_shared_memory(self):
+    self._use_shared_memory = True
+
+  def _validate_structure(self, input_records: Sequence[Any]) -> None:
+    """Validate that all records have the same Pytree structure."""
+    if not input_records:
+      return
+    first_record = input_records[0]
+    non_matching_records_indices = []
+    non_matching_records = []
+    for index, input_record in enumerate(input_records[1:]):
+      try:
+        tree.assert_same_structure(first_record, input_record)
+      except ValueError:
+        non_matching_records_indices.append(index + 1)
+        non_matching_records.append(input_record)
+
+    if non_matching_records:
+      raise TypeError(
+          "Record structures do not match. Record at position 0 has "
+          f"structure {first_record}, while records at "
+          f"positions {non_matching_records_indices} have "
+          f"structures {non_matching_records}."
+      )
+
+  def _batch(self, input_records: Sequence[Any]):
+    """Batches records together and copies Numpy arrays to Shared Memory."""
+    self._validate_structure(input_records)
+
+    def stacking_function(*args):
+      if not self._use_shared_memory:
+        return np.stack(args)
+      result_stacked = np.stack(args)
+      result_dtype = result_stacked.dtype
+      # Numpy arrays can have objects. Sending those via shared memory isn't
+      # supported and causes segmentation faults.
+      if result_dtype.hasobject:
+        return result_stacked
+      result_shape = result_stacked.shape
+      result_nbytes = result_stacked.nbytes
+      shm = shared_memory.SharedMemory(create=True, size=result_nbytes)
+      shm_name = shm.name
+      shm_array = np.ndarray(result_shape, dtype=result_dtype, buffer=shm.buf)
+      shm_array[:] = result_stacked[:]
+      shm.close()
+      return SharedMemoryMetadata(
+          name=shm_name, shape=result_shape, dtype=result_dtype
+      )
+
+    return tree.map_structure(
+        stacking_function, input_records[0], *input_records[1:]
+    )
