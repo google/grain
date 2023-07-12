@@ -62,7 +62,6 @@ py_library(
         "//grain/_src/python:operations",  # build_cleaner: keep
         "//grain/_src/python:options",  # build_cleaner: keep
         "//grain/_src/python:samplers",  # build_cleaner: keep
-        "//grain/_src/python/testing:mocking",  # build_cleaner: keep
     ],
 )
 

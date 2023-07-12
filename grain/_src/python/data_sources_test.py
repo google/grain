@@ -17,7 +17,6 @@ import dataclasses
 import pathlib
 import pickle
 import random
-from unittest import mock
 
 from absl import flags
 from absl.testing import absltest
@@ -151,81 +150,6 @@ class BagDataSourceTest(DataSourceTest):
     expected_data = [b"0", b"1", b"2", b"3", b"4"]
     actual_data = [bag_ds[i] for i in range(5)]
     self.assertEqual(expected_data, actual_data)
-
-
-class TfdsDataSourceTest(DataSourceTest):
-  """Tests for TfdsDataSource."""
-
-  def test_tfrecord_file_format_raises_error(self):
-    tfds_info = mock.create_autospec(tfds.core.DatasetInfo)
-    tfds_info.file_format = tfds.core.file_adapters.FileFormat.TFRECORD
-    with self.assertRaisesRegex(
-        NotImplementedError,
-        "No random access data source for file format FileFormat.TFRECORD",
-    ):
-      with data_sources.TfdsDataSource(tfds_info, split="train"):
-        pass
-
-  def test_array_record_file_format_delegates_to_array_record_data_source(self):
-    tfds_info = mock.create_autospec(tfds.core.DatasetInfo)
-    tfds_info.file_format = tfds.core.file_adapters.FileFormat.ARRAY_RECORD
-    tfds_info.splits["train"].file_instructions = [
-        FileInstruction("my_file-000-of-003", 0, 12, 12),
-        FileInstruction("my_file-001-of-003", 2, 9, 11),
-        FileInstruction("my_file-002-of-003", 0, 4, 4),
-    ]
-    with mock.patch.object(
-        data_sources, "ArrayRecordDataSource"
-    ) as underlying_source_mock:
-      with data_sources.TfdsDataSource(tfds_info, split="train"):
-        underlying_source_mock.assert_called_once_with([
-            FileInstruction("my_file-000-of-003", 0, 12, 12),
-            FileInstruction("my_file-001-of-003", 2, 9, 11),
-            FileInstruction("my_file-002-of-003", 0, 4, 4),
-        ])
-
-  def test_repr_returns_meaningful_string_without_decoders(self):
-    tfds_info = mock.create_autospec(tfds.core.DatasetInfo)
-    tfds_info.file_format = tfds.core.file_adapters.FileFormat.ARRAY_RECORD
-    tfds_info.data_dir = "/path/to/data/dir"
-    tfds_info.splits["train"].file_instructions = [
-        FileInstruction("my_file-000-of-003", 0, 12, 12),
-        FileInstruction("my_file-001-of-003", 2, 9, 11),
-        FileInstruction("my_file-002-of-003", 0, 4, 4),
-    ]
-    with mock.patch.object(data_sources, "ArrayRecordDataSource"):
-      with data_sources.TfdsDataSource(tfds_info, split="train") as source:
-        self.assertEqual(
-            repr(source),
-            (
-                "TfdsDataSource(builder_directory='/path/to/data/dir',"
-                " split='train', decoders=None)"
-            ),
-        )
-
-  def test_repr_returns_meaningful_string_with_decoders(self):
-    tfds_info = mock.create_autospec(tfds.core.DatasetInfo)
-    tfds_info.file_format = tfds.core.file_adapters.FileFormat.ARRAY_RECORD
-    tfds_info.data_dir = "/path/to/data/dir"
-    tfds_info.splits["train"].file_instructions = [
-        FileInstruction("my_file-000-of-003", 0, 12, 12),
-        FileInstruction("my_file-001-of-003", 2, 9, 11),
-        FileInstruction("my_file-002-of-003", 0, 4, 4),
-    ]
-    with mock.patch.object(data_sources, "ArrayRecordDataSource"):
-      with data_sources.TfdsDataSource(
-          tfds_info,
-          split="train",
-          decoders={"my_feature": tfds.decode.SkipDecoding()},
-      ) as source:
-        self.assertEqual(
-            repr(source),
-            (
-                "TfdsDataSource(builder_directory='/path/to/data/dir',"
-                " split='train', decoders={'my_feature': <class"
-                " 'tensorflow_datasets.core.decode.base.SkipDecoding'>})"
-            ),
-        )
 
 
 class SSTableDataSourceTest(DataSourceTest):
