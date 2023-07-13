@@ -119,6 +119,7 @@ py_library(
         ":options",
         ":record",
         ":samplers",
+        "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
         "//grain/_src/core:usage_logging",
     ],

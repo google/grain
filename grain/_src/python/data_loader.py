@@ -31,6 +31,7 @@ from typing import Any, Callable, Optional, Sequence, Tuple, TypeVar
 
 from absl import logging
 from concurrent import futures
+from grain._src.core import sharding
 from grain._src.core import transforms
 from grain._src.core import usage_logging
 import multiprocessing as mp
@@ -126,6 +127,7 @@ class DataLoader:
       operations: Sequence[transforms.Transformation | Operation] = (),
       worker_count: Optional[int] = 0,
       worker_buffer_size: int = 1,
+      shard_options: sharding.ShardOptions | None = None,
       read_options: options.ReadOptions | None = None,
       enable_profiling: bool = False,
   ):
@@ -142,6 +144,8 @@ class DataLoader:
         None lets the python backend choose the value.
       worker_buffer_size: Count of output batches to produce in advance per
         worker. This ensures batches are ready when the consumer requests them.
+      shard_options: Options for how data should be sharded when using multiple
+        machines (~ JAX processes) and data parallelism.
       read_options: Options to use for reading. See ReadOptions.
       enable_profiling: If True, profiling info is logged. Note, it only
         supports worker_count >= 1 at the moment.
@@ -179,9 +183,23 @@ class DataLoader:
         per_worker_buffer_size=worker_buffer_size,
         enable_profiling=enable_profiling,
     )
-    if not hasattr(self._sampler, "_shard_options"):
-      raise ValueError("Could not get shard options from Sampler.")
-    self._shard_options = self._sampler._shard_options  # pylint: disable=protected-access
+    self._shard_options = shard_options
+    if self._shard_options is None:
+      # Previously the Sampler owned the sharding. Try to get sharding from the
+      # sampler.
+      # pylint: disable=protected-access
+      if hasattr(self._sampler, "_shard_options") and isinstance(
+          self._sampler._shard_options, sharding.ShardOptions
+      ):
+        self._shard_options = self._sampler._shard_options
+      else:
+        raise ValueError(
+            "No shard options were provided to the DataLoader. Please pass "
+            "shard options to the DataLoader. Previously sharding was handled "
+            "by the Sampler but going forward sharding will be handled by the "
+            "DataLoader for greater flexibility."
+        )
+      # pylint: enable=protected-access
 
   @property
   def multiprocessing_options(self) -> options.MultiprocessingOptions:
