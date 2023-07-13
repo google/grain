@@ -46,16 +46,16 @@ import dataclasses
 from multiprocessing import context
 from multiprocessing import queues
 from multiprocessing import synchronize
-import os
 import pstats
 import queue
 import traceback
-from typing import Any, Optional, Protocol, TypeVar
+from typing import Any, Protocol, TypeVar
 
 from absl import logging
 import cloudpickle
 from grain._src.core import parallel
 from grain._src.python import multiprocessing_common
+from grain._src.python.options import MultiprocessingOptions  # pylint: disable=g-importing-member
 
 T = TypeVar("T")
 
@@ -214,10 +214,8 @@ class GrainPool(Iterator[T]):
       ctx: context.BaseContext,
       *,
       get_element_producer_fn: GetElementProducerFn[T],
-      num_processes: Optional[int] = None,
-      elements_to_buffer_per_process: int = 1,
-      enable_profiling: bool = False,
       worker_index_to_start_reading: int = 0,
+      options: MultiprocessingOptions,
   ):
     """Initialise a Grain Pool.
 
@@ -225,29 +223,12 @@ class GrainPool(Iterator[T]):
       ctx: Context to make multiprocessing primitives work.
       get_element_producer_fn: Callable that returns an iterator over the
         elements given the process index and process count.
-      num_processes: Number of child processes that the pool uses.
-      elements_to_buffer_per_process: Number of output elements to buffer per
-        process.
-      enable_profiling: If True, process with worker_index 0 will be profiled.
       worker_index_to_start_reading: index of worker to start reading output
         batches from (needed for checkpointing support).
+      options: Options for multiprocessing. See MultiprocessingOptions.
     """
-    if num_processes is None:
-      self.num_processes = os.cpu_count()
-      if self.num_processes is None:
-        raise NotImplementedError("Cannot determine the number of CPUs.")
-    else:
-      self.num_processes = num_processes
+    self.num_processes = options.num_workers
     logging.info("Grain pool will use %i processes.", self.num_processes)
-    logging.info(
-        "Grain pool will buffer %i elements per process.",
-        elements_to_buffer_per_process,
-    )
-    logging.info(
-        "Grain Pool has profiling enabled."
-        if enable_profiling
-        else "Grain Pool has profiling disabled."
-    )
     self.worker_args_queues = []
     self.worker_output_queues = []
     self.processes = []
@@ -269,15 +250,15 @@ class GrainPool(Iterator[T]):
 
     for worker_index in range(self.num_processes):
       worker_args_queue = ctx.Queue(1)
-      worker_output_queue = ctx.Queue(elements_to_buffer_per_process)
+      worker_output_queue = ctx.Queue(options.per_worker_buffer_size)
       process_kwargs = {
           "args_queue": worker_args_queue,
           "errors_queue": self.worker_error_queue,
           "output_queue": worker_output_queue,
           "termination_event": self.termination_event,
           "worker_index": worker_index,
-          "worker_count": num_processes,
-          "enable_profiling": enable_profiling,
+          "worker_count": options.num_workers,
+          "enable_profiling": options.enable_profiling,
       }
       # The process kwargs must all be pickable and will be unpickle before
       # absl.app.run() is called. We send arguments via a queue to ensure that

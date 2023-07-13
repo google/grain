@@ -154,6 +154,7 @@ py_library(
     srcs_version = "PY3",
     deps = [
         ":multiprocessing_common",
+        ":options",
         "//grain/_src/core:parallel",
     ],
 )
@@ -163,7 +164,10 @@ py_test(
     srcs = ["grain_pool_test.py"],
     srcs_version = "PY3",
     tags = ["not_run:arm"],
-    deps = [":grain_pool"],
+    deps = [
+        ":grain_pool",
+        ":options",
+    ],
 )
 
 py_library(

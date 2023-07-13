@@ -562,14 +562,11 @@ class _MultiProcessorIterator(collections.abc.Iterator):
       iterator = data_loader._read_and_transform_data(last_seen_index)  # pylint: disable=protected-access
       yield from iterator
 
-    mp_options = data_loader.multiprocessing_options
     with grain_pool.GrainPool(
         ctx=ctx,
         get_element_producer_fn=get_element_producer_fn,
-        num_processes=mp_options.num_workers,
-        elements_to_buffer_per_process=mp_options.per_worker_buffer_size,
-        enable_profiling=mp_options.enable_profiling,
         worker_index_to_start_reading=worker_index_to_start_reading,
+        options=data_loader.multiprocessing_options,
     ) as g_pool:
       try:
         for element in g_pool:

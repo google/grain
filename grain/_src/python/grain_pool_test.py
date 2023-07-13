@@ -19,6 +19,7 @@ import signal
 from absl.testing import absltest
 import multiprocessing as mp
 from grain._src.python import grain_pool as gp
+from grain._src.python.options import MultiprocessingOptions  # pylint: disable=g-importing-member
 
 
 class GrainPoolTest(absltest.TestCase):
@@ -29,23 +30,23 @@ class GrainPoolTest(absltest.TestCase):
     def get_element_producer_fn(worker_index: int, worker_count: int):
       return iter(range(worker_index, 16, worker_count))
 
-    num_processes = 4
-    elements_to_buffer = 1
+    options = MultiprocessingOptions(num_workers=4, per_worker_buffer_size=1)
     output_elements = []
     with gp.GrainPool(
         ctx=ctx,
         get_element_producer_fn=get_element_producer_fn,
-        num_processes=num_processes,
-        elements_to_buffer_per_process=elements_to_buffer,
+        options=options,
     ) as grain_pool:
       for element in grain_pool:
         output_elements.append(element)
     expected_elements = list(
-        map(lambda x: gp.GrainPoolElement(x, x % num_processes), range(16))
+        map(
+            lambda x: gp.GrainPoolElement(x, x % options.num_workers), range(16)
+        )
     )
     self.assertEqual(expected_elements, output_elements)
     # Make sure num_processes processes were launched.
-    self.assertLen(grain_pool.processes, num_processes)
+    self.assertLen(grain_pool.processes, options.num_workers)
     # Make sure all child processes exited successfully.
     for child_process in grain_pool.processes:
       self.assertEqual(child_process.exitcode, 0)
@@ -56,23 +57,21 @@ class GrainPoolTest(absltest.TestCase):
     def get_element_producer_fn(worker_index: int, worker_count: int):
       return iter(range(worker_index, 14, worker_count))
 
-    num_processes = 4
-    elements_to_buffer = 1
+    options = MultiprocessingOptions(num_workers=4, per_worker_buffer_size=1)
     output_elements = []
     with gp.GrainPool(
         ctx=ctx,
         get_element_producer_fn=get_element_producer_fn,
-        num_processes=num_processes,
-        elements_to_buffer_per_process=elements_to_buffer,
+        options=options,
     ) as grain_pool:
       for element in grain_pool:
         output_elements.append(element)
     expected_elements = list(
-        map(lambda x: gp.GrainPoolElement(x, x % num_processes), range(14))
+        map(
+            lambda x: gp.GrainPoolElement(x, x % options.num_workers), range(14)
+        )
     )
     self.assertEqual(expected_elements, output_elements)
-    # Make sure num_processes processes were launched.
-    self.assertLen(grain_pool.processes, num_processes)
     # Make sure all child processes exited successfully.
     for child_process in grain_pool.processes:
       self.assertEqual(child_process.exitcode, 0)
@@ -82,19 +81,15 @@ class GrainPoolTest(absltest.TestCase):
     def get_element_producer_fn(worker_index: int, worker_count: int):
       return iter(range(worker_index, 14, worker_count))
 
-    num_processes = 4
-    elements_to_buffer = 1
+    options = MultiprocessingOptions(num_workers=4, per_worker_buffer_size=1)
     with gp.GrainPool(
         ctx=ctx,
         get_element_producer_fn=get_element_producer_fn,
-        num_processes=num_processes,
-        elements_to_buffer_per_process=elements_to_buffer,
+        options=options,
     ) as grain_pool:
       child_pid = grain_pool.processes[0].pid
       os.kill(child_pid, signal.SIGKILL)
 
-    # Make sure num_processes processes were launched.
-    self.assertLen(grain_pool.processes, num_processes)
     self.assertEqual(
         grain_pool.processes[0].exitcode, -1 * signal.SIGKILL.value
     )
@@ -106,8 +101,7 @@ class GrainPoolTest(absltest.TestCase):
     def get_element_producer_fn(worker_index: int, worker_count: int):
       return iter(range(worker_index, 14, worker_count))
 
-    num_processes = 4
-    elements_to_buffer = 1
+    options = MultiprocessingOptions(num_workers=4, per_worker_buffer_size=1)
 
     # Users should generally use the with statement, here we test if GrainPool
     # was created without the "with statement", that object deletion would
@@ -115,8 +109,7 @@ class GrainPoolTest(absltest.TestCase):
     grain_pool = gp.GrainPool(
         ctx=ctx,
         get_element_producer_fn=get_element_producer_fn,
-        num_processes=num_processes,
-        elements_to_buffer_per_process=elements_to_buffer,
+        options=options,
     )
 
     child_processes = grain_pool.processes
