@@ -11,16 +11,22 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""This module provides a way to distribute processing across multiple processes.
+"""This module provides a way to distribute processing across multiple workers.
 
-GrainPool (not to be confused with Python multiprocessing Pools) allows the
-distributing of processing among a set of child processes. The GrainPool works
-as follows:
-* Parent process launches a set of "num_processes" child processes.
-* Data from input iterable is split in a static way among child processes.
-* Each child process processes its part of the data and emit resulting elements
-  to a queue (each child process has its queue.)
-* Parent reads data from the children in a strict round-robin fashion.
+In the context of Grain we use the term "process" similar to JAX, where usually
+each machine runs one Python process (identified by `jax.proccess_index()`).
+In Grain each "process" can create additional Python child processes that we
+call "workers".
+
+GrainPool manages a set of Python processes. It's similar to
+`multiprocessing.Pool` but optimises communication between the processes to
+enable high throughput data pipelines.
+The GrainPool works as follows:
+* Parent process launches a set of "num_workers" child processes.
+* Each child process produces elements by reading data and transforming it. The
+  resulting elements are added to a queue (each child process has its queue).
+* Parent process reads data from the children queues in a strict round-robin
+  fashion.
 
 Shutdown logic considerations:
 * Child processes are launched as Daemon processes. In case of (unexpected)
@@ -34,6 +40,7 @@ Shutdown logic considerations:
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 import cProfile
 import dataclasses
 from multiprocessing import context
@@ -42,17 +49,15 @@ from multiprocessing import synchronize
 import os
 import pstats
 import queue
-import threading
 import traceback
-from typing import Any, Callable, Generic, Iterable, Iterator, Optional, Sequence, TypeVar
+from typing import Any, Optional, Protocol, TypeVar
 
 from absl import logging
 import cloudpickle
 from grain._src.core import parallel
 from grain._src.python import multiprocessing_common
 
-_IN = TypeVar("_IN")
-_OUT = TypeVar("_OUT")
+T = TypeVar("T")
 
 # Maximum number of threads for starting and stopping processes.
 _PROCESS_MANAGEMENT_MAX_THREADS = 64
@@ -71,20 +76,12 @@ class _ProcessingComplete:
 _PROCESSING_COMPLETE = _ProcessingComplete()
 
 
-@dataclasses.dataclass
-class _SamplerExhausted:
-  """Used by feeder thread to indicate that the sampler is exhausted."""
-
-
-_SAMPLER_EXHAUSTED = _SamplerExhausted()
-
-
 @dataclasses.dataclass(frozen=True, slots=True)
 class GrainPoolElement:
   """Wrapper for output records emited by Grain Pool."""
 
   record: Any
-  worker_idx: Any
+  worker_index: Any
 
 
 # Hack to embed stringification of remote traceback in local traceback.
@@ -116,27 +113,6 @@ def rebuild_exception(exception: Exception, tb: traceback.TracebackType):
   return exception
 
 
-def _create_input_iterator(
-    input_queue: queues.Queue, termination_event: synchronize.Event
-) -> Iterator[Any]:
-  """Creates iterator that consumes elements from input_queue."""
-  while True:
-    element = multiprocessing_common.get_element_from_queue(
-        input_queue, termination_event.is_set
-    )
-    # If termination event is set, we receive SystemTerminated.
-    if element == multiprocessing_common.SYSTEM_TERMINATED:
-      logging.info(
-          "Got a SystemTerminated, indicating no more input elements. "
-      )
-      break
-    if element == _SAMPLER_EXHAUSTED:
-      logging.info("Sampler exhausted! No more input elements.")
-      break
-    yield element
-  logging.info("Done consuming input iterator.")
-
-
 def _print_profile(preamble: str, profile: cProfile.Profile):
   """Prints output of cProfile, sorted by cumulative time."""
   print(preamble)
@@ -144,39 +120,54 @@ def _print_profile(preamble: str, profile: cProfile.Profile):
   stats.print_stats()
 
 
+class GetElementProducerFn(Protocol[T]):
+
+  def __call__(self, *, worker_index: int, worker_count: int) -> Iterator[T]:
+    """Returns a generator of elements."""
+
+
+def _get_element_producer_from_queue(
+    args_queue: queues.Queue, *, worker_index: int, worker_count: int
+) -> Iterator[Any]:
+  """Unpickles the element producer from the args queue and closes the queue."""
+  serialized_element_producer_fn = args_queue.get()
+  element_producer_fn: GetElementProducerFn[Any] = cloudpickle.loads(
+      serialized_element_producer_fn
+  )
+  element_producer = element_producer_fn(
+      worker_index=worker_index, worker_count=worker_count
+  )
+  # args_queue has only a single argument and thus can be safely closed.
+  args_queue.close()
+  return element_producer
+
+
 def _worker_loop(
     *,
-    input_queue: queues.Queue,
-    output_queue: queues.Queue,
-    errors_queue: queues.Queue,
     args_queue: queues.Queue,
+    errors_queue: queues.Queue,
+    output_queue: queues.Queue,
     termination_event: synchronize.Event,
-    process_idx: int,
+    worker_index: int,
+    worker_count: int,
     enable_profiling: bool,
 ):
   """Code to be run on each child process."""
   try:
     logging.info(
-        "Starting work for child process with process_idx: %i", process_idx
+        "Starting work for child process with worker_index: %i", worker_index
     )
-    transformation_function = args_queue.get()
-    transformation_function = cloudpickle.loads(transformation_function)
-    # args_queue has only a single argument and thus can be safely closed.
-    args_queue.close()
-    profiling_enabled = enable_profiling and process_idx == 0
+    element_producer = _get_element_producer_from_queue(
+        args_queue, worker_index=worker_index, worker_count=worker_count
+    )
+    profiling_enabled = enable_profiling and worker_index == 0
     if profiling_enabled:
       profile = cProfile.Profile()
       profile.enable()
-    iterator_for_process = _create_input_iterator(
-        input_queue, termination_event
-    )
-    iterator_after_transformation = transformation_function(
-        iterator_for_process
-    )
     # If termination event is set, we terminate and discard remaining elements.
     while not termination_event.is_set():
       try:
-        next_element = next(iterator_after_transformation)
+        next_element = next(element_producer)
         multiprocessing_common.add_element_to_queue(
             next_element, output_queue, termination_event.is_set
         )
@@ -187,11 +178,11 @@ def _worker_loop(
         break
     if profiling_enabled:
       profile.disable()
-      _print_profile(f"PROFILE OF PROCESS WITH IDX {process_idx}.", profile)
+      _print_profile(f"PROFILE OF PROCESS WITH IDX {worker_index}.", profile)
 
   except Exception as e:  # pylint: disable=broad-except
     logging.exception(
-        "Error occurred in child process with process_idx: %i", process_idx
+        "Error occurred in child process with worker_index: %i", worker_index
     )
     remote_error = ExceptionWithTraceback(e, e.__traceback__)
     try:
@@ -200,7 +191,8 @@ def _worker_loop(
       logging.error("Couldn't send exception from child process. Queue full!")
 
     logging.info(
-        "Setting termination event in process with process_idx: %i", process_idx
+        "Setting termination event in process with worker_index: %i",
+        worker_index,
     )
     termination_event.set()
 
@@ -211,41 +203,33 @@ def _worker_loop(
     # cancel_join_thread when system terminates to prevent deadlocks.
     output_queue.cancel_join_thread()
     output_queue.close()
-  logging.info("Process %i exiting.", process_idx)
+  logging.info("Process %i exiting.", worker_index)
 
 
-class GrainPool(Generic[_IN, _OUT]):
+class GrainPool(Iterator[T]):
   """Pool to parallelize processing of Grain pipelines among a set of processes."""
 
   def __init__(
       self,
       ctx: context.BaseContext,
       *,
-      elements_to_process: Iterable[_IN],
-      transformation_function: Callable[[Iterator[_IN]], Iterator[_OUT]],
+      get_element_producer_fn: GetElementProducerFn[T],
       num_processes: Optional[int] = None,
       elements_to_buffer_per_process: int = 1,
       enable_profiling: bool = False,
-      discard_element_function: Optional[Callable[[_IN, int], bool]] = None,
-      worker_idx_to_start_processing: int = 0,
-      worker_idx_to_start_reading: int = 0,
+      worker_index_to_start_reading: int = 0,
   ):
     """Initialise a Grain Pool.
 
     Args:
       ctx: Context to make multiprocessing primitives work.
-      elements_to_process: Iterable of elements that pool should process.
-      transformation_function: Function to apply to input elements.
+      get_element_producer_fn: Callable that returns an iterator over the
+        elements given the process index and process count.
       num_processes: Number of child processes that the pool uses.
       elements_to_buffer_per_process: Number of output elements to buffer per
         process.
-      enable_profiling: If True, process with process_idx 0 will be profiled.
-      discard_element_function: determine whether an element from the
-        elements_to_process should be processed or discarded by the pool.
-        Function takes in an element and worker_idx to process the element on.
-      worker_idx_to_start_processing: idx of worker that we start distributing
-        elements to (needed for checkpointing support).
-      worker_idx_to_start_reading: index of worker to start reading output
+      enable_profiling: If True, process with worker_index 0 will be profiled.
+      worker_index_to_start_reading: index of worker to start reading output
         batches from (needed for checkpointing support).
     """
     if num_processes is None:
@@ -264,9 +248,8 @@ class GrainPool(Generic[_IN, _OUT]):
         if enable_profiling
         else "Grain Pool has profiling disabled."
     )
-    self.worker_input_queues = []
-    self.worker_output_queues = []
     self.worker_args_queues = []
+    self.worker_output_queues = []
     self.processes = []
     self.termination_event = ctx.Event()
     self.completed_processes = set()
@@ -275,7 +258,7 @@ class GrainPool(Generic[_IN, _OUT]):
     self.worker_error_queue = ctx.Queue(self.num_processes)
 
     try:
-      transformation_function = cloudpickle.dumps(transformation_function)
+      get_element_producer_fn = cloudpickle.dumps(get_element_producer_fn)
     except Exception as e:
       raise ValueError(
           "Could not serialize transformation_function passed to GrainPool."
@@ -284,44 +267,29 @@ class GrainPool(Generic[_IN, _OUT]):
           " objects work with cloudpickle.dumps()."
       ) from e
 
-    for process_idx in range(self.num_processes):
-      worker_input_queue = ctx.Queue(_INPUT_QUEUE_MAX_SIZE)
-      worker_input_queue.cancel_join_thread()
-      worker_output_queue = ctx.Queue(elements_to_buffer_per_process)
+    for worker_index in range(self.num_processes):
       worker_args_queue = ctx.Queue(1)
+      worker_output_queue = ctx.Queue(elements_to_buffer_per_process)
       process_kwargs = {
-          "input_queue": worker_input_queue,
-          "output_queue": worker_output_queue,
-          "errors_queue": self.worker_error_queue,
           "args_queue": worker_args_queue,
+          "errors_queue": self.worker_error_queue,
+          "output_queue": worker_output_queue,
           "termination_event": self.termination_event,
-          "process_idx": process_idx,
+          "worker_index": worker_index,
+          "worker_count": num_processes,
           "enable_profiling": enable_profiling,
       }
       # The process kwargs must all be pickable and will be unpickle before
       # absl.app.run() is called. We send arguments via a queue to ensure that
       # they are unpickled after absl.app.run() was called in the child
       # processes.
-      worker_args_queue.put(transformation_function)
+      worker_args_queue.put(get_element_producer_fn)
       process = ctx.Process(  # pytype: disable=attribute-error  # re-none
           target=_worker_loop, kwargs=process_kwargs, daemon=True
       )
-      self.worker_input_queues.append(worker_input_queue)
-      self.worker_output_queues.append(worker_output_queue)
       self.worker_args_queues.append(worker_args_queue)
+      self.worker_output_queues.append(worker_output_queue)
       self.processes.append(process)
-
-    self._feeder_thread = threading.Thread(
-        target=self._feed_worker_input_queues,
-        args=(
-            elements_to_process,
-            self.worker_input_queues,
-            discard_element_function,
-            worker_idx_to_start_processing,
-        ),
-        daemon=True,
-    )
-    self._feeder_thread.start()
 
     logging.info("Grain pool will start child processes.")
     parallel.run_in_parallel(
@@ -333,47 +301,20 @@ class GrainPool(Generic[_IN, _OUT]):
     )
 
     logging.info("Grain pool started all child processes.")
-    self._next_process_idx = worker_idx_to_start_reading
-
-  def _feed_worker_input_queues(
-      self,
-      elements_to_process: Iterable[_IN],
-      worker_input_queues: Sequence[queues.Queue],
-      discard_element_function=None,
-      starting_worker: int = 0,
-  ) -> None:
-    """Puts elements from iterable into processes input queues."""
-    queue_idx = starting_worker
-    for element in elements_to_process:
-      if self.termination_event.is_set():
-        break
-      if discard_element_function is not None and discard_element_function(
-          element, queue_idx
-      ):
-        queue_idx = (queue_idx + 1) % len(worker_input_queues)
-        continue
-      multiprocessing_common.add_element_to_queue(
-          element, worker_input_queues[queue_idx], self.termination_event.is_set
-      )
-      queue_idx = (queue_idx + 1) % len(worker_input_queues)
-    for worker_input_queue in worker_input_queues:
-      multiprocessing_common.add_element_to_queue(
-          _SAMPLER_EXHAUSTED, worker_input_queue, self.termination_event.is_set
-      )
-    logging.info("Feeder thread completed!")
+    self._next_worker_index = worker_index_to_start_reading
 
   def __iter__(self) -> GrainPool:
     return self
 
-  def _process_failed(self, process_idx: int) -> bool:
-    exit_code = self.processes[process_idx].exitcode
+  def _process_failed(self, worker_index: int) -> bool:
+    exit_code = self.processes[worker_index].exitcode
     return exit_code is not None and exit_code != 0
 
   def _processing_completed(self) -> bool:
     return all(p.exitcode == 0 for p in self.processes)
 
-  def _update_next_process_idx(self) -> None:
-    self._next_process_idx = (self._next_process_idx + 1) % self.num_processes
+  def _update_next_worker_index(self) -> None:
+    self._next_worker_index = (self._next_worker_index + 1) % self.num_processes
 
   def __next__(self) -> GrainPoolElement:
     processing_failed = False
@@ -381,30 +322,30 @@ class GrainPool(Generic[_IN, _OUT]):
         not self.termination_event.is_set()
         and len(self.completed_processes) < self.num_processes
     ):
-      if self._next_process_idx in self.completed_processes:
-        self._update_next_process_idx()
+      if self._next_worker_index in self.completed_processes:
+        self._update_next_worker_index()
         continue
       try:
-        element_worker_idx = self._next_process_idx
-        element = self.worker_output_queues[self._next_process_idx].get(
+        element_worker_index = self._next_worker_index
+        element = self.worker_output_queues[self._next_worker_index].get(
             timeout=_QUEUE_WAIT_TIMEOUT
         )
-        logging.debug("Read element from process: %s", self._next_process_idx)
+        logging.debug("Read element from process: %s", self._next_worker_index)
         if element == _PROCESSING_COMPLETE:
           logging.info(
-              "Processing complete for process with process_idx %i",
-              self._next_process_idx,
+              "Processing complete for process with worker_index %i",
+              self._next_worker_index,
           )
-          self.completed_processes.add(self._next_process_idx)
-          self._update_next_process_idx()
+          self.completed_processes.add(self._next_worker_index)
+          self._update_next_worker_index()
         else:
-          self._update_next_process_idx()
-          return GrainPoolElement(element, element_worker_idx)
+          self._update_next_worker_index()
+          return GrainPoolElement(element, element_worker_index)
       except queue.Empty:
-        logging.debug("Got no element from process %s", self._next_process_idx)
-        if self._process_failed(self._next_process_idx):
+        logging.debug("Got no element from process %s", self._next_worker_index)
+        if self._process_failed(self._next_worker_index):
           processing_failed = True
-          logging.debug("Process with idx %i Failed.", self._next_process_idx)
+          logging.debug("Process with idx %i Failed.", self._next_worker_index)
           break
 
     if processing_failed or self.termination_event.is_set():
@@ -438,7 +379,6 @@ class GrainPool(Generic[_IN, _OUT]):
     logging.info("Shutting down multiprocessing system.")
     try:
       self.termination_event.set()
-      self._feeder_thread.join()
       # Not joining here will cause the children to be zombie after they finish.
       # Need to join or call active_children.
       for process in self.processes:
@@ -450,6 +390,3 @@ class GrainPool(Generic[_IN, _OUT]):
         if process.is_alive():
           logging.info("Forcibly terminating process with pid %i", process.pid)
           process.terminate()
-      for input_queue in self.worker_input_queues:
-        # close indicates current process will put no more elements to queue.
-        input_queue.close()
