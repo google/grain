@@ -8,10 +8,7 @@ py_library(
         "data_sources.py",
     ],
     srcs_version = "PY3",
-    deps = [
-        "//grain/_src/core:usage_logging",
-        "//learning/deepmind/storage/bag/python:bag_reader",
-    ],
+    deps = ["//grain/_src/core:usage_logging"],
 )
 
 py_test(
