@@ -12,12 +12,35 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Tests for samplers."""
+from collections.abc import Sequence
 
 from absl.testing import absltest
 from grain._src.core import sharding
 from grain._src.python import record
 from grain._src.python import samplers
-import numpy as np
+
+
+def _get_all_metadata(
+    sampler: samplers.Sampler, shard_options: sharding.ShardOptions
+) -> Sequence[record.RecordMetadata]:
+  metadata = []
+  i = shard_options.shard_index
+  while True:
+    try:
+      metadata.append(sampler[i])
+    except IndexError:
+      break
+    i += shard_options.shard_count
+  return metadata
+
+
+def _remove_rngs(
+    metadata: Sequence[record.RecordMetadata],
+) -> Sequence[record.RecordMetadata]:
+  return [
+      record.RecordMetadata(index=m.index, record_key=m.record_key)
+      for m in metadata
+  ]
 
 
 class SequentialSamplerTest(absltest.TestCase):
@@ -32,101 +55,82 @@ class SequentialSamplerTest(absltest.TestCase):
           num_records=-18, shard_options=sharding.NoSharding()
       )
 
-  def test_sampler_one_shard(self):
+  def test_no_sharding(self):
     sampler = samplers.SequentialSampler(
         num_records=4, shard_options=sharding.NoSharding()
     )
-    actual_record_metadata = list(sampler)
-    actual_record_metadata_random_access = [sampler[idx] for idx in range(4)]
-    expected_record_metadata = [
+    actual_metadata = _get_all_metadata(
+        sampler, shard_options=sharding.NoSharding()
+    )
+    expected_metadata = [
         record.RecordMetadata(index=0, record_key=0),
         record.RecordMetadata(index=1, record_key=1),
         record.RecordMetadata(index=2, record_key=2),
         record.RecordMetadata(index=3, record_key=3),
     ]
-    self.assertEqual(actual_record_metadata, expected_record_metadata)
-    self.assertEqual(
-        actual_record_metadata_random_access, expected_record_metadata
-    )
+    self.assertEqual(actual_metadata, expected_metadata)
 
-  def test_sampler_two_shards(self):
-    sharding_option = sharding.ShardOptions(shard_index=0, shard_count=2)
+  def test_sampler_sharding(self):
+    shard_options = sharding.ShardOptions(shard_index=0, shard_count=2)
     sampler = samplers.SequentialSampler(
-        num_records=4, shard_options=sharding_option
+        num_records=4, shard_options=shard_options
     )
-    actual_record_metadata = list(sampler)
-    actual_record_metadata_random_access = [
-        sampler[idx] for idx in range(0, 4, 2)
-    ]
-    expected_record_metadata = [
+    actual_metadata = _get_all_metadata(sampler, shard_options=shard_options)
+    expected_metadata = [
         record.RecordMetadata(index=0, record_key=0),
         record.RecordMetadata(index=2, record_key=2),
     ]
-    self.assertEqual(actual_record_metadata, expected_record_metadata)
-    self.assertEqual(
-        actual_record_metadata_random_access, expected_record_metadata
-    )
+    self.assertEqual(actual_metadata, expected_metadata)
 
-  def test_sampler_three_shards_with_remainder(self):
-    sharding_option = sharding.ShardOptions(
+  def test_sampler_sharding_no_drop_remainder(self):
+    shard_options = sharding.ShardOptions(
         shard_index=0, shard_count=3, drop_remainder=False
     )
     sampler = samplers.SequentialSampler(
-        num_records=8, shard_options=sharding_option
+        num_records=8, shard_options=shard_options
     )
-    actual_record_metadata = list(sampler)
-    actual_record_metadata_random_access = [
-        sampler[idx] for idx in range(0, 8, 3)
-    ]
-    expected_record_metadata = [
+    actual_metadata = _get_all_metadata(sampler, shard_options=shard_options)
+    expected_metadata = [
         record.RecordMetadata(index=0, record_key=0),
         record.RecordMetadata(index=3, record_key=3),
         record.RecordMetadata(index=6, record_key=6),
     ]
-    self.assertEqual(actual_record_metadata, expected_record_metadata)
-    self.assertEqual(
-        actual_record_metadata_random_access, expected_record_metadata
-    )
+    self.assertEqual(actual_metadata, expected_metadata)
 
-  def test_sampler_three_shards_no_remainder(self):
-    sharding_option = sharding.ShardOptions(
+  def test_sampler_sharding_drop_remainder(self):
+    shard_options = sharding.ShardOptions(
         shard_index=0, shard_count=3, drop_remainder=True
     )
     sampler = samplers.SequentialSampler(
-        num_records=8, shard_options=sharding_option
+        num_records=8, shard_options=shard_options
     )
-    num_records_per_shard = 8 // 3
-    total_records = num_records_per_shard * 3
-    actual_record_metadata_random_access = [
-        sampler[idx] for idx in range(0, total_records, 3)
-    ]
-    actual_record_metadata = list(sampler)
-    expected_record_metadata = [
+    actual_metadata = _get_all_metadata(sampler, shard_options=shard_options)
+    expected_metadata = [
         record.RecordMetadata(index=0, record_key=0),
         record.RecordMetadata(index=3, record_key=3),
     ]
-    self.assertEqual(actual_record_metadata, expected_record_metadata)
-    self.assertEqual(
-        actual_record_metadata_random_access, expected_record_metadata
-    )
+    self.assertEqual(actual_metadata, expected_metadata)
 
 
 class IndexSamplerTest(absltest.TestCase):
 
-  def assertRecordMetadataWithRNGIsEqual(self, actual, expected):
-    if len(actual) != len(expected):
-      self.fail("Sampler returned incorrect number of record metadata objects")
+  def assertRngsAreUnique(self, actual: Sequence[record.RecordMetadata]):
+    actual_floats = [metadata.rng.random() for metadata in actual]
+    if len(actual_floats) != len(set(actual_floats)):
+      self.fail(
+          "At least 2 RNGs returned the same random number. Metadata with"
+          f" RNGs: {actual}"
+      )
 
-    for actual_metadata, expected_metadata in zip(actual, expected):
-      if (
-          actual_metadata.index != expected_metadata.index
-          or actual_metadata.record_key != expected_metadata.record_key
-      ):
-        self.fail("Sampler returned incorrect record metadata")
-
-    rngs = [metadata.rng for metadata in expected]
-    if len(rngs) != len(set(rngs)):
-      self.fail("RNGs aren't unique for each record metadata object.")
+  def assertRecordMetadata(
+      self,
+      sampler: samplers.Sampler,
+      shard_options: sharding.ShardOptions,
+      expected_metadata: Sequence[record.RecordMetadata],
+  ):
+    actual_metadata = _get_all_metadata(sampler, shard_options)
+    self.assertRngsAreUnique(actual_metadata)
+    self.assertEqual(_remove_rngs(actual_metadata), expected_metadata)
 
   def test_with_invalid_invalid_num_epochs(self):
     with self.assertRaises(ValueError):
@@ -150,8 +154,8 @@ class IndexSamplerTest(absltest.TestCase):
         num_epochs=2,
         seed=3,
     )
-    index_sampler_record_metadata = list(index_sampler)
-    self.assertLen(index_sampler_record_metadata, 400)
+    actual_metadata = _get_all_metadata(index_sampler, sharding.NoSharding())
+    self.assertLen(actual_metadata, 400)
 
   def test_invalid_non_integer_seed(self):
     with self.assertRaises(TypeError):
@@ -174,842 +178,478 @@ class IndexSamplerTest(absltest.TestCase):
       )
 
   def test_shuffle_no_sharding(self):
-    seed = 32
     sampler = samplers.IndexSampler(
         num_records=5,
         shard_options=sharding.NoSharding(),
         shuffle=True,
         num_epochs=2,
-        seed=seed,
+        seed=32,
     )
-    actual_record_metadata = list(sampler)
-    actual_record_metadata_random_access = [sampler[idx] for idx in range(10)]
-    expected_record_metadata = [
-        record.RecordMetadata(
-            index=0, record_key=2, rng=np.random.Philox(key=seed)
-        ),
-        record.RecordMetadata(
-            index=1, record_key=4, rng=np.random.Philox(key=seed + 1)
-        ),
-        record.RecordMetadata(
-            index=2, record_key=3, rng=np.random.Philox(key=seed + 2)
-        ),
-        record.RecordMetadata(
-            index=3, record_key=0, rng=np.random.Philox(key=seed + 3)
-        ),
-        record.RecordMetadata(
-            index=4, record_key=1, rng=np.random.Philox(key=seed + 4)
-        ),
-        record.RecordMetadata(
-            index=5, record_key=0, rng=np.random.Philox(key=seed + 5)
-        ),
-        record.RecordMetadata(
-            index=6, record_key=2, rng=np.random.Philox(key=seed + 6)
-        ),
-        record.RecordMetadata(
-            index=7, record_key=4, rng=np.random.Philox(key=seed + 7)
-        ),
-        record.RecordMetadata(
-            index=8, record_key=1, rng=np.random.Philox(key=seed + 8)
-        ),
-        record.RecordMetadata(
-            index=9, record_key=3, rng=np.random.Philox(key=seed + 9)
-        ),
+    expected_metadata = [
+        record.RecordMetadata(index=0, record_key=2),
+        record.RecordMetadata(index=1, record_key=4),
+        record.RecordMetadata(index=2, record_key=3),
+        record.RecordMetadata(index=3, record_key=0),
+        record.RecordMetadata(index=4, record_key=1),
+        record.RecordMetadata(index=5, record_key=0),
+        record.RecordMetadata(index=6, record_key=2),
+        record.RecordMetadata(index=7, record_key=4),
+        record.RecordMetadata(index=8, record_key=1),
+        record.RecordMetadata(index=9, record_key=3),
     ]
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata, expected_record_metadata
-    )
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_random_access, expected_record_metadata
-    )
+    self.assertRecordMetadata(sampler, sharding.NoSharding(), expected_metadata)
 
   def test_shuffle_and_sharding_drop_remainder_single_epoch(self):
-    seed = 32
-
-    sharding_option_first_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=0, shard_count=3, drop_remainder=True
     )
-    sampler_first_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=6,
-        shard_options=sharding_option_first_shard,
+        shard_options=shard_options,
         shuffle=True,
         num_epochs=1,
-        seed=seed,
+        seed=32,
     )
-    actual_record_metadata_first_shard = list(sampler_first_shard)
-    actual_record_metadata_first_shard_random_access = [
-        sampler_first_shard[idx] for idx in range(0, 6, 3)
+    expected_metadata = [
+        record.RecordMetadata(index=0, record_key=0),
+        record.RecordMetadata(index=3, record_key=1),
     ]
-    expected_record_metadata_first_shard = [
-        record.RecordMetadata(
-            index=0, record_key=0, rng=np.random.Philox(key=seed)
-        ),
-        record.RecordMetadata(
-            index=3, record_key=1, rng=np.random.Philox(key=seed + 3)
-        ),
-    ]
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_first_shard, expected_record_metadata_first_shard
-    )
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_first_shard_random_access,
-        expected_record_metadata_first_shard,
-    )
+    self.assertRecordMetadata(sampler, shard_options, expected_metadata)
 
-    sharding_option_second_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=1, shard_count=3, drop_remainder=True
     )
-    sampler_second_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=6,
-        shard_options=sharding_option_second_shard,
+        shard_options=shard_options,
         shuffle=True,
         num_epochs=1,
-        seed=seed,
+        seed=32,
     )
-    actual_record_metadata_second_shard = list(sampler_second_shard)
-    actual_record_metadata_second_shard_random_access = [
-        sampler_second_shard[idx] for idx in range(1, 6, 3)
+    expected_metadata = [
+        record.RecordMetadata(index=1, record_key=2),
+        record.RecordMetadata(index=4, record_key=3),
     ]
-    expected_record_metadata_second_shard = [
-        record.RecordMetadata(
-            index=1, record_key=2, rng=np.random.Philox(key=seed + 1)
-        ),
-        record.RecordMetadata(
-            index=4, record_key=3, rng=np.random.Philox(key=seed + 4)
-        ),
-    ]
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_second_shard,
-        expected_record_metadata_second_shard,
-    )
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_second_shard_random_access,
-        expected_record_metadata_second_shard,
-    )
+    self.assertRecordMetadata(sampler, shard_options, expected_metadata)
 
-    sharding_option_third_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=2, shard_count=3, drop_remainder=True
     )
-    sampler_third_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=6,
-        shard_options=sharding_option_third_shard,
+        shard_options=shard_options,
         shuffle=True,
         num_epochs=1,
-        seed=seed,
+        seed=32,
     )
-    actual_record_metadata_third_shard = list(sampler_third_shard)
-    actual_record_metadata_third_shard_random_access = [
-        sampler_third_shard[idx] for idx in range(2, 6, 3)
+    expected_metadata = [
+        record.RecordMetadata(index=2, record_key=4),
+        record.RecordMetadata(index=5, record_key=5),
     ]
-    expected_record_metadata_third_shard = [
-        record.RecordMetadata(
-            index=2, record_key=4, rng=np.random.Philox(key=seed + 2)
-        ),
-        record.RecordMetadata(
-            index=5, record_key=5, rng=np.random.Philox(key=seed + 5)
-        ),
-    ]
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_third_shard, expected_record_metadata_third_shard
-    )
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_third_shard_random_access,
-        expected_record_metadata_third_shard,
-    )
+    self.assertRecordMetadata(sampler, shard_options, expected_metadata)
 
   def test_shuffle_and_sharding_no_drop_remainder_single_epoch(self):
-    seed = 32
-
-    sharding_option_first_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=0, shard_count=3, drop_remainder=False
     )
-    sampler_first_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=8,
-        shard_options=sharding_option_first_shard,
+        shard_options=shard_options,
         shuffle=True,
         num_epochs=1,
-        seed=seed,
+        seed=32,
     )
-    actual_record_metadata_first_shard = list(sampler_first_shard)
-    actual_record_metadata_first_shard_random_access = [
-        sampler_first_shard[idx] for idx in range(0, 8, 3)
+    expected_metadata = [
+        record.RecordMetadata(index=0, record_key=2),
+        record.RecordMetadata(index=3, record_key=1),
+        record.RecordMetadata(index=6, record_key=0),
     ]
-    expected_record_metadata_first_shard = [
-        record.RecordMetadata(
-            index=0, record_key=2, rng=np.random.Philox(key=seed)
-        ),
-        record.RecordMetadata(
-            index=3, record_key=1, rng=np.random.Philox(key=seed + 3)
-        ),
-        record.RecordMetadata(
-            index=6, record_key=0, rng=np.random.Philox(key=seed + 6)
-        ),
-    ]
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_first_shard, expected_record_metadata_first_shard
-    )
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_first_shard_random_access,
-        expected_record_metadata_first_shard,
-    )
+    self.assertRecordMetadata(sampler, shard_options, expected_metadata)
 
-    sharding_option_second_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=1, shard_count=3, drop_remainder=False
     )
-    sampler_second_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=8,
-        shard_options=sharding_option_second_shard,
+        shard_options=shard_options,
         shuffle=True,
         num_epochs=1,
-        seed=seed,
+        seed=32,
     )
-    actual_record_metadata_second_shard = list(sampler_second_shard)
-    actual_record_metadata_second_shard_random_access = [
-        sampler_second_shard[idx] for idx in range(1, 8, 3)
+    expected_metadata = [
+        record.RecordMetadata(index=1, record_key=5),
+        record.RecordMetadata(index=4, record_key=4),
+        record.RecordMetadata(index=7, record_key=3),
     ]
-    expected_record_metadata_second_shard = [
-        record.RecordMetadata(
-            index=1, record_key=5, rng=np.random.Philox(key=seed + 1)
-        ),
-        record.RecordMetadata(
-            index=4, record_key=4, rng=np.random.Philox(key=seed + 4)
-        ),
-        record.RecordMetadata(
-            index=7, record_key=3, rng=np.random.Philox(key=seed + 7)
-        ),
-    ]
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_second_shard,
-        expected_record_metadata_second_shard,
-    )
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_second_shard_random_access,
-        expected_record_metadata_second_shard,
-    )
+    self.assertRecordMetadata(sampler, shard_options, expected_metadata)
 
-    sharding_option_third_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=2, shard_count=3, drop_remainder=False
     )
-    sampler_third_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=8,
-        shard_options=sharding_option_third_shard,
+        shard_options=shard_options,
         shuffle=True,
         num_epochs=1,
-        seed=seed,
+        seed=32,
     )
-    actual_record_metadata_third_shard = list(sampler_third_shard)
-    actual_record_metadata_third_shard_random_access = [
-        sampler_third_shard[idx] for idx in range(2, 8, 3)
+    expected_metadata = [
+        record.RecordMetadata(index=2, record_key=6),
+        record.RecordMetadata(index=5, record_key=7),
     ]
-    expected_record_metadata_third_shard = [
-        record.RecordMetadata(
-            index=2, record_key=6, rng=np.random.Philox(key=seed + 2)
-        ),
-        record.RecordMetadata(
-            index=5, record_key=7, rng=np.random.Philox(key=seed + 5)
-        ),
-    ]
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_third_shard, expected_record_metadata_third_shard
-    )
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_third_shard_random_access,
-        expected_record_metadata_third_shard,
-    )
+    self.assertRecordMetadata(sampler, shard_options, expected_metadata)
 
   def test_shuffle_and_sharding_drop_remainder_multi_epoch(self):
-    seed = 32
-
-    sharding_option_first_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=0, shard_count=3, drop_remainder=True
     )
-    sampler_first_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=6,
-        shard_options=sharding_option_first_shard,
+        shard_options=shard_options,
         shuffle=True,
         num_epochs=2,
-        seed=seed,
+        seed=32,
     )
-    actual_record_metadata_first_shard = list(sampler_first_shard)
-    actual_record_metadata_first_shard_random_access = [
-        sampler_first_shard[idx] for idx in range(0, 6 * 2, 3)
+    expected_metadata = [
+        record.RecordMetadata(index=0, record_key=0),
+        record.RecordMetadata(index=3, record_key=1),
+        record.RecordMetadata(index=6, record_key=0),
+        record.RecordMetadata(index=9, record_key=1),
     ]
-    expected_record_metadata_first_shard = [
-        record.RecordMetadata(
-            index=0, record_key=0, rng=np.random.Philox(key=seed)
-        ),
-        record.RecordMetadata(
-            index=3, record_key=1, rng=np.random.Philox(key=seed + 3)
-        ),
-        record.RecordMetadata(
-            index=6, record_key=0, rng=np.random.Philox(key=seed + 6)
-        ),
-        record.RecordMetadata(
-            index=9, record_key=1, rng=np.random.Philox(key=seed + 9)
-        ),
-    ]
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_first_shard, expected_record_metadata_first_shard
-    )
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_first_shard_random_access,
-        expected_record_metadata_first_shard,
-    )
+    self.assertRecordMetadata(sampler, shard_options, expected_metadata)
 
-    sharding_option_second_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=1, shard_count=3, drop_remainder=True
     )
-    sampler_second_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=6,
-        shard_options=sharding_option_second_shard,
+        shard_options=shard_options,
         shuffle=True,
         num_epochs=2,
-        seed=seed,
+        seed=32,
     )
-    actual_record_metadata_second_shard = list(sampler_second_shard)
-    actual_record_metadata_second_shard_random_access = [
-        sampler_second_shard[idx] for idx in range(1, 6 * 2, 3)
+    expected_metadata = [
+        record.RecordMetadata(index=1, record_key=2),
+        record.RecordMetadata(index=4, record_key=3),
+        record.RecordMetadata(index=7, record_key=2),
+        record.RecordMetadata(index=10, record_key=3),
     ]
-    expected_record_metadata_second_shard = [
-        record.RecordMetadata(
-            index=1, record_key=2, rng=np.random.Philox(key=seed + 1)
-        ),
-        record.RecordMetadata(
-            index=4, record_key=3, rng=np.random.Philox(key=seed + 4)
-        ),
-        record.RecordMetadata(
-            index=7, record_key=2, rng=np.random.Philox(key=seed + 7)
-        ),
-        record.RecordMetadata(
-            index=10, record_key=3, rng=np.random.Philox(key=seed + 10)
-        ),
-    ]
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_second_shard,
-        expected_record_metadata_second_shard,
-    )
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_second_shard_random_access,
-        expected_record_metadata_second_shard,
-    )
+    self.assertRecordMetadata(sampler, shard_options, expected_metadata)
 
-    sharding_option_third_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=2, shard_count=3, drop_remainder=True
     )
-    sampler_third_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=6,
-        shard_options=sharding_option_third_shard,
+        shard_options=shard_options,
         shuffle=True,
         num_epochs=2,
-        seed=seed,
+        seed=32,
     )
-    actual_record_metadata_third_shard = list(sampler_third_shard)
-    actual_record_metadata_third_shard_random_access = [
-        sampler_third_shard[idx] for idx in range(2, 6 * 2, 3)
+    expected_metadata = [
+        record.RecordMetadata(index=2, record_key=4),
+        record.RecordMetadata(index=5, record_key=5),
+        record.RecordMetadata(index=8, record_key=4),
+        record.RecordMetadata(index=11, record_key=5),
     ]
-    expected_record_metadata_third_shard = [
-        record.RecordMetadata(
-            index=2, record_key=4, rng=np.random.Philox(key=seed + 2)
-        ),
-        record.RecordMetadata(
-            index=5, record_key=5, rng=np.random.Philox(key=seed + 5)
-        ),
-        record.RecordMetadata(
-            index=8, record_key=4, rng=np.random.Philox(key=seed + 8)
-        ),
-        record.RecordMetadata(
-            index=11, record_key=5, rng=np.random.Philox(key=seed + 11)
-        ),
-    ]
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_third_shard, expected_record_metadata_third_shard
-    )
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_third_shard_random_access,
-        expected_record_metadata_third_shard,
-    )
+    self.assertRecordMetadata(sampler, shard_options, expected_metadata)
 
   def test_shuffle_and_sharding_no_drop_remainder_multi_epoch(self):
-    seed = 32
-
-    sharding_option_first_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=0, shard_count=3, drop_remainder=False
     )
-    sampler_first_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=8,
-        shard_options=sharding_option_first_shard,
+        shard_options=shard_options,
         shuffle=True,
         num_epochs=2,
-        seed=seed,
+        seed=32,
     )
-    actual_record_metadata_first_shard = list(sampler_first_shard)
-    actual_record_metadata_first_shard_random_access = [
-        sampler_first_shard[idx] for idx in range(0, 8 * 2, 3)
+    expected_metadata = [
+        record.RecordMetadata(index=0, record_key=2),
+        record.RecordMetadata(index=3, record_key=1),
+        record.RecordMetadata(index=6, record_key=0),
+        record.RecordMetadata(index=9, record_key=0),
+        record.RecordMetadata(index=12, record_key=2),
+        record.RecordMetadata(index=15, record_key=1),
     ]
-    expected_record_metadata_first_shard = [
-        record.RecordMetadata(
-            index=0, record_key=2, rng=np.random.Philox(key=seed)
-        ),
-        record.RecordMetadata(
-            index=3, record_key=1, rng=np.random.Philox(key=seed + 3)
-        ),
-        record.RecordMetadata(
-            index=6, record_key=0, rng=np.random.Philox(key=seed + 6)
-        ),
-        record.RecordMetadata(
-            index=9, record_key=0, rng=np.random.Philox(key=seed + 9)
-        ),
-        record.RecordMetadata(
-            index=12, record_key=2, rng=np.random.Philox(key=seed + 12)
-        ),
-        record.RecordMetadata(
-            index=15, record_key=1, rng=np.random.Philox(key=seed + 15)
-        ),
-    ]
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_first_shard, expected_record_metadata_first_shard
-    )
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_first_shard_random_access,
-        expected_record_metadata_first_shard,
-    )
+    self.assertRecordMetadata(sampler, shard_options, expected_metadata)
 
-    sharding_option_second_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=1, shard_count=3, drop_remainder=False
     )
-    sampler_second_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=8,
-        shard_options=sharding_option_second_shard,
+        shard_options=shard_options,
         shuffle=True,
         num_epochs=2,
-        seed=seed,
+        seed=32,
     )
-    actual_record_metadata_second_shard = list(sampler_second_shard)
-    actual_record_metadata_second_shard_random_access = [
-        sampler_second_shard[idx] for idx in range(1, 8 * 2, 3)
+    expected_metadata = [
+        record.RecordMetadata(index=1, record_key=5),
+        record.RecordMetadata(index=4, record_key=4),
+        record.RecordMetadata(index=7, record_key=3),
+        record.RecordMetadata(index=10, record_key=3),
+        record.RecordMetadata(index=13, record_key=5),
     ]
-    expected_record_metadata_second_shard = [
-        record.RecordMetadata(
-            index=1, record_key=5, rng=np.random.Philox(key=seed + 1)
-        ),
-        record.RecordMetadata(
-            index=4, record_key=4, rng=np.random.Philox(key=seed + 4)
-        ),
-        record.RecordMetadata(
-            index=7, record_key=3, rng=np.random.Philox(key=seed + 7)
-        ),
-        record.RecordMetadata(
-            index=10, record_key=3, rng=np.random.Philox(key=seed + 10)
-        ),
-        record.RecordMetadata(
-            index=13, record_key=5, rng=np.random.Philox(key=seed + 13)
-        ),
-    ]
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_second_shard,
-        expected_record_metadata_second_shard,
-    )
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_second_shard_random_access,
-        expected_record_metadata_second_shard,
-    )
+    self.assertRecordMetadata(sampler, shard_options, expected_metadata)
 
-    sharding_option_third_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=2, shard_count=3, drop_remainder=False
     )
-    sampler_third_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=8,
-        shard_options=sharding_option_third_shard,
+        shard_options=shard_options,
         shuffle=True,
         num_epochs=2,
-        seed=seed,
+        seed=32,
     )
-    actual_record_metadata_third_shard = list(sampler_third_shard)
-    actual_record_metadata_third_shard_random_access = [
-        sampler_third_shard[idx] for idx in range(2, 8 * 2, 3)
+    expected_metadata = [
+        record.RecordMetadata(index=2, record_key=6),
+        record.RecordMetadata(index=5, record_key=7),
+        record.RecordMetadata(index=8, record_key=6),
+        record.RecordMetadata(index=11, record_key=7),
+        record.RecordMetadata(index=14, record_key=6),
     ]
-    expected_record_metadata_third_shard = [
-        record.RecordMetadata(
-            index=2, record_key=6, rng=np.random.Philox(key=seed + 2)
-        ),
-        record.RecordMetadata(
-            index=5, record_key=7, rng=np.random.Philox(key=seed + 5)
-        ),
-        record.RecordMetadata(
-            index=8, record_key=6, rng=np.random.Philox(key=seed + 8)
-        ),
-        record.RecordMetadata(
-            index=11, record_key=7, rng=np.random.Philox(key=seed + 11)
-        ),
-        record.RecordMetadata(
-            index=14, record_key=6, rng=np.random.Philox(key=seed + 14)
-        ),
-    ]
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_third_shard, expected_record_metadata_third_shard
-    )
-    self.assertRecordMetadataWithRNGIsEqual(
-        actual_record_metadata_third_shard_random_access,
-        expected_record_metadata_third_shard,
-    )
+    self.assertRecordMetadata(sampler, shard_options, expected_metadata)
 
   def test_sharding_no_shuffle_drop_remainder_single_epoch(self):
-    sharding_option_first_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=0, shard_count=3, drop_remainder=True
     )
-    sampler_first_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=6,
-        shard_options=sharding_option_first_shard,
+        shard_options=shard_options,
         shuffle=False,
         num_epochs=1,
     )
-    actual_record_metadata_first_shard = list(sampler_first_shard)
-    actual_record_metadata_first_shard_random_access = [
-        sampler_first_shard[idx] for idx in range(0, 6, 3)
+    actual_metadata = _get_all_metadata(sampler, shard_options)
+    expected_metadata = [
+        record.RecordMetadata(index=0, record_key=0),
+        record.RecordMetadata(index=3, record_key=1),
     ]
-    expected_record_metadata_first_shard = [
-        record.RecordMetadata(index=0, record_key=0, rng=None),
-        record.RecordMetadata(index=3, record_key=1, rng=None),
-    ]
-    self.assertEqual(
-        actual_record_metadata_first_shard, expected_record_metadata_first_shard
-    )
-    self.assertEqual(
-        actual_record_metadata_first_shard_random_access,
-        expected_record_metadata_first_shard,
-    )
+    self.assertEqual(actual_metadata, expected_metadata)
 
-    sharding_option_second_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=1, shard_count=3, drop_remainder=True
     )
-    sampler_second_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=6,
-        shard_options=sharding_option_second_shard,
+        shard_options=shard_options,
         shuffle=False,
         num_epochs=1,
     )
-    actual_record_metadata_second_shard = list(sampler_second_shard)
-    actual_record_metadata_second_shard_random_access = [
-        sampler_second_shard[idx] for idx in range(1, 6, 3)
+    actual_metadata = _get_all_metadata(sampler, shard_options)
+    expected_metadata = [
+        record.RecordMetadata(index=1, record_key=2),
+        record.RecordMetadata(index=4, record_key=3),
     ]
-    expected_record_metadata_second_shard = [
-        record.RecordMetadata(index=1, record_key=2, rng=None),
-        record.RecordMetadata(index=4, record_key=3, rng=None),
-    ]
-    self.assertEqual(
-        actual_record_metadata_second_shard,
-        expected_record_metadata_second_shard,
-    )
-    self.assertEqual(
-        actual_record_metadata_second_shard_random_access,
-        expected_record_metadata_second_shard,
-    )
+    self.assertEqual(actual_metadata, expected_metadata)
 
-    sharding_option_third_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=2, shard_count=3, drop_remainder=True
     )
-    sampler_third_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=6,
-        shard_options=sharding_option_third_shard,
+        shard_options=shard_options,
         shuffle=False,
         num_epochs=1,
     )
-    actual_record_metadata_third_shard = list(sampler_third_shard)
-    actual_record_metadata_third_shard_random_access = [
-        sampler_third_shard[idx] for idx in range(2, 6, 3)
+    actual_metadata = _get_all_metadata(sampler, shard_options)
+    expected_metadata = [
+        record.RecordMetadata(index=2, record_key=4),
+        record.RecordMetadata(index=5, record_key=5),
     ]
-    expected_record_metadata_third_shard = [
-        record.RecordMetadata(index=2, record_key=4, rng=None),
-        record.RecordMetadata(index=5, record_key=5, rng=None),
-    ]
-    self.assertEqual(
-        actual_record_metadata_third_shard, expected_record_metadata_third_shard
-    )
-    self.assertEqual(
-        actual_record_metadata_third_shard_random_access,
-        expected_record_metadata_third_shard,
-    )
+    self.assertEqual(actual_metadata, expected_metadata)
 
   def test_sharding_no_shuffle_no_drop_remainder_single_epoch(self):
-    sharding_option_first_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=0, shard_count=3, drop_remainder=False
     )
-    sampler_first_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=8,
-        shard_options=sharding_option_first_shard,
+        shard_options=shard_options,
         shuffle=False,
         num_epochs=1,
     )
-    actual_record_metadata_first_shard = list(sampler_first_shard)
-    actual_record_metadata_first_shard_random_access = [
-        sampler_first_shard[idx] for idx in range(0, 8, 3)
+    actual_metadata = _get_all_metadata(sampler, shard_options)
+    expected_metadata = [
+        record.RecordMetadata(index=0, record_key=0),
+        record.RecordMetadata(index=3, record_key=1),
+        record.RecordMetadata(index=6, record_key=2),
     ]
-    expected_record_metadata_first_shard = [
-        record.RecordMetadata(index=0, record_key=0, rng=None),
-        record.RecordMetadata(index=3, record_key=1, rng=None),
-        record.RecordMetadata(index=6, record_key=2, rng=None),
-    ]
-    self.assertEqual(
-        actual_record_metadata_first_shard, expected_record_metadata_first_shard
-    )
-    self.assertEqual(
-        actual_record_metadata_first_shard_random_access,
-        expected_record_metadata_first_shard,
-    )
+    self.assertEqual(actual_metadata, expected_metadata)
 
-    sharding_option_second_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=1, shard_count=3, drop_remainder=False
     )
-    sampler_second_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=8,
-        shard_options=sharding_option_second_shard,
+        shard_options=shard_options,
         shuffle=False,
         num_epochs=1,
     )
-    actual_record_metadata_second_shard = list(sampler_second_shard)
-    actual_record_metadata_second_shard_random_access = [
-        sampler_second_shard[idx] for idx in range(1, 8, 3)
+    actual_metadata = _get_all_metadata(sampler, shard_options)
+    expected_metadata = [
+        record.RecordMetadata(index=1, record_key=3),
+        record.RecordMetadata(index=4, record_key=4),
+        record.RecordMetadata(index=7, record_key=5),
     ]
-    expected_record_metadata_second_shard = [
-        record.RecordMetadata(index=1, record_key=3, rng=None),
-        record.RecordMetadata(index=4, record_key=4, rng=None),
-        record.RecordMetadata(index=7, record_key=5, rng=None),
-    ]
-    self.assertEqual(
-        actual_record_metadata_second_shard,
-        expected_record_metadata_second_shard,
-    )
-    self.assertEqual(
-        actual_record_metadata_second_shard_random_access,
-        expected_record_metadata_second_shard,
-    )
+    self.assertEqual(actual_metadata, expected_metadata)
 
-    sharding_option_third_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=2, shard_count=3, drop_remainder=False
     )
-    sampler_third_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=8,
-        shard_options=sharding_option_third_shard,
+        shard_options=shard_options,
         shuffle=False,
         num_epochs=1,
     )
-    actual_record_metadata_third_shard = list(sampler_third_shard)
-    actual_record_metadata_third_shard_random_access = [
-        sampler_third_shard[idx] for idx in range(2, 8, 3)
+    actual_metadata = _get_all_metadata(sampler, shard_options)
+    expected_metadata = [
+        record.RecordMetadata(index=2, record_key=6),
+        record.RecordMetadata(index=5, record_key=7),
     ]
-    expected_record_metadata_third_shard = [
-        record.RecordMetadata(index=2, record_key=6, rng=None),
-        record.RecordMetadata(index=5, record_key=7, rng=None),
-    ]
-    self.assertEqual(
-        actual_record_metadata_third_shard, expected_record_metadata_third_shard
-    )
-    self.assertEqual(
-        actual_record_metadata_third_shard_random_access,
-        expected_record_metadata_third_shard,
-    )
+    self.assertEqual(actual_metadata, expected_metadata)
 
   def test_sharding_no_shuffle_drop_remainder_multi_epoch(self):
-    sharding_option_first_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=0, shard_count=3, drop_remainder=True
     )
-    sampler_first_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=6,
-        shard_options=sharding_option_first_shard,
+        shard_options=shard_options,
         shuffle=False,
         num_epochs=2,
     )
-    actual_record_metadata_first_shard = list(sampler_first_shard)
-    actual_record_metadata_first_shard_random_access = [
-        sampler_first_shard[idx] for idx in range(0, 6 * 2, 3)
+    actual_metadata = _get_all_metadata(sampler, shard_options)
+    expected_metadata = [
+        record.RecordMetadata(index=0, record_key=0),
+        record.RecordMetadata(index=3, record_key=1),
+        record.RecordMetadata(index=6, record_key=0),
+        record.RecordMetadata(index=9, record_key=1),
     ]
-    expected_record_metadata_first_shard = [
-        record.RecordMetadata(index=0, record_key=0, rng=None),
-        record.RecordMetadata(index=3, record_key=1, rng=None),
-        record.RecordMetadata(index=6, record_key=0, rng=None),
-        record.RecordMetadata(index=9, record_key=1, rng=None),
-    ]
-    self.assertEqual(
-        actual_record_metadata_first_shard, expected_record_metadata_first_shard
-    )
-    self.assertEqual(
-        actual_record_metadata_first_shard_random_access,
-        expected_record_metadata_first_shard,
-    )
+    self.assertEqual(actual_metadata, expected_metadata)
 
-    sharding_option_second_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=1, shard_count=3, drop_remainder=True
     )
-    sampler_second_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=6,
-        shard_options=sharding_option_second_shard,
+        shard_options=shard_options,
         shuffle=False,
         num_epochs=2,
     )
-    actual_record_metadata_second_shard = list(sampler_second_shard)
-    actual_record_metadata_second_shard_random_access = [
-        sampler_second_shard[idx] for idx in range(1, 6 * 2, 3)
+    actual_metadata = _get_all_metadata(sampler, shard_options)
+    expected_metadata = [
+        record.RecordMetadata(index=1, record_key=2),
+        record.RecordMetadata(index=4, record_key=3),
+        record.RecordMetadata(index=7, record_key=2),
+        record.RecordMetadata(index=10, record_key=3),
     ]
-    expected_record_metadata_second_shard = [
-        record.RecordMetadata(index=1, record_key=2, rng=None),
-        record.RecordMetadata(index=4, record_key=3, rng=None),
-        record.RecordMetadata(index=7, record_key=2, rng=None),
-        record.RecordMetadata(index=10, record_key=3, rng=None),
-    ]
-    self.assertEqual(
-        actual_record_metadata_second_shard,
-        expected_record_metadata_second_shard,
-    )
-    self.assertEqual(
-        actual_record_metadata_second_shard_random_access,
-        expected_record_metadata_second_shard,
-    )
+    self.assertEqual(actual_metadata, expected_metadata)
 
-    sharding_option_third_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=2, shard_count=3, drop_remainder=True
     )
-    sampler_third_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=6,
-        shard_options=sharding_option_third_shard,
+        shard_options=shard_options,
         shuffle=False,
         num_epochs=2,
     )
-    actual_record_metadata_third_shard = list(sampler_third_shard)
-    actual_record_metadata_third_shard_random_access = [
-        sampler_third_shard[idx] for idx in range(2, 6 * 2, 3)
+    actual_metadata = _get_all_metadata(sampler, shard_options)
+    expected_metadata = [
+        record.RecordMetadata(index=2, record_key=4),
+        record.RecordMetadata(index=5, record_key=5),
+        record.RecordMetadata(index=8, record_key=4),
+        record.RecordMetadata(index=11, record_key=5),
     ]
-    expected_record_metadata_third_shard = [
-        record.RecordMetadata(index=2, record_key=4, rng=None),
-        record.RecordMetadata(index=5, record_key=5, rng=None),
-        record.RecordMetadata(index=8, record_key=4, rng=None),
-        record.RecordMetadata(index=11, record_key=5, rng=None),
-    ]
-    self.assertEqual(
-        actual_record_metadata_third_shard, expected_record_metadata_third_shard
-    )
-    self.assertEqual(
-        actual_record_metadata_third_shard_random_access,
-        expected_record_metadata_third_shard,
-    )
+    self.assertEqual(actual_metadata, expected_metadata)
 
   def test_sharding_no_shuffle_no_drop_remainder_multi_epoch(self):
-    sharding_option_first_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=0, shard_count=3, drop_remainder=False
     )
-    sampler_first_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=8,
-        shard_options=sharding_option_first_shard,
+        shard_options=shard_options,
         shuffle=False,
         num_epochs=2,
     )
-    actual_record_metadata_first_shard = list(sampler_first_shard)
-    actual_record_metadata_first_shard_random_access = [
-        sampler_first_shard[idx] for idx in range(0, 8 * 2, 3)
+    actual_metadata = _get_all_metadata(sampler, shard_options)
+    expected_metadata = [
+        record.RecordMetadata(index=0, record_key=0),
+        record.RecordMetadata(index=3, record_key=1),
+        record.RecordMetadata(index=6, record_key=2),
+        record.RecordMetadata(index=9, record_key=0),
+        record.RecordMetadata(index=12, record_key=1),
+        record.RecordMetadata(index=15, record_key=2),
     ]
-    expected_record_metadata_first_shard = [
-        record.RecordMetadata(index=0, record_key=0, rng=None),
-        record.RecordMetadata(index=3, record_key=1, rng=None),
-        record.RecordMetadata(index=6, record_key=2, rng=None),
-        record.RecordMetadata(index=9, record_key=0, rng=None),
-        record.RecordMetadata(index=12, record_key=1, rng=None),
-        record.RecordMetadata(index=15, record_key=2, rng=None),
-    ]
-    self.assertEqual(
-        actual_record_metadata_first_shard, expected_record_metadata_first_shard
-    )
-    self.assertEqual(
-        actual_record_metadata_first_shard_random_access,
-        expected_record_metadata_first_shard,
-    )
+    self.assertEqual(actual_metadata, expected_metadata)
 
-    sharding_option_second_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=1, shard_count=3, drop_remainder=False
     )
-    sampler_second_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=8,
-        shard_options=sharding_option_second_shard,
+        shard_options=shard_options,
         shuffle=False,
         num_epochs=2,
     )
-    actual_record_metadata_second_shard = list(sampler_second_shard)
-    actual_record_metadata_second_shard_random_access = [
-        sampler_second_shard[idx] for idx in range(1, 8 * 2, 3)
+    actual_metadata = _get_all_metadata(sampler, shard_options)
+    expected_metadata = [
+        record.RecordMetadata(index=1, record_key=3),
+        record.RecordMetadata(index=4, record_key=4),
+        record.RecordMetadata(index=7, record_key=5),
+        record.RecordMetadata(index=10, record_key=3),
+        record.RecordMetadata(index=13, record_key=4),
     ]
-    expected_record_metadata_second_shard = [
-        record.RecordMetadata(index=1, record_key=3, rng=None),
-        record.RecordMetadata(index=4, record_key=4, rng=None),
-        record.RecordMetadata(index=7, record_key=5, rng=None),
-        record.RecordMetadata(index=10, record_key=3, rng=None),
-        record.RecordMetadata(index=13, record_key=4, rng=None),
-    ]
-    self.assertEqual(
-        actual_record_metadata_second_shard,
-        expected_record_metadata_second_shard,
-    )
-    self.assertEqual(
-        actual_record_metadata_second_shard_random_access,
-        expected_record_metadata_second_shard,
-    )
+    self.assertEqual(actual_metadata, expected_metadata)
 
-    sharding_option_third_shard = sharding.ShardOptions(
+    shard_options = sharding.ShardOptions(
         shard_index=2, shard_count=3, drop_remainder=False
     )
-    sampler_third_shard = samplers.IndexSampler(
+    sampler = samplers.IndexSampler(
         num_records=8,
-        shard_options=sharding_option_third_shard,
+        shard_options=shard_options,
         shuffle=False,
         num_epochs=2,
     )
-    actual_record_metadata_third_shard = list(sampler_third_shard)
-    actual_record_metadata_third_shard_random_access = [
-        sampler_third_shard[idx] for idx in range(2, 8 * 2, 3)
+    actual_metadata = _get_all_metadata(sampler, shard_options)
+    expected_metadata = [
+        record.RecordMetadata(index=2, record_key=6),
+        record.RecordMetadata(index=5, record_key=7),
+        record.RecordMetadata(index=8, record_key=6),
+        record.RecordMetadata(index=11, record_key=7),
+        record.RecordMetadata(index=14, record_key=6),
     ]
-    expected_record_metadata_third_shard = [
-        record.RecordMetadata(index=2, record_key=6, rng=None),
-        record.RecordMetadata(index=5, record_key=7, rng=None),
-        record.RecordMetadata(index=8, record_key=6, rng=None),
-        record.RecordMetadata(index=11, record_key=7, rng=None),
-        record.RecordMetadata(index=14, record_key=6, rng=None),
-    ]
-    self.assertEqual(
-        actual_record_metadata_third_shard, expected_record_metadata_third_shard
-    )
-    self.assertEqual(
-        actual_record_metadata_third_shard_random_access,
-        expected_record_metadata_third_shard,
-    )
+    self.assertEqual(actual_metadata, expected_metadata)
 
   def test_determinism(self):
-    seed = 32
     first_sampler = samplers.IndexSampler(
         num_records=5,
         shard_options=sharding.NoSharding(),
         shuffle=True,
         num_epochs=2,
-        seed=seed,
+        seed=32,
     )
-    first_sampler_actual_record_metadata = list(first_sampler)
-    first_sampler_actual_record_metadata_random_access = [
-        first_sampler[idx] for idx in range(5)
-    ]
+    first_metadata = _get_all_metadata(first_sampler, sharding.NoSharding())
     second_sampler = samplers.IndexSampler(
         num_records=5,
         shard_options=sharding.NoSharding(),
         shuffle=True,
         num_epochs=2,
-        seed=seed,
+        seed=32,
     )
-    second_sampler_actual_record_metadata = list(second_sampler)
-    second_sampler_actual_record_metadata_random_access = [
-        second_sampler[idx] for idx in range(5)
-    ]
-    self.assertRecordMetadataWithRNGIsEqual(
-        first_sampler_actual_record_metadata,
-        second_sampler_actual_record_metadata,
-    )
-    self.assertRecordMetadataWithRNGIsEqual(
-        first_sampler_actual_record_metadata_random_access,
-        second_sampler_actual_record_metadata_random_access,
+    second_metadata = _get_all_metadata(second_sampler, sharding.NoSharding())
+    self.assertEqual(len(first_metadata), len(second_metadata))
+    for m1, m2 in zip(first_metadata, second_metadata):
+      if m1.rng.random() != m2.rng.random():
+        self.fail("Metadata RNGs returned different floats.")
+    self.assertEqual(
+        _remove_rngs(first_metadata), _remove_rngs(second_metadata)
     )
 
 

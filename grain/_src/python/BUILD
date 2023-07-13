@@ -101,9 +101,7 @@ py_test(
     deps = [
         ":record",
         ":samplers",
-        "//grain/_src/core:constants",
         "//grain/_src/core:sharding",
-        "//grain/_src/tensorflow:index_dataset",
     ],
 )
 

@@ -25,17 +25,8 @@ import numpy as np
 class Sampler(Protocol):
   """Interface for PyGrain-compatible sampler."""
 
-  def __iter__(self):
-    ...
-
-  def __next__(self) -> record.RecordMetadata:
-    ...
-
-  def reset(self, last_seen_index: int) -> None:
-    """Resets the sampler to the next index after the last_seen_index."""
-
   def __getitem__(self, index: int) -> record.RecordMetadata:
-    ...
+    """Returns the RecordMetadata for a global index."""
 
 
 class SequentialSampler:
@@ -54,32 +45,13 @@ class SequentialSampler:
           "must be greater than 0."
       )
     self._num_records = num_records
-    self._next_index = shard_options.shard_index
     self._shard_options = shard_options
     if shard_options.drop_remainder:
       num_records_per_shard = self._num_records // shard_options.shard_count
-      self._total_records = num_records_per_shard * shard_options.shard_count
+      self._max_index = num_records_per_shard * shard_options.shard_count
     else:
-      self._total_records = self._num_records
+      self._max_index = self._num_records
     self._seed = seed
-
-  def __iter__(self):
-    return self
-
-  def __next__(self) -> record.RecordMetadata:
-    if self._next_index >= self._total_records:
-      raise StopIteration
-    current_index = self._next_index
-    self._next_index += self._shard_options.shard_count
-    return self[current_index]
-
-  def reset(self, last_seen_index: int) -> None:
-    if (
-        last_seen_index % self._shard_options.shard_count
-        != self._shard_options.shard_index
-    ):
-      raise ValueError("Invalid last_seen_index provided for the given shard.")
-    self._next_index = last_seen_index + self._shard_options.shard_count
 
   def __repr__(self) -> str:
     return (
@@ -88,10 +60,10 @@ class SequentialSampler:
     )
 
   def __getitem__(self, index: int) -> record.RecordMetadata:
-    if index >= self._total_records:
+    if index >= self._max_index:
       raise IndexError(
           f"RecordMetadata object index is out of bounds; Got index {index},"
-          f" allowed indices should be in [0, {self._total_records}]"
+          f" allowed indices should be in [0, {self._max_index}]"
       )
     rng = None
     if self._seed is not None:
@@ -144,18 +116,13 @@ class IndexSampler:
     self._shuffle = shuffle
     self._num_epochs = num_epochs
     self._seed = seed
-
-    self._next_index = 0
-    self._next_record_key_list_index = 0
     self._max_index = None if num_epochs is None else num_epochs * num_records
 
     self._record_keys = lazy_dataset.RangeLazyMapDataset(num_records)
-
     if not isinstance(shard_options, sharding.NoSharding):
       self._record_keys = lazy_dataset.ShardLazyDataset(
           self._record_keys, shard_options
       )
-      self._next_index = shard_options.shard_index
       if self._max_index is not None and shard_options.drop_remainder:
         self._max_index = min(  # Account for no remainder
             self._max_index,
@@ -163,32 +130,6 @@ class IndexSampler:
         )
     if shuffle:
       self._record_keys = ShuffleLazyMapDataset(self._record_keys, seed=seed)
-
-  def reset(self, last_seen_index: int):
-    """Reset the sampler to the next index after the last_seen_index."""
-    shard_index = self._shard_options.shard_index
-    shard_count = self._shard_options.shard_count
-    if last_seen_index == -1:
-      self._next_index = shard_index
-      return
-    if last_seen_index % shard_count != shard_index:
-      raise ValueError(
-          f"Last seen index {last_seen_index} is not valid index for "
-          f"{self._shard_options=}. last_seen_index % shard_count should equal "
-          "the shard_index."
-      )
-    self._next_index = last_seen_index + shard_count
-
-  def __iter__(self):
-    return self
-
-  def __next__(self) -> record.RecordMetadata:
-    if self._max_index is not None and self._next_index >= self._max_index:
-      raise StopIteration
-    index = self._next_index
-    next_record = self._get_record_metadata_for_index(index)
-    self._next_index += self._shard_options.shard_count
-    return next_record
 
   def __repr__(self) -> str:
     return (
@@ -205,9 +146,6 @@ class IndexSampler:
           f"RecordMetadata object index is out of bounds; Got index {index},"
           f" allowed indices should be in [0, {self._max_index}]"
       )
-    return self._get_record_metadata_for_index(index)
-
-  def _get_record_metadata_for_index(self, index: int) -> record.RecordMetadata:
     record_key = self._record_keys[int(index / self._shard_options.shard_count)]
     rng = None
     if self._seed is not None:
