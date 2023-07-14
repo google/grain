@@ -22,8 +22,8 @@ from absl.testing import parameterized
 from grain._src.core import sharding
 from grain._src.core import transforms
 import multiprocessing as mp
+from grain._src.python import data_loader as data_loader_lib
 from grain._src.python import samplers
-from grain._src.python.data_loader import DataLoader
 from grain._src.python.data_sources import ArrayRecordDataSource
 from grain._src.python.data_sources import RangeDataSource
 from grain._src.python.operations import BatchOperation
@@ -68,6 +68,15 @@ class FailingMap(transforms.MapTransform):
     1 / 0  # pylint: disable=pointless-statement
 
 
+class NonPickableTransform(transforms.MapTransform):
+
+  def __getstate__(self):
+    raise ValueError("I shall not be pickled")
+
+  def map(self, x):
+    return x
+
+
 class DataLoaderTest(parameterized.TestCase):
 
   def setUp(self):
@@ -76,7 +85,7 @@ class DataLoaderTest(parameterized.TestCase):
 
   def _create_data_loader_for_short_sequence(
       self, transformations, *, worker_count: int = 0, seed: int | None = None
-  ) -> DataLoader:
+  ) -> data_loader_lib.DataLoader:
     # Generates elements [0, 1, 2, 3, 4, 5, 6, 7].
     range_data_source = RangeDataSource(start=0, stop=8, step=1)
     sampler = samplers.SequentialSampler(
@@ -84,12 +93,20 @@ class DataLoaderTest(parameterized.TestCase):
         shard_options=sharding.NoSharding(),
         seed=seed,
     )
-    return DataLoader(
+    return data_loader_lib.DataLoader(
         data_source=range_data_source,
         sampler=sampler,
         operations=transformations,
         worker_count=worker_count,
     )
+
+  def test_fails_to_pickle(self):
+    transformations = [NonPickableTransform()]
+    data_loader = self._create_data_loader_for_short_sequence(
+        transformations, worker_count=2
+    )
+    with self.assertRaises(data_loader_lib.GrainPoolProcessingError):
+      list(data_loader)
 
   def test_data_loader_single_process(self):
     # Map transforms elements to be [1, 2, 3, 4, 5, 6, 7, 8]
@@ -166,7 +183,7 @@ class DataLoaderTest(parameterized.TestCase):
     ]
 
     num_workers = 2
-    data_loader = DataLoader(
+    data_loader = data_loader_lib.DataLoader(
         data_source=range_data_source,
         sampler=sampler,
         operations=operations,
@@ -197,7 +214,7 @@ class DataLoaderTest(parameterized.TestCase):
     ]
 
     num_workers = 2
-    data_loader = DataLoader(
+    data_loader = data_loader_lib.DataLoader(
         data_source=range_data_source,
         sampler=sampler,
         operations=operations,
@@ -219,7 +236,7 @@ class DataLoaderTest(parameterized.TestCase):
     operations = [FailingMap()]
 
     num_workers = 2
-    data_loader = DataLoader(
+    data_loader = data_loader_lib.DataLoader(
         data_source=range_data_source,
         sampler=sampler,
         operations=operations,
@@ -243,7 +260,7 @@ class DataLoaderTest(parameterized.TestCase):
     )
 
     num_workers = 1
-    data_loader = DataLoader(
+    data_loader = data_loader_lib.DataLoader(
         data_source=data_source, sampler=sampler, worker_count=num_workers
     )
     expected = [b"0", b"1", b"2", b"3", b"4", b"5", b"6", b"7", b"8", b"9"]
@@ -264,11 +281,13 @@ class DataLoaderTest(parameterized.TestCase):
 
     num_workers = -1
     with self.assertRaises(ValueError):
-      DataLoader(
+      data_loader_lib.DataLoader(
           data_source=ar_data_source, sampler=sampler, worker_count=num_workers
       )
 
-  def create_checkpointing_dataloader(self, num_workers: int) -> DataLoader:
+  def create_checkpointing_dataloader(
+      self, num_workers: int
+  ) -> data_loader_lib.DataLoader:
     """Creates a DataLoader object for checkpointing tests."""
     range_data_source = RangeDataSource(start=0, stop=16, step=1)
     sampler = samplers.IndexSampler(
@@ -282,7 +301,7 @@ class DataLoaderTest(parameterized.TestCase):
         FilterEven(),
         BatchOperation(batch_size=2),
     ]
-    return DataLoader(
+    return data_loader_lib.DataLoader(
         data_source=range_data_source,
         sampler=sampler,
         operations=operations,

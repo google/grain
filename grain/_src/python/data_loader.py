@@ -564,7 +564,6 @@ class _MultiProcessorIterator(collections.abc.Iterator):
     """Processes elements read from grain pool asynchronously."""
     ctx = mp.get_context("spawn")
 
-    exception_from_pool = None
     worker_index_to_start_reading = (
         state[_LAST_WORKER_INDEX] + 1
     ) % data_loader.multiprocessing_options.num_workers
@@ -580,13 +579,13 @@ class _MultiProcessorIterator(collections.abc.Iterator):
       iterator = data_loader._read_and_transform_data(last_seen_index)  # pylint: disable=protected-access
       yield from iterator
 
-    with grain_pool.GrainPool(
-        ctx=ctx,
-        get_element_producer_fn=get_element_producer_fn,
-        worker_index_to_start_reading=worker_index_to_start_reading,
-        options=data_loader.multiprocessing_options,
-    ) as g_pool:
-      try:
+    try:
+      with grain_pool.GrainPool(
+          ctx=ctx,
+          get_element_producer_fn=get_element_producer_fn,
+          worker_index_to_start_reading=worker_index_to_start_reading,
+          options=data_loader.multiprocessing_options,
+      ) as g_pool:
         for element in g_pool:
           if read_thread_should_stop():
             break
@@ -610,22 +609,18 @@ class _MultiProcessorIterator(collections.abc.Iterator):
               reader_queue,
               read_thread_should_stop,
           )
-      # This exception could arise from user-provide code. Propagating it to
-      # the main thread to re-raise it as is.
-      except Exception as e:  # pylint: disable=broad-except
-        exception_from_pool = e
-
-      if exception_from_pool is not None:
-        multiprocessing_common.add_element_to_queue(
-            exception_from_pool, reader_queue, read_thread_should_stop
-        )
-      else:
-        multiprocessing_common.add_element_to_queue(
-            _GrainPoolProcessingComplete(),
-            reader_queue,
-            read_thread_should_stop,
-        )
-    logging.info("DataLoader reader thread completed!")
+    # This exception could arise from user-provide code. Propagating it to
+    # the main thread to re-raise it as is.
+    except Exception as e:  # pylint: disable=broad-except
+      multiprocessing_common.add_element_to_queue(
+          e, reader_queue, read_thread_should_stop
+      )
+      return
+    multiprocessing_common.add_element_to_queue(
+        _GrainPoolProcessingComplete(),
+        reader_queue,
+        read_thread_should_stop,
+    )
 
   def _can_iterate(self):
     """Checks whether the object is in a state where it can be iterated on."""
