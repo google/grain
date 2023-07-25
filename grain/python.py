@@ -41,6 +41,7 @@ from ._src.python.data_loader import (
 )
 from ._src.python.data_sources import (
     BagDataSource,
+    InMemoryDataSource,
     RandomAccessDataSource,
     RangeDataSource,
     SSTableDataSource,

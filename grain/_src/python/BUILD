@@ -29,7 +29,10 @@ py_test(
         "//grain/_src/python/testdata:digits_malformed_keys-00000-of-00001.sst",
     ],
     srcs_version = "PY3",
-    deps = [":data_sources"],
+    deps = [
+        ":data_sources",
+        ":options",
+    ],
 )
 
 py_library(
@@ -164,6 +167,7 @@ py_test(
     srcs_version = "PY3",
     tags = ["not_run:arm"],
     deps = [
+        ":data_sources",
         ":grain_pool",
         ":options",
     ],

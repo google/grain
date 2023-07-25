@@ -23,6 +23,7 @@ pipelines.
 
 import collections
 import math
+from multiprocessing import shared_memory
 import os
 import threading
 import typing
@@ -87,9 +88,57 @@ class RangeDataSource:
     )
 
 
+class InMemoryDataSource(shared_memory.ShareableList):
+  """Simple in-memory data source for sequences that is sharable among mutiple processes.
+
+  Note:
+    This constrains storable values to only the int, float, bool, str (less than
+    10M bytes each), bytes (less than 10M bytes each), and None built-in data
+    types. It also notably differs from the built-in list type in that these
+    lists can not change their overall length (i.e. no append, insert, etc.)
+  """
+
+  def __init__(
+      self,
+      elements: Optional[Sequence[Any]] = None,
+      *,
+      name: Optional[str] = None,
+  ):
+    """Creates a new InMemoryDataSource object.
+
+    Args:
+      elements: the elements for the sharable list.
+      name: the name of the datasource.
+    """
+    if elements is not None:
+      logging.info(
+          "Creating a new ShareableList" + f" with name {name}"
+          if name is not None
+          else ""
+      )
+    elif name is not None:
+      logging.info("Attaching to a ShareableList named %s", name)
+    else:
+      raise ValueError("Elements or name must be provided.")
+    super().__init__(elements, name=name)
+
+  def __str__(self):
+    return f"InMemoryDataSource(name={self.shm.name}, len={len(self)})"
+
+  def close(self):
+    self.shm.close()
+
+  def unlink(self):
+    self.shm.unlink()
+
+  def __del__(self):
+    del self.shm
+
+
 # `tensor` can be a tf.Tensor, tf.SparseTensor or tf.RaggedTensor.
 def _as_numpy(tensor):
   import tensorflow as tf  # pylint: disable=g-import-not-at-top # pytype: disable=import-error
+
   if isinstance(tensor, (tf.Tensor, tf.RaggedTensor)):
     return tensor.numpy()
   if isinstance(tensor, tf.SparseTensor):
@@ -175,6 +224,7 @@ class TfdsDataSource:
         f"split={self._split!r}, "
         f"decoders={decoders})"
     )
+
   # pytype: enable=attribute-error
 
   def __getstate__(self):

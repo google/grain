@@ -18,14 +18,41 @@ import signal
 
 from absl.testing import absltest
 import multiprocessing as mp
+from grain._src.python import data_sources
 from grain._src.python import grain_pool as gp
 from grain._src.python.options import MultiprocessingOptions  # pylint: disable=g-importing-member
 
 
 class GrainPoolTest(absltest.TestCase):
 
+  def test_pool_equal_split_in_memory_data_source(self):
+    in_memory_ds = data_sources.InMemoryDataSource(range(12))
+
+    # 12 elements in the `in_memory_ds` are divided
+    # equally among 4 processes.
+    def get_element_producer_fn(worker_index: int, worker_count: int):
+      return iter(range(worker_index, 12, worker_count))
+
+    output_elements = []
+    with gp.GrainPool(
+        ctx=mp.get_context("spawn"),
+        get_element_producer_fn=get_element_producer_fn,
+        options=MultiprocessingOptions(num_workers=4, per_worker_buffer_size=1),
+    ) as grain_pool:
+      for element in grain_pool:
+        output_elements.append(element)
+        # turn each element in `in_memory_ds` to their negatives.
+        in_memory_ds[element.record] = -in_memory_ds[element.record]
+
+    self.assertEqual(
+        output_elements, [gp.GrainPoolElement(x, x % 4) for x in range(12)]
+    )
+
+    self.assertEqual(list(iter(in_memory_ds)), [-x for x in range(12)])
+
   def test_pool_equal_split(self):
     ctx = mp.get_context("spawn")
+
     # 16 elements divide equally among 4 processes
     def get_element_producer_fn(worker_index: int, worker_count: int):
       return iter(range(worker_index, 16, worker_count))
@@ -53,6 +80,7 @@ class GrainPoolTest(absltest.TestCase):
 
   def test_pool_non_equal_split(self):
     ctx = mp.get_context("spawn")
+
     # 14 elements do not divide equally among 4 processes
     def get_element_producer_fn(worker_index: int, worker_count: int):
       return iter(range(worker_index, 14, worker_count))
@@ -78,6 +106,7 @@ class GrainPoolTest(absltest.TestCase):
 
   def test_pool_kill_child(self):
     ctx = mp.get_context("spawn")
+
     def get_element_producer_fn(worker_index: int, worker_count: int):
       return iter(range(worker_index, 14, worker_count))
 
@@ -98,6 +127,7 @@ class GrainPoolTest(absltest.TestCase):
 
   def test_pool_object_deletion(self):
     ctx = mp.get_context("spawn")
+
     def get_element_producer_fn(worker_index: int, worker_count: int):
       return iter(range(worker_index, 14, worker_count))
 

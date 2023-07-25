@@ -17,10 +17,12 @@ import dataclasses
 import pathlib
 import pickle
 import random
+from typing import Sequence
 
 from absl import flags
 from absl.testing import absltest
 from absl.testing import parameterized
+import grain._src.core.multiprocessing as grain_multiprocessing
 from grain._src.python import data_sources
 import tensorflow_datasets as tfds
 
@@ -58,6 +60,79 @@ class RangeDataSourceTest(DataSourceTest):
     actual_output = [range_ds[i] for i in range(len(range_ds))]
 
     self.assertEqual(expected_output, actual_output)
+
+
+class InMemoryDataSourceTest(DataSourceTest):
+  sequence = list(range(12))
+  name = "Test"
+
+  def test_single_process(self):
+    in_memory_ds = data_sources.InMemoryDataSource(
+        InMemoryDataSourceTest.sequence
+    )
+    actual_output = [in_memory_ds[i] for i in range(len(in_memory_ds))]
+
+    self.assertEqual(InMemoryDataSourceTest.sequence, actual_output)
+
+    in_memory_ds.close()
+    in_memory_ds.unlink()
+
+  @staticmethod
+  def read_elements(indices: Sequence[int]) -> Sequence[int]:
+    in_memory_ds = data_sources.InMemoryDataSource(
+        name=InMemoryDataSourceTest.name
+    )
+    res = [in_memory_ds[i] for i in indices]
+    in_memory_ds.close()
+    return res
+
+  def test_multi_processes(self):
+    in_memory_ds = data_sources.InMemoryDataSource(
+        InMemoryDataSourceTest.sequence, name=InMemoryDataSourceTest.name
+    )
+
+    indices_for_processes = [[1, 3, 5], [2, 3, 4], [5, 2, 3]]
+    expected_elements_read = list(
+        map(
+            lambda indices: [in_memory_ds[i] for i in indices],
+            indices_for_processes,
+        )
+    )
+
+    mp_context = grain_multiprocessing.get_context("spawn")
+    with mp_context.Pool(processes=3) as pool:
+      elements_read = pool.map(
+          InMemoryDataSourceTest.read_elements, indices_for_processes
+      )
+
+      pool.close()
+      pool.join()
+
+    self.assertEqual(elements_read, expected_elements_read)
+
+    in_memory_ds.close()
+    in_memory_ds.unlink()
+
+  def test_empty_sequence(self):
+    in_memory_ds = data_sources.InMemoryDataSource([])
+    self.assertEmpty(in_memory_ds)
+
+    in_memory_ds.close()
+    in_memory_ds.unlink()
+
+  def test_str(self):
+    in_memory_ds = data_sources.InMemoryDataSource(
+        InMemoryDataSourceTest.sequence, name=InMemoryDataSourceTest.name
+    )
+    actual_str = str(in_memory_ds)
+    self.assertEqual(
+        actual_str,
+        f"InMemoryDataSource(name={InMemoryDataSourceTest.name},"
+        f" len={len(InMemoryDataSourceTest.sequence)})",
+    )
+
+    in_memory_ds.close()
+    in_memory_ds.unlink()
 
 
 class ArrayRecordDataSourceTest(DataSourceTest):
@@ -226,4 +301,4 @@ class SSTableDataSourceTest(DataSourceTest):
 
 
 if __name__ == "__main__":
-  absltest.main()
+  grain_multiprocessing.handle_test_main(absltest.main)

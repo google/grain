@@ -25,6 +25,7 @@ import multiprocessing as mp
 from grain._src.python import data_loader as data_loader_lib
 from grain._src.python import samplers
 from grain._src.python.data_sources import ArrayRecordDataSource
+from grain._src.python.data_sources import InMemoryDataSource
 from grain._src.python.data_sources import RangeDataSource
 from grain._src.python.operations import BatchOperation
 from grain._src.python.operations import FilterOperation
@@ -162,6 +163,36 @@ class DataLoaderTest(parameterized.TestCase):
     np.testing.assert_equal(actual, expected)
     # Second iteration.
     actual = list(data_loader)
+    np.testing.assert_equal(actual, expected)
+
+  def test_data_loader_in_memory_data_source(self):
+    data_source = InMemoryDataSource([0, 1, 2, 3, 4, 5, 6, 7])
+
+    sampler = samplers.SequentialSampler(
+        num_records=len(data_source), shard_options=sharding.NoSharding()
+    )
+
+    # Multiprocessing (with 2 processes), splits elements such that:
+    # Process_0 gets [0, 2, 4, 6]
+    # Process_1 gets [1, 3, 5, 7]
+    # Afterwards, operations are executed on elements from each process.
+    operations = [
+        PlusOne(),
+        FilterEven(),
+        BatchOperation(batch_size=2),
+    ]
+
+    num_workers = 2
+    data_loader = data_loader_lib.DataLoader(
+        data_source=data_source,
+        sampler=sampler,
+        operations=operations,
+        worker_count=num_workers,
+    )
+
+    expected = [np.array([2, 4]), np.array([6, 8])]
+    actual = list(data_loader)
+
     np.testing.assert_equal(actual, expected)
 
   def test_data_loader_two_processes_no_shared_memory(self):
