@@ -16,8 +16,6 @@ package_group(
     name = "internal",
     packages = [
         "//third_party/py/grain/...",
-        # TODO(mrit): Remove after migration.
-        "//third_party/py/clu/grain/...",
     ],
 )
 
