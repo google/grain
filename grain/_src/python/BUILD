@@ -43,6 +43,15 @@ py_library(
     srcs_version = "PY3",
 )
 
+py_test(
+    name = "record_test",
+    srcs = [
+        "record_test.py",
+    ],
+    srcs_version = "PY3",
+    deps = [":record"],
+)
+
 py_library(
     name = "multiprocessing_common",
     srcs = [

@@ -40,6 +40,12 @@ class RecordMetadata:
     else:
       return dataclasses.replace(self, record_key=None)
 
+  def __str__(self):
+    return (
+        f"RecordMetadata(index={self.index}, record_key={self.record_key}, "
+        f"rng={self.rng})"
+    )
+
 
 @dataclasses.dataclass(slots=True)
 class Record(Generic[T]):
