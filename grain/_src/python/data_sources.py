@@ -27,7 +27,7 @@ from multiprocessing import shared_memory
 import os
 import threading
 import typing
-from typing import Any, Generic, Mapping, Optional, Protocol, Sequence, TypeVar, Union
+from typing import Any, Generic, Mapping, Optional, Protocol, Sequence, SupportsIndex, TypeVar, Union
 
 from absl import logging
 import array_record
@@ -59,7 +59,7 @@ class RandomAccessDataSource(Protocol, Generic[T]):
   def __len__(self) -> int:
     ...
 
-  def __getitem__(self, record_key: int) -> T:
+  def __getitem__(self, record_key: SupportsIndex) -> T:
     ...
 
 
@@ -77,7 +77,8 @@ class RangeDataSource:
   def __len__(self) -> int:
     return self._len
 
-  def __getitem__(self, record_key: int) -> int:
+  def __getitem__(self, record_key: SupportsIndex) -> int:
+    record_key = record_key.__index__()
     assert record_key >= 0 and record_key < self._len
     return self._start + record_key * self._step
 
@@ -210,7 +211,7 @@ class TfdsDataSource:
     logging.debug("__enter__ for TfdsDataSource is called.")
     self._source.__exit__(exc_type, exc_value, traceback)
 
-  def __getitem__(self, record_key: int) -> int:
+  def __getitem__(self, record_key: SupportsIndex) -> int:
     record = self._source[record_key]
     record = self._features.deserialize_example(record, decoders=self._decoders)
     return tree.map_structure(_as_numpy, record)
