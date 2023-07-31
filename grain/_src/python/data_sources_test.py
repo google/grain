@@ -63,34 +63,34 @@ class RangeDataSourceTest(DataSourceTest):
 
 
 class InMemoryDataSourceTest(DataSourceTest):
-  sequence = list(range(12))
-  name = "Test"
 
   def test_single_process(self):
-    in_memory_ds = data_sources.InMemoryDataSource(
-        InMemoryDataSourceTest.sequence
-    )
-    actual_output = [in_memory_ds[i] for i in range(len(in_memory_ds))]
+    sequence = list(range(12))
+    in_memory_ds = data_sources.InMemoryDataSource(sequence)
 
-    self.assertEqual(InMemoryDataSourceTest.sequence, actual_output)
+    output_by_index = [in_memory_ds[i] for i in range(len(in_memory_ds))]
+    self.assertEqual(sequence, output_by_index)
+
+    output_by_list = list(in_memory_ds)
+    self.assertEqual(sequence, output_by_list)
 
     in_memory_ds.close()
     in_memory_ds.unlink()
 
   @staticmethod
-  def read_elements(indices: Sequence[int]) -> Sequence[int]:
-    in_memory_ds = data_sources.InMemoryDataSource(
-        name=InMemoryDataSourceTest.name
-    )
+  def read_elements(
+      in_memory_ds: data_sources.InMemoryDataSource, indices: Sequence[int]
+  ) -> Sequence[int]:
     res = [in_memory_ds[i] for i in indices]
-    in_memory_ds.close()
     return res
 
-  def test_multi_processes(self):
+  def test_multi_processes_co_read(self):
+    sequence = list(range(12))
     in_memory_ds = data_sources.InMemoryDataSource(
-        InMemoryDataSourceTest.sequence, name=InMemoryDataSourceTest.name
+        sequence, name="DataSourceTestingCoRead"
     )
 
+    num_processes = 3
     indices_for_processes = [[1, 3, 5], [2, 3, 4], [5, 2, 3]]
     expected_elements_read = list(
         map(
@@ -100,15 +100,47 @@ class InMemoryDataSourceTest(DataSourceTest):
     )
 
     mp_context = grain_multiprocessing.get_context("spawn")
-    with mp_context.Pool(processes=3) as pool:
-      elements_read = pool.map(
-          InMemoryDataSourceTest.read_elements, indices_for_processes
+    with mp_context.Pool(processes=num_processes) as pool:
+      elements_read = pool.starmap(
+          InMemoryDataSourceTest.read_elements,
+          zip([in_memory_ds] * num_processes, indices_for_processes),
       )
 
       pool.close()
       pool.join()
 
     self.assertEqual(elements_read, expected_elements_read)
+
+    in_memory_ds.close()
+    in_memory_ds.unlink()
+
+  @staticmethod
+  def increment_elements_by_one(
+      in_memory_ds: data_sources.InMemoryDataSource,
+  ) -> None:
+    for i in range(len(in_memory_ds)):
+      in_memory_ds[i] = in_memory_ds[i] + 1
+
+  def test_multi_processes_co_modify(self):
+    sequence = list(range(12))
+    in_memory_ds = data_sources.InMemoryDataSource(
+        sequence, name="DataSourceTestingCoModify"
+    )
+
+    num_processes = 3
+    expected_final_state = [x + num_processes for x in sequence]
+
+    mp_context = grain_multiprocessing.get_context("spawn")
+    with mp_context.Pool(processes=num_processes) as pool:
+      pool.map(
+          InMemoryDataSourceTest.increment_elements_by_one,
+          [in_memory_ds] * num_processes,
+      )
+
+      pool.close()
+      pool.join()
+
+    self.assertEqual(list(in_memory_ds), expected_final_state)
 
     in_memory_ds.close()
     in_memory_ds.unlink()
@@ -121,14 +153,13 @@ class InMemoryDataSourceTest(DataSourceTest):
     in_memory_ds.unlink()
 
   def test_str(self):
-    in_memory_ds = data_sources.InMemoryDataSource(
-        InMemoryDataSourceTest.sequence, name=InMemoryDataSourceTest.name
-    )
+    sequence = list(range(12))
+    name = "DataSourceTestingStr"
+    in_memory_ds = data_sources.InMemoryDataSource(sequence, name=name)
     actual_str = str(in_memory_ds)
     self.assertEqual(
         actual_str,
-        f"InMemoryDataSource(name={InMemoryDataSourceTest.name},"
-        f" len={len(InMemoryDataSourceTest.sequence)})",
+        f"InMemoryDataSource(name={name}, len={len(sequence)})",
     )
 
     in_memory_ds.close()
