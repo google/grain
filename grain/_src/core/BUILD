@@ -21,25 +21,11 @@ py_library(
 )
 
 py_library(
-    name = "futures",
-    srcs = ["futures.py"],
-    srcs_version = "PY3",
-    deps = ["//pyglib/contrib/concurrent:futures"],
-)
-
-py_library(
-    name = "multiprocessing",
-    srcs = [
-        "multiprocessing.py",
-    ],
-    srcs_version = "PY3",
-)
-
-py_library(
     name = "parallel",
     srcs = ["parallel.py"],
     srcs_version = "PY3",
-    deps = [":futures"],
+    deps = [
+    ],
 )
 
 py_test(

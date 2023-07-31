@@ -20,13 +20,6 @@ py_test(
     data = [
         "//grain/_src/python/testdata:digits.array_record-00000-of-00002",
         "//grain/_src/python/testdata:digits.array_record-00001-of-00002",
-        "//grain/_src/python/testdata:digits-00000-of-00002.bagz",
-        "//grain/_src/python/testdata:digits-00000-of-00002.sst",
-        "//grain/_src/python/testdata:digits-00001-of-00002.bagz",
-        "//grain/_src/python/testdata:digits-00001-of-00002.sst",
-        "//grain/_src/python/testdata:digits_duplicated_keys-00000-of-00001.sst",
-        "//grain/_src/python/testdata:digits_keys-00000-of-00001.sst",
-        "//grain/_src/python/testdata:digits_malformed_keys-00000-of-00001.sst",
     ],
     srcs_version = "PY3",
     deps = [
