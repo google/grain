@@ -36,16 +36,16 @@ py_test(
 )
 
 py_library(
-    name = "random",
-    srcs = ["random.py"],
+    name = "grain_random",
+    srcs = ["grain_random.py"],
     srcs_version = "PY3",
 )
 
 py_test(
-    name = "random_test",
-    srcs = ["random_test.py"],
+    name = "grain_random_test",
+    srcs = ["grain_random_test.py"],
     srcs_version = "PY3",
-    deps = [":random"],
+    deps = [":grain_random"],
 )
 
 py_library(

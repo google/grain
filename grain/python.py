@@ -40,11 +40,9 @@ from ._src.python.data_loader import (
     PyGrainDatasetIterator,
 )
 from ._src.python.data_sources import (
-    BagDataSource,
     InMemoryDataSource,
     RandomAccessDataSource,
     RangeDataSource,
-    SSTableDataSource,
     TfdsDataSource,
 )
 from ._src.python.grain_pool import (GrainPool, GrainPoolElement)

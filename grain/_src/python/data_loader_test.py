@@ -284,6 +284,7 @@ class DataLoaderTest(parameterized.TestCase):
         str(self.testdata_dir / "digits.array_record-00000-of-00002"),
         str(self.testdata_dir / "digits.array_record-00001-of-00002"),
     ])
+
     data_source[0]  # pylint: disable=pointless-statement
 
     sampler = samplers.SequentialSampler(

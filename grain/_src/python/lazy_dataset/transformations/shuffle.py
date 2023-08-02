@@ -2,7 +2,7 @@
 
 from typing import Optional, TypeVar
 
-from grain._src.python.experimental.index_shuffle.python import index_shuffle
+from grain._src.python.experimental.index_shuffle.python import index_shuffle_module as index_shuffle
 from grain._src.python.lazy_dataset import lazy_dataset
 
 T = TypeVar("T")

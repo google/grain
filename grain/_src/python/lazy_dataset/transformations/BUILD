@@ -124,6 +124,7 @@ py_test(
 py_library(
     name = "shuffle",
     srcs = ["shuffle.py"],
+    data = ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
     srcs_version = "PY3",
     deps = ["//grain/_src/python/lazy_dataset"],
 )

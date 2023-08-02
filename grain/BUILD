@@ -15,7 +15,7 @@ py_library(
     deps = [
         "//grain/_src/core:config",
         "//grain/_src/core:constants",
-        "//grain/_src/core:random",
+        "//grain/_src/core:grain_random",
         "//grain/_src/core:sharding",
     ],
 )
@@ -43,6 +43,7 @@ py_library(
 py_library(
     name = "python_experimental",
     srcs = ["python_experimental.py"],
+    data = ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
     srcs_version = "PY3",
     # Implicit build flag
     deps = [

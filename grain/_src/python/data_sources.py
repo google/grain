@@ -30,7 +30,7 @@ import typing
 from typing import Any, Generic, Mapping, Optional, Protocol, Sequence, SupportsIndex, TypeVar, Union
 
 from absl import logging
-import array_record
+import array_record.python.array_record_data_source as array_record
 from etils import epath
 from grain._src.core import usage_logging
 import tree

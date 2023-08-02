@@ -19,7 +19,7 @@ import re
 
 from absl.testing import absltest
 from absl.testing import parameterized
-from grain._src.core import multiprocessing
+import multiprocessing
 from grain._src.python import record
 from grain._src.python.operations import BatchOperation
 from grain._src.python.operations import FilterOperation
@@ -390,4 +390,4 @@ class OperationsTest(parameterized.TestCase):
 
 
 if __name__ == "__main__":
-  multiprocessing.handle_test_main(absltest.main)
+  absltest.main()
