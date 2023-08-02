@@ -13,11 +13,12 @@
 # limitations under the License.
 """Tests for data sources."""
 
+from collections.abc import Sequence
 import dataclasses
 import pathlib
 import pickle
 import random
-from typing import Sequence
+from typing import TypeVar
 
 from absl import flags
 from absl.testing import absltest
@@ -26,6 +27,7 @@ import grain._src.core.multiprocessing as grain_multiprocessing
 from grain._src.python import data_sources
 import tensorflow_datasets as tfds
 
+_T = TypeVar("_T")
 
 FLAGS = flags.FLAGS
 FileInstruction = tfds.core.utils.shard_utils.FileInstruction
@@ -79,8 +81,8 @@ class InMemoryDataSourceTest(DataSourceTest):
 
   @staticmethod
   def read_elements(
-      in_memory_ds: data_sources.InMemoryDataSource, indices: Sequence[int]
-  ) -> Sequence[int]:
+      in_memory_ds: data_sources.InMemoryDataSource[_T], indices: Sequence[int]
+  ) -> Sequence[_T]:
     res = [in_memory_ds[i] for i in indices]
     return res
 

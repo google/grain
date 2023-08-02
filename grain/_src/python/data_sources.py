@@ -45,6 +45,8 @@ except ImportError:
   DatasetInfo = Any
 
 T = TypeVar("T")
+_SLT = TypeVar("_SLT")
+
 _SparseArray = collections.namedtuple(
     "SparseArray", ["indices", "values", "dense_shape"]
 )
@@ -89,7 +91,7 @@ class RangeDataSource:
     )
 
 
-class InMemoryDataSource(shared_memory.ShareableList):
+class InMemoryDataSource(shared_memory.ShareableList[_SLT]):
   """Simple in-memory data source for sequences that is sharable among mutiple processes.
 
   Note:
@@ -101,7 +103,7 @@ class InMemoryDataSource(shared_memory.ShareableList):
 
   def __init__(
       self,
-      elements: Optional[Sequence[Any]] = None,
+      elements: Optional[Sequence[_SLT]] = None,
       *,
       name: Optional[str] = None,
   ):
