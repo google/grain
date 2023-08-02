@@ -122,11 +122,11 @@ def _worker_loop(
     while not termination_event.is_set():
       try:
         next_element = next(iterator_after_transformation)
-        multiprocessing_common.add_element_to_queue(
+        multiprocessing_common.add_element_to_queue(  # pytype: disable=wrong-arg-types
             next_element, output_queue, termination_event.is_set
         )
       except StopIteration:
-        multiprocessing_common.add_element_to_queue(
+        multiprocessing_common.add_element_to_queue(  # pytype: disable=wrong-arg-types
             _ProcessingComplete(), output_queue, termination_event.is_set
         )
         break

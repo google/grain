@@ -27,7 +27,7 @@ class MultiProcessingCommonTest(absltest.TestCase):
     test_queue = multiprocessing.Queue()
     element = 1
     termination_event = multiprocessing.Event()
-    multiprocessing_common.add_element_to_queue(
+    multiprocessing_common.add_element_to_queue(  # pytype: disable=wrong-arg-types
         element=element,
         elements_queue=test_queue,
         should_stop=termination_event.is_set,
@@ -39,7 +39,7 @@ class MultiProcessingCommonTest(absltest.TestCase):
     element = 1
     termination_event = multiprocessing.Event()
     termination_event.set()
-    multiprocessing_common.add_element_to_queue(
+    multiprocessing_common.add_element_to_queue(  # pytype: disable=wrong-arg-types
         element=element,
         elements_queue=test_queue,
         should_stop=termination_event.is_set,
@@ -52,7 +52,7 @@ class MultiProcessingCommonTest(absltest.TestCase):
     expected_element = 1
     test_queue.put(expected_element)
     termination_event = multiprocessing.Event()
-    actual_element = multiprocessing_common.get_element_from_queue(
+    actual_element = multiprocessing_common.get_element_from_queue(  # pytype: disable=wrong-arg-types
         elements_queue=test_queue,
         should_stop=termination_event.is_set,
     )
@@ -64,7 +64,7 @@ class MultiProcessingCommonTest(absltest.TestCase):
     test_queue.put(expected_element)
     termination_event = multiprocessing.Event()
     termination_event.set()
-    actual_element = multiprocessing_common.get_element_from_queue(
+    actual_element = multiprocessing_common.get_element_from_queue(  # pytype: disable=wrong-arg-types
         elements_queue=test_queue,
         should_stop=termination_event.is_set,
     )
