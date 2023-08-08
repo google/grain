@@ -541,5 +541,37 @@ class DataLoaderTest(parameterized.TestCase):
     np.testing.assert_equal(actual, expected)
 
 
+class PyGrainDatasetIteratorTest(absltest.TestCase):
+
+  def test_str(self):
+    range_data_source = RangeDataSource(start=0, stop=8, step=1)
+    sampler = samplers.SequentialSampler(
+        num_records=len(range_data_source),
+        shard_options=sharding.NoSharding(),
+        seed=1,
+    )
+    loader = data_loader_lib.DataLoader(
+        data_source=range_data_source,
+        sampler=sampler,
+        worker_count=3,
+    )
+    itr = iter(loader)
+
+    expected_str = """PyGrainDatasetIterator(state={
+    "version": 2,
+    "last_seen_indices": {
+        "0": -3,
+        "1": -2,
+        "2": -1
+    },
+    "last_worker_index": -1,
+    "worker_count": 3,
+    "sampler": "SequentialSampler(num_records=8, shard_options=NoSharding(shard_index=0, shard_count=1, drop_remainder=False))",
+    "data_source": "RangeDataSource(start=0, stop=8, step=1)"
+})"""
+
+    self.assertEqual(expected_str, str(itr))
+
+
 if __name__ == "__main__":
   absltest.main()

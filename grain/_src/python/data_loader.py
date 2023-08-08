@@ -378,6 +378,9 @@ class PyGrainDatasetIterator(collections.abc.Iterator):
     self._raw_iterator = None
     self._iterator = None
 
+  def __str__(self):
+    return f"PyGrainDatasetIterator(state={self.get_state().decode()})"
+
 
 def _apply_transform(
     transform: transforms.Transformation | Operation,
