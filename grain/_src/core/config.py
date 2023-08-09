@@ -66,9 +66,10 @@ _LOOKUP_FAST_WARMUP = flags.DEFINE_bool(
     "grain_tf_lookup_fast_warmup",
     False,
     (
-        "If True will split up the first batch lookup into smaller chunks. This"
-        " can help to provide initial elements fast while allowing when using a"
-        " large tf_lookup_batch_size (which is usually better for throughput)."
+        "Deprecated. If True will split up the first batch lookup into smaller"
+        " chunks. This can help to provide initial elements fast while allowing"
+        " when using a large tf_lookup_batch_size (which is usually better for"
+        " throughput)."
     ),
 )
 
