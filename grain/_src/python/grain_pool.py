@@ -54,6 +54,7 @@ from typing import Any, Protocol, TypeVar
 from absl import logging
 import cloudpickle
 from grain._src.core import parallel
+from grain._src.python import grain_logging
 from grain._src.python import multiprocessing_common
 from grain._src.python.options import MultiprocessingOptions  # pylint: disable=g-importing-member
 
@@ -154,9 +155,11 @@ def _worker_loop(
 ):
   """Code to be run on each child process."""
   try:
-    logging.info(
-        "Starting work for child process with worker_index: %i", worker_index
-    )
+    # grain_logging.set_prefix(f"Worker {worker_index}")
+    grain_logging.info("Starting the work")
+    # logging.info(
+    #     "Starting work for child process with worker_index: %i", worker_index
+    # )
     element_producer = _get_element_producer_from_queue(
         args_queue, worker_index=worker_index, worker_count=worker_count
     )
@@ -265,6 +268,7 @@ class GrainPool(Iterator[T]):
       # they are unpickled after absl.app.run() was called in the child
       # processes.
       worker_args_queue.put(get_element_producer_fn)
+      grain_logging.set_prefix("Main process")
       process = ctx.Process(  # pytype: disable=attribute-error  # re-none
           target=_worker_loop, kwargs=process_kwargs, daemon=True
       )

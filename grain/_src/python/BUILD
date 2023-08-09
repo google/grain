@@ -157,6 +157,7 @@ py_library(
     srcs = ["grain_pool.py"],
     srcs_version = "PY3",
     deps = [
+        ":grain_logging",
         ":multiprocessing_common",
         ":options",
         "//grain/_src/core:parallel",
@@ -212,5 +213,11 @@ py_test(
 py_library(
     name = "options",
     srcs = ["options.py"],
+    srcs_version = "PY3",
+)
+
+py_library(
+    name = "grain_logging",
+    srcs = ["grain_logging.py"],
     srcs_version = "PY3",
 )
