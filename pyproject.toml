@@ -13,6 +13,7 @@ authors = [
 dependencies = [
     'absl-py',
     'array-record',
+    'cloudpickle',
     'dm-tree',
     'etils[epath]',
     'more-itertools>=9.1.0',

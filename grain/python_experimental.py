@@ -20,4 +20,4 @@
 
 from . import python_lazy_dataset as lazy_dataset
 from ._src.python.experimental.example_packing.packing import PackAndBatchOperation
-from ._src.python.experimental.index_shuffle.python.index_shuffle import index_shuffle
+from ._src.python.experimental.index_shuffle.python.index_shuffle_module import index_shuffle
