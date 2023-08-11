@@ -24,5 +24,7 @@ from ._src.core.transforms import (
     MapWithIndexTransform,
     RaggedBatchTransform,
 )
+from ._src.python.experimental.continual_sequence_sampler.continual_data_source import ContinualDataSource
+from ._src.python.experimental.continual_sequence_sampler.continual_sequence_sampler import get_sampler as get_continual_sequence_sampler
 from ._src.python.experimental.example_packing.packing import PackAndBatchOperation
 from ._src.python.experimental.index_shuffle.python.index_shuffle_module import index_shuffle
