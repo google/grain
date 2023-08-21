@@ -7,14 +7,20 @@ py_library(
     srcs = ["lazy_dataset.py"],
     data = ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
     srcs_version = "PY3",
-    deps = ["//grain/_src/core:sharding"],
+    deps = [
+        "//grain/_src/core:sharding",
+        "//grain/_src/python:options",
+    ],
 )
 
 py_test(
     name = "lazy_dataset_test",
     srcs = ["lazy_dataset_test.py"],
     srcs_version = "PY3",
-    deps = [":lazy_dataset"],
+    deps = [
+        ":lazy_dataset",
+        "//grain/_src/python:options",
+    ],
 )
 
 py_library(
