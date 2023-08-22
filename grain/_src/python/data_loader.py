@@ -90,6 +90,7 @@ def _determine_worker_count(input_worker_count: int | None) -> int:
 @dataclasses.dataclass(frozen=True, slots=True)
 class _ReaderQueueElement:
   """Element to be added to the reader queue."""
+
   async_result: pool.AsyncResult[Any]
   # max record index seen so far at worker with worker_index
   max_element_index: int
@@ -326,7 +327,7 @@ def _iterator_with_context(
     yield from it
 
 
-class PyGrainDatasetIterator(collections.abc.Iterator):
+class PyGrainDatasetIterator(collections.abc.Iterator[_T]):
   """DataLoader iterator providing get/set state functionality.
 
   This is the only iterator we expose to users. It wraps underlying
@@ -341,10 +342,10 @@ class PyGrainDatasetIterator(collections.abc.Iterator):
     self._raw_iterator = None
     self._iterator = None
 
-  def __iter__(self):
+  def __iter__(self) -> PyGrainDatasetIterator[_T]:
     return self
 
-  def __next__(self):
+  def __next__(self) -> _T:
     if self._iterator is None:
       if self._data_loader.multiprocessing_options.num_workers == 0:
         self._raw_iterator = _SingleProcessIterator(
