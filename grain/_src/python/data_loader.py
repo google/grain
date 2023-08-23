@@ -172,7 +172,7 @@ class DataLoader:
         and isinstance(operations[-1], BatchOperation)
     ):
       operations[-1]._enable_shared_memory()
-      logging.info("Enabeling shared memory.")
+      logging.info("Enabling shared memory.")
 
     self._data_source = data_source
     self._sampler = sampler
