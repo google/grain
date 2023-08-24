@@ -41,5 +41,6 @@ from ._src.python.lazy_dataset.transformations.map import (
 )
 from ._src.python.lazy_dataset.transformations.mix import MixedLazyMapDataset
 from ._src.python.lazy_dataset.transformations.ragged_batch import RaggedBatchLazyMapDataset
+from ._src.python.lazy_dataset.transformations.repeat import RepeatLazyMapDataset
 from ._src.python.lazy_dataset.transformations.shuffle import ShuffleLazyMapDataset
 from ._src.python.lazy_dataset.transformations.slice import SliceLazyMapDataset

@@ -161,3 +161,20 @@ py_test(
         "//grain/_src/python/lazy_dataset:data_sources",
     ],
 )
+
+py_library(
+    name = "repeat",
+    srcs = ["repeat.py"],
+    srcs_version = "PY3",
+    deps = ["//grain/_src/python/lazy_dataset"],
+)
+
+py_test(
+    name = "repeat_test",
+    srcs = ["repeat_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":repeat",
+        "//grain/_src/python/lazy_dataset",
+    ],
+)
