@@ -118,6 +118,22 @@ class PrefetchLazyIterDatasetTest(parameterized.TestCase):
     _ = [next(ds_iter) for _ in range(5)]
     self.assertEmpty(ds_iter._buffer)  # iterated through all elements
 
+  def test_checkpoint(self):
+    ds_iter = iter(self.prefetch_lazy_iter_ds)
+
+    max_steps = 20
+    values_without_interruption = []
+    checkpoints = []
+    for _ in range(max_steps):
+      checkpoints.append(ds_iter.get_state())  # pytype: disable=attribute-error
+      values_without_interruption.append(next(ds_iter))
+
+    for starting_step in [0, 1, 5, 12, 18]:
+      ds_iter.set_state(checkpoints[starting_step])  # pytype: disable=attribute-error
+      for i in range(starting_step, max_steps):
+        value = next(ds_iter)
+        self.assertEqual(value, values_without_interruption[i])
+
 
 if __name__ == '__main__':
   absltest.main()
