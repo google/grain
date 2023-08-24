@@ -16,6 +16,7 @@ from typing import cast
 
 from absl.testing import absltest
 from absl.testing import parameterized
+from grain._src.python import options
 from grain._src.python.lazy_dataset import lazy_dataset
 
 
@@ -66,7 +67,7 @@ class PrefetchLazyIterDatasetTest(parameterized.TestCase):
     super().setUp()
     self.range_ds = lazy_dataset.RangeLazyMapDataset(20)
     self.prefetch_lazy_iter_ds = lazy_dataset.PrefetchLazyIterDataset(
-        self.range_ds, prefetch=1
+        self.range_ds, options.ReadOptions()
     )
 
   def test_dataset_and_iterator_types(self):
@@ -77,11 +78,14 @@ class PrefetchLazyIterDatasetTest(parameterized.TestCase):
     self.assertIsInstance(ds_iter, lazy_dataset.PrefetchLazyDatasetIterator)
 
   @parameterized.parameters(0, 1, 10)
-  def test_prefetch_data(self, prefetch: int):
-    prefetch_lazy_iter_ds = lazy_dataset.PrefetchLazyIterDataset(
-        self.range_ds, prefetch=prefetch
+  def test_prefetch_data(self, prefetch_buffer_size: int):
+    read_options = options.ReadOptions(
+        prefetch_buffer_size=prefetch_buffer_size
     )
-    self.assertEqual(prefetch_lazy_iter_ds.prefetch, prefetch)
+    prefetch_lazy_iter_ds = lazy_dataset.PrefetchLazyIterDataset(
+        self.range_ds, read_options
+    )
+    self.assertEqual(prefetch_lazy_iter_ds.read_options, read_options)
     ds_iter = iter(prefetch_lazy_iter_ds)
     actual = [next(ds_iter) for _ in range(20)]
     expected = list(range(20))
@@ -95,8 +99,11 @@ class PrefetchLazyIterDatasetTest(parameterized.TestCase):
 
   def test_prefetch_does_not_buffer_unnecessary_elements(self):
     prefetch_buffer_size = 15
+    read_options = options.ReadOptions(
+        prefetch_buffer_size=prefetch_buffer_size
+    )
     prefetch_lazy_iter_ds_large_buffer = lazy_dataset.PrefetchLazyIterDataset(
-        self.range_ds, prefetch=prefetch_buffer_size
+        self.range_ds, read_options
     )
     ds_iter = iter(prefetch_lazy_iter_ds_large_buffer)
     self.assertIsInstance(ds_iter, lazy_dataset.PrefetchLazyDatasetIterator)

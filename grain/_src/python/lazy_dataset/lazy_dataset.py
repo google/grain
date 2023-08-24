@@ -47,7 +47,7 @@ from typing import Any, Callable, Optional, TypeVar
 
 from concurrent import futures
 from grain._src.core import sharding
-
+from grain._src.python import options as grain_options
 
 T = TypeVar("T")
 _MAX_PREFETCH_THREADS = 1000
@@ -93,9 +93,13 @@ class LazyMapDataset(Sequence[T], abc.ABC):
   def __iter__(self) -> LazyDatasetIterator[T]:
     return self.to_iter_dataset().__iter__()
 
-  def to_iter_dataset(self) -> LazyIterDataset[T]:
+  def to_iter_dataset(
+      self, read_options: grain_options.ReadOptions | None = None
+  ) -> LazyIterDataset[T]:
     """Syntactic sugar to construct a LazyIterDataset."""
-    return PrefetchLazyIterDataset(self, prefetch=128)
+    return PrefetchLazyIterDataset(
+        self, read_options or grain_options.ReadOptions()
+    )
 
 
 class LazyIterDataset(Iterable[T], abc.ABC):
@@ -166,26 +170,26 @@ class PrefetchLazyIterDataset(LazyIterDataset[T]):
   """Iterable dataset that uses a thread pool for prefetching."""
 
   parent: LazyMapDataset[T]
-  prefetch: int
+  read_options: grain_options.ReadOptions
 
   def __iter__(self) -> LazyDatasetIterator[T]:
-    return PrefetchLazyDatasetIterator(self.parent, self.prefetch)
+    return PrefetchLazyDatasetIterator(self.parent, self.read_options)
 
 
 class PrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
   """Iterator that performs prefetching using a thread pool."""
 
-  def __init__(self, dataset: LazyMapDataset[T], prefetch: int):
+  def __init__(
+      self, dataset: LazyMapDataset[T], read_options: grain_options.ReadOptions
+  ):
     super().__init__()
     self._dataset = dataset
     self._dataset_length = len(dataset)
     self._next_index = 0
-    self._prefetch = prefetch
-    if self._prefetch > 0:
-      self._buffer = None
-      self._executor = futures.ThreadPoolExecutor(
-          max_workers=_MAX_PREFETCH_THREADS
-      )
+    self._buffer = None
+    self._prefetch_buffer_size = read_options.prefetch_buffer_size
+    if self._prefetch_buffer_size > 0:
+      self._executor = futures.ThreadPoolExecutor(read_options.num_threads)
 
   def __next__(self) -> T:
     # We loop here to skip all None elements (in case the underlying dataset
@@ -193,21 +197,25 @@ class PrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
     while True:
       if self._next_index == self._dataset_length:
         break
-      if self._prefetch > 0:
+      if self._prefetch_buffer_size > 0:
         if not self._buffer:
           indices = range(
               self._next_index,
-              min(self._next_index + self._prefetch, self._dataset_length),
+              min(
+                  self._next_index + self._prefetch_buffer_size,
+                  self._dataset_length,
+              ),
           )
           self._buffer = collections.deque(
               self._executor.submit(self._dataset.__getitem__, i)
               for i in indices
           )
         element = self._buffer.popleft()
-        if self._next_index + self._prefetch < self._dataset_length:
+        if self._next_index + self._prefetch_buffer_size < self._dataset_length:
           self._buffer.append(
               self._executor.submit(
-                  self._dataset.__getitem__, self._next_index + self._prefetch
+                  self._dataset.__getitem__,
+                  self._next_index + self._prefetch_buffer_size,
               )
           )
         element = element.result()
@@ -223,7 +231,7 @@ class PrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
 
   def set_state(self, state):
     self._next_index = state["next_index"]
-    if self._prefetch > 0:
+    if self._prefetch_buffer_size > 0:
       self._buffer = None
 
 
@@ -254,9 +262,13 @@ class RangeLazyMapDataset(LazyMapDataset[int]):
   def __getitem__(self, index: int) -> int:
     return self.start + (index % self._length) * self.step
 
-  def to_iter_dataset(self) -> LazyIterDataset[int]:
+  def to_iter_dataset(
+      self, read_options: grain_options.ReadOptions | None = None
+  ) -> LazyIterDataset[int]:
     """Syntactic sugar to construct a LazyIterDataset."""
-    return PrefetchLazyIterDataset(self, prefetch=0)
+    return PrefetchLazyIterDataset(
+        self, read_options or grain_options.ReadOptions(prefetch_buffer_size=0)
+    )
 
 
 # Deprecated: This class should not be used for new code. It's used to
