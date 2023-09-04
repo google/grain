@@ -66,6 +66,7 @@ py_library(
         "//grain/_src/python/lazy_dataset/transformations:flatmap",  # build_cleaner: keep
         "//grain/_src/python/lazy_dataset/transformations:map",  # build_cleaner: keep
         "//grain/_src/python/lazy_dataset/transformations:mix",  # build_cleaner: keep
+        "//grain/_src/python/lazy_dataset/transformations:packing",  # build_cleaner: keep
         "//grain/_src/python/lazy_dataset/transformations:ragged_batch",  # build_cleaner: keep
         "//grain/_src/python/lazy_dataset/transformations:repeat",  # build_cleaner: keep
         "//grain/_src/python/lazy_dataset/transformations:shuffle",  # build_cleaner: keep

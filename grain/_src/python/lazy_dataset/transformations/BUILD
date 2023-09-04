@@ -103,6 +103,30 @@ py_test(
 )
 
 py_library(
+    name = "packing",
+    srcs = ["packing.py"],
+    srcs_version = "PY3",
+    deps = [
+        "//grain/_src/python/lazy_dataset",
+        "//third_party/py/jaxtyping",
+    ],
+)
+
+py_test(
+    name = "packing_test",
+    srcs = ["packing_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":map",
+        ":packing",
+        ":repeat",
+        ":shuffle",
+        "//grain/_src/python/lazy_dataset",
+        "//grain/_src/python/lazy_dataset:data_sources",
+    ],
+)
+
+py_library(
     name = "slice",
     srcs = ["slice.py"],
     srcs_version = "PY3",
