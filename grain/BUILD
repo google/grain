@@ -29,6 +29,7 @@ py_library(
     deps = [
         ":core",  # build_cleaner: keep
         ":python_experimental",  # build_cleaner: keep
+        "//grain/_src/core:transforms",  # build_cleaner: keep
         "//grain/_src/python:checkpoint_handlers",  # build_cleaner: keep
         "//grain/_src/python:data_loader",  # build_cleaner: keep
         "//grain/_src/python:data_sources",  # build_cleaner: keep
@@ -48,6 +49,7 @@ py_library(
     # Implicit build flag
     deps = [
         ":python_lazy_dataset",  # build_cleaner: keep
+        "//grain/_src/core:transforms",  # build_cleaner: keep
         "//grain/_src/python/experimental/example_packing:packing",  # build_cleaner: keep
     ],
 )

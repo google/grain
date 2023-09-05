@@ -25,10 +25,9 @@ from . import python_experimental as experimental
 from ._src.core.config import config
 from ._src.core.sharding import NoSharding, ShardByJaxProcess, ShardOptions
 from ._src.core.transforms import (
+    BatchTransform as Batch,
     FilterTransform,
-    FlatMapTransform,
     MapTransform,
-    RaggedBatchTransform,
     RandomMapTransform,
     Transformations,
     Transformation,
