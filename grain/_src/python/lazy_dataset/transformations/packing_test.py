@@ -29,7 +29,7 @@ import numpy as np
 class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
 
   def test_pack_single_feature(self):
-    # 4 elements of variable sequence length.
+    # 5 elements of variable sequence length.
     input_elements = [[1, 2, 3, 4], [5, 6], [11, 12, 13, 14], [7], [8]]
     ds = data_sources.SourceLazyMapDataset(input_elements)
     ds = ds.map(np.asarray)
@@ -44,8 +44,32 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
         # Second element is in buffer and we yield the third element first
         # because it's already fully packed on 'inputs'.
         ([11, 12, 13, 14], [1, 1, 1, 1], [0, 1, 2, 3]),
-        # Second, fourth and fifth element packed together.
+        # Second, fourth and five element packed together.
         ([5, 6, 7, 8], [1, 1, 2, 3], [0, 1, 0, 0]),
+    ]
+    for actual, expected in zip(ds_iter, expected_elements, strict=True):
+      # Elements are tuples with (inputs, inputs_segment_ids, inputs_positions).
+      self.assertLen(actual, 3)
+      np.testing.assert_array_equal(actual, expected)
+
+  def test_pack_single_feature_remainder_is_padded(self):
+    # 4 elements of variable sequence length.
+    input_elements = [[1, 2, 3, 4], [5, 6], [11, 12, 13, 14], [7]]
+    ds = data_sources.SourceLazyMapDataset(input_elements)
+    ds = ds.map(np.asarray)
+    ds = ds.to_iter_dataset()
+    ds = packing.SingleBinPackLazyIterDataset(ds, length_struct=4)
+    ds_iter = iter(ds)
+
+    # Elements are tuples with (inputs, inputs_segment_ids, inputs_positions).
+    expected_elements = [
+        # First element was already fully packed on 'inputs'.
+        ([1, 2, 3, 4], [1, 1, 1, 1], [0, 1, 2, 3]),
+        # Second element is in buffer and we yield the third element first
+        # because it's already fully packed on 'inputs'.
+        ([11, 12, 13, 14], [1, 1, 1, 1], [0, 1, 2, 3]),
+        # Second and fourth element packed together (plus padding).
+        ([5, 6, 7, 0], [1, 1, 2, 0], [0, 1, 0, 0]),
     ]
 
     for actual, expected in zip(ds_iter, expected_elements, strict=True):

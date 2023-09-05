@@ -48,7 +48,9 @@ class SingleBinPackLazyIterDataset(lazy_dataset.LazyIterDataset):
   SingleBinPack packs a single example at a time and passes through any examples
   that seem already packed.
   When only single features is packed this produces 0 padding. However some
-  examples will be truncated.
+  examples will be truncated. And when the parent iterator is exhausted the
+  remaining examples in the buffer will be packed together and padded to form
+  a full packed example.
 
   # Details
   The `length_struct` should have the same structure as examples from the
@@ -135,7 +137,18 @@ class SingleBinPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
       if self._packed_elements:
         return self._packed_elements.popleft()
 
-      flat_element = self._get_next_from_parent()
+      try:
+        flat_element = self._get_next_from_parent()
+      except StopIteration as e:
+        # Parent iterator exhausted. Yield whatever is in the buffer as last
+        # (potentially heavily padded) element.
+        if self._element_buffer:
+          packed_element = self._pack_elements(self._element_buffer)
+          self._element_buffer = []
+          self._element_buffer_space = copy.copy(self._flat_lengths)
+          return packed_element
+        else:
+          raise e
       if self._is_fully_packed(flat_element):
         # To avoid uncessary splitting/truncation we pass through examples that
         # seem to be fully packed. This does change the order of examples but
