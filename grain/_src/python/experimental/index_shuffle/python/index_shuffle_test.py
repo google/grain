@@ -37,6 +37,11 @@ class IndexShuffleTest(absltest.TestCase):
       seen.add(y)
     self.assertLen(seen, 10_000)
 
+  def test_index_shuffle_single_record(self):
+    self.assertEqual(
+        0, index_shuffle.index_shuffle(index=0, max_index=0, seed=0, rounds=4)
+    )
+
 
 if __name__ == '__main__':
   absltest.main()
