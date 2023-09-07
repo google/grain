@@ -12,12 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Tests for LazyDataset."""
+import dataclasses
 from typing import cast
 
 from absl.testing import absltest
 from absl.testing import parameterized
+from grain._src.core import transforms
 from grain._src.python import options
 from grain._src.python.lazy_dataset import lazy_dataset
+from grain._src.python.lazy_dataset.transformations import filter as filter_lazy_dataset
+
+
+@dataclasses.dataclass(frozen=True)
+class FilterEvenElementsOnly(transforms.FilterTransform):
+
+  def filter(self, element: int):
+    return element % 2
 
 
 class RangeLazyMapDatasetTest(absltest.TestCase):
@@ -66,6 +76,9 @@ class PrefetchLazyIterDatasetTest(parameterized.TestCase):
   def setUp(self):
     super().setUp()
     self.range_ds = lazy_dataset.RangeLazyMapDataset(20)
+    self.filtered_range_ds = filter_lazy_dataset.FilterLazyMapDataset(
+        self.range_ds, FilterEvenElementsOnly()
+    )
     self.prefetch_lazy_iter_ds = lazy_dataset.PrefetchLazyIterDataset(
         self.range_ds, options.ReadOptions()
     )
@@ -78,7 +91,7 @@ class PrefetchLazyIterDatasetTest(parameterized.TestCase):
     self.assertIsInstance(ds_iter, lazy_dataset.PrefetchLazyDatasetIterator)
 
   @parameterized.parameters(0, 1, 10)
-  def test_prefetch_data(self, prefetch_buffer_size: int):
+  def test_prefetch_data_dense(self, prefetch_buffer_size: int):
     read_options = options.ReadOptions(
         prefetch_buffer_size=prefetch_buffer_size
     )
@@ -89,6 +102,20 @@ class PrefetchLazyIterDatasetTest(parameterized.TestCase):
     ds_iter = iter(prefetch_lazy_iter_ds)
     actual = [next(ds_iter) for _ in range(20)]
     expected = list(range(20))
+    self.assertSequenceEqual(actual, expected)
+
+  @parameterized.parameters(0, 1, 10)
+  def test_prefetch_data_sparse(self, prefetch_buffer_size: int):
+    read_options = options.ReadOptions(
+        prefetch_buffer_size=prefetch_buffer_size
+    )
+    prefetch_lazy_iter_ds = lazy_dataset.PrefetchLazyIterDataset(
+        self.filtered_range_ds, read_options, allow_nones=True
+    )
+    self.assertEqual(prefetch_lazy_iter_ds.read_options, read_options)
+    ds_iter = iter(prefetch_lazy_iter_ds)
+    actual = [next(ds_iter) for _ in range(20)]
+    expected = [i if i % 2 == 1 else None for i in range(20)]
     self.assertSequenceEqual(actual, expected)
 
   def test_prefetch_iterates_one_epoch(self):

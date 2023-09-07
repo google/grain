@@ -171,16 +171,22 @@ class PrefetchLazyIterDataset(LazyIterDataset[T]):
 
   parent: LazyMapDataset[T]
   read_options: grain_options.ReadOptions
+  allow_nones: bool = False
 
   def __iter__(self) -> LazyDatasetIterator[T]:
-    return PrefetchLazyDatasetIterator(self.parent, self.read_options)
+    return PrefetchLazyDatasetIterator(
+        self.parent, self.read_options, self.allow_nones
+    )
 
 
 class PrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
   """Iterator that performs prefetching using a thread pool."""
 
   def __init__(
-      self, dataset: LazyMapDataset[T], read_options: grain_options.ReadOptions
+      self,
+      dataset: LazyMapDataset[T],
+      read_options: grain_options.ReadOptions,
+      allow_nones: bool,
   ):
     super().__init__()
     self._dataset = dataset
@@ -188,12 +194,13 @@ class PrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
     self._next_index = 0
     self._buffer = None
     self._prefetch_buffer_size = read_options.prefetch_buffer_size
+    self._allow_nones = allow_nones
     if self._prefetch_buffer_size > 0:
       self._executor = futures.ThreadPoolExecutor(read_options.num_threads)
 
   def __next__(self) -> T:
     # We loop here to skip all None elements (in case the underlying dataset
-    # is sparse).
+    # is sparse), if self._allow_sparsity = False, else we return Nones too.
     while True:
       if self._next_index == self._dataset_length:
         break
@@ -222,7 +229,7 @@ class PrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
       else:
         element = self._dataset[self._next_index]
       self._next_index += 1
-      if element is not None:
+      if self._allow_nones or element is not None:
         return element
     raise StopIteration
 
