@@ -8,7 +8,9 @@ py_library(
         "data_sources.py",
     ],
     srcs_version = "PY3",
-    deps = ["//grain/_src/core:usage_logging"],
+    deps = [
+        "//grain/_src/core:usage_logging",
+    ],
 )
 
 py_test(
@@ -24,7 +26,6 @@ py_test(
     srcs_version = "PY3",
     deps = [
         ":data_sources",
-        ":options",
     ],
 )
 

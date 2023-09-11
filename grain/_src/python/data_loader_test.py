@@ -15,6 +15,7 @@
 
 from collections.abc import Sequence
 import pathlib
+from unittest import mock
 
 from absl import flags
 from absl.testing import absltest

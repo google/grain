@@ -51,7 +51,8 @@ _SparseArray = collections.namedtuple(
     "SparseArray", ["indices", "values", "dense_shape"]
 )
 
-ArrayRecordDataSource = array_record.ArrayRecordDataSource
+
+class ArrayRecordDataSource(array_record.ArrayRecordDataSource):
 
 
 @typing.runtime_checkable
