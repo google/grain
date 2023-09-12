@@ -18,8 +18,6 @@
 # pylint: disable=unused-import
 # pylint: disable=wildcard-import
 
-from array_record.python.array_record_data_source import ArrayRecordDataSource
-
 from . import python_experimental as experimental
 
 from ._src.core.config import config
@@ -39,6 +37,7 @@ from ._src.python.data_loader import (
     PyGrainDatasetIterator,
 )
 from ._src.python.data_sources import (
+    ArrayRecordDataSource,
     InMemoryDataSource,
     RandomAccessDataSource,
     RangeDataSource,
