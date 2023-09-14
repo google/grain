@@ -202,3 +202,24 @@ py_test(
         "//grain/_src/python/lazy_dataset",
     ],
 )
+
+py_library(
+    name = "shard",
+    srcs = ["shard.py"],
+    srcs_version = "PY3",
+    deps = [
+        "//grain/_src/core:sharding",
+        "//grain/_src/python/lazy_dataset",
+    ],
+)
+
+py_test(
+    name = "shard_test",
+    srcs = ["shard_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":shard",
+        "//grain/_src/core:sharding",
+        "//grain/_src/python/lazy_dataset",
+    ],
+)
