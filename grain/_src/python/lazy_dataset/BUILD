@@ -38,24 +38,3 @@ py_test(
     srcs_version = "PY3",
     deps = [":data_sources"],
 )
-
-py_library(
-    name = "grain_pool_v2",
-    srcs = ["grain_pool_v2.py"],
-    srcs_version = "PY3",
-    deps = [
-        "//grain/_src/core:parallel",
-        "//grain/_src/python:multiprocessing_common",
-    ],
-)
-
-py_test(
-    name = "grain_pool_v2_test",
-    srcs = ["grain_pool_v2_test.py"],
-    srcs_version = "PY3",
-    deps = [
-        ":grain_pool_v2",
-        "//grain/_src/core:sharding",
-        "//grain/_src/python:samplers",
-    ],
-)
