@@ -101,7 +101,9 @@ def as_rng_key(seed: RNGKeyLike) -> RNGKey:
   Returns:
     RNGKey which is currently a NumPy array of dtype uint32 and shape [2].
   """
-  if isinstance(seed, jax.random.PRNGKeyArray):
+  if hasattr(seed, "dtype") and jax.dtypes.issubdtype(
+      seed.dtype, jax.dtypes.prng_key
+  ):
     return seed
   if isinstance(seed, (int, jnp.integer)):
     return jax.random.PRNGKey(seed)
