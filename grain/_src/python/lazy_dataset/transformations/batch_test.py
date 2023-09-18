@@ -33,7 +33,18 @@ class BatchLazyMapDatasetTest(absltest.TestCase):
     np.testing.assert_allclose(actual, expected)
 
   def test_batch_size_3(self):
+    # drop_remainder defaults to False
     ds = batch.BatchLazyMapDataset(self.range_ds, batch_size=3)
+    self.assertLen(ds, 4)  # ceil(10 / 3).
+    actual = [ds[i] for i in range(4)]
+    expected = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
+    for i in range(4):
+      np.testing.assert_allclose(actual[i], expected[i])
+
+  def test_batch_size_3_drop_remainder(self):
+    ds = batch.BatchLazyMapDataset(
+        self.range_ds, batch_size=3, drop_remainder=True
+    )
     self.assertLen(ds, 3)  # 10 // 3.
     actual = [ds[i] for i in range(3)]
     expected = [[0, 1, 2], [3, 4, 5], [6, 7, 8]]

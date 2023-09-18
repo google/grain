@@ -14,6 +14,7 @@
 """Implements batch transformations."""
 
 from collections.abc import Sequence
+import math
 from typing import TypeVar
 
 from grain._src.python.lazy_dataset import lazy_dataset
@@ -77,7 +78,12 @@ class _BatchLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
 class BatchLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   """Batch transformation for non-sparse LazyMapDatasets."""
 
-  def __init__(self, parent: lazy_dataset.LazyMapDataset, batch_size: int):
+  def __init__(
+      self,
+      parent: lazy_dataset.LazyMapDataset,
+      batch_size: int,
+      drop_remainder: bool = False,
+  ):
     super().__init__()
     if parent.sparse:
       raise ValueError(
@@ -86,17 +92,22 @@ class BatchLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
       )
     self._parent = parent
     self._batch_size = batch_size
+    self._drop_remainder = drop_remainder
+    if self._drop_remainder:
+      self._length = len(self._parent) // self._batch_size
+    else:
+      self._length = math.ceil(len(self._parent) / self._batch_size)
 
   @property
   def sparse(self) -> bool:
     return False
 
   def __len__(self):
-    return len(self._parent) // self._batch_size
+    return self._length
 
   def __getitem__(self, index: int):
     start = index * self._batch_size
-    stop = (index + 1) * self._batch_size
+    stop = min(len(self._parent), (index + 1) * self._batch_size)
     values = [self._parent[i] for i in range(start, stop)]
     return _make_batch(values)
 
