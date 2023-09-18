@@ -93,7 +93,7 @@ class RangeDataSource:
 
 
 class InMemoryDataSource(shared_memory.ShareableList[_SLT]):
-  """Simple in-memory data source for sequences that is sharable among mutiple processes.
+  """Simple in-memory data source for sequences that is sharable among multiple processes.
 
   Note:
     This constrains storable values to only the int, float, bool, str (less than
