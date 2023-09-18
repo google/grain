@@ -410,6 +410,13 @@ def _apply_transform(
       )
     case transforms.FilterTransform():
       fn = lambda r: (r, bool(transform.filter(r.data)))
+    case transforms.BatchTransform():
+      batch_op = BatchOperation(
+          batch_size=transform.batch_size,
+          drop_remainder=transform.drop_remainder,
+      )
+      for r in batch_op(input_iterator):
+        yield r
     case _:
       # Transform is a legacy style operation and __call__() yield output
       # records.

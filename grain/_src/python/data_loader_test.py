@@ -542,6 +542,21 @@ class DataLoaderTest(parameterized.TestCase):
       actual.append(item)
     np.testing.assert_equal(actual, expected)
 
+  def test_batch_transform_mapped_to_batch_operation(self):
+    # Map transforms elements to be [1, 2, 3, 4, 5, 6, 7, 8]
+    # Filter keeps only even elements [2, 4, 6, 8]
+    # Batching batches each 2 consective elements, producing
+    # [np.array([2, 4]), np.array([6, 8])]
+    transformations = [
+        PlusOne(),
+        FilterEven(),
+        transforms.BatchTransform(batch_size=2),
+    ]
+    data_loader = self._create_data_loader_for_short_sequence(transformations)
+    expected = [np.array([2, 4]), np.array([6, 8])]
+    actual = list(data_loader)
+    np.testing.assert_equal(actual, expected)
+
 
 class PyGrainDatasetIteratorTest(absltest.TestCase):
 
