@@ -42,7 +42,9 @@ class FlatMapLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   def __len__(self) -> int:
     return self._transform.max_fan_out * len(self._parent)
 
-  def __getitem__(self, index: int) -> Element | None:
+  def __getitem__(self, index):
+    if isinstance(index, slice):
+      return self.slice(index)
     fan_out = self._transform.max_fan_out
     split_index = index % fan_out
     element_index = index // fan_out

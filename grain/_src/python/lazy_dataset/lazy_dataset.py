@@ -43,7 +43,7 @@ import collections
 from collections.abc import Iterable, Iterator, Sequence
 import dataclasses
 import functools
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, Callable, Optional, TypeVar, overload
 
 from concurrent import futures
 from grain._src.core import sharding
@@ -67,8 +67,16 @@ class LazyMapDataset(Sequence[T], abc.ABC):
   def __len__(self) -> int:
     """Returns the length of this dataset."""
 
+  @overload
+  def __getitem__(self, index: slice) -> LazyMapDataset:
+    ...
+
+  @overload
+  def __getitem__(self, index: int) -> T | None:
+    ...
+
   @abc.abstractmethod
-  def __getitem__(self, index: int) -> Optional[T]:
+  def __getitem__(self, index):
     """Returns the element for the index or None if missing."""
 
   @classmethod
@@ -266,7 +274,9 @@ class RangeLazyMapDataset(LazyMapDataset[int]):
   def __len__(self) -> int:
     return self._length
 
-  def __getitem__(self, index: int) -> int:
+  def __getitem__(self, index):
+    if isinstance(index, slice):
+      return self.slice(index)
     return self.start + (index % self._length) * self.step
 
   def to_iter_dataset(
@@ -300,7 +310,9 @@ class ShardLazyDataset(LazyMapDataset[T]):
   def __len__(self) -> int:
     return self._end - self._start
 
-  def __getitem__(self, index: int) -> Optional[T]:
+  def __getitem__(self, index: int | slice) -> Optional[T]:
+    if isinstance(index, slice):
+      return self.slice(index)
     epoch = index // len(self)
     index_in_epoch = index % len(self)
     index = epoch * len(self._parent) + index_in_epoch + self._start

@@ -13,7 +13,7 @@
 # limitations under the License.
 """Implements global shuffle transformation."""
 
-from typing import Optional, TypeVar
+from typing import TypeVar
 
 from grain._src.python.experimental.index_shuffle.python import index_shuffle_module as index_shuffle
 from grain._src.python.lazy_dataset import lazy_dataset
@@ -44,7 +44,9 @@ class ShuffleLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   def __len__(self) -> int:
     return len(self._parent)
 
-  def __getitem__(self, index: int) -> Optional[T]:
+  def __getitem__(self, index):
+    if isinstance(index, slice):
+      return self.slice(index)
     length = len(self._parent)
     epoch = index // length
     index_in_epoch = index % length

@@ -39,10 +39,7 @@ class SliceLazyMapDatasetTest(parameterized.TestCase):
   )
   def test_len(self, start: int, step: int, expected_len: int):
     range_ds_for_process = slice_ds.SliceLazyMapDataset(
-        parent=self.range_ds,
-        start=start,
-        stop=self.data_len,
-        step=step,
+        self.range_ds, slice(start, self.data_len, step)
     )
     self.assertLen(range_ds_for_process, expected_len)
 
@@ -51,9 +48,16 @@ class SliceLazyMapDatasetTest(parameterized.TestCase):
   )
   def test_getitem(self, start: int, stop: int, step: int):
     expected = self.range_py_list[start:stop:step]
-    ds = slice_ds.SliceLazyMapDataset(
-        self.range_ds, start=start, stop=stop, step=step
-    )
+    ds = slice_ds.SliceLazyMapDataset(self.range_ds, slice(start, stop, step))
+    actual = [ds[i] for i in range(len(ds))]
+    self.assertSequenceEqual(actual, expected)
+
+  @parameterized.parameters(
+      itertools.product(range(-8, 8), range(-9, 8), [-2, -1, 1, 2])
+  )
+  def test_getitem_sice(self, start: int, stop: int, step: int):
+    expected = self.range_py_list[start:stop:step]
+    ds = self.range_ds[start:stop:step]
     actual = [ds[i] for i in range(len(ds))]
     self.assertSequenceEqual(actual, expected)
 
@@ -62,9 +66,7 @@ class SliceLazyMapDatasetTest(parameterized.TestCase):
   )
   def test_iter(self, start: int, stop: int, step: int):
     expected = self.range_py_list[start:stop:step]
-    ds = slice_ds.SliceLazyMapDataset(
-        self.range_ds, start=start, stop=stop, step=step
-    )
+    ds = slice_ds.SliceLazyMapDataset(self.range_ds, slice(start, stop, step))
     ds_iter = iter(ds)
     actual = list(ds_iter)
     self.assertSequenceEqual(actual, expected)

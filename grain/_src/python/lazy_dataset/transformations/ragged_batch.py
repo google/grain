@@ -43,7 +43,9 @@ class RaggedBatchLazyMapDataset(LazyMapDataset[T]):
   def __len__(self) -> int:
     return math.ceil(len(self._parent) / self._transform.batch_size)
 
-  def __getitem__(self, index: int) -> Element:
+  def __getitem__(self, index):
+    if isinstance(index, slice):
+      return self.slice(index)
     indices = range(
         index * self._transform.batch_size,
         min(len(self._parent), (index + 1) * self._transform.batch_size),

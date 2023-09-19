@@ -45,5 +45,7 @@ class SourceLazyMapDataset(lazy_dataset.LazyMapDataset):
   def __len__(self) -> int:
     return len(self._source)
 
-  def __getitem__(self, index: int):
+  def __getitem__(self, index):
+    if isinstance(index, slice):
+      return self.slice(index)
     return self._source[index % len(self)]

@@ -61,7 +61,9 @@ class MixedLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   def __len__(self) -> int:
     return self._length
 
-  def __getitem__(self, index: int) -> T:
+  def __getitem__(self, index):
+    if isinstance(index, slice):
+      return self.slice(index)
     input_index, index = _dataset_and_key_of_next_element(
         index, self._proportions
     )

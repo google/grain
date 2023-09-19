@@ -105,7 +105,9 @@ class BatchLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   def __len__(self):
     return self._length
 
-  def __getitem__(self, index: int):
+  def __getitem__(self, index):
+    if isinstance(index, slice):
+      return self.slice(index)
     start = index * self._batch_size
     stop = min(len(self._parent), (index + 1) * self._batch_size)
     values = [self._parent[i] for i in range(start, stop)]
