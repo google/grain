@@ -557,6 +557,42 @@ class DataLoaderTest(parameterized.TestCase):
     actual = list(data_loader)
     np.testing.assert_equal(actual, expected)
 
+  @mock.patch.object(data_loader_lib, "np_array_in_shared_memory")
+  def test_global_shared_memory(self, mock_np_array_in_shared_memory):
+    range_data_source = RangeDataSource(start=0, stop=8, step=1)
+    sampler = samplers.SequentialSampler(
+        num_records=len(range_data_source), shard_options=sharding.NoSharding()
+    )
+
+    batch_operation = mock.MagicMock(BatchOperation(batch_size=2))
+    operations = [
+        PlusOne(),
+        FilterEven(),
+        batch_operation,
+    ]
+
+    mock_np_array_in_shared_memory.numpy_shared_memory_pickler_enabled.return_value = (
+        True
+    )
+    data_loader_lib.DataLoader(
+        data_source=range_data_source,
+        sampler=sampler,
+        operations=operations,
+        worker_count=2,
+    )
+    batch_operation._enable_shared_memory.assert_not_called()
+
+    mock_np_array_in_shared_memory.numpy_shared_memory_pickler_enabled.return_value = (
+        False
+    )
+    data_loader_lib.DataLoader(
+        data_source=range_data_source,
+        sampler=sampler,
+        operations=operations,
+        worker_count=2,
+    )
+    batch_operation._enable_shared_memory.assert_called_once()
+
 
 class PyGrainDatasetIteratorTest(absltest.TestCase):
 

@@ -51,6 +51,7 @@ py_library(
         ":python_lazy_dataset",  # build_cleaner: keep
         "//grain/_src/core:transforms",  # build_cleaner: keep
         "//grain/_src/python/experimental/example_packing:packing",  # build_cleaner: keep
+        "//grain/_src/python/experimental/shared_memory:np_array_in_shared_memory",  # build_cleaner: keep
     ],
 )
 
