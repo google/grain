@@ -21,6 +21,7 @@ import dataclasses
 from multiprocessing import shared_memory
 from typing import Any, Callable, Generic, Iterator, Protocol, Sequence, TypeVar
 
+from absl import logging
 from grain._src.python import record
 import numpy as np
 import numpy.typing as npt
@@ -54,6 +55,10 @@ class MapOperation(Generic[_IN, _OUT]):
   def __call__(
       self, input_iterator: Iterator[record.Record[_IN]]
   ) -> Iterator[record.Record[_OUT]]:
+    logging.error(
+        "Applying deprecated PyGrain MapOperation. Please use the"
+        " grain.python.MapTransform."
+    )
     for input_record in input_iterator:
       try:
         map_result = self.map_function(input_record.data)
@@ -73,6 +78,10 @@ class RandomMapOperation(Generic[_IN, _OUT]):
   def __call__(
       self, input_iterator: Iterator[record.Record[_IN]]
   ) -> Iterator[record.Record[_OUT]]:
+    logging.error(
+        "Applying deprecated PyGrain RandomMapOperation. Please use the"
+        " grain.python.RandomMapTransform."
+    )
     for input_record in input_iterator:
       try:
         random_map_result = self.random_map_function(
@@ -96,6 +105,10 @@ class FilterOperation(Generic[_IN]):
   def __call__(
       self, input_iterator: Iterator[record.Record[_IN]]
   ) -> Iterator[record.Record[_IN]]:
+    logging.error(
+        "Applying deprecated PyGrain FilterOperation. Please use the"
+        " grain.python.FilterTransform."
+    )
     for input_record in input_iterator:
       try:
         filter_result = self.condition_function(input_record.data)
@@ -136,6 +149,10 @@ class BatchOperation(Generic[_IN, _OUT]):
   def __call__(
       self, input_iterator: Iterator[record.Record[_IN]]
   ) -> Iterator[record.Record[_OUT]]:
+    logging.error(
+        "Applying deprecated PyGrain BatchOperation. Please use the"
+        " grain.python.Batch transformation."
+    )
     records_to_batch = []
     last_record_metadata = None
     for input_record in input_iterator:
