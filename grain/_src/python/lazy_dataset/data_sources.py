@@ -37,6 +37,8 @@ class SourceLazyMapDataset(lazy_dataset.LazyMapDataset):
   def __init__(self, source: RandomAccessDataSource):
     super().__init__()
     self._source = source
+    if isinstance(self._source, lineage_logging.SupportsLineageLogging):
+      self._source.log_lineage()
 
   @property
   def sparse(self) -> bool:
