@@ -71,7 +71,10 @@ py_library(
         "operations.py",
     ],
     srcs_version = "PY3",
-    deps = [":record"],
+    deps = [
+        ":record",
+        ":shared_memory_array",
+    ],
 )
 
 py_test(
@@ -127,6 +130,7 @@ py_library(
         ":options",
         ":record",
         ":samplers",
+        ":shared_memory_array",
         "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
         "//grain/_src/core:usage_logging",
@@ -232,4 +236,21 @@ py_test(
     srcs = ["grain_logging_test.py"],
     srcs_version = "PY3",
     deps = [":grain_logging"],
+)
+
+py_library(
+    name = "shared_memory_array",
+    srcs = ["shared_memory_array.py"],
+    srcs_version = "PY3",
+)
+
+py_test(
+    name = "shared_memory_array_test",
+    srcs = ["shared_memory_array_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":operations",
+        ":record",
+        ":shared_memory_array",
+    ],
 )
