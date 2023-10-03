@@ -41,7 +41,6 @@ from ._src.python.data_sources import (
     InMemoryDataSource,
     RandomAccessDataSource,
     RangeDataSource,
-    TfdsDataSource,
 )
 from ._src.python.grain_pool import (GrainPool, GrainPoolElement)
 from ._src.python.load import load
