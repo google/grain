@@ -50,10 +50,24 @@ class RandomAccessDataSource(Protocol, Generic[T]):
   """Interface for datasources where storage supports efficient random access."""
 
   def __len__(self) -> int:
-    ...
+    """Returns the total number of records in the data source."""
 
   def __getitem__(self, record_key: SupportsIndex) -> T:
-    ...
+    """Returns the value for the given record_key.
+
+    This method must be threadsafe. It's also expected to be deterministic.
+    When using multiprocessing (worker_count>0) PyGrain will pickle the data
+    source, which invokes __getstate__(), and send a copy to each worker
+    process, where __setstate__() is called. After that each worker process
+    has it's own independent data source object.
+
+    Arguments:
+      record_key: This will be an integer in [0, len(self)-1].
+
+    Returns:
+      The corresponding record. File data sources often return the raw bytes but
+      records can be any Python object.
+    """
 
 
 class RangeDataSource:
