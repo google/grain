@@ -1,13 +1,11 @@
 """The file contains functions to manage shared_memory usage for numpy array."""
 
-import logging
 from multiprocessing import reduction
 from multiprocessing import shared_memory
 import pickle
-from typing import Any
-import weakref
 
 from absl import flags
+from absl import logging
 import numpy as np
 
 
@@ -21,30 +19,63 @@ _MIN_BYTES_FOR_SHARED_MEMORY = 2**23
 
 
 def _cleanup_shm(shm: shared_memory.SharedMemory) -> None:
-  logging.info("Cleaning up shared memory %s.", shm.name)
+  logging.log_first_n(
+      logging.INFO,
+      "Cleaning up shared memory %s.",
+      1,
+      shm.name,
+  )
   shm.close()
   shm.unlink()
 
 
 def _rebuild_ndarray(serialized: bytes, shm_name: str) -> np.ndarray:
-  logging.info("Rebuilding numpy array from shared memory %s.", shm_name)
+  """Rebuilds numpy array from serialized bytes using shared memory.
+
+  Args:
+    serialized: the serialized bytes
+    shm_name: the name of the shared memory
+
+  Returns:
+    the numpy array.
+  """
+  logging.log_first_n(
+      logging.INFO,
+      "Rebuilding numpy array from shared memory %s.",
+      1,
+      shm_name,
+  )
   shm = shared_memory.SharedMemory(name=shm_name)
   arr = pickle.loads(serialized, buffers=[shm.buf])
-  weakref.finalize(shm, _cleanup_shm, shm)
-  return arr
+  arr_copied = arr.copy()
+  # Need to delete shm's pointer first to avoid BufferError during closing shm.
+  del arr
+  _cleanup_shm(shm)
+  return arr_copied
 
 
-def _reduce_ndarray(arr: Any):
+def _reduce_ndarray(arr: np.ndarray):
   """Reduces a NumPy using shared memory when possible."""
   # We cannot move generic objects or non-continuous arrays to shared memory.
   # Moving small array is not worth the overhead.
   # Fall-back to default method for these three cases.
   is_small = arr.nbytes < _MIN_BYTES_FOR_SHARED_MEMORY
   if arr.dtype.hasobject or not arr.flags.c_contiguous or is_small:
-    return arr.__reduce__()
+    logging.log_first_n(
+        logging.INFO,
+        "Small array with %d bytes, not using shared memory pickler.",
+        1,
+        arr.nbytes,
+    )
+    return arr.__reduce__()  # pytype:disable=attribute-error
 
   shm = shared_memory.SharedMemory(size=arr.nbytes, create=True)
-  logging.info("Shared memory %s is created.", shm.name)
+  logging.log_first_n(
+      logging.INFO,
+      "Shared memory %s is created.",
+      1,
+      shm.name,
+  )
 
   def buffer_callback(arr_buf: pickle.PickleBuffer):
     shm.buf[:] = arr_buf.raw()[:]
@@ -73,5 +104,7 @@ def disable_numpy_shared_memory_pickler() -> None:
 
 def numpy_shared_memory_pickler_enabled() -> bool:
   return np.ndarray in reduction.ForkingPickler._extra_reducers
+
+
 # pytype:enable=attribute-error
 # pylint:enable=protected-access
