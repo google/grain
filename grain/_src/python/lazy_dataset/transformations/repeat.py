@@ -32,7 +32,7 @@ class RepeatLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   """
 
   parent: lazy_dataset.LazyMapDataset[T]
-  num_epochs: int | None
+  num_epochs: int | None = None
   _len: int = sys.maxsize
 
   def __post_init__(self):
