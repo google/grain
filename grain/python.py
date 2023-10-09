@@ -58,3 +58,4 @@ from ._src.python.samplers import (
     Sampler,
     SequentialSampler,
 )
+from ._src.python.shared_memory_array import SharedMemoryArray
