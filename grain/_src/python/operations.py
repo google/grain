@@ -18,24 +18,16 @@ implementation for basic operations like MapOperation and FilterOperation (and
 Batch to follow soon) but users can also implement their own operations.
 """
 import dataclasses
-from multiprocessing import shared_memory
 from typing import Any, Callable, Generic, Iterator, Protocol, Sequence, TypeVar
 
 from absl import logging
 from grain._src.python import record
+from grain._src.python.shared_memory_array import SharedMemoryArray
 import numpy as np
-import numpy.typing as npt
 import tree
 
 _IN = TypeVar("_IN")
 _OUT = TypeVar("_OUT")
-
-
-@dataclasses.dataclass
-class SharedMemoryMetadata:
-  name: str
-  shape: tuple[int, ...]
-  dtype: npt.DTypeLike
 
 
 class Operation(Protocol):
@@ -198,24 +190,11 @@ class BatchOperation(Generic[_IN, _OUT]):
     self._validate_structure(input_records)
 
     def stacking_function(*args):
-      if not self._use_shared_memory:
+      first_arg = np.asanyarray(args[0])
+      shape, dtype = (len(args),) + first_arg.shape, first_arg.dtype
+      if not self._use_shared_memory or dtype.hasobject:
         return np.stack(args)
-      result_stacked = np.stack(args)
-      result_dtype = result_stacked.dtype
-      # Numpy arrays can have objects. Sending those via shared memory isn't
-      # supported and causes segmentation faults.
-      if result_dtype.hasobject:
-        return result_stacked
-      result_shape = result_stacked.shape
-      result_nbytes = result_stacked.nbytes
-      shm = shared_memory.SharedMemory(create=True, size=result_nbytes)
-      shm_name = shm.name
-      shm_array = np.ndarray(result_shape, dtype=result_dtype, buffer=shm.buf)
-      shm_array[:] = result_stacked[:]
-      shm.close()
-      return SharedMemoryMetadata(
-          name=shm_name, shape=result_shape, dtype=result_dtype
-      )
+      return np.stack(args, out=SharedMemoryArray(shape, dtype=dtype)).metadata
 
     return tree.map_structure(
         stacking_function, input_records[0], *input_records[1:]
