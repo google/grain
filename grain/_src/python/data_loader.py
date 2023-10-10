@@ -23,7 +23,6 @@ import dataclasses
 import functools
 import json
 from multiprocessing import pool
-from multiprocessing import shared_memory
 import os
 import queue
 import threading
@@ -43,9 +42,9 @@ from grain._src.python.data_sources import RandomAccessDataSource
 from grain._src.python.experimental.shared_memory import np_array_in_shared_memory
 from grain._src.python.operations import BatchOperation
 from grain._src.python.operations import Operation
-from grain._src.python.operations import SharedMemoryMetadata
 from grain._src.python.samplers import Sampler
-import numpy as np
+from grain._src.python.shared_memory_array import SharedMemoryArray
+from grain._src.python.shared_memory_array import SharedMemoryArrayMetadata
 import tree
 
 
@@ -533,6 +532,7 @@ class _MultiProcessorIterator(collections.abc.Iterator):
         ),
     )
     self._reader_thread.start()
+    SharedMemoryArray.enable_async_del(mp_options.num_workers)
     return self
 
   def __exit__(self, exc_type, exc_value, traceback):
@@ -548,23 +548,11 @@ class _MultiProcessorIterator(collections.abc.Iterator):
     self._reader_queue = None
 
   @staticmethod
-  def _read_and_unlink_shared_memory(element: Any) -> Any:
-    """Reads and unlinks shared memory blocks if element has any."""
-    if isinstance(element, SharedMemoryMetadata):
-      shm = shared_memory.SharedMemory(name=element.name)
-      array_in_shm = np.ndarray(
-          element.shape, dtype=element.dtype, buffer=shm.buf
-      )
-      # The Numpy array is to be handed to the user, who might use it for an
-      # indefinite time or pass it to other processes. We cannot keep the shared
-      # memory block indefinitely, thus chose to copy data out of it here.
-      data_copied_from_shm = array_in_shm.copy()
-      # make sure to free the shared memory block.
-      shm.close()
-      shm.unlink()
-      return data_copied_from_shm
-    else:
-      return element
+  def _open_shared_memory(element: Any) -> Any:
+    if isinstance(element, SharedMemoryArrayMetadata):
+      element = SharedMemoryArray.from_metadata(element)
+      element.unlink_on_del()
+    return element
 
   @staticmethod
   def _process_elements(
@@ -602,14 +590,13 @@ class _MultiProcessorIterator(collections.abc.Iterator):
         for element in g_pool:
           if read_thread_should_stop():
             break
-          # Note: Do we really need this thread pool? Can we return a weak
-          # ref instead of unlinking from memory?
-          # This method is already running in a background thread of the main
-          # process.
+          # Note: We use a thread pool for opening the shared memory because
+          # in some cases the calls to `shm_open` can actually become the
+          # bottleneck for a single thread.
           async_result = thread_pool.apply_async(
               tree.map_structure,
               args=(
-                  _MultiProcessorIterator._read_and_unlink_shared_memory,
+                  _MultiProcessorIterator._open_shared_memory,
                   element.record.data,
               ),
           )
