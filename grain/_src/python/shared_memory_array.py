@@ -26,7 +26,7 @@ import numpy as np
 import numpy.typing as npt
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True, slots=True)
 class SharedMemoryArrayMetadata:
   name: str
   shape: Iterable[int]
