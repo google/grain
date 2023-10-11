@@ -12,20 +12,140 @@ can't be added, we construct a new batch to which the element is added.
 """
 
 import dataclasses
-from typing import Any, Generic, Iterator, TypeVar, cast
+from typing import Generic, Iterator, TypeVar, cast
 
 from grain._src.python import record
 import jax
+import jaxtyping as jt
 import numpy as np
 import tree
 
-_IN = TypeVar("_IN")
-_OUT = TypeVar("_OUT")
-_Pytree = Any
+_T = TypeVar("_T")
+
+
+class _PackedBatch:
+  """Class to represent a batch of packed examples."""
+
+  def __init__(
+      self,
+      element_for_shapes: jt.PyTree[np.ndarray],
+      batch_size: int,
+      length_struct: jt.PyTree[int],
+  ):
+    self._batch_size = batch_size
+    self._length_struct = length_struct
+
+    # Define the main buffers we will pack the data into.
+    def make_packed_buffer(length: int, input_arr: np.ndarray):
+      return np.zeros(
+          shape=(batch_size, length, *input_arr.shape[1:]),  # (B, T, ...)
+          dtype=input_arr.dtype,
+      )
+
+    self._batch = jax.tree_map(
+        make_packed_buffer, length_struct, element_for_shapes
+    )
+
+    def make_packed_aux_info(length: int):
+      return np.zeros(shape=(batch_size, length), dtype=np.int32)
+
+    self._segmentations = jax.tree_map(make_packed_aux_info, length_struct)
+    self._positions = jax.tree_map(make_packed_aux_info, length_struct)
+
+    # Tracks the next empty position to insert an example for each row
+    # in the batch, for each feature in features_to_pack.
+    self._first_free_cell_per_row = jax.tree_map(
+        lambda _: np.zeros(batch_size, dtype=np.int32), length_struct
+    )
+
+    # Tracks the number of examples already packed into row of the batch. Used
+    # to fill the segmentation values for each feature.
+    self._num_examples_per_row = [0 for _ in range(batch_size)]
+
+    # For determinism, the metadata.index for the packed batch must match
+    # metadata.index of the _last_ included input example.
+    self._last_record_metadata = None
+
+  def get_packed_batch(self) -> record.Record[tuple[_T, _T, _T]]:
+    assert self._last_record_metadata is not None
+    return record.Record(
+        metadata=cast(record.RecordMetadata, self._last_record_metadata),
+        data=(self._batch, self._segmentations, self._positions),
+    )
+
+  def _can_add_at_row(self, element: jt.PyTree[np.ndarray]) -> int:
+    """Returns the index of the first row which fits element, or -1 if none."""
+    element_feature_lengths = jax.tree_map(len, element)
+
+    # Check no feature exceeds max length
+    length_exceeded = jax.tree_map(
+        lambda feature_length, max_length: feature_length > max_length,
+        element_feature_lengths,
+        self._length_struct,
+    )
+    if any(tree.flatten(length_exceeded)):
+      raise ValueError(
+          "Inputs to PackAndBatchOperation must be truncated to max length."
+      )
+
+    # For each row, check whether the total length after adding the current
+    # element would exceed max feature lengths.
+    def _feature_will_fit(feature_length, first_free_cell, max_length):
+      return feature_length + first_free_cell <= max_length
+
+    is_row_free_struct = jax.tree_map(
+        _feature_will_fit,
+        element_feature_lengths,
+        self._first_free_cell_per_row,
+        self._length_struct,
+    )
+
+    ## Pick first row (if exists) where element can be added.
+    for i in range(self._batch_size):
+      row_is_free_per_feature = [
+          free[i] for free in tree.flatten(is_row_free_struct)
+      ]
+      if all(row_is_free_per_feature):
+        return i
+    return -1
+
+  def add_element_to_batch(
+      self, element: jt.PyTree[np.ndarray], row: int
+  ) -> None:
+    """Adds element to current batch at the specified row."""
+    # Apply updates to each feature.
+    for per_feature_data in zip(
+        tree.flatten(element),
+        tree.flatten(self._batch),
+        tree.flatten(self._segmentations),
+        tree.flatten(self._positions),
+        tree.flatten(self._first_free_cell_per_row),
+    ):
+      value, batch_value, segmentations, positions, first_free_cell_per_row = (
+          per_feature_data
+      )
+      # Update batch value, segmentations, and positions.
+      start = first_free_cell_per_row[row]
+      end = first_free_cell_per_row[row] + len(value)
+      batch_value[row][start:end] = value
+      segmentations[row][start:end] = self._num_examples_per_row[row] + 1
+      positions[row][start:end] = np.arange(end - start)
+      # Update first_free_cell_per_row.
+      first_free_cell_per_row[row] += len(value)
+
+    self._num_examples_per_row[row] += 1
+
+  def try_add_to_batch(self, element: record.Record) -> bool:
+    """Finds a row in the batch at which element can be added."""
+    if (row_idx := self._can_add_at_row(element.data)) == -1:
+      return False
+    self.add_element_to_batch(element.data, row_idx)
+    self._last_record_metadata = element.metadata.remove_record_key()
+    return True
 
 
 @dataclasses.dataclass
-class PackAndBatchOperation(Generic[_IN]):
+class PackAndBatchOperation(Generic[_T]):
   """PyGrain pack-and-batch operation - see module docstring.
 
   Attributes:
@@ -57,16 +177,14 @@ class PackAndBatchOperation(Generic[_IN]):
       embeddings.
   """
 
-  length_struct: _Pytree
+  length_struct: jt.PyTree[int]
   batch_size: int
-
-  def __post_init__(self):
-    # We don't know input shapes and corresponding buffer shapes until __call__.
-    self._cur_batch: _PackedBatch | None = None
+  # We don't know input shapes and corresponding buffer shapes until __call__.
+  _cur_batch: _PackedBatch | None = None
 
   def __call__(
-      self, input_iterator: Iterator[record.Record[_IN]]
-  ) -> Iterator[record.Record[tuple[_IN, _IN, _IN]]]:
+      self, input_iterator: Iterator[record.Record[_T]]
+  ) -> Iterator[record.Record[tuple[_T, _T, _T]]]:
     for element in input_iterator:
       # Use `element` to set dtypes + trailing dimensions.
       if self._cur_batch is None:  # pytype: disable=attribute-error
@@ -76,6 +194,7 @@ class PackAndBatchOperation(Generic[_IN]):
 
       # Try adding element to the current packed batch.
       element_added_to_batch = self._cur_batch.try_add_to_batch(element)
+
       # When we have a full batch, yield the current packed data,
       # and then start a new batch with this element.
       if not element_added_to_batch:
@@ -84,121 +203,6 @@ class PackAndBatchOperation(Generic[_IN]):
             element.data, self.batch_size, self.length_struct
         )
         self._cur_batch.try_add_to_batch(element)
-    yield self._cur_batch.get_packed_batch()  # Final batch
 
-
-class _PackedBatch:
-  """Class to represent a batch of packed examples."""
-
-  def __init__(
-      self, element_for_shapes: _Pytree, batch_size: int, length_struct: _Pytree
-  ):
-    self._batch_size = batch_size
-    self._length_struct = length_struct
-
-    # Define the main buffers we will pack the data into.
-    def make_packed_buffer(length: int, input_arr: np.ndarray):
-      return np.zeros(
-          shape=(batch_size, length, *input_arr.shape[1:]),  # (B, T, ...)
-          dtype=input_arr.dtype,
-      )
-
-    self._batch = jax.tree_map(
-        make_packed_buffer, length_struct, element_for_shapes
-    )
-
-    def make_packed_aux_info(length: int):
-      return np.zeros(shape=(batch_size, length), dtype=np.int32)
-
-    self._segmentations = jax.tree_map(make_packed_aux_info, length_struct)
-    self._positions = jax.tree_map(make_packed_aux_info, length_struct)
-
-    # Tracks the next empty position to insert an example for each row
-    # in the batch, for each feature in features_to_pack.
-    self._first_free_cell_per_row = jax.tree_map(
-        lambda _: np.array([0 for _ in range(batch_size)]), length_struct
-    )
-
-    # Tracks the number of examples already packed into row of the batch. Used
-    # to fill the segmentation values for each feature.
-    self._num_examples_per_row = [0 for _ in range(batch_size)]
-
-    # For determinism, the metadata.index for the packed batch must match
-    # metadata.index of the _last_ included input example.
-    self._last_record_metadata = None
-
-  def get_packed_batch(self):
-    assert self._last_record_metadata is not None
-    return record.Record(
-        metadata=cast(record.RecordMetadata, self._last_record_metadata),
-        data=(self._batch, self._segmentations, self._positions),
-    )
-
-  def _can_add_at_row(self, element: _Pytree) -> int:
-    """Returns the index of the first row which fits element, or -1 if none."""
-    element_feature_lengths = jax.tree_map(len, element)
-
-    # Check no feature exceeds max length
-    length_exceeded = jax.tree_map(
-        lambda feature_length, max_length: feature_length > max_length,
-        element_feature_lengths,
-        self._length_struct,
-    )
-    if any([v for v in tree.flatten(length_exceeded)]):
-      raise ValueError(
-          "Inputs to PackAndBatchOperation must be truncated to max length."
-      )
-
-    # For each row, check whether the total length after adding the current
-    # element would exceed max feature lengths.
-    def _feature_will_fit(feature_length, first_free_cell, max_length):
-      return feature_length + first_free_cell <= max_length
-
-    is_row_free_struct = jax.tree_map(
-        _feature_will_fit,
-        element_feature_lengths,
-        self._first_free_cell_per_row,
-        self._length_struct,
-    )
-
-    ## Pick first row (if exists) where element can be added.
-    for i in range(self._batch_size):
-      row_is_free_per_feature = [
-          free[i] for free in tree.flatten(is_row_free_struct)
-      ]
-      if all(row_is_free_per_feature):
-        return i
-    return -1
-
-  def add_element_to_batch(self, element: _Pytree, row: int) -> None:
-    """Adds element to current batch at the specified row."""
-    # Apply updates to each feature.
-    for per_feature_data in zip(
-        tree.flatten(element),
-        tree.flatten(self._batch),
-        tree.flatten(self._segmentations),
-        tree.flatten(self._positions),
-        tree.flatten(self._first_free_cell_per_row),
-    ):
-      value, batch_value, segmentations, positions, first_free_cell_per_row = (
-          per_feature_data
-      )
-      # Update batch value, segmentations, and positions.
-      start = first_free_cell_per_row[row]
-      end = first_free_cell_per_row[row] + len(value)
-      batch_value[row][start:end] = value
-      segmentations[row][start:end] = self._num_examples_per_row[row] + 1
-      positions[row][start:end] = np.arange(end - start)
-      # Update first_free_cell_per_row.
-      first_free_cell_per_row[row] += len(value)
-
-    self._num_examples_per_row[row] += 1
-
-  def try_add_to_batch(self, element: record.Record) -> bool:
-    """Finds a row in the batch at which element can be added."""
-    row_idx = self._can_add_at_row(element.data)
-    if row_idx == -1:
-      return False
-    self.add_element_to_batch(element.data, row_idx)
-    self._last_record_metadata = element.metadata.remove_record_key()
-    return True
+    # Final batch
+    yield self._cur_batch.get_packed_batch()
