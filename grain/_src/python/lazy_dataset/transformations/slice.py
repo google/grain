@@ -30,10 +30,6 @@ class SliceLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     self._start, self._stop, self._step = sl.indices(len(parent))
     self._length = len(range(self._start, self._stop, self._step))
 
-  @property
-  def sparse(self) -> bool:
-    return self._parent.sparse
-
   def __len__(self) -> int:
     return self._length
 

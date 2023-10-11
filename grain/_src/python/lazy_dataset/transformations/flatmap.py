@@ -35,10 +35,6 @@ class FlatMapLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     self._parent = parent
     self._transform = transform
 
-  @property
-  def sparse(self) -> bool:
-    return True
-
   def __len__(self) -> int:
     return self._transform.max_fan_out * len(self._parent)
 

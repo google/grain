@@ -39,10 +39,6 @@ class FilterLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     else:
       self._filter_fn = transform
 
-  @property
-  def sparse(self) -> bool:
-    return True
-
   def __len__(self) -> int:
     return len(self._parent)
 

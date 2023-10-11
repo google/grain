@@ -58,11 +58,6 @@ class LazyMapDataset(Sequence[T], abc.ABC):
 
   _functions: dict[str, Callable[[LazyMapDataset], Any]] = {}
 
-  @property
-  @abc.abstractmethod
-  def sparse(self) -> bool:
-    """Returns True if this dataset can contain None elements."""
-
   @abc.abstractmethod
   def __len__(self) -> int:
     """Returns the length of this dataset."""
@@ -263,10 +258,6 @@ class RangeLazyMapDataset(LazyMapDataset[int]):
       self.stop = self.start
       self.start = 0
 
-  @property
-  def sparse(self) -> bool:
-    return False
-
   @functools.cached_property
   def _length(self) -> int:
     return len(range(self.start, self.stop, self.step))
@@ -302,10 +293,6 @@ class ShardLazyDataset(LazyMapDataset[T]):
     self._start, self._end = sharding.even_split(
         len(self._parent), shard_options
     )
-
-  @property
-  def sparse(self) -> bool:
-    return self._parent.sparse
 
   def __len__(self) -> int:
     return self._end - self._start

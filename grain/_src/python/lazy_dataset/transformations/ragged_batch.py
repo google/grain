@@ -31,14 +31,6 @@ class RaggedBatchLazyMapDataset(LazyMapDataset[T]):
     super().__init__()
     self._parent = parent
     self._transform = transform
-    if parent.sparse:
-      raise ValueError(
-          f"Cannot create RaggedBatchLazyDataset for sparse parent {parent}."
-      )
-
-  @property
-  def sparse(self) -> bool:
-    return False
 
   def __len__(self) -> int:
     return math.ceil(len(self._parent) / self._transform.batch_size)

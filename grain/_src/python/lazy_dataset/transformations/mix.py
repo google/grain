@@ -54,10 +54,6 @@ class MixedLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     # Ensure all elements of constituent datasets appear at least once.
     self._length = int((lengths / float_proportions).max())
 
-  @property
-  def sparse(self) -> bool:
-    return any(p.sparse for p in self._parents)
-
   def __len__(self) -> int:
     return self._length
 

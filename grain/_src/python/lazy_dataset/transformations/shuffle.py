@@ -37,10 +37,6 @@ class ShuffleLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     self._seed = seed
     self._reshuffle_each_epoch = reshuffle_each_epoch
 
-  @property
-  def sparse(self) -> bool:
-    return self._parent.sparse
-
   def __len__(self) -> int:
     return len(self._parent)
 

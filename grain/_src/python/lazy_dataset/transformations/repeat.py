@@ -33,24 +33,18 @@ class RepeatLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
 
   parent: lazy_dataset.LazyMapDataset[T]
   num_epochs: int | None = None
-  _len: int = sys.maxsize
+  _length: int = sys.maxsize
 
   def __post_init__(self):
     if len(self.parent) >= sys.maxsize:
       raise ValueError(
           f"Repeating already infinite dataset {self.parent} does nothing."
       )
-    if self.num_epochs is None:
-      self._len = sys.maxsize
-    else:
-      self._len = self.num_epochs * len(self.parent)
-
-  @property
-  def sparse(self) -> bool:
-    return self.parent.sparse
+    if self.num_epochs is not None:
+      self._length = self.num_epochs * len(self.parent)
 
   def __len__(self) -> int:
-    return self._len
+    return self._length
 
   def __getitem__(self, index):
     if isinstance(index, slice):

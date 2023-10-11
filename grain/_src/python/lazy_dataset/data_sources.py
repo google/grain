@@ -40,10 +40,6 @@ class SourceLazyMapDataset(lazy_dataset.LazyMapDataset):
     if isinstance(self._source, lineage_logging.SupportsLineageLogging):
       self._source.log_lineage()
 
-  @property
-  def sparse(self) -> bool:
-    return False
-
   def __len__(self) -> int:
     return len(self._source)
 

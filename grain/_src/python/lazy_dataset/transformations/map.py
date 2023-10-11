@@ -122,10 +122,6 @@ class MapLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     self._map_fn, seed = _get_map_fn_and_seed(transform, seed)
     self._rng_pool = None if seed is None else RngPool(seed)
 
-  @property
-  def sparse(self) -> bool:
-    return self._parent.sparse
-
   def __len__(self) -> int:
     return len(self._parent)
 

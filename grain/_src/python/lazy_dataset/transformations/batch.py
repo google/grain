@@ -85,11 +85,6 @@ class BatchLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
       drop_remainder: bool = False,
   ):
     super().__init__()
-    if parent.sparse:
-      raise ValueError(
-          "Parent dataset is spare. Batching could result in empty rows."
-          f" Please call to_iter_dataset() first. Parent: {parent}"
-      )
     self._parent = parent
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
@@ -97,10 +92,6 @@ class BatchLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
       self._length = len(self._parent) // self._batch_size
     else:
       self._length = math.ceil(len(self._parent) / self._batch_size)
-
-  @property
-  def sparse(self) -> bool:
-    return False
 
   def __len__(self):
     return self._length
