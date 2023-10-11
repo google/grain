@@ -1,14 +1,24 @@
-"""The file contains functions to manage shared_memory usage for numpy array."""
+"""Methods to automatically use shared memory when sending NumPy arrays.
 
+Methods below can register a custom reducer for `np.ndarray` classes. After
+registration the reducer will turn NumPy arrays into our `SharedMemoryArray`
+objects. This can speed up communication between worker and main process when
+the last operation doesn't explicitly outputs `SharedMemoryArray`.
+
+The serialized data only contains the metadata and the receiving process must
+use it to reconstruct the array and free up the memory:
+```
+element: shared_memory_array.SharedMemoryArrayMetadata = ...
+element = shared_memory_array.SharedMemoryArray.from_metadata(element)
+# Free underlying memory when element reference count hits 0.
+element.unlink_on_del()
+```
+"""
 from multiprocessing import reduction
 
-from absl import flags
 from absl import logging
-from grain._src.python.shared_memory_array import SharedMemoryArray
+from grain._src.python import shared_memory_array
 import numpy as np
-
-
-FLAGS = flags.FLAGS
 
 
 # Arrays with fewer bytes with be serialized without using shared memory.
@@ -31,7 +41,7 @@ def _reduce_ndarray(arr: np.ndarray):
         arr.nbytes,
     )
     return arr.__reduce__()  # pytype: disable=attribute-error
-  shared_arr = SharedMemoryArray(arr.shape, arr.dtype)
+  shared_arr = shared_memory_array.SharedMemoryArray(arr.shape, arr.dtype)
   logging.log_first_n(
       logging.INFO,
       "Shared memory %s is created.",
