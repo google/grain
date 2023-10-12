@@ -10,8 +10,6 @@ py_library(
     srcs_version = "PY3",
     deps = [
         "//grain/_src/core:usage_logging",
-        "//grain/google/ntk/bagz/python:lazy_bag_reader",
-        "//learning/gemini/cms/core/data/tf_grain/shard_size_cache:shard_size_cache_py_pb2",
     ],
 )
 
