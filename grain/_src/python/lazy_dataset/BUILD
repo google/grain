@@ -31,7 +31,6 @@ py_library(
     srcs_version = "PY3",
     deps = [
         ":lazy_dataset",
-        "//grain/_src/python:options",
         "//grain/google/lineage:lineage_logging",
     ],
 )
@@ -40,7 +39,10 @@ py_test(
     name = "data_sources_test",
     srcs = ["data_sources_test.py"],
     srcs_version = "PY3",
-    deps = [":data_sources"],
+    deps = [
+        ":data_sources",
+        ":lazy_dataset",
+    ],
 )
 
 py_library(

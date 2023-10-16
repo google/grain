@@ -13,9 +13,9 @@
 # limitations under the License.
 """LazyDataset data sources."""
 
-
 from typing import Protocol
 
+from absl import logging
 from grain._src.python.lazy_dataset import lazy_dataset
 
 
@@ -37,8 +37,6 @@ class SourceLazyMapDataset(lazy_dataset.LazyMapDataset):
   def __init__(self, source: RandomAccessDataSource):
     super().__init__()
     self._source = source
-    if isinstance(self._source, lineage_logging.SupportsLineageLogging):
-      self._source.log_lineage()
 
   def __len__(self) -> int:
     return len(self._source)
@@ -47,3 +45,21 @@ class SourceLazyMapDataset(lazy_dataset.LazyMapDataset):
     if isinstance(index, slice):
       return self.slice(index)
     return self._source[index % len(self)]
+
+  def log_lineage(self):
+    if isinstance(self._source, lineage_logging.SupportsLineageLogging):
+      self._source.log_lineage()
+    else:
+      logging.error(
+          "Data source %s does not support lineage logging.", self._source
+      )
+
+
+def log_lineage_for_sources(
+    root: lazy_dataset.LazyMapDataset | lazy_dataset.LazyIterDataset,
+):
+  """Traverses tree of transformations and logs lineage on source datasets."""
+  if isinstance(root, lineage_logging.SupportsLineageLogging):
+    root.log_lineage()
+  for p in root.parents:
+    log_lineage_for_sources(p)
