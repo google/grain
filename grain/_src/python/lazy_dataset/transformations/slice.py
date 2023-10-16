@@ -24,7 +24,7 @@ class SliceLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   """Slices a LazyMapDataset similar to the slicing syntax in Python."""
 
   def __init__(self, parent: lazy_dataset.LazyMapDataset[T], sl: slice):
-    self._parent = parent
+    super().__init__(parent)
     if not isinstance(sl, slice):
       raise ValueError(f"sl is not a slice: {type(sl)}")
     self._start, self._stop, self._step = sl.indices(len(parent))

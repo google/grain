@@ -41,7 +41,6 @@ from __future__ import annotations
 import abc
 import collections
 from collections.abc import Iterable, Iterator, Sequence
-import dataclasses
 import functools
 from typing import Any, Callable, Optional, TypeVar, overload
 
@@ -57,6 +56,21 @@ class LazyMapDataset(Sequence[T], abc.ABC):
   """Abstract base class for all LazyMapDataset classes."""
 
   _functions: dict[str, Callable[[LazyMapDataset], Any]] = {}
+
+  def __init__(self, parents: LazyMapDataset | Sequence[LazyMapDataset] = ()):
+    if isinstance(parents, LazyMapDataset):
+      self._parents = (parents,)
+    else:
+      self._parents = tuple(parents)
+
+  @property
+  def parents(self) -> Sequence[LazyMapDataset]:
+    return self._parents
+
+  @property
+  def _parent(self) -> LazyMapDataset:
+    assert len(self._parents) == 1
+    return self._parents[0]
 
   @abc.abstractmethod
   def __len__(self) -> int:
@@ -109,6 +123,26 @@ class LazyIterDataset(Iterable[T], abc.ABC):
   """Abstract base class for all LazyIterDataset classes."""
 
   _functions: dict[str, Callable[[LazyIterDataset], Any]] = {}
+
+  def __init__(
+      self,
+      parents: LazyMapDataset
+      | LazyIterDataset
+      | Sequence[LazyMapDataset | LazyIterDataset] = (),
+  ):
+    if isinstance(parents, (LazyMapDataset, LazyIterDataset)):
+      self._parents = (parents,)
+    else:
+      self._parents = tuple(parents)
+
+  @property
+  def parents(self) -> Sequence[LazyMapDataset | LazyIterDataset]:
+    return self._parents
+
+  @property
+  def _parent(self) -> LazyMapDataset | LazyIterDataset:
+    assert len(self._parents) == 1
+    return self._parents[0]
 
   @abc.abstractmethod
   def __iter__(self) -> LazyDatasetIterator[T]:
@@ -168,17 +202,23 @@ class LazyDatasetIterator(Iterator[T], abc.ABC):
 
 
 @lazy_map_dataset_function("prefetch")
-@dataclasses.dataclass(frozen=True)
 class PrefetchLazyIterDataset(LazyIterDataset[T]):
   """Iterable dataset that uses a thread pool for prefetching."""
 
-  parent: LazyMapDataset[T]
-  read_options: grain_options.ReadOptions
-  allow_nones: bool = False
+  def __init__(
+      self,
+      parent: LazyMapDataset[T],
+      read_options: grain_options.ReadOptions,
+      *,
+      allow_nones: bool = False,
+  ):
+    super().__init__(parent)
+    self._read_options = read_options
+    self._allow_nones = allow_nones
 
   def __iter__(self) -> LazyDatasetIterator[T]:
     return PrefetchLazyDatasetIterator(
-        self.parent, self.read_options, self.allow_nones
+        self._parent, self._read_options, self._allow_nones
     )
 
 
@@ -245,18 +285,14 @@ class PrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
       self._buffer = None
 
 
-@dataclasses.dataclass(frozen=False)
 class RangeLazyMapDataset(LazyMapDataset[int]):
   """Range data source, similar to python range() function."""
 
-  start: int
-  stop: int | None = None
-  step: int = 1
-
-  def __post_init__(self):
-    if self.stop is None:
-      self.stop = self.start
-      self.start = 0
+  def __init__(self, start: int, stop: int | None = None, step: int = 1):
+    super().__init__()
+    self.start = 0 if stop is None else start
+    self.stop = start if stop is None else stop
+    self.step = step
 
   @functools.cached_property
   def _length(self) -> int:
@@ -288,8 +324,7 @@ class ShardLazyDataset(LazyMapDataset[T]):
   def __init__(
       self, parent: LazyMapDataset[T], shard_options: sharding.ShardOptions
   ):
-    super().__init__()
-    self._parent = parent
+    super().__init__(parent)
     self._start, self._end = sharding.even_split(
         len(self._parent), shard_options
     )

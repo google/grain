@@ -32,8 +32,7 @@ class FilterLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
       parent: lazy_dataset.LazyMapDataset[T],
       transform: transforms.FilterTransform | Callable[[T], bool],
   ):
-    super().__init__()
-    self._parent = parent
+    super().__init__(parent)
     if isinstance(transform, transforms.FilterTransform):
       self._filter_fn = transform.filter
     else:
@@ -100,8 +99,7 @@ class FilterLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
       parent: lazy_dataset.LazyIterDataset,
       transform: transforms.FilterTransform | Callable[[T], bool],
   ):
-    super().__init__()
-    self._parent = parent
+    super().__init__(parent)
     if isinstance(transform, transforms.FilterTransform):
       self._filter_fn = transform.filter
     else:

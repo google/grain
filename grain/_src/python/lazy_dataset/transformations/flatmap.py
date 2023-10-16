@@ -31,8 +31,7 @@ class FlatMapLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
       parent: lazy_dataset.LazyMapDataset,
       transform: transforms.FlatMapTransform,
   ):
-    super().__init__()
-    self._parent = parent
+    super().__init__(parent)
     self._transform = transform
 
   def __len__(self) -> int:

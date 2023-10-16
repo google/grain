@@ -32,8 +32,7 @@ class ShuffleLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
       reshuffle_each_epoch: bool = True,
       seed: int,
   ):
-    super().__init__()
-    self._parent = parent
+    super().__init__(parent)
     self._seed = seed
     self._reshuffle_each_epoch = reshuffle_each_epoch
 

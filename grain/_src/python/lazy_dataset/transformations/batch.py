@@ -84,8 +84,7 @@ class BatchLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
       batch_size: int,
       drop_remainder: bool = False,
   ):
-    super().__init__()
-    self._parent = parent
+    super().__init__(parent)
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
     if self._drop_remainder:
@@ -121,8 +120,7 @@ class BatchLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
       batch_size: int,
       drop_remainder: bool = False,
   ):
-    super().__init__()
-    self._parent = parent
+    super().__init__(parent)
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
 

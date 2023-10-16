@@ -98,7 +98,7 @@ class PrefetchLazyIterDatasetTest(parameterized.TestCase):
     prefetch_lazy_iter_ds = lazy_dataset.PrefetchLazyIterDataset(
         self.range_ds, read_options
     )
-    self.assertEqual(prefetch_lazy_iter_ds.read_options, read_options)
+    self.assertEqual(prefetch_lazy_iter_ds._read_options, read_options)  # pylint: disable=protected-access
     ds_iter = iter(prefetch_lazy_iter_ds)
     actual = [next(ds_iter) for _ in range(20)]
     expected = list(range(20))
@@ -112,7 +112,7 @@ class PrefetchLazyIterDatasetTest(parameterized.TestCase):
     prefetch_lazy_iter_ds = lazy_dataset.PrefetchLazyIterDataset(
         self.filtered_range_ds, read_options, allow_nones=True
     )
-    self.assertEqual(prefetch_lazy_iter_ds.read_options, read_options)
+    self.assertEqual(prefetch_lazy_iter_ds._read_options, read_options)  # pylint: disable=protected-access
     ds_iter = iter(prefetch_lazy_iter_ds)
     actual = [next(ds_iter) for _ in range(20)]
     expected = [i if i % 2 == 1 else None for i in range(20)]

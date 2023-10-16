@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Implements repeat transformation."""
-import dataclasses
 import sys
 from typing import TypeVar
 
@@ -22,7 +21,6 @@ T = TypeVar("T")
 
 
 @lazy_dataset.lazy_map_dataset_function("repeat")
-@dataclasses.dataclass
 class RepeatLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   """Repeats the underlying dataset for num_epochs.
 
@@ -31,17 +29,21 @@ class RepeatLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   of steps.
   """
 
-  parent: lazy_dataset.LazyMapDataset[T]
-  num_epochs: int | None = None
-  _length: int = sys.maxsize
-
-  def __post_init__(self):
-    if len(self.parent) >= sys.maxsize:
+  def __init__(
+      self,
+      parent: lazy_dataset.LazyMapDataset[T],
+      num_epochs: int | None = None,
+  ):
+    super().__init__(parent)
+    if len(parent) >= sys.maxsize:
       raise ValueError(
-          f"Repeating already infinite dataset {self.parent} does nothing."
+          f"Repeating already infinite dataset {parent} does nothing."
       )
-    if self.num_epochs is not None:
-      self._length = self.num_epochs * len(self.parent)
+    self._num_epochs = num_epochs
+    if num_epochs is None:
+      self._length: int = sys.maxsize
+    else:
+      self._length = num_epochs * len(parent)
 
   def __len__(self) -> int:
     return self._length
@@ -49,4 +51,4 @@ class RepeatLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
-    return self.parent[index]
+    return self._parent[index]

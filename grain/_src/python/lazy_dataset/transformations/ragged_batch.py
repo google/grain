@@ -28,8 +28,7 @@ class RaggedBatchLazyMapDataset(LazyMapDataset[T]):
   """Concatenate a fixed number of data records, which may be of different size."""
 
   def __init__(self, parent: LazyMapDataset, transform: RaggedBatchTransform):
-    super().__init__()
-    self._parent = parent
+    super().__init__(parent)
     self._transform = transform
     self._length = math.ceil(len(self._parent) / self._transform.batch_size)
 

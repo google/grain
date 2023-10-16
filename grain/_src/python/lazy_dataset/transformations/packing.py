@@ -14,7 +14,6 @@
 """Implements packing transformations."""
 import collections
 import copy
-import dataclasses
 from typing import Any
 
 from grain._src.python.lazy_dataset import lazy_dataset
@@ -35,7 +34,6 @@ _RECACHE_PARENT_STATE_EVERY_N = 100
 
 
 @lazy_dataset.lazy_iter_dataset_function("single_bin_pack")
-@dataclasses.dataclass
 class SingleBinPackLazyIterDataset(lazy_dataset.LazyIterDataset):
   """Packs potentially multiple examples from the parent into a single example.
 
@@ -80,12 +78,17 @@ class SingleBinPackLazyIterDataset(lazy_dataset.LazyIterDataset):
   positions).
   """
 
-  parent: lazy_dataset.LazyIterDataset
-  length_struct: PyTree[int | None]
+  def __init__(
+      self,
+      parent: lazy_dataset.LazyIterDataset,
+      length_struct: PyTree[int | None],
+  ):
+    super().__init__(parent)
+    self._length_struct = length_struct
 
   def __iter__(self) -> lazy_dataset.LazyDatasetIterator:
     return SingleBinPackLazyDatasetIterator(
-        iter(self.parent), self.length_struct
+        iter(self._parent), self._length_struct
     )  # pytype: disable=wrong-arg-types
 
 

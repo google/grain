@@ -117,8 +117,7 @@ class MapLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
       transform: _MapTransformType,
       seed: int | None = None,
   ):
-    super().__init__()
-    self._parent = parent
+    super().__init__(parent)
     self._map_fn, seed = _get_map_fn_and_seed(transform, seed)
     self._rng_pool = None if seed is None else RngPool(seed)
 
@@ -196,8 +195,7 @@ class MapLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
       transform: _MapTransformType,
       seed: int | None = None,
   ):
-    super().__init__()
-    self._parent = parent
+    super().__init__(parent)
     self._map_fn, self._seed = _get_map_fn_and_seed(transform, seed)
 
   def __iter__(self) -> _MapLazyDatasetIterator[T]:

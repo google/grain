@@ -35,9 +35,7 @@ class MixedLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
       parents: Sequence[lazy_dataset.LazyMapDataset[T]],
       proportions: Sequence[float | int] | None = None,
   ):
-    super().__init__()
-    self._parents = parents
-
+    super().__init__(parents)
     # Normalize proportions
     if proportions is None:
       proportions = [1] * len(parents)
