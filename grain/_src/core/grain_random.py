@@ -88,7 +88,7 @@ import numpy as np
 # However when custom RNGs are enabled by default keys are wrapped in a KeyArray
 # object and can have different internal state. This might become the default
 # in the future.
-RNGKey = jax.random.PRNGKeyArray
+RNGKey = jax.Array
 RNGKeyLike = Union[RNGKey, int, Sequence[int], np.ndarray]
 
 
