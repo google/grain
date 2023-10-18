@@ -66,7 +66,7 @@ def function_taking_some_time(input_iterator: Iterable[int]):
 
 def add_random_value(
     input_iterator: Iterable[int],
-    jax_prng_key: jax.random.PRNGKeyArray,
+    jax_prng_key: jax.Array,
     process_idx: int,
 ) -> Iterable[float]:  # pylint: disable=unused-argument
   del process_idx
