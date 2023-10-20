@@ -21,25 +21,11 @@ from grain._src.python import shared_memory_array
 import numpy as np
 
 
-# Arrays with fewer bytes with be serialized without using shared memory.
-# This number is tuned based on the fact that imagenet starts to see benefit
-# from batch_size 64 (9,633,792 bytes).
-_MIN_BYTES_FOR_SHARED_MEMORY = 2**23
-
-
 def _reduce_ndarray(arr: np.ndarray):
   """Reduces a NumPy using shared memory when possible."""
   # We cannot move generic objects or non-continuous arrays to shared memory.
-  # Moving small array is not worth the overhead.
   # Fall-back to default method for these three cases.
-  is_small = arr.nbytes < _MIN_BYTES_FOR_SHARED_MEMORY
-  if arr.dtype.hasobject or not arr.flags.c_contiguous or is_small:
-    logging.log_first_n(
-        logging.INFO,
-        "Small array with %d bytes, not using shared memory pickler.",
-        1,
-        arr.nbytes,
-    )
+  if arr.dtype.hasobject or not arr.flags.c_contiguous:
     return arr.__reduce__()  # pytype: disable=attribute-error
   shared_arr = shared_memory_array.SharedMemoryArray(arr.shape, arr.dtype)
   logging.log_first_n(
