@@ -52,3 +52,15 @@ class PyGrainCheckpointHandler:
   def structure(self, directory: epath.Path) -> Any:
     del directory
     return None
+
+  # Required by interface.
+
+  def metadata(self, directory: epath.Path) -> Optional[Any]:
+    del directory
+    return None
+
+  def finalize(self, directory: epath.Path):
+    pass
+
+  def close(self):
+    pass
