@@ -125,6 +125,7 @@ py_library(
         ":data_sources",
         ":grain_pool",
         ":multiprocessing_common",
+        ":np_array_in_shared_memory",
         ":operations",
         ":options",
         ":record",
@@ -133,7 +134,6 @@ py_library(
         "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
         "//grain/_src/core:usage_logging",
-        "//grain/_src/python/experimental/shared_memory:np_array_in_shared_memory",
     ],
 )
 
@@ -166,9 +166,9 @@ py_library(
     deps = [
         ":grain_logging",
         ":multiprocessing_common",
+        ":np_array_in_shared_memory",
         ":options",
         "//grain/_src/core:parallel",
-        "//grain/_src/python/experimental/shared_memory:np_array_in_shared_memory",
     ],
 )
 
@@ -235,6 +235,23 @@ py_test(
     srcs = ["grain_logging_test.py"],
     srcs_version = "PY3",
     deps = [":grain_logging"],
+)
+
+py_library(
+    name = "np_array_in_shared_memory",
+    srcs = ["np_array_in_shared_memory.py"],
+    srcs_version = "PY3",
+    deps = ["//grain/_src/python:shared_memory_array"],
+)
+
+py_test(
+    name = "np_array_in_shared_memory_test",
+    srcs = ["np_array_in_shared_memory_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":np_array_in_shared_memory",
+        ":shared_memory_array",
+    ],
 )
 
 py_library(

@@ -558,39 +558,44 @@ class DataLoaderTest(parameterized.TestCase):
     np.testing.assert_equal(actual, expected)
 
   @mock.patch.object(data_loader_lib, "np_array_in_shared_memory")
-  def test_global_shared_memory(self, mock_np_array_in_shared_memory):
+  def test_shared_memory(self, mock_np_array_in_shared_memory):
     range_data_source = RangeDataSource(start=0, stop=8, step=1)
     sampler = samplers.SequentialSampler(
         num_records=len(range_data_source), shard_options=sharding.NoSharding()
     )
 
-    batch_operation = mock.MagicMock(BatchOperation(batch_size=2))
     operations = [
         PlusOne(),
         FilterEven(),
-        batch_operation,
     ]
 
-    mock_np_array_in_shared_memory.numpy_shared_memory_pickler_enabled.return_value = (
-        True
-    )
+    batch_operation = mock.MagicMock(BatchOperation(batch_size=2))
+
     data_loader_lib.DataLoader(
         data_source=range_data_source,
         sampler=sampler,
         operations=operations,
-        worker_count=2,
+        worker_count=0,
     )
+    mock_np_array_in_shared_memory.enable_numpy_shared_memory_pickler.assert_not_called()
     batch_operation._enable_shared_memory.assert_not_called()
 
-    mock_np_array_in_shared_memory.numpy_shared_memory_pickler_enabled.return_value = (
-        False
-    )
     data_loader_lib.DataLoader(
         data_source=range_data_source,
         sampler=sampler,
         operations=operations,
         worker_count=2,
     )
+    mock_np_array_in_shared_memory.enable_numpy_shared_memory_pickler.assert_called_once()
+    batch_operation._enable_shared_memory.assert_not_called()
+
+    data_loader_lib.DataLoader(
+        data_source=range_data_source,
+        sampler=sampler,
+        operations=operations + [batch_operation],
+        worker_count=2,
+    )
+    mock_np_array_in_shared_memory.enable_numpy_shared_memory_pickler.assert_called_with()
     batch_operation._enable_shared_memory.assert_called_once()
 
 
