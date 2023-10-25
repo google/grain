@@ -139,6 +139,34 @@ class MapLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     return element
 
 
+@lazy_dataset.lazy_map_dataset_function("map_with_index")
+class MapWithIndexLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
+  """Map with index LazyMapDataset."""
+
+  def __init__(
+      self,
+      parent: lazy_dataset.LazyMapDataset,
+      transform: transforms.MapWithIndexTransform | Callable[[int, Any], T],
+  ):
+    super().__init__(parent)
+    if isinstance(transform, transforms.MapWithIndexTransform):
+      self._map_fn = transform.map_with_index
+    else:
+      # Expect Callable[[int, Any], T].
+      self._map_fn = transform
+
+  def __len__(self) -> int:
+    return len(self._parent)
+
+  def __getitem__(self, index):
+    if isinstance(index, slice):
+      return self.slice(index)
+    element = self._parent[index]
+    if element is None:
+      return None
+    return self._map_fn(index, element)
+
+
 class _MapLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
   """Iterator that applies map transformation to elements."""
 

@@ -46,6 +46,14 @@ class RandomMapTransform(abc.ABC):
     """Maps a single element."""
 
 
+class MapWithIndexTransform(abc.ABC):
+  """Abstract base class for 1:1 transformations of elements and their index."""
+
+  @abc.abstractmethod
+  def map_with_index(self, index: int, element):
+    """Maps a single element with its index."""
+
+
 class TfRandomMapTransform(abc.ABC):
   """Abstract base class for all random 1:1 transformations of elements."""
 

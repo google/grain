@@ -21,6 +21,7 @@
 from . import python_lazy_dataset as lazy_dataset
 from ._src.core.transforms import (
     FlatMapTransform,
+    MapWithIndexTransform,
     RaggedBatchTransform,
 )
 from ._src.python.experimental.example_packing.packing import PackAndBatchOperation
