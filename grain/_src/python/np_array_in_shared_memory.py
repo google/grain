@@ -20,12 +20,22 @@ from absl import logging
 from grain._src.python import shared_memory_array
 import numpy as np
 
+# See http://shortn/_1qvUhTBlZM
+RNG_STATE_ARRAY_MAX_SIZE = 4 * 8
+
 
 def _reduce_ndarray(arr: np.ndarray):
   """Reduces a NumPy using shared memory when possible."""
-  # We cannot move generic objects or non-continuous arrays to shared memory.
-  # Fall-back to default method for these three cases.
-  if arr.dtype.hasobject or not arr.flags.c_contiguous:
+  # There are three cases we fall-back to default reduce method.
+  # 1. generic objects, 2. non-continuous arrays, 3. RecordMetadata case:
+  # each Record contains a RecordMetadata which contains a RNG, and the
+  # RNG keeps its internal state in the form of a numpy array. Unpickling
+  # of the RNG would fail if pickled object is not of type numpy array.
+  if (
+      arr.dtype.hasobject
+      or not arr.flags.c_contiguous
+      or arr.nbytes <= RNG_STATE_ARRAY_MAX_SIZE
+  ):
     return arr.__reduce__()  # pytype: disable=attribute-error
   shared_arr = shared_memory_array.SharedMemoryArray(arr.shape, arr.dtype)
   logging.log_first_n(
@@ -41,19 +51,3 @@ def _reduce_ndarray(arr: np.ndarray):
 def enable_numpy_shared_memory_pickler() -> None:
   logging.info("Enabling shared memory pickler for numpy arrays...")
   reduction.ForkingPickler.register(np.ndarray, _reduce_ndarray)
-
-
-# pylint:disable=protected-access
-# pytype:disable=attribute-error
-def disable_numpy_shared_memory_pickler() -> None:
-  logging.info("Disabling shared memory pickler for numpy arrays...")
-  if np.ndarray in reduction.ForkingPickler._extra_reducers:
-    reduction.ForkingPickler._extra_reducers.pop(np.ndarray)
-
-
-def numpy_shared_memory_pickler_enabled() -> bool:
-  return np.ndarray in reduction.ForkingPickler._extra_reducers
-
-
-# pytype:enable=attribute-error
-# pylint:enable=protected-access

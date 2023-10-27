@@ -26,8 +26,3 @@ from ._src.core.transforms import (
 )
 from ._src.python.experimental.example_packing.packing import PackAndBatchOperation
 from ._src.python.experimental.index_shuffle.python.index_shuffle_module import index_shuffle
-from ._src.python.experimental.shared_memory.np_array_in_shared_memory import (
-    disable_numpy_shared_memory_pickler,
-    enable_numpy_shared_memory_pickler,
-    numpy_shared_memory_pickler_enabled,
-)

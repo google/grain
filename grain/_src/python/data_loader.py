@@ -36,10 +36,10 @@ from grain._src.core import usage_logging
 import multiprocessing as mp
 from grain._src.python import grain_pool
 from grain._src.python import multiprocessing_common
+from grain._src.python import np_array_in_shared_memory
 from grain._src.python import options
 from grain._src.python import record
 from grain._src.python.data_sources import RandomAccessDataSource
-from grain._src.python.experimental.shared_memory import np_array_in_shared_memory
 from grain._src.python.operations import BatchOperation
 from grain._src.python.operations import Operation
 from grain._src.python.samplers import Sampler
@@ -165,15 +165,12 @@ class DataLoader:
 
     worker_count = _determine_worker_count(worker_count)
 
-      # Shared memory should be enabled in Batch operation iff worker_count > 0.
-      if (
-          not np_array_in_shared_memory.numpy_shared_memory_pickler_enabled()
-          and worker_count > 0
-          and len(operations)
-          and isinstance(operations[-1], BatchOperation)
-      ):
+      # Shared memory should be enabled iff worker_count > 0.
+      np_array_in_shared_memory.enable_numpy_shared_memory_pickler()
+      logging.info("Enabling shared memory pickler for numpy arrays.")
+      if operations and isinstance(operations[-1], BatchOperation):
         operations[-1]._enable_shared_memory()
-        logging.info("Enabling shared memory.")
+        logging.info("Enabling SharedMemoryArray for BatchOperation.")
 
     self._data_source = data_source
     self._sampler = sampler
