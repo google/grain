@@ -133,7 +133,6 @@ py_library(
         "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
         "//grain/_src/core:usage_logging",
-        "//grain/_src/python/experimental/shared_memory:np_array_in_shared_memory",
     ],
 )
 
@@ -168,7 +167,6 @@ py_library(
         ":multiprocessing_common",
         ":options",
         "//grain/_src/core:parallel",
-        "//grain/_src/python/experimental/shared_memory:np_array_in_shared_memory",
     ],
 )
 

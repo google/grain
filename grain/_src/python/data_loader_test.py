@@ -79,6 +79,45 @@ class NonPickableTransform(transforms.MapTransform):
     return x
 
 
+class CopyNumPyArrayToSharedMemoryTest(absltest.TestCase):
+
+  def test_copy_numpy_array_to_shared_memory(self):
+    element = np.array([1, 2, 3, 4, 5, 6, 7])
+    transform = data_loader_lib.CopyNumPyArrayToSharedMemory()
+    result = transform.map(element)
+    self.assertIsInstance(result, data_loader_lib.SharedMemoryArrayMetadata)
+
+  def test_copy_nested_numpy_array_to_shared_memory(self):
+    element_1 = np.arange(5)
+    element_2 = np.arange(5)
+    transform = data_loader_lib.CopyNumPyArrayToSharedMemory()
+    result = transform.map([element_1, element_2])
+    self.assertIsInstance(result[0], data_loader_lib.SharedMemoryArrayMetadata)
+    self.assertIsInstance(result[1], data_loader_lib.SharedMemoryArrayMetadata)
+
+  def test_copy_skipped_non_numpy_array(self):
+    element = "randomstring"
+    transform = data_loader_lib.CopyNumPyArrayToSharedMemory()
+    result = transform.map(element)
+    self.assertIs(result, element)
+
+  def test_copy_skipped_dtype_hasobject(self):
+    class DT:
+      pass
+
+    element = np.array([127, 128, 129], dtype=np.dtype(DT))
+    transform = data_loader_lib.CopyNumPyArrayToSharedMemory()
+    result = transform.map(element)
+    print(result)
+    self.assertIs(result, element)
+
+  def test_copy_skipped_flags_c_contiguous(self):
+    element = np.arange(9).reshape(3, 3)[:, (0, 1)]
+    transform = data_loader_lib.CopyNumPyArrayToSharedMemory()
+    result = transform.map(element)
+    self.assertIs(result, element)
+
+
 class DataLoaderTest(parameterized.TestCase):
 
   def setUp(self):
@@ -557,41 +596,39 @@ class DataLoaderTest(parameterized.TestCase):
     actual = list(data_loader)
     np.testing.assert_equal(actual, expected)
 
-  @mock.patch.object(data_loader_lib, "np_array_in_shared_memory")
-  def test_global_shared_memory(self, mock_np_array_in_shared_memory):
+  @mock.patch.object(data_loader_lib, "CopyNumPyArrayToSharedMemory")
+  def test_shared_memory(self, mock_copy_numpy_array_to_shared_memory):
     range_data_source = RangeDataSource(start=0, stop=8, step=1)
     sampler = samplers.SequentialSampler(
         num_records=len(range_data_source), shard_options=sharding.NoSharding()
     )
 
-    batch_operation = mock.MagicMock(BatchOperation(batch_size=2))
     operations = [
         PlusOne(),
         FilterEven(),
-        batch_operation,
     ]
 
-    mock_np_array_in_shared_memory.numpy_shared_memory_pickler_enabled.return_value = (
-        True
-    )
-    data_loader_lib.DataLoader(
+    batch_operation = mock.MagicMock(BatchOperation(batch_size=2))
+
+    data_loader = data_loader_lib.DataLoader(
         data_source=range_data_source,
         sampler=sampler,
         operations=operations,
-        worker_count=2,
+        worker_count=0,
     )
     batch_operation._enable_shared_memory.assert_not_called()
-
-    mock_np_array_in_shared_memory.numpy_shared_memory_pickler_enabled.return_value = (
-        False
+    self.assertTrue(
+        data_loader._operations[-1], mock_copy_numpy_array_to_shared_memory
     )
-    data_loader_lib.DataLoader(
+
+    data_loader = data_loader_lib.DataLoader(
         data_source=range_data_source,
         sampler=sampler,
-        operations=operations,
+        operations=operations + [batch_operation],
         worker_count=2,
     )
     batch_operation._enable_shared_memory.assert_called_once()
+    self.assertTrue(data_loader._operations[-1], batch_operation)
 
 
 class PyGrainDatasetIteratorTest(absltest.TestCase):

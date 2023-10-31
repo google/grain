@@ -39,12 +39,12 @@ from grain._src.python import multiprocessing_common
 from grain._src.python import options
 from grain._src.python import record
 from grain._src.python.data_sources import RandomAccessDataSource
-from grain._src.python.experimental.shared_memory import np_array_in_shared_memory
 from grain._src.python.operations import BatchOperation
 from grain._src.python.operations import Operation
 from grain._src.python.samplers import Sampler
 from grain._src.python.shared_memory_array import SharedMemoryArray
 from grain._src.python.shared_memory_array import SharedMemoryArrayMetadata
+import numpy as np
 import tree
 
 
@@ -117,6 +117,26 @@ def use_context_if_available(obj):
     yield
 
 
+@dataclasses.dataclass
+class CopyNumPyArrayToSharedMemory(transforms.MapTransform):
+  """If `element` contains NumPy array copy it to SharedMemoryArray."""
+
+  def map(self, element: Any) -> Any:
+    def copy_if_applied(element: Any) -> Any:
+      if (
+          not isinstance(element, np.ndarray)
+          or element.dtype.hasobject
+          or not element.flags.c_contiguous
+      ):
+        return element
+
+      shared_memory_arr = SharedMemoryArray(element.shape, element.dtype)
+      np.copyto(shared_memory_arr, element, casting="no")
+      return shared_memory_arr.metadata
+
+    return tree.map_structure(copy_if_applied, element)
+
+
 class DataLoader:
   """DataLoader loads and transforms input data."""
 
@@ -165,15 +185,13 @@ class DataLoader:
 
     worker_count = _determine_worker_count(worker_count)
 
-      # Shared memory should be enabled in Batch operation iff worker_count > 0.
-      if (
-          not np_array_in_shared_memory.numpy_shared_memory_pickler_enabled()
-          and worker_count > 0
-          and len(operations)
-          and isinstance(operations[-1], BatchOperation)
-      ):
+      # Shared memory should be enabled iff worker_count > 0.
+      if operations and isinstance(operations[-1], BatchOperation):
+        logging.info("Enabling SharedMemoryArray for BatchOperation.")
         operations[-1]._enable_shared_memory()
-        logging.info("Enabling shared memory.")
+      else:
+        logging.info("Adding CopyNumPyArrayToSharedMemory MapTransform.")
+        operations = list(operations) + [CopyNumPyArrayToSharedMemory()]
 
     self._data_source = data_source
     self._sampler = sampler

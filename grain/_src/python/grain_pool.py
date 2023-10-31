@@ -56,7 +56,6 @@ import cloudpickle
 from grain._src.core import parallel
 from grain._src.python import grain_logging
 from grain._src.python import multiprocessing_common
-from grain._src.python.experimental.shared_memory import np_array_in_shared_memory
 from grain._src.python.options import MultiprocessingOptions  # pylint: disable=g-importing-member
 
 T = TypeVar("T")
@@ -153,15 +152,12 @@ def _worker_loop(
     worker_index: int,
     worker_count: int,
     enable_profiling: bool,
-    enable_numpy_shared_memory: bool = False,
 ):
   """Code to be run on each child process."""
   try:
     grain_logging.set_process_identifier_prefix(
         f"PyGrain Worker {worker_index}"
     )
-    if enable_numpy_shared_memory:
-      np_array_in_shared_memory.enable_numpy_shared_memory_pickler()
     logging.info("Starting work.")
     element_producer = _get_element_producer_from_queue(
         args_queue, worker_index=worker_index, worker_count=worker_count
@@ -265,9 +261,6 @@ class GrainPool(Iterator[T]):
           "worker_index": worker_index,
           "worker_count": options.num_workers,
           "enable_profiling": options.enable_profiling,
-          "enable_numpy_shared_memory": (
-              np_array_in_shared_memory.numpy_shared_memory_pickler_enabled()
-          ),
       }
       # The process kwargs must all be pickable and will be unpickle before
       # absl.app.run() is called. We send arguments via a queue to ensure that
