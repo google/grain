@@ -49,8 +49,8 @@ class MixedLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     # Compute length.
     lengths = np.asarray([len(p) for p in parents])
     float_proportions = np.asarray(proportions) / sum(proportions)
-    # Ensure all elements of constituent datasets appear at least once.
-    self._length = int((lengths / float_proportions).max())
+    # Ensure all elements of constituent datasets appear at most once.
+    self._length = int((lengths / float_proportions).min())
 
   def __len__(self) -> int:
     return self._length
