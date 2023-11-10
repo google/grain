@@ -7,6 +7,7 @@ py_library(
     srcs = ["packing.py"],
     srcs_version = "PY3",
     deps = [
+        "//grain/_src/core:tree",
         "//grain/_src/python:record",
         "//third_party/py/jaxtyping",
     ],
@@ -18,6 +19,7 @@ py_test(
     srcs_version = "PY3",
     deps = [
         ":packing",
+        "//grain/_src/core:tree",
         "//grain/_src/python:record",
     ],
 )

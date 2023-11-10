@@ -73,6 +73,7 @@ py_library(
     deps = [
         ":record",
         ":shared_memory_array",
+        "//grain/_src/core:tree",
     ],
 )
 
@@ -132,6 +133,7 @@ py_library(
         ":shared_memory_array",
         "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
+        "//grain/_src/core:tree",
         "//grain/_src/core:usage_logging",
     ],
 )

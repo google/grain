@@ -32,6 +32,7 @@ from absl import logging
 from concurrent import futures
 from grain._src.core import sharding
 from grain._src.core import transforms
+from grain._src.core import tree
 from grain._src.core import usage_logging
 import multiprocessing as mp
 from grain._src.python import grain_pool
@@ -45,7 +46,6 @@ from grain._src.python.samplers import Sampler
 from grain._src.python.shared_memory_array import SharedMemoryArray
 from grain._src.python.shared_memory_array import SharedMemoryArrayMetadata
 import numpy as np
-import tree
 
 
 _T = TypeVar("_T")

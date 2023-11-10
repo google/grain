@@ -14,11 +14,11 @@ can't be added, we construct a new batch to which the element is added.
 import dataclasses
 from typing import Generic, Iterator, TypeVar, cast
 
+from grain._src.core import tree
 from grain._src.python import record
 import jax
 import jaxtyping as jt
 import numpy as np
-import tree
 
 _T = TypeVar("_T")
 

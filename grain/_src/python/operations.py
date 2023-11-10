@@ -21,10 +21,10 @@ import dataclasses
 from typing import Any, Callable, Generic, Iterator, Protocol, Sequence, TypeVar
 
 from absl import logging
+from grain._src.core import tree
 from grain._src.python import record
 from grain._src.python.shared_memory_array import SharedMemoryArray
 import numpy as np
-import tree
 
 _IN = TypeVar("_IN")
 _OUT = TypeVar("_OUT")

@@ -72,3 +72,38 @@ py_library(
     srcs = ["transforms.py"],
     srcs_version = "PY3",
 )
+
+py_library(
+    name = "tree",
+    srcs = [
+        "tree.py",
+    ],
+    srcs_version = "PY3",
+)
+
+py_library(
+    name = "tree_test_lib",
+    testonly = 1,
+    srcs = ["tree_test.py"],
+    srcs_version = "PY3",
+    deps = [":tree"],
+)
+
+py_test(
+    name = "tree_test",
+    srcs = ["tree_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":tree_test_lib",
+    ],
+)
+
+py_test(
+    name = "tree_jax_test",
+    srcs = ["tree_jax_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":tree",
+        ":tree_test_lib",
+    ],
+)

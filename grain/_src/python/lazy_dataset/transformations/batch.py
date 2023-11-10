@@ -17,9 +17,9 @@ from collections.abc import Sequence
 import math
 from typing import TypeVar
 
+from grain._src.core import tree
 from grain._src.python.lazy_dataset import lazy_dataset
 import numpy as np
-import tree
 
 T = TypeVar("T")
 

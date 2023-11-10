@@ -6,7 +6,10 @@ py_library(
     name = "batch",
     srcs = ["batch.py"],
     srcs_version = "PY3",
-    deps = ["//grain/_src/python/lazy_dataset"],
+    deps = [
+        "//grain/_src/core:tree",
+        "//grain/_src/python/lazy_dataset",
+    ],
 )
 
 py_test(
@@ -108,6 +111,7 @@ py_library(
     srcs = ["packing.py"],
     srcs_version = "PY3",
     deps = [
+        "//grain/_src/core:tree",
         "//grain/_src/python/lazy_dataset",
         "//third_party/py/jaxtyping",
     ],

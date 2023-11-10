@@ -16,10 +16,10 @@ import collections
 import copy
 from typing import Any
 
+from grain._src.core import tree
 from grain._src.python.lazy_dataset import lazy_dataset
 from jaxtyping import PyTree  # pylint: disable=g-importing-member
 import numpy as np
-import tree
 
 
 # SingleBinPackLazyDatasetIterator's state is defined by the a state of the
