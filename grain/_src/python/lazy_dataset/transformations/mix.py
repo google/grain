@@ -15,11 +15,11 @@
 
 import dataclasses
 import functools
+import sys
 from typing import Any, Sequence, Tuple, TypeVar, Union
 
 from grain._src.core.exceptions import PyGrainInternalError
 from grain._src.python.lazy_dataset import lazy_dataset
-import numpy as np
 
 
 Element = Any
@@ -46,11 +46,14 @@ class MixedLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     assert len(parents) == len(proportions)
     self._proportions = tuple(proportions)
 
-    # Compute length.
-    lengths = np.asarray([len(p) for p in parents])
-    float_proportions = np.asarray(proportions) / sum(proportions)
-    # Ensure all elements of constituent datasets appear at most once.
-    self._length = int((lengths / float_proportions).min())
+    # Compute length such that elements of constituent datasets appear at most
+    # once.
+    weight_sum = sum(proportions)
+    lengths = [
+        len(parent) / (weight / weight_sum)
+        for parent, weight in zip(parents, proportions)
+    ]
+    self._length = min(sys.maxsize, int(min(lengths)))
 
   def __len__(self) -> int:
     return self._length
