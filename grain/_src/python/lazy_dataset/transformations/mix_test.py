@@ -13,10 +13,13 @@
 # limitations under the License.
 """Tests for mixing transformation."""
 
+import sys
+
 from absl.testing import absltest
 from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import mix
 from grain._src.python.lazy_dataset.transformations import repeat  # pylint: disable=unused-import
+import numpy as np
 
 
 class MixedLazyMapDatasetTest(absltest.TestCase):
@@ -107,6 +110,19 @@ class MixedLazyMapDatasetTest(absltest.TestCase):
       _ = mix.MixedLazyMapDataset(
           parents=[self.even_ds, self.odd_ds], proportions=[0, 1]
       )
+
+  def test_mix_infinite_datasets(self):
+    zeros = lazy_dataset.RangeLazyMapDataset(0, 1).repeat()
+    ones = lazy_dataset.RangeLazyMapDataset(1, 2).repeat()
+    self.assertLen(zeros, sys.maxsize)
+    self.assertLen(ones, sys.maxsize)
+    ld = mix.MixedLazyMapDataset([zeros, ones], proportions=[4, 1])
+    self.assertLen(ld, sys.maxsize)
+    # Mix again.
+    ld = mix.MixedLazyMapDataset([ld, ones], proportions=[1, 1])
+    num_samples = 1000
+    value_counts = np.bincount([ld[i] for i in range(num_samples)]).tolist()
+    self.assertEqual(value_counts, [400, 600])
 
 
 if __name__ == "__main__":
