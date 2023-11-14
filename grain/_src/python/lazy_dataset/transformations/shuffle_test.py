@@ -59,5 +59,49 @@ class ShuffleLazyMapDatasetTest(absltest.TestCase):
     self.assertLen(elements, 400)
 
 
+class WindowShuffleLazyMapDatasetTest(absltest.TestCase):
+
+  def test_len(self):
+    ds = shuffle.WindowShuffleLazyMapDataset(
+        lazy_dataset.RangeLazyMapDataset(400), window_size=10, seed=42
+    )
+    self.assertLen(ds, 400)
+
+  def test_getitem(self):
+    window_size = 10
+    ds = shuffle.WindowShuffleLazyMapDataset(
+        lazy_dataset.RangeLazyMapDataset(400),
+        window_size=window_size,
+        seed=42,
+    )
+    shuffled_indices = [ds[i] for i in range(400)]
+    self.assertLen(shuffled_indices, 400)
+    for i in range(0, 400, 10):
+      self.assertBetween(shuffled_indices[i], i, i + (window_size - 1))
+
+  def test_getitem_multi_epochs(self):
+    # Multiple epochs shouldn't affect window shuffling.
+    ds = shuffle.WindowShuffleLazyMapDataset(
+        lazy_dataset.RangeLazyMapDataset(400),
+        window_size=10,
+        seed=42,
+    )
+    shuffled_indices = [ds[i] for i in range(400)]
+    shuffled_indices_epoch2 = [ds[400 + i] for i in range(400)]
+    self.assertLen(shuffled_indices, 400)
+    self.assertLen(shuffled_indices_epoch2, 400)
+    self.assertNotEqual(shuffled_indices, shuffled_indices_epoch2)
+
+  def test_iter(self):
+    window_size = 10
+    ds = shuffle.WindowShuffleLazyMapDataset(
+        lazy_dataset.RangeLazyMapDataset(400), window_size=window_size, seed=42
+    )
+    ds_iter = iter(ds)
+    elements = [next(ds_iter) for _ in range(400)]
+    for i in range(0, 400, 10):
+      self.assertBetween(elements[i], i, i + (window_size - 1))
+
+
 if __name__ == "__main__":
   absltest.main()
