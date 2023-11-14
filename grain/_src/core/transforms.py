@@ -63,7 +63,11 @@ class TfRandomMapTransform(abc.ABC):
 
 
 class FilterTransform(abc.ABC):
-  """Abstract base class for filter transformations for individual elements."""
+  """Abstract base class for filter transformations for individual elements.
+
+  The pipeline will drop any element for which the filter function returns
+  False.
+  """
 
   @abc.abstractmethod
   def filter(self, element) -> bool:
