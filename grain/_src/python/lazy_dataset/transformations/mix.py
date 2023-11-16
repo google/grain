@@ -67,6 +67,85 @@ class MixedLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     return self._parents[input_index][index]
 
 
+@dataclasses.dataclass
+class _MixedLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
+  """Iterator that mixes elements from iterators based on given proportions.
+
+  Note: The current implementation stops sampling elements when any dataset is
+  exhausted. This can be extended to allow sampling until all datasets are
+  exhausted, either by restarting sampling from the beginning of exhausted
+  datasets or deviating from the given proportions.
+  """
+
+  def __init__(
+      self,
+      parents: Sequence[lazy_dataset.LazyDatasetIterator[T]],
+      proportions: Sequence[float | int] | None = None,
+  ):
+    super().__init__()
+    self._parents = parents
+    self._proportions = tuple(proportions)
+    self._index = 0
+
+  def __next__(self):
+    input_index, _ = _dataset_and_key_of_next_element(
+        self._index, self._proportions
+    )
+    self._index += 1
+    return next(self._parents[input_index])
+
+  def get_state(self):
+    return {
+        "parents": [parent.get_state() for parent in self._parents],
+        "index": self._index,
+    }
+
+  def set_state(self, state):
+    for parent, parent_state in zip(self._parents, state["parents"]):
+      parent.set_state(parent_state)
+    self._index = state["index"]
+
+  def __str__(self) -> str:
+    return (
+        f"MixedLazyDatasetIterator(parents={self._parents},"
+        f" proportions={self._proportions})"
+    )
+
+
+@lazy_dataset.lazy_iter_dataset_function("mix")
+class MixedLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
+  """Mix transformation for LazyIterDatasets."""
+
+  def __init__(
+      self,
+      parents: Sequence[lazy_dataset.LazyIterDataset],
+      proportions: Sequence[float | int] | None = None,
+  ):
+    super().__init__(parents)
+    # Normalize proportions
+    if proportions is None:
+      proportions = [1] * len(parents)
+    elif 0 in proportions:
+      raise ValueError("Must specify all non-zero proportions for mixing.")
+    else:
+      proportions = _float_to_int_proportions(proportions)
+    assert len(parents) == len(proportions)
+    self._proportions = proportions
+
+  def __iter__(self) -> _MixedLazyDatasetIterator[T]:
+    parent_iters = [parent.__iter__() for parent in self._parents]
+    return _MixedLazyDatasetIterator(
+        parent_iters,
+        proportions=self._proportions,
+    )
+
+  def __str__(self) -> str:
+    return (
+        f"MixedLazyIterDataset(parents={self._parents},"
+        f" proportions={self._proportions})"
+    )
+
+
 def _float_to_int_proportions(
     values: Sequence[Union[float, int]], scale_min_to: int = 100
 ) -> Sequence[int]:
