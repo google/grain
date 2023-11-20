@@ -234,41 +234,43 @@ class PrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
     super().__init__()
     self._dataset = dataset
     self._dataset_length = len(dataset)
+    self._buffer = collections.deque()
     self._next_index = 0
-    self._buffer = None
+    self._prefetch_index = 0
     self._prefetch_buffer_size = read_options.prefetch_buffer_size
     self._allow_nones = allow_nones
     if self._prefetch_buffer_size > 0:
       self._executor = futures.ThreadPoolExecutor(read_options.num_threads)
+    first_prefetch_size = (
+        read_options.first_batch_size
+        if read_options.first_batch_size > 0
+        else read_options.prefetch_buffer_size
+    )
+    for _ in range(first_prefetch_size):
+      self._prefetch()
+
+  def _prefetch(self):
+    if self._prefetch_index < self._dataset_length:
+      self._buffer.append(
+          self._executor.submit(self._dataset.__getitem__, self._prefetch_index)
+      )
+      self._prefetch_index += 1
+
+  # Pop and element from the prefetch buffer, growing the buffer if under the
+  # maximum buffer size.
+  def _pop_and_replace_prefetched(self) -> T:
+    element = self._buffer.popleft()
+    self._prefetch()
+    if (self._prefetch_index - self._next_index) < self._prefetch_buffer_size:
+      self._prefetch()
+    return element.result()
 
   def __next__(self) -> T:
     # We loop here to skip all None elements (in case the underlying dataset
     # is sparse), if self._allow_sparsity = False, else we return Nones too.
-    while True:
-      if self._next_index == self._dataset_length:
-        break
-      if self._prefetch_buffer_size > 0:
-        if not self._buffer:
-          indices = range(
-              self._next_index,
-              min(
-                  self._next_index + self._prefetch_buffer_size,
-                  self._dataset_length,
-              ),
-          )
-          self._buffer = collections.deque(
-              self._executor.submit(self._dataset.__getitem__, i)
-              for i in indices
-          )
-        element = self._buffer.popleft()
-        if self._next_index + self._prefetch_buffer_size < self._dataset_length:
-          self._buffer.append(
-              self._executor.submit(
-                  self._dataset.__getitem__,
-                  self._next_index + self._prefetch_buffer_size,
-              )
-          )
-        element = element.result()
+    while self._next_index < self._dataset_length:
+      if self._buffer:
+        element = self._pop_and_replace_prefetched()
       else:
         element = self._dataset[self._next_index]
       self._next_index += 1
