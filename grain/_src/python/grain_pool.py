@@ -328,7 +328,11 @@ class GrainPool(Iterator[T]):
         logging.debug("Got no element from process %s", self._next_worker_index)
         if self._process_failed(self._next_worker_index):
           processing_failed = True
-          logging.debug("Process with idx %i Failed.", self._next_worker_index)
+          logging.info(
+              "Process with idx %i Failed (Exitcode: %s).",
+              self._next_worker_index,
+              self.processes[self._next_worker_index].exitcode,
+          )
           break
 
     if processing_failed or self.termination_event.is_set():
