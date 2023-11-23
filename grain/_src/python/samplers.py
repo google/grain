@@ -60,7 +60,7 @@ class SequentialSampler:
     )
 
   def __getitem__(self, index: int) -> record.RecordMetadata:
-    if index >= self._max_index:
+    if index < 0 or index >= self._max_index:
       raise IndexError(
           f"RecordMetadata object index is out of bounds; Got index {index},"
           f" allowed indices should be in [0, {self._max_index}]"
@@ -141,7 +141,7 @@ class IndexSampler:
     )
 
   def __getitem__(self, index: int) -> record.RecordMetadata:
-    if self._max_index is not None and index >= self._max_index:
+    if index < 0 or (self._max_index is not None and index >= self._max_index):
       raise IndexError(
           f"RecordMetadata object index is out of bounds; Got index {index},"
           f" allowed indices should be in [0, {self._max_index}]"

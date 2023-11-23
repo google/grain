@@ -19,6 +19,8 @@ from grain._src.core import sharding
 from grain._src.python import record
 from grain._src.python import samplers
 
+from absl.testing import parameterized
+
 
 def _get_all_metadata(
     sampler: samplers.Sampler, shard_options: sharding.ShardOptions
@@ -43,7 +45,20 @@ def _remove_rngs(
   ]
 
 
-class SequentialSamplerTest(absltest.TestCase):
+class SequentialSamplerTest(parameterized.TestCase):
+
+  @parameterized.named_parameters(
+      {'testcase_name': 'negative_index', 'num_records': 42, 'index': -1},
+      {'testcase_name': 'too_large_index', 'num_records': 42, 'index': 42},
+  )
+  def test_index_out_of_bounds_raises_index_error(
+      self, num_records: int, index: int
+  ):
+    sampler = samplers.SequentialSampler(
+        num_records=num_records, shard_options=sharding.NoSharding()
+    )
+    with self.assertRaises(IndexError):
+      _ = sampler[index]
 
   def test_with_invalid_number_records(self):
     with self.assertRaises(ValueError):
@@ -118,8 +133,8 @@ class IndexSamplerTest(absltest.TestCase):
     actual_floats = [metadata.rng.random() for metadata in actual]
     if len(actual_floats) != len(set(actual_floats)):
       self.fail(
-          "At least 2 RNGs returned the same random number. Metadata with"
-          f" RNGs: {actual}"
+          'At least 2 RNGs returned the same random number. Metadata with'
+          f' RNGs: {actual}'
       )
 
   def assertRecordMetadata(
@@ -176,6 +191,20 @@ class IndexSamplerTest(absltest.TestCase):
           num_epochs=2,
           seed=2**32,
       )
+
+  def test_negative_index_raises_index_error(self):
+    sampler = samplers.IndexSampler(
+        num_records=42, shard_options=sharding.NoSharding()
+    )
+    with self.assertRaises(IndexError):
+      sampler[-1]  # pylint: disable=pointless-statement
+
+  def test_index_too_large_raises_index_error(self):
+    sampler = samplers.IndexSampler(
+        num_records=42, shard_options=sharding.NoSharding(), num_epochs=1
+    )
+    with self.assertRaises(IndexError):
+      sampler[42]  # pylint: disable=pointless-statement
 
   def test_shuffle_no_sharding(self):
     sampler = samplers.IndexSampler(
@@ -647,11 +676,11 @@ class IndexSamplerTest(absltest.TestCase):
     self.assertEqual(len(first_metadata), len(second_metadata))
     for m1, m2 in zip(first_metadata, second_metadata):
       if m1.rng.random() != m2.rng.random():
-        self.fail("Metadata RNGs returned different floats.")
+        self.fail('Metadata RNGs returned different floats.')
     self.assertEqual(
         _remove_rngs(first_metadata), _remove_rngs(second_metadata)
     )
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
   absltest.main()

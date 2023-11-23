@@ -113,6 +113,7 @@ py_test(
         ":record",
         ":samplers",
         "//grain/_src/core:sharding",
+        "//testing/pybase:parameterized",
     ],
 )
 
