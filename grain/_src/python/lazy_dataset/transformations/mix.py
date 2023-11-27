@@ -26,7 +26,7 @@ Element = Any
 T = TypeVar("T")  # pylint: disable=invalid-name
 
 
-@dataclasses.dataclass
+@lazy_dataset.lazy_map_dataset_function("mix")
 class MixedLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   """LazyDataset for mixtures."""
 
