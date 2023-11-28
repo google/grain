@@ -238,6 +238,17 @@ class MixedLazyIterDatasetTest(absltest.TestCase):
     ).tolist()
     self.assertEqual(value_counts, [400, 600])
 
+  def test_stop_sampling_after_end_of_any_dataset(self):
+    smaller_ds = lazy_dataset.RangeLazyMapDataset(5).to_iter_dataset()
+    larger_ds = lazy_dataset.RangeLazyMapDataset(10).to_iter_dataset()
+    mixed_ds = mix.MixedLazyIterDataset([smaller_ds, larger_ds], [1.0, 1.0])
+    ds_iter = iter(mixed_ds)
+    for _ in range(10):  # Exhaust the iterator.
+      _ = next(ds_iter)
+    for _ in range(10):  # Verify that no more examples are sampled.
+      with self.assertRaises(StopIteration):
+        _ = next(ds_iter)
+
   def test_checkpointing(self):
     ds = mix.MixedLazyIterDataset(
         parents=[self.even_ds, self.odd_ds], proportions=[1, 1]
