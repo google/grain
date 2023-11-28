@@ -86,24 +86,37 @@ class _MixedLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
     self._parents = parents
     self._proportions = tuple(proportions)
     self._index = 0
+    self._stop = False
 
   def __next__(self):
+    if self._stop:
+      # Although there may be elements available in some parent datasets, do not
+      # sample once stop signal is turned on.
+      raise StopIteration
     input_index, _ = _dataset_and_key_of_next_element(
         self._index, self._proportions
     )
     self._index += 1
-    return next(self._parents[input_index])
+    try:
+      elem = next(self._parents[input_index])
+    except StopIteration as e:
+      # Turn on stop signal as soon as the end of any dataset is reached.
+      self._stop = True
+      raise e
+    return elem
 
   def get_state(self):
     return {
         "parents": [parent.get_state() for parent in self._parents],
         "index": self._index,
+        "stop": self._stop,
     }
 
   def set_state(self, state):
     for parent, parent_state in zip(self._parents, state["parents"]):
       parent.set_state(parent_state)
     self._index = state["index"]
+    self._stop = state["stop"]
 
   def __str__(self) -> str:
     return (
@@ -112,7 +125,6 @@ class _MixedLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
     )
 
 
-@lazy_dataset.lazy_iter_dataset_function("mix")
 class MixedLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
   """Mix transformation for LazyIterDatasets."""
 
