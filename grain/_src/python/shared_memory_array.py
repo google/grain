@@ -33,6 +33,13 @@ class SharedMemoryArrayMetadata:
   dtype: npt.DTypeLike
 
 
+def close_with_semaphore(
+    shm: shared_memory.SharedMemory, semaphore: threading.Semaphore
+) -> None:
+  with semaphore:
+    shm.close()
+
+
 class SharedMemoryArray(np.ndarray):
   """A NumPy array subclass which is backed by shared memory.
 
@@ -128,8 +135,7 @@ class SharedMemoryArray(np.ndarray):
       assert semaphore is not None
       # We use a semaphore to make sure that we don't accumulate too many
       # requests to close/unlink shared memory, which could lead to OOM errors
-      semaphore.acquire()
-      thread_pool.apply_async(shm.close, callback=lambda _: semaphore.release())
+      thread_pool.apply_async(close_with_semaphore, args=(shm, semaphore))
     else:
       shm.close()
     if self._unlink_on_del:
