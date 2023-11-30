@@ -78,12 +78,7 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
       np.testing.assert_array_equal(actual, expected)
 
   # Same as above but elements are dictionaries.
-  @parameterized.parameters(
-      "inputs",
-      "inputs_segment_ids",
-      "inputs_positions",
-  )
-  def test_pack_single_feature_in_dict(self, feature: str):
+  def pack_single_feature_in_dict(self, packer):
     input_elements = [
         {
             "inputs": [1, 2, 3, 4],
@@ -104,7 +99,8 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
     ds = data_sources.SourceLazyMapDataset(input_elements)
     ds = ds.map(lambda d: {k: np.asarray(v) for k, v in d.items()})
     ds = ds.to_iter_dataset()
-    ds = packing.SingleBinPackLazyIterDataset(ds, length_struct={"inputs": 4})
+
+    ds = packer(ds, {"inputs": 4})
     ds_iter = iter(ds)
 
     expected_elements = [
@@ -130,19 +126,22 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
     ]
 
     for actual, expected in zip(ds_iter, expected_elements, strict=True):
-      # Compare keys.
-      self.assertSequenceEqual(sorted(actual), sorted(expected))
-      np.testing.assert_array_equal(actual[feature], expected[feature])
+      for feature in [
+          "inputs",
+          "inputs_segment_ids",
+          "inputs_positions",
+      ]:
+        # Compare keys.
+        self.assertSequenceEqual(sorted(actual), sorted(expected))
+        np.testing.assert_array_equal(actual[feature], expected[feature])
 
-  @parameterized.parameters(
-      "inputs",
-      "inputs_segment_ids",
-      "inputs_positions",
-      "targets",
-      "targets_segment_ids",
-      "targets_positions",
-  )
-  def test_pack_multiple_features_same_sequences_length(self, feature: str):
+  def test_pack_single_feature_in_dict(self):
+    self.pack_single_feature_in_dict(packing.SingleBinPackLazyIterDataset)
+    # copybara: strip_begin
+    self.pack_single_feature_in_dict(packing.PackLazyIterDataset)
+    # copybara: strip_end
+
+  def test_pack_multiple_features_same_sequences_length(self):
     input_elements = [
         {
             "inputs": [1, 2, 3, 4],
@@ -164,9 +163,7 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
     ds = data_sources.SourceLazyMapDataset(input_elements)
     ds = ds.map(lambda d: {k: np.asarray(v) for k, v in d.items()})
     ds = ds.to_iter_dataset()
-    ds = packing.SingleBinPackLazyIterDataset(
-        ds, length_struct={"inputs": 4, "targets": 4}
-    )
+    ds = packing.SingleBinPackLazyIterDataset(ds, {"inputs": 4, "targets": 4})
     ds_iter = iter(ds)
 
     expected_elements = [
@@ -200,21 +197,19 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
         },
     ]
     for actual, expected in zip(ds_iter, expected_elements, strict=True):
-      # Compare keys.
-      self.assertSequenceEqual(sorted(actual), sorted(expected))
-      np.testing.assert_array_equal(actual[feature], expected[feature])
+      for feature in [
+          "inputs",
+          "inputs_segment_ids",
+          "inputs_positions",
+          "targets",
+          "targets_segment_ids",
+          "targets_positions",
+      ]:
+        # Compare keys.
+        self.assertSequenceEqual(sorted(actual), sorted(expected))
+        np.testing.assert_array_equal(actual[feature], expected[feature])
 
-  @parameterized.parameters(
-      "inputs",
-      "inputs_segment_ids",
-      "inputs_positions",
-      "targets",
-      "targets_segment_ids",
-      "targets_positions",
-  )
-  def test_pack_multiple_features_different_sequences_length(
-      self, feature: str
-  ):
+  def test_pack_multiple_features_different_sequences_length(self):
     input_elements = [
         {
             "inputs": [1, 2, 3, 4],
@@ -260,17 +255,17 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
         },
     ]
     for actual, expected in zip(ds_iter, expected_elements, strict=True):
-      np.testing.assert_array_equal(actual[feature], expected[feature])
+      for feature in [
+          "inputs",
+          "inputs_segment_ids",
+          "inputs_positions",
+          "targets",
+          "targets_segment_ids",
+          "targets_positions",
+      ]:
+        np.testing.assert_array_equal(actual[feature], expected[feature])
 
-  @parameterized.parameters(
-      "input_tokens",
-      "input_tokens_segment_ids",
-      "input_tokens_positions",
-      "input_vectors",
-      "input_vectors_segment_ids",
-      "input_vectors_positions",
-  )
-  def test_pack_two_dimensional_features(self, feature: str):
+  def test_pack_two_dimensional_features(self):
     input_elements = [
         {
             "input_tokens": [1, 2, 3],
@@ -312,7 +307,15 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
         },
     ]
     for actual, expected in zip(ds_iter, expected_elements, strict=True):
-      np.testing.assert_array_equal(actual[feature], expected[feature])
+      for feature in [
+          "input_tokens",
+          "input_tokens_segment_ids",
+          "input_tokens_positions",
+          "input_vectors",
+          "input_vectors_segment_ids",
+          "input_vectors_positions",
+      ]:
+        np.testing.assert_array_equal(actual[feature], expected[feature])
 
   def test_checkpointing(self):
     ds = lazy_dataset.RangeLazyMapDataset(1, 12).map(
@@ -337,7 +340,6 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
         value = next(ds_iter)
         for k, v in value.items():
           np.testing.assert_array_equal(v, values_without_interruption[i][k])
-
 
 if __name__ == "__main__":
   absltest.main()

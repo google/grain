@@ -14,12 +14,16 @@
 """Implements packing transformations."""
 import collections
 import copy
-from typing import Any
+from typing import Any, Dict, TypeVar
 
 from grain._src.core import tree
+from grain._src.cpp.transformations.packing.python import pack
 from grain._src.python.lazy_dataset import lazy_dataset
 from jaxtyping import PyTree  # pylint: disable=g-importing-member
 import numpy as np
+
+
+T = TypeVar("T")
 
 
 # SingleBinPackLazyDatasetIterator's state is defined by the a state of the
