@@ -36,6 +36,9 @@ Shutdown logic considerations:
   set, they break from what they are doing.
 * We never block indefinitely when calling get() or put() on a queue. This
   ensures parent and child processes continue to check the termination_event.
+
+MultiProcessIterator wraps GrainPool adding lifecycle management, checkpointing
+support and multithreaded elements read.
 """
 
 from __future__ import annotations
@@ -44,18 +47,24 @@ from collections.abc import Iterator
 import cProfile
 import dataclasses
 from multiprocessing import context
+from multiprocessing import pool
 from multiprocessing import queues
 from multiprocessing import synchronize
 import pstats
 import queue
+import threading
 import traceback
 from typing import Any, Protocol, TypeVar
 
 from absl import logging
 import cloudpickle
 from grain._src.core import parallel
+from grain._src.core import tree
+import multiprocessing as mp
 from grain._src.python import grain_logging
 from grain._src.python import multiprocessing_common
+from grain._src.python import record
+from grain._src.python import shared_memory_array
 from grain._src.python.options import MultiprocessingOptions  # pylint: disable=g-importing-member
 
 T = TypeVar("T")
@@ -377,3 +386,223 @@ class GrainPool(Iterator[T]):
         if process.is_alive():
           logging.info("Forcibly terminating process with pid %i", process.pid)
           process.terminate()
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _ReaderQueueElement:
+  """Element to be added to the reader queue."""
+
+  async_result: pool.AsyncResult[Any]
+  # index of worker producing the element in [0, worker_count]
+  worker_index: int
+
+
+@dataclasses.dataclass(frozen=True)
+class _GrainPoolProcessingComplete:
+  """Indicates processing of grain pool is complete."""
+
+
+_GRAIN_POOL_PROCESSING_COMPLETE = _GrainPoolProcessingComplete()
+_QueueElement = _ReaderQueueElement | _GrainPoolProcessingComplete | Exception
+
+
+class GrainPoolProcessingError(Exception):
+  """Raised when input processing in Grain Pool fails."""
+
+
+class MultiProcessIteratorInvalidStateError(Exception):
+  """Raised when iterator is an invalid state and can't be iterated on."""
+
+
+class MultiProcessIterator(Iterator[T]):
+  """Runs iterators returned by `get_element_producer_fn` in child processes.
+
+  Note: MultiProcessIterator implements the Context Manager protocol to clean
+  resources. As such, it must be used within a "with" statement.
+
+  Wraps `GrainPool` adding lifecycle management, multithreaded elements read and
+  recording the last worker index useful for checkpointing.
+  """
+
+  def __init__(
+      self,
+      get_element_producer_fn: GetElementProducerFn,
+      multiprocessing_options: MultiprocessingOptions,
+      worker_index_to_start_reading: int,
+  ):
+    """Initializes MultiProcessIterator.
+
+    Args:
+      get_element_producer_fn: factory making record iterators for each child
+        process.
+      multiprocessing_options: options for distributing the record iterators.
+      worker_index_to_start_reading: Index of the next worker to read from. This
+        is useful for recovering from a checkpoint.
+    """
+    self._get_element_producer_fn = get_element_producer_fn
+    self._multiprocessing_options = multiprocessing_options
+    self._last_worker_index = worker_index_to_start_reading - 1
+    self._reader_queue = None
+    self._reader_thread_pool = None
+    self._termination_event = None
+    self._reader_thread = None
+
+  def __enter__(self):
+    max_buffered_elements = (
+        self._multiprocessing_options.num_workers
+        * self._multiprocessing_options.per_worker_buffer_size
+    )
+    self._reader_queue = queue.Queue(maxsize=max_buffered_elements)
+    self._reader_thread_pool = pool.ThreadPool(max_buffered_elements)
+    self._termination_event = threading.Event()
+    self._reader_thread = threading.Thread(
+        target=MultiProcessIterator._process_elements,
+        args=(
+            self._get_element_producer_fn,
+            self._multiprocessing_options,
+            self._reader_queue,
+            self._reader_thread_pool,
+            self._termination_event,
+            self._last_worker_index + 1,
+        ),
+    )
+    self._reader_thread.start()
+    shared_memory_array.SharedMemoryArray.enable_async_del(
+        self._multiprocessing_options.num_workers
+    )
+    return self
+
+  def __exit__(self, exc_type, exc_value, tb):
+    # pytype: disable=attribute-error
+    self._termination_event.set()
+    self._reader_thread_pool.close()
+    self._reader_thread.join()
+    self._reader_thread_pool.join()
+    # pytype: enable=attribute-error
+    self._termination_event = None
+    self._reader_thread_pool = None
+    self._reader_thread = None
+    self._reader_queue = None
+
+  @staticmethod
+  def _open_shared_memory_for_leaf(element: Any) -> Any:
+    if isinstance(element, shared_memory_array.SharedMemoryArrayMetadata):
+      element = shared_memory_array.SharedMemoryArray.from_metadata(element)
+      element.unlink_on_del()
+    return element
+
+  @staticmethod
+  def _open_shared_memory_for_structure(structure: Any) -> Any:
+    if isinstance(structure, record.Record):
+      structure.data = tree.map_structure(
+          MultiProcessIterator._open_shared_memory_for_leaf, structure.data
+      )
+      return structure
+    return tree.map_structure(
+        MultiProcessIterator._open_shared_memory_for_leaf, structure
+    )
+
+  @staticmethod
+  def _process_elements(
+      get_element_producer_fn: GetElementProducerFn,
+      multiprocessing_options: MultiprocessingOptions,
+      reader_queue: queue.Queue[_QueueElement],
+      thread_pool: pool.ThreadPool,
+      termination_event: threading.Event,
+      worker_index_to_start_reading: int,
+  ) -> None:
+    """Processes elements read from grain pool asynchronously."""
+    ctx = mp.get_context("spawn")
+
+    def read_thread_should_stop():
+      return (
+          termination_event.is_set() or not threading.main_thread().is_alive()
+      )
+
+    try:
+      with GrainPool(
+          ctx=ctx,
+          get_element_producer_fn=get_element_producer_fn,
+          worker_index_to_start_reading=worker_index_to_start_reading,
+          options=multiprocessing_options,
+      ) as g_pool:
+        for element in g_pool:
+          if read_thread_should_stop():
+            break
+          # Note: We use a thread pool for opening the shared memory because
+          # in some cases the calls to `shm_open` can actually become the
+          # bottleneck for a single thread.
+          async_result = thread_pool.apply_async(
+              MultiProcessIterator._open_shared_memory_for_structure,
+              args=(element.record,),
+          )
+          multiprocessing_common.add_element_to_queue(
+              _ReaderQueueElement(
+                  async_result,
+                  element.worker_index,
+              ),
+              reader_queue,
+              read_thread_should_stop,
+          )
+    # This exception could arise from user-provide code. Propagating it to
+    # the main thread to re-raise it as is.
+    except Exception as e:  # pylint: disable=broad-except
+      multiprocessing_common.add_element_to_queue(
+          e, reader_queue, read_thread_should_stop
+      )
+      return
+    multiprocessing_common.add_element_to_queue(
+        _GrainPoolProcessingComplete(),
+        reader_queue,
+        read_thread_should_stop,
+    )
+
+  def _can_iterate(self):
+    """Checks whether the object is in a state where it can be iterated on."""
+    return (
+        self._reader_queue is not None
+        and self._termination_event is not None
+        and self._reader_thread_pool is not None
+        and self._reader_thread is not None
+    )
+
+  def __iter__(self):
+    if not self._can_iterate():
+      raise MultiProcessIteratorInvalidStateError(
+          "MultiProcessIterator is in an invalid state. Note that"
+          " MultiProcessIterator should be used with a 'with' statement."
+      )
+    return self
+
+  def get_last_worker_index(self):
+    return self._last_worker_index
+
+  def __next__(self):
+    if not self._can_iterate():
+      raise MultiProcessIteratorInvalidStateError(
+          "MultiProcessIterator is in an invalid state. Note that"
+          " MultiProcessIterator should be used with a 'with' statement."
+      )
+    element = multiprocessing_common.get_element_from_queue(
+        self._reader_queue, self._termination_event.is_set  # pytype: disable=attribute-error
+    )
+    if isinstance(element, Exception):
+      raise GrainPoolProcessingError() from element
+    if (
+        element == _GRAIN_POOL_PROCESSING_COMPLETE
+        or element == multiprocessing_common.SYSTEM_TERMINATED
+    ):
+      raise StopIteration
+
+    if not isinstance(element, _ReaderQueueElement):
+      raise ValueError(
+          f"Got invalid element type from GrainPool: {type(element)}"
+      )
+
+    result = multiprocessing_common.get_async_result(
+        element.async_result, self._termination_event.is_set
+    )
+    if isinstance(result, multiprocessing_common._SystemTerminated):  # pylint: disable=protected-access
+      raise StopIteration
+    self._last_worker_index = element.worker_index
+    return result

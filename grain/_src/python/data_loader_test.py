@@ -24,7 +24,9 @@ from grain._src.core import sharding
 from grain._src.core import transforms
 import multiprocessing as mp
 from grain._src.python import data_loader as data_loader_lib
+from grain._src.python import grain_pool
 from grain._src.python import samplers
+from grain._src.python import shared_memory_array
 from grain._src.python.data_sources import ArrayRecordDataSource
 from grain._src.python.data_sources import InMemoryDataSource
 from grain._src.python.data_sources import RangeDataSource
@@ -85,15 +87,19 @@ class CopyNumPyArrayToSharedMemoryTest(absltest.TestCase):
     element = np.array([1, 2, 3, 4, 5, 6, 7])
     transform = data_loader_lib.CopyNumPyArrayToSharedMemory()
     result = transform.map(element)
-    self.assertIsInstance(result, data_loader_lib.SharedMemoryArrayMetadata)
+    self.assertIsInstance(result, shared_memory_array.SharedMemoryArrayMetadata)
 
   def test_copy_nested_numpy_array_to_shared_memory(self):
     element_1 = np.arange(5)
     element_2 = np.arange(5)
     transform = data_loader_lib.CopyNumPyArrayToSharedMemory()
     result = transform.map([element_1, element_2])
-    self.assertIsInstance(result[0], data_loader_lib.SharedMemoryArrayMetadata)
-    self.assertIsInstance(result[1], data_loader_lib.SharedMemoryArrayMetadata)
+    self.assertIsInstance(
+        result[0], shared_memory_array.SharedMemoryArrayMetadata
+    )
+    self.assertIsInstance(
+        result[1], shared_memory_array.SharedMemoryArrayMetadata
+    )
 
   def test_copy_skipped_non_numpy_array(self):
     element = "randomstring"
@@ -146,7 +152,7 @@ class DataLoaderTest(parameterized.TestCase):
     data_loader = self._create_data_loader_for_short_sequence(
         transformations, worker_count=2
     )
-    with self.assertRaises(data_loader_lib.GrainPoolProcessingError):
+    with self.assertRaises(grain_pool.GrainPoolProcessingError):
       list(data_loader)
 
   def test_data_loader_single_process(self):

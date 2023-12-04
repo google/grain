@@ -126,7 +126,6 @@ py_library(
     deps = [
         ":data_sources",
         ":grain_pool",
-        ":multiprocessing_common",
         ":operations",
         ":options",
         ":record",
@@ -154,8 +153,10 @@ py_test(
     deps = [
         ":data_loader",
         ":data_sources",
+        ":grain_pool",
         ":operations",
         ":samplers",
+        ":shared_memory_array",
         "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
     ],
@@ -169,19 +170,24 @@ py_library(
         ":grain_logging",
         ":multiprocessing_common",
         ":options",
+        ":record",
+        ":shared_memory_array",
         "//grain/_src/core:parallel",
+        "//grain/_src/core:tree",
     ],
 )
 
 py_test(
     name = "grain_pool_test",
     srcs = ["grain_pool_test.py"],
+    shard_count = 15,
     srcs_version = "PY3",
     tags = ["not_run:arm"],
     deps = [
         ":data_sources",
         ":grain_pool",
         ":options",
+        ":record",
     ],
 )
 

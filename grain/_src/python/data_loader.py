@@ -18,14 +18,11 @@ from __future__ import annotations
 import collections
 from collections.abc import Iterator
 import contextlib
-import copy
 import dataclasses
 import functools
 import json
 from multiprocessing import pool
 import os
-import queue
-import threading
 from typing import Any, Callable, Optional, Sequence, Tuple, TypeVar
 
 from absl import logging
@@ -36,7 +33,6 @@ from grain._src.core import tree
 from grain._src.core import usage_logging
 import multiprocessing as mp
 from grain._src.python import grain_pool
-from grain._src.python import multiprocessing_common
 from grain._src.python import options
 from grain._src.python import record
 from grain._src.python.data_sources import RandomAccessDataSource
@@ -44,7 +40,6 @@ from grain._src.python.operations import BatchOperation
 from grain._src.python.operations import Operation
 from grain._src.python.samplers import Sampler
 from grain._src.python.shared_memory_array import SharedMemoryArray
-from grain._src.python.shared_memory_array import SharedMemoryArrayMetadata
 import numpy as np
 
 
@@ -350,40 +345,81 @@ class PyGrainDatasetIterator(collections.abc.Iterator[_T]):
   """DataLoader iterator providing get/set state functionality.
 
   This is the only iterator we expose to users. It wraps underlying
-  _SingleProcessIterator/_MultipleProcessIterator. In order to set state,
-  it recreates the underlying iterator fresh with a new state.
+  MultipleProcessIterator. In order to set state, it recreates the underlying
+  iterator fresh with a new state.
+
+  Checkpointing for PyGrainDatasetIterator:
+  PyGrainDatasetIterator uses GrainPool, which distributes RecordMetadata from
+  produced records among worker processes in a round robin fashion. Generally,
+  some workers can process more elements than others at a given training step.
+  Checkpointing logic goes as follows:
+  1) With each output batch produced, GrainPool emits the worker_index of The
+     worker that processed the batch.
+  2) PyGrainDatasetIterator keeps track of the last_seen_index at each worker.
+  3) When restoring from a state, PyGrainDatasetIterator checks what is the
+     minumum last_seen_index (among the last seen indices for all workers.) and
+     which worker processed that index. GrainPool is instructed to start
+     distributing indices to the next worker.
   """
 
   def __init__(self, data_loader: DataLoader, state: _IteratorState):
     self._data_loader = data_loader
     self._data_loader._validate_state(state)
-    self._initial_iterator_state = state
+    self._state = state
     self._raw_iterator = None
     self._iterator = None
 
   def __iter__(self) -> PyGrainDatasetIterator[_T]:
     return self
 
+  def _create_iterator(self) -> None:
+    """Creates the wrapped `MultiProcessIterator` or in-process iterator."""
+    if self._data_loader.multiprocessing_options.num_workers == 0:
+      # Pipeline is going to be executed in the main process.
+      self._raw_iterator = self._data_loader._read_and_transform_data(  # pylint: disable=protected-access
+          self._state[_LAST_SEEN_INDICES]["0"]
+      )
+      self._iterator = self._raw_iterator
+    else:
+      state = self._state
+      data_loader = self._data_loader
+
+      def get_element_producer_fn(
+          worker_index: int, worker_count: int
+      ) -> Iterator[record.Record]:
+        del worker_count
+        last_seen_index = state[_LAST_SEEN_INDICES].get(str(worker_index))
+        yield from data_loader._read_and_transform_data(last_seen_index)  # pylint: disable=protected-access
+
+      worker_index_to_start_reading = (
+          state[_LAST_WORKER_INDEX] + 1
+      ) % self._data_loader.multiprocessing_options.num_workers
+
+      self._raw_iterator = grain_pool.MultiProcessIterator(
+          get_element_producer_fn,
+          self._data_loader.multiprocessing_options,
+          worker_index_to_start_reading,
+      )
+      self._iterator = _iterator_with_context(self._raw_iterator)
+
   def __next__(self) -> _T:
     if self._iterator is None:
-      if self._data_loader.multiprocessing_options.num_workers == 0:
-        self._raw_iterator = _SingleProcessIterator(
-            self._data_loader, self._initial_iterator_state
-        )
-        self._iterator = self._raw_iterator
-      else:
-        self._raw_iterator = _MultiProcessorIterator(
-            self._data_loader, self._initial_iterator_state
-        )
-        self._iterator = _iterator_with_context(self._raw_iterator)
-    return next(self._iterator)
+      self._create_iterator()
+
+    result_record = next(self._iterator)
+
+    if isinstance(self._raw_iterator, grain_pool.MultiProcessIterator):
+      last_worker_index = self._raw_iterator.get_last_worker_index()
+      self._state[_LAST_WORKER_INDEX] = last_worker_index
+    else:
+      last_worker_index = 0
+    self._state[_LAST_SEEN_INDICES][
+        str(last_worker_index)
+    ] = result_record.metadata.index
+    return result_record.data
 
   def get_state(self) -> bytes:
-    if self._raw_iterator:
-      state = self._raw_iterator.get_state()
-    else:
-      state = self._initial_iterator_state
-    return json.dumps(state, indent=4).encode()
+    return json.dumps(self._state, indent=4).encode()
 
   def set_state(self, state: bytes):
     """Sets the state for the undelrying iterator.
@@ -394,7 +430,7 @@ class PyGrainDatasetIterator(collections.abc.Iterator[_T]):
     """
     state = json.loads(state.decode())
     self._data_loader._validate_state(state)  # pylint: disable=protected-access
-    self._initial_iterator_state = state
+    self._state = state
     self._raw_iterator = None
     self._iterator = None
 
@@ -453,242 +489,3 @@ def _apply_transform(
       ) from e
     if filter_result:
       yield output_record
-
-
-class _SingleProcessIterator(collections.abc.Iterator):
-  """Iterator that runs the data transformations in the main process.
-
-  Please note that the checkpointing state of a _SingleProcessIterator is the
-  same as that of a _MultiProcessorIterator with one process.
-  """
-
-  def __init__(self, data_loader: DataLoader, state: _IteratorState):
-    self._data_loader = data_loader
-    self._state = state
-    self._iterator = self._data_loader._read_and_transform_data(
-        self._state[_LAST_SEEN_INDICES]["0"]
-    )
-
-  def __next__(self):
-    next_element = next(self._iterator)
-    self._state[_LAST_SEEN_INDICES]["0"] = next_element.metadata.index
-    return next_element.data
-
-  def get_state(self) -> _IteratorState:
-    return copy.deepcopy(self._state)
-
-  def __iter__(self):
-    return self
-
-
-class GrainPoolProcessingError(Exception):
-  """Raised when input processing in Grain Pool fails."""
-
-
-class MultiProcessorIteratorInvalidStateError(Exception):
-  """Raised when iterator is an invalid state and can't be iterated on."""
-
-
-class _MultiProcessorIterator(collections.abc.Iterator):
-  """Iterator that runs the data transformations in separate child processes.
-
-  Note: MultiProcessorIterator implements the Context Manager protocol to clean
-  resources. As such, it must be used within a "with" statement.
-
-  Checkpointing for _MultiProcessorIterator:
-  _MultiProcessorIterator uses GrainPool, which distributes RecordMetadata from
-  the Sampler among worker processes in a round robin fashion. Due to Filter (or
-  packing) operations, some workers can process more elements than others at a
-  given training step. Checkpointing logic goes as follows:
-  1) With each output batch produced, GrainPool emits the worker_index of The
-     worker that processed the batch.
-  2) _MultiProcessorIterator keeps track of the last_seen_index at each worker.
-  3) When restoring from a state, _MultiProcessorIterator checks what is the
-     minumum last_seen_index (among the last seen indices for all workers.) and
-     which worker processed that index.
-  4) The Sampler is reset to start from the next index (to the index from #3)
-     and GrainPool is instructed to start distributing indices to the next
-     worker (to the one that processed the index from #3).
-  5) To avoid processing elements twice, we pass a discard_function to the pool,
-     which discards any element that was already processed before (where element
-     index is <= to the last_seen_index) at a given worker.
-  6) GrainPool keeps track of which worker produced the last output batch handed
-     to the user. Upon restarting from a checkpoint, round robin reading is
-     started from the next worker (to the worker producing the last batch).
-  """
-
-  def __init__(self, data_loader: DataLoader, state: _IteratorState):
-    """Creates an iterator for given data_loader that uses multiple processes.
-
-    Args:
-      data_loader: data_loader for which the iterator is created.
-      state: initial state to load iterator from.
-    """
-    self._data_loader = data_loader
-    self._reader_queue = None
-    self._reader_thread_pool = None
-    self._termination_event = None
-    self._reader_thread = None
-    self._state = state
-
-  def __enter__(self):
-    mp_options = self._data_loader.multiprocessing_options
-    max_buffered_elements = (
-        mp_options.num_workers * mp_options.per_worker_buffer_size
-    )
-    self._reader_queue = queue.Queue(maxsize=max_buffered_elements)
-    self._reader_thread_pool = pool.ThreadPool(max_buffered_elements)
-    self._termination_event = threading.Event()
-    self._reader_thread = threading.Thread(
-        target=_MultiProcessorIterator._process_elements,
-        args=(
-            self._data_loader,
-            self._reader_queue,
-            self._reader_thread_pool,
-            self._termination_event,
-            self._state,
-        ),
-    )
-    self._reader_thread.start()
-    SharedMemoryArray.enable_async_del(mp_options.num_workers)
-    return self
-
-  def __exit__(self, exc_type, exc_value, traceback):
-    # pytype: disable=attribute-error
-    self._termination_event.set()
-    self._reader_thread_pool.close()
-    self._reader_thread.join()
-    self._reader_thread_pool.join()
-    # pytype: enable=attribute-error
-    self._termination_event = None
-    self._reader_thread_pool = None
-    self._reader_thread = None
-    self._reader_queue = None
-
-  @staticmethod
-  def _open_shared_memory(element: Any) -> Any:
-    if isinstance(element, SharedMemoryArrayMetadata):
-      element = SharedMemoryArray.from_metadata(element)
-      element.unlink_on_del()
-    return element
-
-  @staticmethod
-  def _process_elements(
-      data_loader: DataLoader,
-      reader_queue: queue.Queue[_QueueElement],
-      thread_pool: pool.ThreadPool,
-      termination_event: threading.Event,
-      state: _IteratorState,
-  ) -> None:
-    """Processes elements read from grain pool asynchronously."""
-    ctx = mp.get_context("spawn")
-
-    worker_index_to_start_reading = (
-        state[_LAST_WORKER_INDEX] + 1
-    ) % data_loader.multiprocessing_options.num_workers
-
-    def read_thread_should_stop():
-      return (
-          termination_event.is_set() or not threading.main_thread().is_alive()
-      )
-
-    def get_element_producer_fn(worker_index: int, worker_count: int):
-      del worker_count
-      last_seen_index = state[_LAST_SEEN_INDICES].get(str(worker_index))
-      iterator = data_loader._read_and_transform_data(last_seen_index)  # pylint: disable=protected-access
-      yield from iterator
-
-    try:
-      with grain_pool.GrainPool(
-          ctx=ctx,
-          get_element_producer_fn=get_element_producer_fn,
-          worker_index_to_start_reading=worker_index_to_start_reading,
-          options=data_loader.multiprocessing_options,
-      ) as g_pool:
-        for element in g_pool:
-          if read_thread_should_stop():
-            break
-          # Note: We use a thread pool for opening the shared memory because
-          # in some cases the calls to `shm_open` can actually become the
-          # bottleneck for a single thread.
-          async_result = thread_pool.apply_async(
-              tree.map_structure,
-              args=(
-                  _MultiProcessorIterator._open_shared_memory,
-                  element.record.data,
-              ),
-          )
-          multiprocessing_common.add_element_to_queue(
-              _ReaderQueueElement(
-                  async_result,
-                  element.record.metadata.index,
-                  element.worker_index,
-              ),
-              reader_queue,
-              read_thread_should_stop,
-          )
-    # This exception could arise from user-provide code. Propagating it to
-    # the main thread to re-raise it as is.
-    except Exception as e:  # pylint: disable=broad-except
-      multiprocessing_common.add_element_to_queue(
-          e, reader_queue, read_thread_should_stop
-      )
-      return
-    multiprocessing_common.add_element_to_queue(
-        _GrainPoolProcessingComplete(),
-        reader_queue,
-        read_thread_should_stop,
-    )
-
-  def _can_iterate(self):
-    """Checks whether the object is in a state where it can be iterated on."""
-    return (
-        self._reader_queue is not None
-        and self._termination_event is not None
-        and self._reader_thread_pool is not None
-        and self._reader_thread is not None
-    )
-
-  def __iter__(self):
-    if not self._can_iterate():
-      raise MultiProcessorIteratorInvalidStateError(
-          "MultiProcessorIterator is in an invalid state. Note that"
-          " MultiProcessorIterator should be used with a 'with' statement."
-      )
-    return self
-
-  def get_state(self) -> _IteratorState:
-    return copy.deepcopy(self._state)
-
-  def __next__(self):
-    if not self._can_iterate():
-      raise MultiProcessorIteratorInvalidStateError(
-          "MultiProcessorIterator is in an invalid state. Note that"
-          " MultiProcessorIterator should be used with a 'with' statement."
-      )
-    element = multiprocessing_common.get_element_from_queue(
-        self._reader_queue, self._termination_event.is_set  # pytype: disable=attribute-error
-    )
-    if isinstance(element, Exception):
-      raise GrainPoolProcessingError() from element
-    if (
-        element == _GRAIN_POOL_PROCESSING_COMPLETE
-        or element == multiprocessing_common.SYSTEM_TERMINATED
-    ):
-      raise StopIteration
-
-    if not isinstance(element, _ReaderQueueElement):
-      raise ValueError(
-          f"Got invalid element type from GrainPool: {type(element)}"
-      )
-
-    result = multiprocessing_common.get_async_result(
-        element.async_result, self._termination_event.is_set
-    )
-    if isinstance(result, multiprocessing_common._SystemTerminated):  # pylint: disable=protected-access
-      raise StopIteration
-    self._state[_LAST_SEEN_INDICES][
-        str(element.worker_index)
-    ] = element.max_element_index
-    self._state[_LAST_WORKER_INDEX] = element.worker_index
-    return result
