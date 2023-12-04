@@ -32,6 +32,12 @@ class SharedMemoryArrayMetadata:
   shape: Iterable[int]
   dtype: npt.DTypeLike
 
+  def close_and_unlink_shm(self) -> None:
+    """Closes and unlinks the shared memory referred to by this instance."""
+    shm = shared_memory.SharedMemory(self.name)
+    shm.close()
+    shm.unlink()
+
 
 def close_with_semaphore(
     shm: shared_memory.SharedMemory, semaphore: threading.Semaphore

@@ -140,6 +140,7 @@ py_library(
 
 py_test(
     name = "data_loader_test",
+    size = "large",
     srcs = [
         "data_loader_test.py",
     ],

@@ -81,6 +81,19 @@ class NonPickableTransform(transforms.MapTransform):
     return x
 
 
+class RandomTripletSource:
+
+  def __len__(self) -> int:
+    return 100_000
+
+  def __getitem__(self, record_key: int):
+    return {
+        "data": np.random.uniform(size=(3, 224, 224, 3)).astype(
+            dtype=np.float32
+        )
+    }
+
+
 class CopyNumPyArrayToSharedMemoryTest(absltest.TestCase):
 
   def test_copy_numpy_array_to_shared_memory(self):
@@ -302,6 +315,29 @@ class DataLoaderTest(parameterized.TestCase):
     actual = list(data_loader)
 
     np.testing.assert_equal(actual, expected)
+
+  def test_no_shared_memory_leak(self):
+    data_source = RandomTripletSource()
+    sampler = samplers.IndexSampler(
+        num_records=len(data_source),
+        shard_options=sharding.NoSharding(),
+    )
+    dataloader = data_loader_lib.DataLoader(
+        data_source=data_source,
+        operations=[BatchOperation(128, drop_remainder=True)],
+        sampler=sampler,
+        worker_count=5,
+        worker_buffer_size=20,
+        shard_options=sharding.NoSharding(),
+    )
+
+    # We interrupt iteration and create a new iterator re-launching the worker
+    # pool. If the opened shared memory in the buffered elements is not unlinked
+    # properly, this will OOM after couple repetitions.
+    for _ in range(5):
+      for i, _ in enumerate(dataloader):
+        if i > 10:
+          break
 
   def test_data_loader_remote_exception(self):
     range_data_source = RangeDataSource(start=0, stop=8, step=1)

@@ -163,6 +163,7 @@ def _worker_loop(
     enable_profiling: bool,
 ):
   """Code to be run on each child process."""
+  out_of_elements = False
   try:
     grain_logging.set_process_identifier_prefix(
         f"PyGrain Worker {worker_index}"
@@ -179,10 +180,15 @@ def _worker_loop(
     while not termination_event.is_set():
       try:
         next_element = next(element_producer)
-        multiprocessing_common.add_element_to_queue(  # pytype: disable=wrong-arg-types
+        if not multiprocessing_common.add_element_to_queue(  # pytype: disable=wrong-arg-types
             next_element, output_queue, termination_event.is_set
-        )
+        ):
+          # We failed to put the element into the output queue because the
+          # termination event was set. The element may contain a shared memory
+          # block reference that has to be cleaned up.
+          _unlink_shm_in_structure(next_element)
       except StopIteration:
+        out_of_elements = True
         multiprocessing_common.add_element_to_queue(  # pytype: disable=wrong-arg-types
             _ProcessingComplete(), output_queue, termination_event.is_set
         )
@@ -208,6 +214,12 @@ def _worker_loop(
     termination_event.set()
 
   if termination_event.is_set():
+    if not out_of_elements:
+      # Since the termination event is set the consumer will not get any more
+      # elements from the output queue. The elements may contain reference to
+      # shared memory blocks that have to be cleaned up.
+      while not output_queue.empty():
+        _unlink_shm_in_structure(output_queue.get_nowait())
     # When adding elements to the queue, element is put in a buffer and a
     # background thread flushes the elements through the pipe. The process that
     # writes to the queue joins that thread automatically on exit. We call
@@ -215,6 +227,18 @@ def _worker_loop(
     output_queue.cancel_join_thread()
     output_queue.close()
   logging.info("Process %i exiting.", worker_index)
+
+
+def _unlink_shm_if_metadata(obj: Any):
+  if isinstance(obj, shared_memory_array.SharedMemoryArrayMetadata):
+    obj.close_and_unlink_shm()
+
+
+def _unlink_shm_in_structure(structure: Any):
+  if isinstance(structure, record.Record):
+    _unlink_shm_in_structure(structure.data)
+  else:
+    tree.map_structure(_unlink_shm_if_metadata, structure)
 
 
 class GrainPool(Iterator[T]):

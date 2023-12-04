@@ -27,10 +27,12 @@ class MultiProcessingCommonTest(absltest.TestCase):
     test_queue = multiprocessing.Queue()
     element = 1
     termination_event = multiprocessing.Event()
-    multiprocessing_common.add_element_to_queue(  # pytype: disable=wrong-arg-types
-        element=element,
-        elements_queue=test_queue,
-        should_stop=termination_event.is_set,
+    self.assertTrue(
+        multiprocessing_common.add_element_to_queue(  # pytype: disable=wrong-arg-types
+            element=element,
+            elements_queue=test_queue,
+            should_stop=termination_event.is_set,
+        )
     )
     self.assertEqual(test_queue.get(), 1)
 
@@ -39,10 +41,12 @@ class MultiProcessingCommonTest(absltest.TestCase):
     element = 1
     termination_event = multiprocessing.Event()
     termination_event.set()
-    multiprocessing_common.add_element_to_queue(  # pytype: disable=wrong-arg-types
-        element=element,
-        elements_queue=test_queue,
-        should_stop=termination_event.is_set,
+    self.assertFalse(
+        multiprocessing_common.add_element_to_queue(  # pytype: disable=wrong-arg-types
+            element=element,
+            elements_queue=test_queue,
+            should_stop=termination_event.is_set,
+        )
     )
     with self.assertRaises(queue.Empty):
       test_queue.get(timeout=0.1)

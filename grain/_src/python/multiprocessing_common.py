@@ -37,14 +37,25 @@ def add_element_to_queue(
     element: T,
     elements_queue: queue.Queue[T],
     should_stop: Callable[[], bool],
-) -> None:
-  """Try adding element to queue as long as should_stop() is not True."""
+) -> bool:
+  """Try adding element to queue as long as should_stop() is not True.
+
+  Args:
+    element: Element to add.
+    elements_queue: Target queue.
+    should_stop: Callable to check whether addition should proceed (possibly
+      after a re-try).
+
+  Returns:
+    Bool indicating whether addition was successfull.
+  """
   while not should_stop():
     try:
       elements_queue.put(element, timeout=_QUEUE_WAIT_TIMEOUT_SECONDS)
-      break
+      return True
     except queue.Full:
       pass
+  return False
 
 
 def get_element_from_queue(

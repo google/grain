@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Tests for shared memory array."""
+from multiprocessing import shared_memory
 from absl.testing import absltest
 from absl.testing import parameterized
 import multiprocessing
@@ -63,9 +64,15 @@ class SharedMemoryArrayTest(parameterized.TestCase):
     self.assertEqual(actual_record.metadata, expected_record.metadata)
     self.assertIsInstance(actual_record.data, dict)
     self.assertEqual(actual_record.data.keys(), {"a"})
-    self.assertIsInstance(actual_record.data["a"], SharedMemoryArrayMetadata)
-    self.assertEqual(actual_record.data["a"].shape, (2, 2))
-    self.assertEqual(actual_record.data["a"].dtype, np.int32)
+    shm_metadata = actual_record.data["a"]
+    self.assertIsInstance(shm_metadata, SharedMemoryArrayMetadata)
+    self.assertEqual(shm_metadata.shape, (2, 2))
+    self.assertEqual(shm_metadata.dtype, np.int32)
+    # Clean up the allocated shared memory block and make sure it no longer
+    # exists.
+    shm_metadata.close_and_unlink_shm()
+    with self.assertRaises(FileNotFoundError):
+      _ = shared_memory.SharedMemory(name=shm_metadata.name, create=False)
 
 
 if __name__ == "__main__":
