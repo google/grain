@@ -5,7 +5,6 @@ from grain._src.core import transforms
 from grain._src.core import usage_logging
 from grain._src.python import data_loader
 from grain._src.python import data_sources
-from grain._src.python import operations
 from grain._src.python import options
 from grain._src.python import samplers
 
@@ -54,7 +53,7 @@ def load(
   if batch_size is not None:
     transformations = list(transformations)
     transformations.append(
-        operations.BatchOperation(batch_size, drop_remainder=drop_remainder)
+        transforms.BatchTransform(batch_size, drop_remainder=drop_remainder)
     )
   return data_loader.DataLoader(
       data_source=source,
