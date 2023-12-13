@@ -104,7 +104,7 @@ class LazyMapDataset(Sequence[T], abc.ABC):
       return functools.partial(LazyMapDataset._functions[attribute_name], self)
     raise AttributeError(
         f"'{self.__class__.__name__}' object has no attribute"
-        f" '{attribute_name} :("
+        f" '{attribute_name}' :("
     )
 
   def __iter__(self) -> LazyDatasetIterator[T]:
@@ -164,7 +164,7 @@ class LazyIterDataset(Iterable[T], abc.ABC):
       return functools.partial(LazyIterDataset._functions[attribute_name], self)
     raise AttributeError(
         f"'{self.__class__.__name__}' object has no attribute"
-        f" '{attribute_name} :("
+        f" '{attribute_name}' :("
     )
 
 
