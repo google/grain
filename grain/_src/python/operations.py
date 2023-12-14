@@ -137,14 +137,19 @@ class BatchOperation(Generic[_IN, _OUT]):
           f"batch_size must be a positive integer. Got {self.batch_size}."
       )
     self._use_shared_memory = False
+    # TODO(b/301931658): Split this class into implementation and an operation
+    # wrapping the implementation. Only the operation level should emit the
+    # message.
+    self._display_deprecation_message = True
 
   def __call__(
       self, input_iterator: Iterator[record.Record[_IN]]
   ) -> Iterator[record.Record[_OUT]]:
-    logging.error(
-        "Applying deprecated PyGrain BatchOperation. Please use the"
-        " grain.python.Batch transformation."
-    )
+    if self._display_deprecation_message:  # pytype: disable=attribute-error
+      logging.error(
+          "Applying deprecated PyGrain BatchOperation. Please use the"
+          " grain.python.Batch transformation."
+      )
     records_to_batch = []
     last_record_metadata = None
     for input_record in input_iterator:
@@ -162,6 +167,9 @@ class BatchOperation(Generic[_IN, _OUT]):
 
   def _enable_shared_memory(self):
     self._use_shared_memory = True
+
+  def disable_deprecation_message(self):
+    self._display_deprecation_message = False
 
   def _validate_structure(self, input_records: Sequence[Any]) -> None:
     """Validate that all records have the same Pytree structure."""

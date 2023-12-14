@@ -470,6 +470,7 @@ def _apply_transform(
           batch_size=transform.batch_size,
           drop_remainder=transform.drop_remainder,
       )
+      batch_op.disable_deprecation_message()
       for r in batch_op(input_iterator):
         yield r
     case _:
