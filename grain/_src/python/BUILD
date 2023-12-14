@@ -206,7 +206,6 @@ py_library(
     deps = [
         ":data_loader",
         ":data_sources",
-        ":operations",
         ":options",
         ":samplers",
         "//grain/_src/core:sharding",
