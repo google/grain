@@ -44,6 +44,8 @@ def _reset_rng_state(
   state["state"]["counter"] = np.array([0, 0, op_seed, index], dtype=np.uint64)
   state["buffer"] = np.array([0, 0, 0, 0], dtype=np.uint64)
   state["buffer_pos"] = 4
+  state["has_uint32"] = 0
+  state["uint32"] = 0
   rng.bit_generator.state = state
 
 

@@ -45,6 +45,13 @@ class RandomMapWithTransform(transforms.RandomMapTransform):
 
 
 @dataclasses.dataclass(frozen=True)
+class RandomMapWithDeterminismTransform(transforms.RandomMapTransform):
+
+  def random_map(self, element: int, rng: np.random.Generator):
+    return element + rng.integers(0, 10)
+
+
+@dataclasses.dataclass(frozen=True)
 class AddIndexTransform(transforms.MapWithIndexTransform):
 
   def map_with_index(self, index: int, element: int):
@@ -136,6 +143,18 @@ class MapLazyIterDatasetTest(absltest.TestCase):
     expected_data = [_ for _ in range(10)]
     actual_data = [next(map_with_random_transform_iter_ds) for _ in range(10)]
     np.testing.assert_almost_equal(expected_data, actual_data, decimal=1)
+
+  def test_random_map_data_with_transform_deterministic_with_seed(self):
+    expected_data = [9, 3, 6, 11, 4, 7, 9, 9, 8, 9]
+    # check if elements are reproducible for multiple runs
+    for _ in range(10):
+      map_with_random_transform_iter_ds = iter(
+          ldmap.MapLazyIterDataset(
+              self.range_iter_ds, RandomMapWithDeterminismTransform(), seed=42
+          )
+      )
+      actual_data = [next(map_with_random_transform_iter_ds) for _ in range(10)]
+      np.testing.assert_equal(expected_data, actual_data)
 
   def test_map_past_one_epoch_raises_exception(self):
     map_no_transform_iter_ds = iter(
