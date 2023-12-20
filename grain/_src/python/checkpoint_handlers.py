@@ -12,17 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """This module provides a PyGrain CheckpointHandler for integration with Orbax."""
-from typing import Any, Optional
+
+from typing import Any
 
 from etils import epath
 from grain._src.python import data_loader
 import jax
+from orbax import checkpoint as ocp
+
 
 PyGrainDatasetIterator = data_loader.PyGrainDatasetIterator
 
 
-# Ipmlements orbax.checkpoint.CheckpointHandler.
-class PyGrainCheckpointHandler:
+class PyGrainCheckpointHandler(ocp.CheckpointHandler):
   """Orbax CheckpointHandler for PyGrainDatasetIterator."""
 
   def save(self, directory: epath.Path, item: PyGrainDatasetIterator):
@@ -33,7 +35,7 @@ class PyGrainCheckpointHandler:
     filename.write_text(item.get_state().decode())
 
   def restore(
-      self, directory: epath.Path, item: Optional[PyGrainDatasetIterator] = None
+      self, directory: epath.Path, item: PyGrainDatasetIterator | None = None
   ) -> PyGrainDatasetIterator:
     """Restores the given iterator from the checkpoint in `directory`."""
     if item is None:
@@ -53,14 +55,7 @@ class PyGrainCheckpointHandler:
     del directory
     return None
 
-  # Required by interface.
-
-  def metadata(self, directory: epath.Path) -> Optional[Any]:
+  # Required by interface but not supported by PyGrain checkpoints.
+  def metadata(self, directory: epath.Path) -> Any | None:
     del directory
     return None
-
-  def finalize(self, directory: epath.Path):
-    pass
-
-  def close(self):
-    pass
