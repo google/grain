@@ -59,7 +59,7 @@ class RandomAccessDataSource(Protocol, Generic[T]):
     When using multiprocessing (worker_count>0) PyGrain will pickle the data
     source, which invokes __getstate__(), and send a copy to each worker
     process, where __setstate__() is called. After that each worker process
-    has it's own independent data source object.
+    has its own independent data source object.
 
     Arguments:
       record_key: This will be an integer in [0, len(self)-1].
