@@ -196,7 +196,10 @@ py_library(
     name = "checkpoint_handlers",
     srcs = ["checkpoint_handlers.py"],
     srcs_version = "PY3",
-    deps = [":data_loader"],
+    deps = [
+        ":data_loader",
+        "//third_party/py/orbax/checkpoint",
+    ],
 )
 
 py_library(
