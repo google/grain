@@ -52,7 +52,7 @@ class RandomAccessDataSource(Protocol, Generic[T]):
   def __len__(self) -> int:
     """Returns the total number of records in the data source."""
 
-  def __getitem__(self, record_key: SupportsIndex) -> T:
+  def __getitem__(self, record_key: int) -> T:
     """Returns the value for the given record_key.
 
     This method must be threadsafe. It's also expected to be deterministic.
