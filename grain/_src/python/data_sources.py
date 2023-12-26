@@ -47,7 +47,11 @@ class ArrayRecordDataSource(array_record.ArrayRecordDataSource):
 
 @typing.runtime_checkable
 class RandomAccessDataSource(Protocol, Generic[T]):
-  """Interface for datasources where storage supports efficient random access."""
+  """Interface for datasources where storage supports efficient random access.
+
+  Note that `__repr__` has to be additionally implemented to make checkpointing
+  work with this source.
+  """
 
   def __len__(self) -> int:
     """Returns the total number of records in the data source."""
