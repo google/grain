@@ -21,6 +21,8 @@ from unittest import mock
 
 from absl.testing import absltest
 from grain._src.python.experimental.continual_sequence_sampler import continual_sequence_sampler
+from grain._src.python.lazy_dataset import lazy_dataset
+from grain._src.python.lazy_dataset.transformations import shuffle
 
 
 @dataclasses.dataclass(frozen=True)
@@ -32,7 +34,7 @@ class RecordMetadata:
 
 
 def _get_all_metadata(
-    sampler: continual_sequence_sampler.ContinualSequenceSampler,
+    sampler: continual_sequence_sampler.SamplerWrapper,
     gen: Iterable[int],
     uses_bisect: bool,
 ) -> Sequence[RecordMetadata]:
@@ -65,6 +67,19 @@ def _get_all_metadata(
     else:
       mock_bisect.assert_not_called()
   return metadata
+
+
+class FakeShuffledDataset(lazy_dataset.LazyMapDataset[int]):
+
+  def __init__(self, values: Sequence[int], length: int) -> None:
+    self._values = values
+    self._length = length
+
+  def __len__(self) -> int:
+    return self._length
+
+  def __getitem__(self, index):
+    return self._values[index]
 
 
 class ContinualSequenceSamplerTest(absltest.TestCase):
@@ -140,6 +155,56 @@ class ContinualSequenceSamplerTest(absltest.TestCase):
         expected_record_key=[5, 2],
         expected_element=[2, 0],
         expected_clip=[1, 2],
+    )
+
+  def test_shuffling(self):
+    clip_map = [3, 1, 5]
+    # Shuffle the dataset using a fake shuffler where we can specify the order.
+    # pyformat: disable
+    shuffled_order = [2, 0, 1,  # epoch 0
+                      1, 2, 0]  # epoch 1
+    # pyformat: enable
+    fake_shuffled = FakeShuffledDataset(shuffled_order, len(clip_map))
+    fake_shuffled_constructor = lambda *args, **kwargs: fake_shuffled
+    with mock.patch.object(
+        shuffle,
+        "ShuffleLazyMapDataset",
+        new_callable=lambda: fake_shuffled_constructor,
+    ):
+      sampler = continual_sequence_sampler.get_sampler(
+          clip_map=clip_map,
+          num_epochs=2,
+          shuffle_dataset=True,
+      )
+    actual_metadata = _get_all_metadata(
+        sampler, itertools.count(), uses_bisect=False
+    )
+    # pyformat: disable
+    expected_record_key = [4, 5, 6, 7, 8,  # element 2
+                           0, 1, 2,  # element 0
+                           3,  # element 1
+                           3,  # element 1
+                           4, 5, 6, 7, 8,  # element 2
+                           0, 1, 2]  # element 0
+    expected_element = [2, 2, 2, 2, 2,  # element 2
+                        0, 0, 0,  # element 0
+                        1,  # element 1
+                        1,  # element 1
+                        2, 2, 2, 2, 2,  # element 2
+                        0, 0, 0]  # element 0
+    expected_clip = [0, 1, 2, 3, 4,  # element 2
+                     0, 1, 2,  # element 0
+                     0,  # element 1
+                     0,  # element 1
+                     0, 1, 2, 3, 4,  # element 2
+                     0, 1, 2]  # element 0
+    # pyformat: enable
+    self.assert_expected_metadata(
+        actual_metadata,
+        list(range(sum(clip_map) * 2)),
+        expected_record_key,
+        expected_element,
+        expected_clip,
     )
 
 
