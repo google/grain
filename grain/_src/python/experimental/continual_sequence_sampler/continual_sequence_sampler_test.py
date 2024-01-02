@@ -16,11 +16,15 @@
 import bisect
 import dataclasses
 import itertools
-from typing import Iterable, Sequence
+import typing
+from typing import Iterable, List, Sequence
 from unittest import mock
 
 from absl.testing import absltest
+from grain._src.core import sharding
 from grain._src.python.experimental.continual_sequence_sampler import continual_sequence_sampler
+from grain._src.python.lazy_dataset import lazy_dataset
+from grain._src.python.lazy_dataset.transformations import shuffle
 
 
 @dataclasses.dataclass(frozen=True)
@@ -32,7 +36,7 @@ class RecordMetadata:
 
 
 def _get_all_metadata(
-    sampler: continual_sequence_sampler.ContinualSequenceSampler,
+    sampler: continual_sequence_sampler.SamplerWrapper,
     gen: Iterable[int],
     uses_bisect: bool,
 ) -> Sequence[RecordMetadata]:
@@ -67,6 +71,29 @@ def _get_all_metadata(
   return metadata
 
 
+class FakeShuffledDataset(lazy_dataset.LazyMapDataset[int]):
+
+  def __init__(self, values: Sequence[int], length: int) -> None:
+    self._values = values
+    self._length = length
+
+  def __len__(self) -> int:
+    return self._length
+
+  def __getitem__(self, index):
+    return self._values[index]
+
+
+def index_generator(shard_options: sharding.ShardOptions) -> Iterable[int]:
+  return itertools.count(shard_options.shard_index, shard_options.shard_count)
+
+
+def expected_indices(
+    shard_options: sharding.ShardOptions, expected_length: int
+) -> List[int]:
+  return list(itertools.islice(index_generator(shard_options), expected_length))
+
+
 class ContinualSequenceSamplerTest(absltest.TestCase):
 
   def assert_expected_metadata(
@@ -90,6 +117,13 @@ class ContinualSequenceSamplerTest(absltest.TestCase):
     with self.assertRaises(ValueError):
       continual_sequence_sampler.get_sampler(
           clip_map=[],
+      )
+
+  def test_fewer_videos_than_shards(self):
+    with self.assertRaises(ValueError):
+      continual_sequence_sampler.BatchedContinualSequenceSampler(
+          clip_map=[10],
+          shard_options=sharding.ShardOptions(shard_index=1, shard_count=2),
       )
 
   def test_no_shuffling(self):
@@ -140,6 +174,254 @@ class ContinualSequenceSamplerTest(absltest.TestCase):
         expected_record_key=[5, 2],
         expected_element=[2, 0],
         expected_clip=[1, 2],
+    )
+
+  def test_shuffling(self):
+    clip_map = [3, 1, 5]
+    # Shuffle the dataset using a fake shuffler where we can specify the order.
+    # pyformat: disable
+    shuffled_order = [2, 0, 1,  # epoch 0
+                      1, 2, 0]  # epoch 1
+    # pyformat: enable
+    fake_shuffled = FakeShuffledDataset(shuffled_order, len(clip_map))
+    fake_shuffled_constructor = lambda *args, **kwargs: fake_shuffled
+    with mock.patch.object(
+        shuffle,
+        "ShuffleLazyMapDataset",
+        new_callable=lambda: fake_shuffled_constructor,
+    ):
+      sampler = continual_sequence_sampler.get_sampler(
+          clip_map=clip_map,
+          num_epochs=2,
+          shuffle_dataset=True,
+      )
+    actual_metadata = _get_all_metadata(
+        sampler, itertools.count(), uses_bisect=False
+    )
+    # pyformat: disable
+    expected_record_key = [4, 5, 6, 7, 8,  # element 2
+                           0, 1, 2,  # element 0
+                           3,  # element 1
+                           3,  # element 1
+                           4, 5, 6, 7, 8,  # element 2
+                           0, 1, 2]  # element 0
+    expected_element = [2, 2, 2, 2, 2,  # element 2
+                        0, 0, 0,  # element 0
+                        1,  # element 1
+                        1,  # element 1
+                        2, 2, 2, 2, 2,  # element 2
+                        0, 0, 0]  # element 0
+    expected_clip = [0, 1, 2, 3, 4,  # element 2
+                     0, 1, 2,  # element 0
+                     0,  # element 1
+                     0,  # element 1
+                     0, 1, 2, 3, 4,  # element 2
+                     0, 1, 2]  # element 0
+    # pyformat: enable
+    self.assert_expected_metadata(
+        actual_metadata,
+        list(range(sum(clip_map) * 2)),
+        expected_record_key,
+        expected_element,
+        expected_clip,
+    )
+
+  def test_sharding(self):
+    clip_map = [3, 1, 5]
+    # Shard 0 gets the largest element
+    shard_options = sharding.ShardOptions(shard_index=0, shard_count=2)
+    sampler = continual_sequence_sampler.get_sampler(
+        clip_map=clip_map,
+        shard_options=shard_options,
+        num_epochs=2,
+    )
+    sub_sampler = typing.cast(
+        continual_sequence_sampler.BatchedContinualSequenceSampler,
+        sampler._sampler,
+    )
+    self.assertLen(sub_sampler._batch_idx_sampler, 1)
+    actual_clip_map = sub_sampler._batch_idx_sampler[0]._clip_map
+    self.assertSequenceEqual(actual_clip_map, [5])
+    actual_metadata = _get_all_metadata(
+        sampler,
+        index_generator(shard_options),
+        uses_bisect=False,
+    )
+    # pyformat: disable
+    expected_element = [2, 2, 2, 2, 2,  # element 2
+                        2, 2, 2, 2, 2]  # element 2
+    expected_clip = [0, 1, 2, 3, 4,  # element 2
+                     0, 1, 2, 3, 4]  # element 2
+    expected_record_key = [4, 5, 6, 7, 8,  # element 2
+                           4, 5, 6, 7, 8]  # element 2
+    # pyformat: enable
+    self.assert_expected_metadata(
+        actual_metadata,
+        expected_indices(shard_options, len(actual_metadata)),
+        expected_record_key,
+        expected_element,
+        expected_clip,
+    )
+
+    # Shard 1 gets the other 2 elements
+    shard_options = sharding.ShardOptions(shard_index=1, shard_count=2)
+    sampler = continual_sequence_sampler.get_sampler(
+        clip_map=clip_map,
+        shard_options=shard_options,
+        num_epochs=2,
+    )
+    sub_sampler = typing.cast(
+        continual_sequence_sampler.BatchedContinualSequenceSampler,
+        sampler._sampler,
+    )
+    self.assertLen(sub_sampler._batch_idx_sampler, 1)
+    actual_clip_map = sub_sampler._batch_idx_sampler[0]._clip_map
+    self.assertSequenceEqual(actual_clip_map, [3, 1])
+    actual_metadata = _get_all_metadata(
+        sampler, index_generator(shard_options), uses_bisect=False
+    )
+    # pyformat: disable
+    expected_element = [0, 0, 0,  # element 0
+                        1,  # element 1
+                        0, 0, 0,  # element 0
+                        1]  # element 1
+    expected_clip = [0, 1, 2,  # element 0
+                     0,  # element 1
+                     0, 1, 2,  # element 0
+                     0]  # element 1
+    # pyformat: enable
+    self.assert_expected_metadata(
+        actual_metadata,
+        expected_indices(shard_options, len(actual_metadata)),
+        [i % sum(actual_clip_map) for i in range(sum(actual_clip_map) * 2)],
+        expected_element,
+        expected_clip,
+    )
+
+  def test_batching(self):
+    clip_map = [1, 7, 2, 7, 3, 5, 4, 4]
+    # Shard 0 will have batch elements 0 and 1 which get the largest and second
+    # largest element.
+    shard_options = sharding.ShardOptions(shard_index=0, shard_count=2)
+    batch_size = 4
+    sampler = continual_sequence_sampler.get_sampler(
+        clip_map=clip_map,
+        shard_options=shard_options,
+        batch_size=batch_size,
+        num_epochs=2,
+    )
+    # Each shard has 2 batch elements
+    sub_sampler = typing.cast(
+        continual_sequence_sampler.BatchedContinualSequenceSampler,
+        sampler._sampler,
+    )
+    self.assertLen(sub_sampler._batch_idx_sampler, 2)
+    actual_clip_map = sub_sampler._batch_idx_sampler[0]._clip_map
+    self.assertSequenceEqual(actual_clip_map, [2, 7])
+    actual_clip_map = sub_sampler._batch_idx_sampler[1]._clip_map
+    self.assertSequenceEqual(actual_clip_map, [1, 7])
+    actual_metadata = _get_all_metadata(
+        sampler,
+        index_generator(shard_options),
+        uses_bisect=False,
+    )
+    # Elements should alternate between the 2 batch elements.
+    interleave = lambda x, y: list(itertools.chain.from_iterable(zip(x, y)))
+    # There is 1 more clip per epoch in batch element 0 than in batch element 1.
+    # Therefore we interleave the full 2 epochs of element 1 with 2 epochs of
+    # element 0 minus the final 2 clips.
+    # However, an added complication is that the sampler will not raise an index
+    # error until it tries to sample an element from the 3rd epoch which happens
+    # when it samples from batch element 1.
+    # Therefore we expect to receive 1 more clip from the second epoch for batch
+    # element 0 before raising the error.
+    combine_batch_elements = lambda x, y: interleave(x[:-2], y) + [x[-2]]
+    # pyformat: disable
+    expected_element0 = [2, 2, 3, 3, 3, 3, 3, 3, 3,  # epoch 0
+                         2, 2, 3, 3, 3, 3, 3, 3, 3]  # epoch 1
+    expected_element1 = [0, 1, 1, 1, 1, 1, 1, 1,  # epoch 0
+                         0, 1, 1, 1, 1, 1, 1, 1]  # epoch 1
+    expected_element = combine_batch_elements(
+        expected_element0,
+        expected_element1,
+    )
+    expected_clip0 = [0, 1, 0, 1, 2, 3, 4, 5, 6,  # epoch 0
+                      0, 1, 0, 1, 2, 3, 4, 5, 6]  # epoch 1
+    expected_clip1 = [0, 0, 1, 2, 3, 4, 5, 6,  # epoch 0
+                      0, 0, 1, 2, 3, 4, 5, 6]  # epoch 1
+    expected_clip = combine_batch_elements(expected_clip0, expected_clip1)
+    expected_record_key0 = [8, 9, 10, 11, 12, 13, 14, 15, 16,  # epoch 0
+                            8, 9, 10, 11, 12, 13, 14, 15, 16]  # epoch 1
+    expected_record_key1 = [0, 1, 2, 3, 4, 5, 6, 7,  # epoch 0
+                            0, 1, 2, 3, 4, 5, 6, 7]  # epoch 1
+    expected_record_key = combine_batch_elements(
+        expected_record_key0,
+        expected_record_key1,
+    )
+    # pyformat: enable
+    self.assert_expected_metadata(
+        actual_metadata,
+        expected_indices(shard_options, len(actual_metadata)),
+        expected_record_key,
+        expected_element,
+        expected_clip,
+    )
+
+  def test_sharding_with_shuffling(self):
+    clip_map = [1, 2, 3, 4]
+    shard_options = sharding.ShardOptions(shard_index=1, shard_count=2)
+    expected_shard_clip_map = [2, 3]
+    # pyformat: disable
+    shuffled_order = [1, 0,  # epoch 0
+                      0, 1]  # epoch 1
+    # pyformat: enable
+    fake_shuffled = FakeShuffledDataset(
+        shuffled_order, len(expected_shard_clip_map)
+    )
+    fake_shuffled_constructor = lambda *args, **kwargs: fake_shuffled
+    with mock.patch.object(
+        shuffle,
+        "ShuffleLazyMapDataset",
+        new_callable=lambda: fake_shuffled_constructor,
+    ):
+      sampler = continual_sequence_sampler.get_sampler(
+          clip_map=clip_map,
+          shard_options=shard_options,
+          num_epochs=2,
+          shuffle_dataset=True,
+      )
+    sub_sampler = typing.cast(
+        continual_sequence_sampler.BatchedContinualSequenceSampler,
+        sampler._sampler,
+    )
+    self.assertLen(sub_sampler._batch_idx_sampler, 1)
+    actual_clip_map = sub_sampler._batch_idx_sampler[0]._clip_map
+    self.assertSequenceEqual(actual_clip_map, expected_shard_clip_map)
+    actual_metadata = _get_all_metadata(
+        sampler,
+        index_generator(shard_options),
+        uses_bisect=False,
+    )
+    # pyformat: disable
+    expected_element = [2, 2, 2,  # element 2
+                        1, 1,  # element 1
+                        1, 1,  # element 1
+                        2, 2, 2]  # element 2
+    expected_clip = [0, 1, 2,  # element 2
+                     0, 1,  # element 1
+                     0, 1,  # element 1
+                     0, 1, 2]  # element 2
+    expected_record_key = [3, 4, 5,  # element 2
+                           1, 2,  # element 1
+                           1, 2,  # element 1
+                           3, 4, 5]  # element 2
+    # pyformat: enable
+    self.assert_expected_metadata(
+        actual_metadata,
+        expected_indices(shard_options, len(actual_metadata)),
+        expected_record_key,
+        expected_element,
+        expected_clip,
     )
 
 
