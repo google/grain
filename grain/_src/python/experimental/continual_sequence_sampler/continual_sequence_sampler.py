@@ -22,9 +22,13 @@ The top-level elements may be shuffled, but the clips within each element must
 be returned in order. The shuffled order of elements is stored in
 ContinualSequenceGenerator in _element_index.
 
+Elements are split across shards and batch elements and the top level index is
+converted to an index for the current shard and batch element.
+
 Given an index, we convert this into an epoch number and an index within the
 epoch. When the epoch changes we recompute the start clip for each element.
-i.e. given elements which have the following number of clips:
+i.e. given a shard and batch element with elements which have the following
+number of clips:
   clip_map = [3, 1, 5]
   _element_index = [2, 0, 1] (for example)
 then the start clip map will be computed as the following:
@@ -46,8 +50,10 @@ the function "get_element_clip_from_record_key".
 import bisect
 from collections.abc import Sequence
 import dataclasses
+import heapq
 from typing import Optional, Tuple
 
+from grain._src.core import sharding
 from grain._src.python import record
 from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import shuffle
@@ -58,6 +64,45 @@ import numpy as np
 class ElementClip:
   element: int
   clip: int
+
+
+def shard_elements(
+    clip_map: Sequence[int], index: int, size: int
+) -> Tuple[Sequence[int], Sequence[int]]:
+  """Shard elements attempting to balance the number of clips in each shard.
+
+  This uses the Longest Processing Time First scheduling algorithm to try to
+  balance the clips across batch elements.
+
+  Args:
+    clip_map: The number of clips in each element.
+    index: The index of the shard we are using.
+    size: The total number of shards.
+
+  Returns:
+    A tuple containing the following:
+      - The number of clips for elements in this shard.
+      - A map which converts an index into the new clip map to an index into the
+        clip map passed in.
+  """
+  per_shard_size_heap = [(0, i) for i in range(size)]
+  new_clip_map = []
+  descending_clip_lengths = sorted(
+      [(element_length, i) for i, element_length in enumerate(clip_map)],
+      reverse=True,
+  )
+  for element_length, i in descending_clip_lengths:
+    smallest_end_time, smallest_index = heapq.heappop(per_shard_size_heap)
+    heapq.heappush(
+        per_shard_size_heap,
+        (smallest_end_time + element_length, smallest_index),
+    )
+    if smallest_index == index:
+      new_clip_map.append((i, element_length))
+  # Sort by the original index to retain the original order.
+  new_clip_map = sorted(new_clip_map)
+  original_indices, lengths = zip(*new_clip_map)
+  return lengths, original_indices
 
 
 def _get_shuffled_element_index(
@@ -209,12 +254,93 @@ class ContinualSequenceSampler:
     return element_clip
 
 
+class BatchedContinualSequenceSampler:
+  """Sample clips from elements in a continual sequence sharding into batch elements."""
+
+  def __init__(
+      self,
+      clip_map: Sequence[int],
+      shard_options: sharding.ShardOptions,
+      shuffle_dataset: bool = False,
+      num_epochs: Optional[int] = None,
+      seed=0,
+      batch_size: Optional[int] = None,
+  ):
+    if len(clip_map) < shard_options.shard_count:
+      raise ValueError(
+          "Cannot shard with fewer videos than shards. "
+          f"Num videos = {len(clip_map)}, "
+          f"num shards = {shard_options.shard_count}."
+      )
+    self._seed = seed
+    self._start_index_ordered = np.cumsum([0] + list(clip_map))
+    self._batch_size = (
+        batch_size if batch_size is not None else shard_options.shard_count
+    )
+    if self._batch_size % shard_options.shard_count != 0:
+      raise ValueError(
+          "batch_size must be a multiple of shard_count. "
+          f"batch_size = {batch_size}, "
+          f"shard_count = {shard_options.shard_count}."
+      )
+    per_shard_bs = self._batch_size // shard_options.shard_count
+    self._invert_batch_idx = []
+    self._batch_idx_sampler = []
+    self._shard_options = shard_options
+    for i in range(
+        shard_options.shard_index * per_shard_bs,
+        (shard_options.shard_index + 1) * per_shard_bs,
+    ):
+      batch_clips, invert_batch_idx = shard_elements(
+          clip_map, i, self._batch_size
+      )
+      self._invert_batch_idx.append(invert_batch_idx)
+      self._batch_idx_sampler.append(
+          ContinualSequenceSampler(
+              batch_clips, shuffle_dataset, num_epochs, seed + i
+          )
+      )
+    self._current_batch_element = 0
+
+  def get_element_clip_from_record_key(
+      self,
+      record_key: int,
+  ) -> ElementClip:
+    """Get the element id and clip id for the given record key."""
+    element_clip, _ = _element_clip_from_index(
+        record_key,
+        0,
+        self._start_index_ordered,
+        list(range(len(self._start_index_ordered))),
+        self.current_element_index,
+    )
+    return element_clip
+
+  def set_element_clip_from_index(self, index: int) -> ElementClip:
+    """Set the element id for the given index and return this and the clip."""
+    per_shard_index = index // self._shard_options.shard_count
+    per_shard_bs = self._batch_size // self._shard_options.shard_count
+    sub_index = per_shard_index // per_shard_bs
+    self._current_batch_element = per_shard_index % per_shard_bs
+    sampler = self._batch_idx_sampler[self._current_batch_element]
+    invert_batch_idx = self._invert_batch_idx[self._current_batch_element]
+    element_clip = sampler.set_element_clip_from_index(sub_index)
+    original_element = invert_batch_idx[element_clip.element]
+    return ElementClip(element=original_element, clip=element_clip.clip)
+
+  @property
+  def current_element_index(self) -> int:
+    sampler = self._batch_idx_sampler[self._current_batch_element]
+    invert_batch_idx = self._invert_batch_idx[self._current_batch_element]
+    return invert_batch_idx[sampler.current_element_index]
+
+
 class SamplerWrapper:
   """Wraps a ContinualSequenceSampler to conform to the Sampler protocol."""
 
   def __init__(
       self,
-      sampler: ContinualSequenceSampler,
+      sampler: ContinualSequenceSampler | BatchedContinualSequenceSampler,
       start_index_ordered: np.ndarray,
       seed: int,
   ):
@@ -253,9 +379,31 @@ class SamplerWrapper:
 def get_sampler(
     clip_map: Sequence[int],
     seed: int = 0,
-    **kwargs,
+    shard_options: Optional[sharding.ShardOptions] = None,
+    shuffle_dataset: bool = False,
+    num_epochs: Optional[int] = None,
+    batch_size: Optional[int] = None,
 ) -> SamplerWrapper:
   """Get a continual sequence sampler."""
-  sampler = ContinualSequenceSampler(clip_map, seed=seed, **kwargs)
+  if shard_options is not None:
+    sampler = BatchedContinualSequenceSampler(
+        clip_map,
+        shard_options,
+        shuffle_dataset=shuffle_dataset,
+        num_epochs=num_epochs,
+        seed=seed,
+        batch_size=batch_size,
+    )
+  else:
+    if batch_size is not None:
+      raise ValueError(
+          "shard_options must be specified if batch_size is specified"
+      )
+    sampler = ContinualSequenceSampler(
+        clip_map,
+        shuffle_dataset=shuffle_dataset,
+        num_epochs=num_epochs,
+        seed=seed,
+    )
   wrapper = SamplerWrapper(sampler, np.cumsum([0] + list(clip_map)), seed)
   return wrapper
