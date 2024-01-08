@@ -302,6 +302,34 @@ class ContinualSequenceSamplerTest(absltest.TestCase):
         expected_clip,
     )
 
+  def test_repr(self):
+    clip_map = [1, 7, 2, 7, 3, 5, 4, 4]
+    clip_map_repr = "[1, 7, 2, 7, 3, 5, 4, 4]"
+    start_index_ordered_repr = "array([ 0,  1,  8, 10, 17, 20, 25, 29, 33])"
+    shard_options = sharding.ShardOptions(shard_index=0, shard_count=2)
+    shard_options_repr = (
+        "ShardOptions(shard_index=0, shard_count=2, drop_remainder=False)"
+    )
+    batch_size = 4
+    sampler = continual_sequence_sampler.get_sampler(
+        clip_map=clip_map,
+        shard_options=shard_options,
+        batch_size=batch_size,
+        num_epochs=2,
+    )
+    # With shard options and batch size we will use
+    # BatchedContinualSequenceSampler.
+    expected_sampler_repr = (
+        "BatchedContinualSequenceSampler("
+        f"clip_map={clip_map_repr}, shard_options={shard_options_repr}, "
+        "shuffle_dataset=False, num_epochs=2, seed=0, batch_size=4)"
+    )
+    expected_wrapped_sampler_repr = (
+        f"SamplerWrapper(sampler={expected_sampler_repr}, "
+        f"start_index_ordered={start_index_ordered_repr}, seed=0)"
+    )
+    self.assertEqual(repr(sampler), expected_wrapped_sampler_repr)
+
   def test_batching(self):
     clip_map = [1, 7, 2, 7, 3, 5, 4, 4]
     # Shard 0 will have batch elements 0 and 1 which get the largest and second

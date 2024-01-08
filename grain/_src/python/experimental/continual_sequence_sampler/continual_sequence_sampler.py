@@ -190,6 +190,7 @@ class ContinualSequenceSampler:
     self._clip_map = clip_map
 
     self._element_index = lazy_dataset.RangeLazyMapDataset(len(clip_map))
+    self._shuffle_dataset = shuffle_dataset
     if shuffle_dataset:
       self._element_index = shuffle.ShuffleLazyMapDataset(
           self._element_index, seed=seed
@@ -201,6 +202,14 @@ class ContinualSequenceSampler:
 
     self._max_index = (
         None if num_epochs is None else num_epochs * self._start_index[-1]
+    )
+
+  def __repr__(self) -> str:
+    return (
+        f"ContinualSequenceSampler(clip_map={self._clip_map!r}, "
+        f"shuffle_dataset={self._shuffle_dataset!r}, "
+        f"num_epochs={self._num_epochs!r}, "
+        f"seed={self._seed!r})"
     )
 
   def _in_epoch(self, idx: int) -> Tuple[int, int]:
@@ -287,6 +296,9 @@ class BatchedContinualSequenceSampler:
     self._invert_batch_idx = []
     self._batch_idx_sampler = []
     self._shard_options = shard_options
+    self._shuffle_dataset = shuffle_dataset
+    self._num_epochs = num_epochs
+    self._clip_map = clip_map
     for i in range(
         shard_options.shard_index * per_shard_bs,
         (shard_options.shard_index + 1) * per_shard_bs,
@@ -301,6 +313,16 @@ class BatchedContinualSequenceSampler:
           )
       )
     self._current_batch_element = 0
+
+  def __repr__(self) -> str:
+    return (
+        f"BatchedContinualSequenceSampler(clip_map={self._clip_map!r}, "
+        f"shard_options={self._shard_options!r}, "
+        f"shuffle_dataset={self._shuffle_dataset!r}, "
+        f"num_epochs={self._num_epochs!r}, "
+        f"seed={self._seed!r}, "
+        f"batch_size={self._batch_size!r})"
+    )
 
   def get_element_clip_from_record_key(
       self,
@@ -360,6 +382,13 @@ class SamplerWrapper:
         rng=rng,
     )
     return next_record
+
+  def __repr__(self) -> str:
+    return (
+        f"SamplerWrapper(sampler={self._sampler!r}, "
+        f"start_index_ordered={self._start_index_ordered!r}, "
+        f"seed={self._seed!r})"
+    )
 
   def record_key_to_element_and_clip(self, record_key: int) -> ElementClip:
     """Convert a record key to an element index and a clip index."""
