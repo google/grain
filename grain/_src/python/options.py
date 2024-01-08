@@ -28,6 +28,8 @@ class ReadOptions:
     num_threads: Number of threads reading from the DataSource in parallel.
     prefetch_buffer_size: Size of the buffer for reading elements. This helps
       when reading from a distributed file system.
+    batch_size: How many records to read at once. Can be useful if reading one
+      record at a time is slow. Default is one still.
   """
 
   # The current default values where chosen by running a few selected
@@ -36,6 +38,7 @@ class ReadOptions:
   # 10 KiB on disk.
   num_threads: int = 16
   prefetch_buffer_size: int = 500
+  batch_size: int = 1
 
 
 @dataclasses.dataclass(slots=True)
