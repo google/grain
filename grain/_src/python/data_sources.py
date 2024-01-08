@@ -21,6 +21,7 @@ data sources based on storage backends allowing efficient random access
 pipelines.
 """
 
+import abc
 import collections
 from collections.abc import Sequence
 import math
@@ -28,7 +29,7 @@ from multiprocessing import shared_memory
 import os
 import threading
 import typing
-from typing import Any, Generic, Protocol, SupportsIndex, TypeVar
+from typing import Any, Generic, SupportsIndex, TypeVar
 
 from absl import logging
 import array_record.python.array_record_data_source as array_record
@@ -46,16 +47,18 @@ class ArrayRecordDataSource(array_record.ArrayRecordDataSource):
 
 
 @typing.runtime_checkable
-class RandomAccessDataSource(Protocol, Generic[T]):
+class RandomAccessDataSource(abc.ABC, Generic[T]):
   """Interface for datasources where storage supports efficient random access.
 
   Note that `__repr__` has to be additionally implemented to make checkpointing
   work with this source.
   """
 
+  @abc.abstractmethod
   def __len__(self) -> int:
     """Returns the total number of records in the data source."""
 
+  @abc.abstractmethod
   def __getitem__(self, record_key: SupportsIndex) -> T:
     """Returns the value for the given record_key.
 
@@ -72,6 +75,11 @@ class RandomAccessDataSource(Protocol, Generic[T]):
       The corresponding record. File data sources often return the raw bytes but
       records can be any Python object.
     """
+
+  @abc.abstractmethod
+  def batch_read(self, record_keys: Sequence[SupportsIndex]) -> Sequence[T]:
+    """Batched version of the above."""
+    return tuple(self[record_key] for record_key in record_keys)
 
 
 class RangeDataSource:

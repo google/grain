@@ -269,25 +269,32 @@ class DataLoader:
 
   def _read_data(self, last_seen_index: int) -> Iterator[record.Record]:
     """Reads sampled record indices from the data source and yields records."""
+    batch_size = self._read_options.batch_size
+
     # We use a thread pool to read elements and add them to a buffer in the
     # background.
     # The main thread simply gets elements from the buffer and waits for them
     # to be available.
-    next_index = last_seen_index + self._global_num_workers
+    next_index = last_seen_index + self._global_num_workers * batch_size
 
     buffer = collections.deque()
     buffer_size = self._read_options.prefetch_buffer_size
 
-    def prefetch_element(index: int) -> record.Record:
-      metadata = self._sampler[index]
-      data = self._data_source[metadata.record_key]
-      return record.Record(metadata=metadata, data=data)
+    def prefetch_elements(indices: Sequence[int]) -> record.Record:
+      metadatas = [self._sampler[index] for index in indices]
+      record_keys = [self._sampler[index].record_key for index in indices]
+      data_batch = self._data_source.batch_read(record_keys)
+      records = []
+      for metadata, data in zip(metadatas, data_batch):
+        records.append(record.Record(metadata=metadata, data=data))
+      return records
 
     with futures.ThreadPoolExecutor(self._read_options.num_threads) as executor:
       # Fill the buffer initially.
       while len(buffer) < buffer_size:
-        buffer.append(executor.submit(prefetch_element, next_index))
-        next_index += self._global_num_workers
+        next_indices = tuple(range(next_index, next_index + batch_size))
+        buffer.extend(executor.submit(prefetch_elements, next_indices))
+        next_index += self._global_num_workers * batch_size
 
       # Iterate until we get an IndexError. The IndexError indicates that we
       # reached the end of the Sampler.
@@ -298,8 +305,9 @@ class DataLoader:
           # End of sampler.
           return
         yield element
-        buffer.append(executor.submit(prefetch_element, next_index))
-        next_index += self._global_num_workers
+        next_indices = tuple(range(next_index, next_index + batch_size))
+        buffer.extend(executor.submit(prefetch_elements, next_indices))
+        next_index += self._global_num_workers * batch_size
 
   def _read_and_transform_data(
       self, last_seen_index: int
