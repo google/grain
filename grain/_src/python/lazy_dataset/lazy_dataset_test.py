@@ -14,13 +14,15 @@
 """Tests for LazyDataset."""
 import dataclasses
 from typing import cast
-
+from unittest import mock
 from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.core import transforms
+import multiprocessing as mp
 from grain._src.python import options
 from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import filter as filter_lazy_dataset
+from grain._src.python.lazy_dataset.transformations import slice as slice_lazy_dataset  # pylint: disable=unused-import
 
 
 @dataclasses.dataclass(frozen=True)
@@ -80,7 +82,7 @@ class PrefetchLazyIterDatasetTest(parameterized.TestCase):
         self.range_ds, FilterEvenElementsOnly()
     )
     self.prefetch_lazy_iter_ds = lazy_dataset.PrefetchLazyIterDataset(
-        self.range_ds, options.ReadOptions()
+        self.range_ds, read_options=options.ReadOptions()
     )
 
   def test_dataset_and_iterator_types(self):
@@ -96,7 +98,7 @@ class PrefetchLazyIterDatasetTest(parameterized.TestCase):
         prefetch_buffer_size=prefetch_buffer_size
     )
     prefetch_lazy_iter_ds = lazy_dataset.PrefetchLazyIterDataset(
-        self.range_ds, read_options
+        self.range_ds, read_options=read_options
     )
     self.assertEqual(prefetch_lazy_iter_ds._read_options, read_options)  # pylint: disable=protected-access
     ds_iter = iter(prefetch_lazy_iter_ds)
@@ -110,7 +112,9 @@ class PrefetchLazyIterDatasetTest(parameterized.TestCase):
         prefetch_buffer_size=prefetch_buffer_size
     )
     prefetch_lazy_iter_ds = lazy_dataset.PrefetchLazyIterDataset(
-        self.filtered_range_ds, read_options, allow_nones=True
+        self.filtered_range_ds,
+        read_options=read_options,
+        allow_nones=True,
     )
     self.assertEqual(prefetch_lazy_iter_ds._read_options, read_options)  # pylint: disable=protected-access
     ds_iter = iter(prefetch_lazy_iter_ds)
@@ -126,11 +130,11 @@ class PrefetchLazyIterDatasetTest(parameterized.TestCase):
 
   def test_prefetch_does_not_buffer_unnecessary_elements(self):
     prefetch_buffer_size = 15
-    read_options = options.ReadOptions(
-        prefetch_buffer_size=prefetch_buffer_size
-    )
     prefetch_lazy_iter_ds_large_buffer = lazy_dataset.PrefetchLazyIterDataset(
-        self.range_ds, read_options
+        self.range_ds,
+        read_options=options.ReadOptions(
+            prefetch_buffer_size=prefetch_buffer_size
+        ),
     )
     ds_iter = iter(prefetch_lazy_iter_ds_large_buffer)
     self.assertIsInstance(ds_iter, lazy_dataset.PrefetchLazyDatasetIterator)
@@ -160,6 +164,114 @@ class PrefetchLazyIterDatasetTest(parameterized.TestCase):
       for i in range(starting_step, max_steps):
         value = next(ds_iter)
         self.assertEqual(value, values_without_interruption[i])
+
+
+class MultiprocessPrefetchLazyIterDatasetTest(parameterized.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    ds = lazy_dataset.RangeLazyMapDataset(20)
+    ds = lazy_dataset.PrefetchLazyIterDataset(
+        ds, read_options=options.ReadOptions()
+    )
+    self.iter_ds = filter_lazy_dataset.FilterLazyIterDataset(
+        ds, FilterEvenElementsOnly()
+    )
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='1_worker',
+          num_workers=1,
+          per_worker_buffer_size=1,
+      ),
+      dict(
+          testcase_name='1_worker_large_buffer',
+          num_workers=1,
+          per_worker_buffer_size=20,
+      ),
+      dict(
+          testcase_name='10_workers',
+          num_workers=10,
+          per_worker_buffer_size=1,
+      ),
+      dict(
+          testcase_name='10_workers_large_buffer',
+          num_workers=10,
+          per_worker_buffer_size=20,
+      ),
+  )
+  def test_prefetch_data(self, num_workers: int, per_worker_buffer_size: int):
+    prefetch_lazy_iter_ds = lazy_dataset.MultiprocessPrefetchLazyIterDataset(
+        self.iter_ds,
+        options.MultiprocessingOptions(num_workers, per_worker_buffer_size),
+    )
+    actual = list(prefetch_lazy_iter_ds)
+    expected = list(range(1, 20, 2))
+    self.assertSequenceEqual(actual, expected)
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='1_worker',
+          num_workers=7,
+          record_state_interval=lazy_dataset._RECORD_STATE_INTERVAL_S,
+      ),
+      dict(
+          testcase_name='10_workers',
+          num_workers=10,
+          record_state_interval=lazy_dataset._RECORD_STATE_INTERVAL_S,
+      ),
+      dict(
+          testcase_name='10_workers_with_continuous_state_rcording',
+          num_workers=10,
+          record_state_interval=0,
+      ),
+  )
+  def test_checkpoint(self, num_workers: int, record_state_interval: int):
+    with mock.patch.object(
+        lazy_dataset, '_RECORD_STATE_INTERVAL_S', record_state_interval
+    ):
+      ds = lazy_dataset.MultiprocessPrefetchLazyIterDataset(
+          self.iter_ds,
+          options.MultiprocessingOptions(num_workers),
+      )
+      ds_iter = iter(ds)
+
+      max_steps = 10
+      values_without_interruption = []
+      checkpoints = []
+      for _ in range(max_steps):
+        checkpoints.append(ds_iter.get_state())  # pytype: disable=attribute-error
+        values_without_interruption.append(next(ds_iter))
+
+      for starting_step in [0, 3, 8]:
+        ds_iter.set_state(checkpoints[starting_step])  # pytype: disable=attribute-error
+        for i in range(starting_step, max_steps):
+          value = next(ds_iter)
+          self.assertEqual(value, values_without_interruption[i])
+
+  def test_fails_with_0_workers(self):
+    with self.assertRaisesRegex(
+        ValueError, '`num_workers` must be greater than 0'
+    ):
+      lazy_dataset.MultiprocessPrefetchLazyIterDataset(
+          self.iter_ds,
+          options.MultiprocessingOptions(),
+      )
+
+  def test_fails_with_multiple_prefetches(self):
+    ds = lazy_dataset.MultiprocessPrefetchLazyIterDataset(
+        self.iter_ds,
+        options.MultiprocessingOptions(num_workers=10),
+    )
+    with self.assertRaisesRegex(
+        ValueError,
+        'Having multiple `MultiprocessPrefetchLazyIterDataset`s is not'
+        ' allowed.',
+    ):
+      _ = lazy_dataset.MultiprocessPrefetchLazyIterDataset(
+          ds,
+          options.MultiprocessingOptions(num_workers=1),
+      )
 
 
 if __name__ == '__main__':

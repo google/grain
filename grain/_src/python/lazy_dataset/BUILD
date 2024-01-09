@@ -9,6 +9,7 @@ py_library(
     srcs_version = "PY3",
     deps = [
         "//grain/_src/core:sharding",
+        "//grain/_src/python:grain_pool",
         "//grain/_src/python:options",
     ],
 )
@@ -16,12 +17,14 @@ py_library(
 py_test(
     name = "lazy_dataset_test",
     srcs = ["lazy_dataset_test.py"],
+    shard_count = 20,
     srcs_version = "PY3",
     deps = [
         ":lazy_dataset",
         "//grain/_src/core:transforms",
         "//grain/_src/python:options",
         "//grain/_src/python/lazy_dataset/transformations:filter",
+        "//grain/_src/python/lazy_dataset/transformations:slice",
     ],
 )
 

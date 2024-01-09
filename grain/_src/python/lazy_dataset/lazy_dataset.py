@@ -41,11 +41,15 @@ from __future__ import annotations
 import abc
 import collections
 from collections.abc import Iterable, Iterator, Sequence
+import contextlib
+import copy
 import functools
+import time
 from typing import Any, Callable, Optional, TypeVar, overload
 
 from concurrent import futures
 from grain._src.core import sharding
+from grain._src.python import grain_pool
 from grain._src.python import options as grain_options
 
 T = TypeVar("T")
@@ -95,7 +99,7 @@ class LazyMapDataset(Sequence[T], abc.ABC):
     if name in cls._functions:
       raise ValueError(
           f"Cannot register {function} as dataset function '{name}' since it's"
-          " already taken by {cls._functions[name]}."
+          f" already taken by {cls._functions[name]}."
       )
     cls._functions[name] = function
 
@@ -115,7 +119,7 @@ class LazyMapDataset(Sequence[T], abc.ABC):
   ) -> LazyIterDataset[T]:
     """Syntactic sugar to construct a LazyIterDataset."""
     return PrefetchLazyIterDataset(
-        self, read_options or grain_options.ReadOptions()
+        self, read_options=read_options or grain_options.ReadOptions()
     )
 
 
@@ -126,9 +130,11 @@ class LazyIterDataset(Iterable[T], abc.ABC):
 
   def __init__(
       self,
-      parents: LazyMapDataset
-      | LazyIterDataset
-      | Sequence[LazyMapDataset | LazyIterDataset] = (),
+      parents: (
+          LazyMapDataset
+          | LazyIterDataset
+          | Sequence[LazyMapDataset | LazyIterDataset]
+      ) = (),
   ):
     if isinstance(parents, (LazyMapDataset, LazyIterDataset)):
       self._parents = (parents,)
@@ -141,8 +147,25 @@ class LazyIterDataset(Iterable[T], abc.ABC):
 
   @property
   def _parent(self) -> LazyMapDataset | LazyIterDataset:
-    assert len(self._parents) == 1
+    assert len(self._parents) == 1, self._parents
     return self._parents[0]
+
+  def set_parent_maps_slice(self, sl: slice) -> None:
+    """Replaces LazyMapDataset-type parents with their sliced versions.
+
+    Applies recursively for LazyIterDataset-type parents.
+
+    Args:
+     sl: slice to apply.
+    """
+    sliced_parents = []
+    for parent in self._parents:
+      if isinstance(parent, LazyMapDataset):
+        sliced_parents.append(parent.slice(sl))
+      else:
+        parent.set_parent_maps_slice(sl)
+        sliced_parents.append(parent)
+    self._parents = tuple(sliced_parents)
 
   @abc.abstractmethod
   def __iter__(self) -> LazyDatasetIterator[T]:
@@ -155,7 +178,7 @@ class LazyIterDataset(Iterable[T], abc.ABC):
     if name in cls._functions:
       raise ValueError(
           f"Cannot register {function} as dataset function '{name}' since it's"
-          " already taken by {cls._functions[name]}."
+          f" already taken by {cls._functions[name]}."
       )
     cls._functions[name] = function
 
@@ -208,8 +231,8 @@ class PrefetchLazyIterDataset(LazyIterDataset[T]):
   def __init__(
       self,
       parent: LazyMapDataset[T],
-      read_options: grain_options.ReadOptions,
       *,
+      read_options: grain_options.ReadOptions,
       allow_nones: bool = False,
   ):
     super().__init__(parent)
@@ -285,6 +308,155 @@ class PrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
       self._buffer = None
 
 
+def _iterator_with_context(
+    iterator: contextlib.AbstractContextManager[Iterator[T]],
+) -> Iterator[T]:
+  with iterator as it:
+    yield from it
+
+
+@lazy_iter_dataset_function("prefetch")
+class MultiprocessPrefetchLazyIterDataset(LazyIterDataset[T]):
+  """Uses a pool of processes to prefetch elements ahead of time.
+
+  It usually makes sense to add this transformation in the end of the pipeline
+  since it will execute the parent LazyIterDataset in multiple processes.
+  """
+
+  def __init__(
+      self,
+      parent: LazyIterDataset[T],
+      multiprocessing_options: grain_options.MultiprocessingOptions,
+  ):
+    if multiprocessing_options.num_workers < 1:
+      raise ValueError(
+          "`num_workers` must be greater than 0, got "
+          f"{multiprocessing_options.num_workers}."
+      )
+    super().__init__(parent)
+    self._validate_parent_dataset()
+    self._multiprocessing_options = multiprocessing_options
+
+  def _validate_parent_dataset(self):
+    """Checks that there's a single level of parallelization."""
+    to_check = [self._parent]
+    while to_check:
+      dataset = to_check.pop(0)
+      if isinstance(dataset, MultiprocessPrefetchLazyIterDataset):
+        raise ValueError(
+            "Having multiple `MultiprocessPrefetchLazyIterDataset`s is not "
+            "allowed. Consider only keeping the last one."
+        )
+      to_check.extend(dataset.parents)
+
+  def __iter__(self) -> LazyDatasetIterator[T]:
+    return MultiprocessPrefetchLazyDatasetIterator(
+        self._parent, self._multiprocessing_options
+    )
+
+
+# Keys in `MultiprocessPrefetchLazyDatasetIterator` checkpoints.
+_WORKERS_STATE = "workers_state"
+_ITERATIONS_TO_SKIP = "iterations_to_skip"
+_LAST_WORKER_INDEX = "last_worker_index"
+
+# Minimal interval (in seconds) between consecutive state recordings in worker
+# processes of `MultiprocessPrefetchLazyDatasetIterator`. We record the state
+# periodically to reduce the overhead of sending the state from workers.
+# Note that this is also an approximate upper bound on how long it is going to
+# take to recover from a checkpointed state. Larger values will decrease the
+# overhead of sending the updated state but will also make recovery from a
+# checkpoint longer on average.
+_RECORD_STATE_INTERVAL_S = 3
+
+
+class MultiprocessPrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
+  """Iterator that performs prefetching using a multiprocessing pool."""
+
+  def __init__(
+      self,
+      parent: LazyIterDataset[T],
+      multiprocessing_options: grain_options.MultiprocessingOptions,
+  ):
+    super().__init__()
+    self._parent = parent
+    self._multiprocessing_options = multiprocessing_options
+    # The underlying iterator producing elements and workers state.
+    self._iterator = None
+    # Raw reference to the underlying iterator that can be used to determine the
+    # last worker index.
+    self._raw_iterator = None
+    # Create initial state. We record state of each worker periodically together
+    # with the number of iterations without the recorded state and index of the
+    # last worker.
+    workers_state = {}
+    iterations_to_skip = {}
+    for i in range(multiprocessing_options.num_workers):
+      workers_state[str(i)] = iter(self._parent).get_state()  # pytype: disable=attribute-error
+      iterations_to_skip[str(i)] = 0
+
+    self._state = {
+        _WORKERS_STATE: workers_state,
+        _ITERATIONS_TO_SKIP: iterations_to_skip,
+        _LAST_WORKER_INDEX: -1,
+    }
+
+  def __iter__(self) -> LazyDatasetIterator[T]:
+    return self
+
+  def __next__(self) -> T:
+    if self._iterator is None:
+      state = self._state
+      parent = self._parent
+
+      def get_element_producer_fn(
+          worker_index: int, worker_count: int
+      ) -> Iterator[tuple[T, dict[str, Any] | None]]:
+        # Recover from the last recorded state for the given worker.
+        worker_state = state[_WORKERS_STATE][str(worker_index)]
+        parent.set_parent_maps_slice(slice(worker_index, None, worker_count))
+        it = iter(parent)
+        it.set_state(worker_state)  # pytype: disable=attribute-error
+        # Skip the required number of iterations after the last recorded state.
+        for _ in range(state[_ITERATIONS_TO_SKIP][str(worker_index)]):
+          _ = next(it)
+        last_recorded_state_time = time.time()
+        for element in it:
+          now = time.time()
+          if now - last_recorded_state_time >= _RECORD_STATE_INTERVAL_S:
+            last_recorded_state_time = now
+            yield (element, it.get_state())  # pytype: disable=attribute-error
+          else:
+            yield (element, None)
+
+      self._raw_iterator = grain_pool.MultiProcessIterator(
+          get_element_producer_fn,
+          self._multiprocessing_options,
+          (self._state[_LAST_WORKER_INDEX] + 1)
+          % self._multiprocessing_options.num_workers,
+      )
+      self._iterator = _iterator_with_context(self._raw_iterator)
+
+    result, state = next(self._iterator)
+    worker_index = self._raw_iterator.get_last_worker_index()  # pytype: disable=attribute-error
+    self._state[_LAST_WORKER_INDEX] = worker_index
+    worker_index_str = str(worker_index)
+    if state is None:
+      self._state[_ITERATIONS_TO_SKIP][worker_index_str] += 1
+    else:
+      self._state[_ITERATIONS_TO_SKIP][worker_index_str] = 0
+      self._state[_WORKERS_STATE][worker_index_str] = state
+    return result
+
+  def set_state(self, state):
+    self._state = state
+    self._raw_iterator = None
+    self._iterator = None
+
+  def get_state(self) -> dict[str, Any]:
+    return copy.deepcopy(self._state)
+
+
 class RangeLazyMapDataset(LazyMapDataset[int]):
   """Range data source, similar to python range() function."""
 
@@ -307,11 +479,15 @@ class RangeLazyMapDataset(LazyMapDataset[int]):
     return self.start + (index % self._length) * self.step
 
   def to_iter_dataset(
-      self, read_options: grain_options.ReadOptions | None = None
+      self,
+      read_options: grain_options.ReadOptions | None = None,
   ) -> LazyIterDataset[int]:
     """Syntactic sugar to construct a LazyIterDataset."""
     return PrefetchLazyIterDataset(
-        self, read_options or grain_options.ReadOptions(prefetch_buffer_size=0)
+        self,
+        read_options=(
+            read_options or grain_options.ReadOptions(prefetch_buffer_size=0)
+        ),
     )
 
 
