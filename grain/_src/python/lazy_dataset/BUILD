@@ -9,6 +9,7 @@ py_library(
     srcs_version = "PY3",
     deps = [
         "//grain/_src/core:sharding",
+        "//grain/_src/core:usage_logging",
         "//grain/_src/python:grain_pool",
         "//grain/_src/python:options",
     ],

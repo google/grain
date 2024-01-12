@@ -49,6 +49,7 @@ from typing import Any, Callable, Optional, TypeVar, overload
 
 from concurrent import futures
 from grain._src.core import sharding
+from grain._src.core import usage_logging
 from grain._src.python import grain_pool
 from grain._src.python import options as grain_options
 
@@ -66,6 +67,7 @@ class LazyMapDataset(Sequence[T], abc.ABC):
       self._parents = (parents,)
     else:
       self._parents = tuple(parents)
+    usage_logging.log_event("LazyMapDataset", tag_3="PyGrain")
 
   @property
   def parents(self) -> Sequence[LazyMapDataset]:
@@ -140,6 +142,7 @@ class LazyIterDataset(Iterable[T], abc.ABC):
       self._parents = (parents,)
     else:
       self._parents = tuple(parents)
+    usage_logging.log_event("LazyIterDataset", tag_3="PyGrain")
 
   @property
   def parents(self) -> Sequence[LazyMapDataset | LazyIterDataset]:
