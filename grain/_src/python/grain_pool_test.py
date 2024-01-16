@@ -14,6 +14,7 @@
 """Tests for GrainPool."""
 
 from collections.abc import Iterator
+import multiprocessing
 import os
 import signal
 from typing import Any
@@ -28,6 +29,12 @@ from grain._src.python.options import MultiprocessingOptions  # pylint: disable=
 
 
 class GrainPoolTest(absltest.TestCase):
+
+  def _join_and_assert_process_exitcode(self, process: multiprocessing.Process):
+    # The process can be potentially terminated forcibly and needs a moment to
+    # finalize and update the exitcode.
+    process.join(timeout=gp._PROCESS_JOIN_TIMEOUT)
+    self.assertIn(process.exitcode, {0, -signal.SIGTERM})
 
   def test_pool_equal_split_in_memory_data_source(self):
     in_memory_ds = data_sources.InMemoryDataSource(range(12))
@@ -80,7 +87,7 @@ class GrainPoolTest(absltest.TestCase):
     self.assertLen(grain_pool.processes, options.num_workers)
     # Make sure all child processes exited successfully.
     for child_process in grain_pool.processes:
-      self.assertEqual(child_process.exitcode, 0)
+      self._join_and_assert_process_exitcode(child_process)
 
   def test_pool_non_equal_split(self):
     ctx = mp.get_context("spawn")
@@ -106,7 +113,7 @@ class GrainPoolTest(absltest.TestCase):
     self.assertEqual(expected_elements, output_elements)
     # Make sure all child processes exited successfully.
     for child_process in grain_pool.processes:
-      self.assertEqual(child_process.exitcode, 0)
+      self._join_and_assert_process_exitcode(child_process)
 
   def test_pool_kill_child(self):
     ctx = mp.get_context("spawn")
@@ -127,7 +134,7 @@ class GrainPoolTest(absltest.TestCase):
         grain_pool.processes[0].exitcode, -1 * signal.SIGKILL.value
     )
     for child_process in grain_pool.processes[1:]:
-      self.assertEqual(child_process.exitcode, 0)
+      self._join_and_assert_process_exitcode(child_process)
 
   def test_pool_object_deletion(self):
     ctx = mp.get_context("spawn")
@@ -150,7 +157,7 @@ class GrainPoolTest(absltest.TestCase):
     grain_pool.__del__()
 
     for child_process in child_processes:
-      self.assertEqual(child_process.exitcode, 0)
+      self._join_and_assert_process_exitcode(child_process)
 
 
 def _make_uniform_element_producer_fn(

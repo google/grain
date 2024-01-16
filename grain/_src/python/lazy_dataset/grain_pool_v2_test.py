@@ -15,6 +15,7 @@
 
 from collections.abc import Iterable
 import functools
+import multiprocessing
 import os
 import signal
 import time
@@ -77,6 +78,12 @@ def add_random_value(
 
 class GrainPoolTest(absltest.TestCase):
 
+  def _join_and_assert_process_exitcode(self, process: multiprocessing.Process):
+    # The process can be potentially terminated forcibly and needs a moment to
+    # finalize and update the exitcode.
+    process.join(timeout=gp._PROCESS_JOIN_TIMEOUT)
+    self.assertIn(process.exitcode, {0, -signal.SIGTERM})
+
   def test_pool_equal_split(self):
     ctx = mp.get_context("spawn")
     # 16 elements divide equally among 4 processes
@@ -111,7 +118,7 @@ class GrainPoolTest(absltest.TestCase):
     self.assertLen(grain_pool.processes, num_processes)
     # Make sure all child processes exited successfully.
     for child_process in grain_pool.processes:
-      self.assertEqual(child_process.exitcode, 0)
+      self._join_and_assert_process_exitcode(child_process)
 
   def test_pool_non_equal_split(self):
     ctx = mp.get_context("spawn")
@@ -147,7 +154,7 @@ class GrainPoolTest(absltest.TestCase):
     self.assertLen(grain_pool.processes, num_processes)
     # Make sure all child processes exited successfully.
     for child_process in grain_pool.processes:
-      self.assertEqual(child_process.exitcode, 0)
+      self._join_and_assert_process_exitcode(child_process)
 
   def test_pool_kill_child(self):
     ctx = mp.get_context("spawn")
@@ -168,7 +175,7 @@ class GrainPoolTest(absltest.TestCase):
         grain_pool.processes[0].exitcode, -1 * signal.SIGKILL.value
     )
     for child_process in grain_pool.processes[1:]:
-      self.assertEqual(child_process.exitcode, 0)
+      self._join_and_assert_process_exitcode(child_process)
 
   def test_pool_object_deletion(self):
     ctx = mp.get_context("spawn")
@@ -197,10 +204,10 @@ class GrainPoolTest(absltest.TestCase):
     )
 
     child_processes = grain_pool.processes
-    grain_pool.__del__()
+    del grain_pool
 
     for child_process in child_processes:
-      self.assertEqual(child_process.exitcode, 0)
+      self._join_and_assert_process_exitcode(child_process)
 
   def test_pickling_jax_objects(self):
     ctx = mp.get_context("spawn")
