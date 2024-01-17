@@ -13,12 +13,13 @@
 # limitations under the License.
 """Mixing transformation for LazyDataset."""
 
+import abc
 import dataclasses
 import functools
 import sys
 from typing import Any, Sequence, Tuple, TypeVar, Union
 
-from grain._src.core.exceptions import PyGrainInternalError
+from grain._src.core import exceptions
 from grain._src.python.lazy_dataset import lazy_dataset
 
 
@@ -27,15 +28,32 @@ T = TypeVar("T")  # pylint: disable=invalid-name
 
 
 @dataclasses.dataclass
-class MixedLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
-  """LazyDataset for mixtures."""
+class DatasetSelectionMap(abc.ABC):
+  """Abstract base class for mapping from index to dataset and dataset index.
+
+  Note, this must be stateless, picklable and should avoid randomness to
+  support determinism since it may be created and called concurrently in
+  multiple processes.
+  """
+
+  @abc.abstractmethod
+  def __len__(self) -> int:
+    """Returns the length of this dataset."""
+
+  @abc.abstractmethod
+  def __getitem__(self, index: int) -> Tuple[int, int]:
+    """Returns the dataset and the index within the dataset of global index."""
+
+
+@dataclasses.dataclass
+class SelectionWithProportionsMap(DatasetSelectionMap):
+  """A lazy map mixing datasets acording to their proportions."""
 
   def __init__(
       self,
-      parents: Sequence[lazy_dataset.LazyMapDataset[T]],
+      parents: Sequence[lazy_dataset.LazyMapDataset],
       proportions: Sequence[float | int] | None = None,
   ):
-    super().__init__(parents)
     # Normalize proportions
     if proportions is None:
       proportions = [1] * len(parents)
@@ -58,13 +76,54 @@ class MixedLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   def __len__(self) -> int:
     return self._length
 
-  def __getitem__(self, index):
-    if isinstance(index, slice):
-      return self.slice(index)
+  def __getitem__(self, index: int):
     input_index, index = _dataset_and_key_of_next_element(
         index, self._proportions
     )
-    return self._parents[input_index][index]
+    return input_index, index
+
+
+@dataclasses.dataclass
+class MixedLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
+  """LazyDataset for mixtures."""
+
+  def __init__(
+      self,
+      parents: Sequence[lazy_dataset.LazyMapDataset[T]],
+      proportions: Sequence[float | int] | None = None,
+      selection_map: DatasetSelectionMap | None = None,
+  ):
+    """Initializes the mixed dataset.
+
+    Args:
+      parents: Component datasets to draw from.
+      proportions: Proportions from which to draw from each parent dataset.
+        Defaults to uniform weight if selection_map is not given.
+      selection_map: Mapping from global index to paraent dataset and index
+        within parent dataset.
+    """
+    super().__init__(parents)
+    # Cannot set both proportions and selection_map
+    if proportions is not None and selection_map is not None:
+      raise ValueError("Cannot set both proportions and selection_map.")
+
+    if selection_map is not None:
+      self._selection_map = selection_map
+      self._proportions = None
+    else:
+      self._selection_map = SelectionWithProportionsMap(parents, proportions)
+      self._proportions = self._selection_map._proportions
+
+    self._length = len(self._selection_map)
+
+  def __len__(self) -> int:
+    return self._length
+
+  def __getitem__(self, index):
+    if isinstance(index, slice):
+      return self.slice(index)
+    dataset, dataset_index = self._selection_map[index]
+    return self._parents[dataset][dataset_index]
 
 
 @dataclasses.dataclass
@@ -233,6 +292,6 @@ def _dataset_and_key_of_next_element(
   for dataset_index in range(len(proportions)):
     if old_counts[dataset_index] != new_counts[dataset_index]:
       return dataset_index, new_counts[dataset_index] - 1
-  raise PyGrainInternalError(
+  raise exceptions.PyGrainInternalError(
       "PyGrain internal error: please file a bug with the Grain team."
   )

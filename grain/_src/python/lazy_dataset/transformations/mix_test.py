@@ -14,12 +14,144 @@
 """Tests for mixing transformation."""
 
 import sys
+from typing import Callable, Tuple
 
 from absl.testing import absltest
 from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import mix
 from grain._src.python.lazy_dataset.transformations import repeat  # pylint: disable=unused-import
 import numpy as np
+
+
+class ExplicitSelectionMap(mix.DatasetSelectionMap):
+
+  def __init__(
+      self, length: int, selection_map: Callable[[int], Tuple[int, int]]
+  ):
+    self._length = length
+    self._selection_map = selection_map
+
+  def __len__(self) -> int:
+    return self._length
+
+  def __getitem__(self, index: int) -> Tuple[int, int]:
+    return self._selection_map(index)
+
+
+class MixedLazyMapTest(absltest.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    self.even = range(0, 10, 2)
+    self.odd = range(1, 10, 2)
+
+  def test_interleaved_map(self):
+    expected_indices = [
+        (0, 0),
+        (1, 0),
+        (0, 1),
+        (1, 1),
+        (0, 2),
+        (1, 2),
+        (0, 3),
+        (1, 3),
+        (0, 4),
+        (1, 4),
+    ]
+    expected_dataset = list(range(10))
+
+    def _inteleaved_dataset(index):
+      if index > 9:
+        raise IndexError("index our of range")
+      ds = index % 2
+      ds_index = index // 2
+      return (ds, ds_index)
+
+    interleaved_map = ExplicitSelectionMap(10, _inteleaved_dataset)
+
+    components = [self.even, self.odd]
+    indices = [interleaved_map[i] for i in range(10)]
+    unrolled_dataset = [components[ds][ds_index] for ds, ds_index in indices]
+
+    self.assertLen(interleaved_map, 10)
+    self.assertEqual(expected_indices, indices)
+    self.assertEqual(expected_dataset, unrolled_dataset)
+
+  def test_sequential_map(self):
+    expected_indices = [
+        (0, 0),
+        (0, 1),
+        (0, 2),
+        (0, 3),
+        (0, 4),
+        (1, 0),
+        (1, 1),
+        (1, 2),
+        (1, 3),
+        (1, 4),
+    ]
+    expected_dataset = list(self.even) + list(self.odd)
+
+    def _sequential_dataset(index):
+      if index > 9:
+        raise IndexError("index our of range")
+      if index < 5:
+        ds = 0
+      else:
+        ds = 1
+      ds_index = index % 5
+      return (ds, ds_index)
+
+    sequential_map = ExplicitSelectionMap(10, _sequential_dataset)
+
+    components = [self.even, self.odd]
+    indices = [sequential_map[i] for i in range(10)]
+    unrolled_dataset = [components[ds][ds_index] for ds, ds_index in indices]
+
+    self.assertLen(sequential_map, 10)
+    self.assertEqual(expected_indices, indices)
+    self.assertEqual(expected_dataset, unrolled_dataset)
+
+  def test_subset_and_shuffle_map(self):
+    first_epoch = [0, 1, 2, 3, 4]
+    second_epoch = [1, 0, 3, 2, 4]
+    expected_indices = [
+        (0, 0),
+        (1, 0),
+        (0, 1),
+        (1, 1),
+        (0, 2),
+        (1, 0),
+        (0, 0),
+        (1, 1),
+        (0, 1),
+        (0, 2),
+    ]
+    expected_dataset = first_epoch + second_epoch
+
+    def _subset_and_shuffle_dataset(index):
+      if index > 9:
+        raise IndexError("index our of range")
+      if index < 5:
+        ds = index % 2
+        ds_index = index // 2
+      else:
+        mapped_index = second_epoch[index - 5]
+        ds = mapped_index % 2
+        ds_index = mapped_index // 2
+      return (ds, ds_index)
+
+    subset_and_shuffle_map = ExplicitSelectionMap(
+        10, _subset_and_shuffle_dataset
+    )
+
+    components = [self.even, self.odd]
+    indices = [subset_and_shuffle_map[i] for i in range(10)]
+    unrolled_dataset = [components[ds][ds_index] for ds, ds_index in indices]
+
+    self.assertLen(subset_and_shuffle_map, 10)
+    self.assertEqual(expected_indices, indices)
+    self.assertEqual(expected_dataset, unrolled_dataset)
 
 
 class MixedLazyMapDatasetTest(absltest.TestCase):
@@ -123,6 +255,74 @@ class MixedLazyMapDatasetTest(absltest.TestCase):
     num_samples = 1000
     value_counts = np.bincount([ld[i] for i in range(num_samples)]).tolist()
     self.assertEqual(value_counts, [400, 600])
+
+  def test_interleaved_map(self):
+    expected_dataset = list(range(10))
+
+    def _inteleaved_dataset(index):
+      if index > 9:
+        raise IndexError("index our of range")
+      ds = index % 2
+      ds_index = index // 2
+      return (ds, ds_index)
+
+    interleaved_map = ExplicitSelectionMap(10, _inteleaved_dataset)
+
+    ds = mix.MixedLazyMapDataset(
+        parents=[self.even_ds, self.odd_ds], selection_map=interleaved_map
+    )
+
+    self.assertEqual(list(ds), expected_dataset)
+
+  def test_sequential_map(self):
+    expected_dataset = list(range(0, 10, 2)) + list(range(1, 10, 2))
+
+    def _sequential_dataset(index):
+      if index > 9:
+        raise IndexError("index our of range")
+      if index < 5:
+        ds = 0
+      else:
+        ds = 1
+      ds_index = index % 5
+      return (ds, ds_index)
+
+    sequential_map = ExplicitSelectionMap(10, _sequential_dataset)
+
+    ds = mix.MixedLazyMapDataset(
+        parents=[self.even_ds, self.odd_ds], selection_map=sequential_map
+    )
+
+    self.assertEqual(list(ds), expected_dataset)
+
+  def test_subset_and_shuffle_map(self):
+    first_epoch = [0, 1, 2, 3, 4]
+    second_epoch = [1, 0, 3, 2, 4]
+
+    expected_dataset = first_epoch + second_epoch
+
+    def _subset_and_shuffle_dataset(index):
+      if index > 9:
+        raise IndexError("index our of range")
+      if index < 5:
+        ds = index % 2
+        ds_index = index // 2
+      else:
+        mapped_index = second_epoch[index - 5]
+        ds = mapped_index % 2
+        ds_index = mapped_index // 2
+      return (ds, ds_index)
+
+    subset_and_shuffle_map = ExplicitSelectionMap(
+        10, _subset_and_shuffle_dataset
+    )
+
+    ds = mix.MixedLazyMapDataset(
+        parents=[self.even_ds, self.odd_ds],
+        selection_map=subset_and_shuffle_map,
+    )
+
+    self.assertEqual(list(ds), expected_dataset)
 
 
 class MixedLazyIterDatasetTest(absltest.TestCase):
