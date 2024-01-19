@@ -357,7 +357,7 @@ class PyGrainDatasetIterator(collections.abc.Iterator[_T]):
      worker that processed the batch.
   2) PyGrainDatasetIterator keeps track of the last_seen_index at each worker.
   3) When restoring from a state, PyGrainDatasetIterator checks what is the
-     minumum last_seen_index (among the last seen indices for all workers.) and
+     minimum last_seen_index (among the last seen indices for all workers.) and
      which worker processed that index. GrainPool is instructed to start
      distributing indices to the next worker.
   """
@@ -422,7 +422,7 @@ class PyGrainDatasetIterator(collections.abc.Iterator[_T]):
     return json.dumps(self._state, indent=4).encode()
 
   def set_state(self, state: bytes):
-    """Sets the state for the undelrying iterator.
+    """Sets the state for the underlying iterator.
 
     Note that state is an implementation detail and can change in the future.
     Args:
