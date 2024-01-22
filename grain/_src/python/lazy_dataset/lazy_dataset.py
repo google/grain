@@ -49,9 +49,12 @@ from typing import Any, Callable, Optional, TypeVar, overload
 
 from concurrent import futures
 from grain._src.core import sharding
+from grain._src.core import tree
 from grain._src.core import usage_logging
 from grain._src.python import grain_pool
 from grain._src.python import options as grain_options
+from grain._src.python import shared_memory_array
+import numpy as np
 
 T = TypeVar("T")
 _MAX_PREFETCH_THREADS = 1000
@@ -373,6 +376,40 @@ _LAST_WORKER_INDEX = "last_worker_index"
 _RECORD_STATE_INTERVAL_S = 3
 
 
+def _copy_leaf_to_shm(leaf: Any) -> Any:
+  """Copies `leaf` to shared memory if it's a numpy array."""
+  if (
+      not isinstance(leaf, np.ndarray)
+      or leaf.dtype.hasobject
+      or not leaf.flags.c_contiguous
+  ):
+    return leaf
+
+  shared_memory_arr = shared_memory_array.SharedMemoryArray(
+      leaf.shape, leaf.dtype
+  )
+  np.copyto(shared_memory_arr, leaf, casting="no")
+  return shared_memory_arr.metadata
+
+
+def _copy_struct_to_shm(struct: Any) -> Any:
+  """Copies leaf ndarrays of the structure to shared memory."""
+  return tree.map_structure(_copy_leaf_to_shm, struct)
+
+
+def _open_leaf_from_shm(leaf: Any) -> Any:
+  """Recovers `leaf` from shared memory if it's a numpy array metadata."""
+  if isinstance(leaf, shared_memory_array.SharedMemoryArrayMetadata):
+    leaf = shared_memory_array.SharedMemoryArray.from_metadata(leaf)
+    leaf.unlink_on_del()
+  return leaf
+
+
+def _open_struct_from_shm(struct: Any) -> Any:
+  """Recovers leaf ndarrays of the structure from shared memory."""
+  return tree.map_structure(_open_leaf_from_shm, struct)
+
+
 class MultiprocessPrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
   """Iterator that performs prefetching using a multiprocessing pool."""
 
@@ -426,6 +463,7 @@ class MultiprocessPrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
         last_recorded_state_time = time.time()
         for element in it:
           now = time.time()
+          element = _copy_struct_to_shm(element)
           if now - last_recorded_state_time >= _RECORD_STATE_INTERVAL_S:
             last_recorded_state_time = now
             yield (element, it.get_state())  # pytype: disable=attribute-error
@@ -449,7 +487,7 @@ class MultiprocessPrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
     else:
       self._state[_ITERATIONS_TO_SKIP][worker_index_str] = 0
       self._state[_WORKERS_STATE][worker_index_str] = state
-    return result
+    return _open_struct_from_shm(result)
 
   def set_state(self, state):
     self._state = state

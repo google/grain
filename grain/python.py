@@ -51,7 +51,7 @@ from ._src.python.operations import (
     Operation,
     RandomMapOperation,
 )
-from ._src.python.options import ReadOptions
+from ._src.python.options import ReadOptions, MultiprocessingOptions
 from ._src.python.record import (Record, RecordMetadata)
 from ._src.python.samplers import (
     IndexSampler,
