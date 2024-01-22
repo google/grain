@@ -43,6 +43,7 @@ from ._src.python.lazy_dataset.transformations.map import (
     MapLazyIterDataset,
 )
 from ._src.python.lazy_dataset.transformations.mix import (
+    DatasetSelectionMap,
     MixedLazyMapDataset,
     MixedLazyIterDataset,
 )
