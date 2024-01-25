@@ -9,7 +9,6 @@ py_library(
     deps = [
         "//grain/_src/core:tree",
         "//grain/_src/python:record",
-        "//third_party/py/jaxtyping",
     ],
 )
 

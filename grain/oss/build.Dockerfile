@@ -31,12 +31,14 @@ RUN apt update && apt install -y --no-install-recommends \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Setup python
+# Setup python and pip.
 RUN apt-get update && apt-get install -y \
-    python3-dev python3-pip python3-venv && \
+    python${PYTHON_VERSION} python${PYTHON_VERSION}-dev \
+    python${PYTHON_VERSION}-venv && \
+    curl -sS https://bootstrap.pypa.io/get-pip.py | python${PYTHON_VERSION} && \
     rm -rf /var/lib/apt/lists/* && \
     python${PYTHON_VERSION} -m pip install pip --upgrade && \
-    update-alternatives --install /usr/bin/python python /usr/bin/python${PYTHON_VERSION} 0
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 0
 
 # Install bazel
 RUN mkdir /bazel && \
@@ -48,9 +50,9 @@ RUN mkdir /bazel && \
     cd / && \
     rm -f /bazel/bazel-$BAZEL_VERSION-installer-linux-x86_64.sh
 
-# Install pip dependencies needed for grain
+# Install dependencies needed for grain
 RUN --mount=type=cache,target=/root/.cache \
-  python${PYTHON_VERSION} -m pip install -U \
+  /usr/bin/python${PYTHON_VERSION} -m pip install -U \
     absl-py \
     array_record \
     build \
@@ -61,9 +63,9 @@ RUN --mount=type=cache,target=/root/.cache \
     more-itertools>=9.1.0 \
     numpy;
 
-# Install pip dependencies needed for grain tests
+# Install dependencies needed for grain tests
 RUN --mount=type=cache,target=/root/.cache \
-  python${PYTHON_VERSION} -m pip install -U \
+  /usr/bin/python${PYTHON_VERSION} -m pip install -U \
     dill \
     jax \
     jaxlib \

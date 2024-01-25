@@ -9,7 +9,6 @@ py_library(
     ],
     srcs_version = "PY3",
     deps = [
-        "//file/base:options_py_pb2",
         "//grain/_src/core:usage_logging",
     ],
 )
@@ -113,7 +112,6 @@ py_test(
         ":record",
         ":samplers",
         "//grain/_src/core:sharding",
-        "//testing/pybase:parameterized",
     ],
 )
 

@@ -37,7 +37,6 @@ py_library(
     srcs_version = "PY3",
     deps = [
         ":lazy_dataset",
-        "//grain/google/lineage:lineage_logging",
     ],
 )
 

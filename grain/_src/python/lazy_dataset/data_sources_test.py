@@ -72,24 +72,6 @@ class SourceLazyMapDatasetTest(absltest.TestCase):
     actual_data = [self.lazy_dataset_source[i] for i in indices_to_read]
     self.assertEqual(expected_data, actual_data)
 
-  def test_log_lineage_for_sources(self):
-    source1 = mock.MagicMock()
-    source2 = mock.MagicMock()
-    source3 = mock.MagicMock()
-    # Just creating a LazyDataset does not log lineage.
-    ld = _Interleave([
-        data_sources.SourceLazyMapDataset(source1),
-        data_sources.SourceLazyMapDataset(source2),
-    ])
-    source1.log_lineage.assert_not_called()
-    source2.log_lineage.assert_not_called()
-    source3.log_lineage.assert_not_called()
-    # Traverse tree to log lineage for sources under `ld`.
-    data_sources.log_lineage_for_sources(ld)
-    source1.log_lineage.assert_called_once()
-    source2.log_lineage.assert_called_once()
-    source3.log_lineage.assert_not_called()
-
 
 if __name__ == "__main__":
   absltest.main()

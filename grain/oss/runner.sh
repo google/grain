@@ -9,7 +9,10 @@ export TMP_FOLDER="/tmp/grain"
 # Clean previous folders/images.
 [ -f $TMP_FOLDER ] && rm -rf $TMP_FOLDER
 
-export PYTHON_VERSION="3.10"
+export PYTHON_MAJOR_VERSION="3"
+export PYTHON_MINOR_VERSION="10"
+PYTHON_VERSION="${PYTHON_MAJOR_VERSION}.${PYTHON_MINOR_VERSION}"
+export PYTHON_VERSION="${PYTHON_VERSION}"
 
  # Using a previous version of Blaze to avoid:
  # https://github.com/bazelbuild/bazel/issues/8622
@@ -31,6 +34,8 @@ DOCKER_BUILDKIT=1 docker build --progress=plain --no-cache \
 
 docker run --rm -a stdin -a stdout -a stderr \
   --env PYTHON_VERSION=${PYTHON_VERSION} \
+  --env PYTHON_MAJOR_VERSION=${PYTHON_MAJOR_VERSION} \
+  --env PYTHON_MINOR_VERSION=${PYTHON_MINOR_VERSION} \
   --env BAZEL_VERSION=${BAZEL_VERSION} \
   -v $TMP_FOLDER:/tmp/grain \
   --name grain grain:${PYTHON_VERSION} \

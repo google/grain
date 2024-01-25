@@ -52,8 +52,6 @@ py_library(
         "//grain/_src/core:transforms",  # build_cleaner: keep
         "//grain/_src/python/experimental/continual_sequence_sampler",  # build_cleaner: keep
         "//grain/_src/python/experimental/example_packing:packing",  # build_cleaner: keep
-        "//grain/_src/python/experimental/proto_parsers:encode",  # build_cleaner: keep
-        "//grain/_src/python/experimental/proto_parsers:fast_proto_parser",  # build_cleaner: keep
     ],
 )
 

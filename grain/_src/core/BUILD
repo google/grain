@@ -41,13 +41,6 @@ py_library(
     srcs_version = "PY3",
 )
 
-py_test(
-    name = "grain_random_test",
-    srcs = ["grain_random_test.py"],
-    srcs_version = "PY3",
-    deps = [":grain_random"],
-)
-
 py_library(
     name = "sharding",
     srcs = ["sharding.py"],

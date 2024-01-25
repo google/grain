@@ -179,6 +179,7 @@ class DataLoader:
       )
 
     worker_count = _determine_worker_count(worker_count)
+    if worker_count > 0:
 
       # Shared memory should be enabled iff worker_count > 0.
       if operations and isinstance(operations[-1], BatchOperation):

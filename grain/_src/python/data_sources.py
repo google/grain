@@ -43,6 +43,7 @@ _SparseArray = collections.namedtuple(
 
 
 class ArrayRecordDataSource(array_record.ArrayRecordDataSource):
+  pass
 
 
 @typing.runtime_checkable
