@@ -59,3 +59,9 @@ from ._src.python.samplers import (
     SequentialSampler,
 )
 from ._src.python.shared_memory_array import SharedMemoryArray
+
+# These are imported only if Orbax is present.
+try:
+  from ._src.python.checkpoint_handlers import PyGrainCheckpointSave, PyGrainCheckpointRestore  # pylint: disable=g-import-not-at-top
+except ImportError:
+  pass
