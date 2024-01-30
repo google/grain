@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "grain-nightly"
-version = "0.0.3"
+version = "0.0.4"
 description = "Grain: A library for loading and transforming data for neural network training."
 keywords = []
 authors = [

@@ -1,6 +1,6 @@
 # Steps to build a new grain pip package
 
-1. Update the version number in setup.py
+1. Update the version number in project.toml
 
 2. In workspace, run
 
