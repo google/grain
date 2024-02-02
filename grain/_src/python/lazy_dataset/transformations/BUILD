@@ -80,7 +80,9 @@ py_test(
     srcs_version = "PY3",
     deps = [
         ":map",
+        ":slice",
         "//grain/_src/core:transforms",
+        "//grain/_src/python:options",
         "//grain/_src/python/lazy_dataset",
     ],
 )
