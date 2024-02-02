@@ -16,9 +16,13 @@
 import dataclasses
 
 from absl.testing import absltest
+from absl.testing import parameterized
 from grain._src.core import transforms
+import multiprocessing as mp
+from grain._src.python import options
 from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import map as ldmap
+from grain._src.python.lazy_dataset.transformations import slice as slice_lazy_dataset  # pylint: disable=unused-import
 import numpy as np
 
 
@@ -110,7 +114,7 @@ class MapLazyMapDatasetTest(absltest.TestCase):
     np.testing.assert_almost_equal(expected_data, actual_data, decimal=1)
 
 
-class MapLazyIterDatasetTest(absltest.TestCase):
+class MapLazyIterDatasetTest(parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
@@ -134,12 +138,14 @@ class MapLazyIterDatasetTest(absltest.TestCase):
     actual_data = [next(map_with_transform_iter_ds) for _ in range(10)]
     self.assertEqual(expected_data, actual_data)
 
-  def test_random_map_data_with_transform(self):
-    map_with_random_transform_iter_ds = iter(
-        ldmap.MapLazyIterDataset(
-            self.range_iter_ds, RandomMapWithTransform(), seed=0
-        )
+  @parameterized.parameters(0, 5)
+  def test_random_map_data_with_transform(self, num_workers: int):
+    iter_ds = ldmap.MapLazyIterDataset(
+        self.range_iter_ds, RandomMapWithTransform(), seed=0
     )
+    if num_workers > 0:
+      iter_ds = iter_ds.prefetch(options.MultiprocessingOptions(num_workers))
+    map_with_random_transform_iter_ds = iter(iter_ds)
     expected_data = [_ for _ in range(10)]
     actual_data = [next(map_with_random_transform_iter_ds) for _ in range(10)]
     np.testing.assert_almost_equal(expected_data, actual_data, decimal=1)
