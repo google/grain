@@ -64,9 +64,11 @@ class SingleBinPackLazyIterDataset(lazy_dataset.LazyIterDataset):
   For packed features the output will have the desired feature length by
   combining multiple examples. If there is only a single packed feature it is
   guarantee to not contain padding.
-  Warning: When combining examples that add up to a sequence longer than the
-  target sequence length the remainder of the last example will be dropped!
-  (This could be changed by improving the implementation.)
+  Warning: When allow_truncation=True and combining examples that add up to a
+  sequence longer than the target sequence length the remainder of the last
+  example will be dropped! (This could be changed by improving the
+  implementation.)  When allow_truncation=False, examples will not be truncated,
+  but it will lead to more padding in combined examples.
 
   As common each packed feature there will have 3 outputs:
   - The concatenated values.
@@ -82,13 +84,17 @@ class SingleBinPackLazyIterDataset(lazy_dataset.LazyIterDataset):
       self,
       parent: lazy_dataset.LazyIterDataset,
       length_struct: PyTree[int | None],
+      allow_truncation: bool = True,
   ):
     super().__init__(parent)
     self._length_struct = length_struct
+    self._allow_truncation = allow_truncation
 
   def __iter__(self) -> lazy_dataset.LazyDatasetIterator:
     return SingleBinPackLazyDatasetIterator(
-        iter(self._parent), self._length_struct
+        iter(self._parent),
+        self._length_struct,
+        allow_truncation=self._allow_truncation,
     )  # pytype: disable=wrong-arg-types
 
 
@@ -102,9 +108,11 @@ class SingleBinPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
       self,
       parent: lazy_dataset.LazyDatasetIterator,
       length_struct: PyTree[int | None],
+      allow_truncation: bool = True,
   ):
     self._parent = parent
     self._length_struct = length_struct
+    self._allow_truncation = allow_truncation
     # Same as above but flattened. Some operations are easier using the
     # flattened representation.
     self._flat_lengths: list[int | None] = tree.flatten(length_struct)
@@ -146,9 +154,7 @@ class SingleBinPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
         # Parent iterator exhausted. Yield whatever is in the buffer as last
         # (potentially heavily padded) element.
         if self._element_buffer:
-          packed_element = self._pack_elements(self._element_buffer)
-          self._element_buffer = []
-          self._element_buffer_space = copy.copy(self._flat_lengths)
+          packed_element = self._pack_and_reset_buffer()
           return packed_element
         else:
           raise e
@@ -161,18 +167,35 @@ class SingleBinPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
         self._packed_elements.append(self._pack_elements([flat_element]))
         continue
 
+      if not self._allow_truncation and not self._can_append_to_next_element(
+          flat_element
+      ):
+        self._packed_elements.append(self._pack_and_reset_buffer())
+
       # Concat element to incomplete_element.
       is_fully_packed = self._append_to_next_element(flat_element)
       if is_fully_packed:
-        self._packed_elements.append(self._pack_elements(self._element_buffer))
-        self._element_buffer = []
-        self._element_buffer_space = copy.copy(self._flat_lengths)
+        self._packed_elements.append(self._pack_and_reset_buffer())
 
   def _is_fully_packed(self, flat_element):
     return any(
         target_length is not None and len(y) >= target_length
         for target_length, y in zip(self._flat_lengths, flat_element)
     )
+
+  def _can_append_to_next_element(self, flat_element) -> bool:
+    for i in range(len(self._flat_lengths)):
+      if self._flat_lengths[i] is None:
+        continue
+      if len(flat_element[i]) >= self._element_buffer_space[i]:
+        return False
+    return True
+
+  def _pack_and_reset_buffer(self) -> Any:
+    packed = self._pack_elements(self._element_buffer)
+    self._element_buffer = []
+    self._element_buffer_space = copy.copy(self._flat_lengths)
+    return packed
 
   def _append_to_next_element(self, flat_element) -> bool:
     self._element_buffer.append(flat_element)
