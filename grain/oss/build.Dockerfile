@@ -7,38 +7,19 @@
 # ❯ docker run --rm -it -v /tmp/grain:/tmp/grain \
 #      grain:${PYTHON_VERSION} bash
 
-FROM ubuntu:22.04
+FROM quay.io/pypa/manylinux2014_x86_64
 LABEL maintainer="Grain team <grain-dev@google.com>"
 
-# Declare args after FROM because the args declared before FROM can't be used in
-# any instructions after a FROM
+ARG PYTHON_MAJOR_VERSION
+ARG PYTHON_MINOR_VERSION
 ARG PYTHON_VERSION
 ARG BAZEL_VERSION
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt update && apt install -y --no-install-recommends software-properties-common
-RUN apt update && apt install -y --no-install-recommends \
-        build-essential \
-        curl \
-        git \
-        pkg-config \
-        rename \
-        rsync \
-        unzip \
-        vim \
-        && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+RUN yum install -y rsync
 
-# Setup python and pip.
-RUN apt-get update && apt-get install -y \
-    python${PYTHON_VERSION} python${PYTHON_VERSION}-dev \
-    python${PYTHON_VERSION}-venv && \
-    curl -sS https://bootstrap.pypa.io/get-pip.py | python${PYTHON_VERSION} && \
-    rm -rf /var/lib/apt/lists/* && \
-    python${PYTHON_VERSION} -m pip install pip --upgrade && \
-    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 0
+ENV PATH="/opt/python/cp${PYTHON_MAJOR_VERSION}${PYTHON_MINOR_VERSION}-cp${PYTHON_MAJOR_VERSION}${PYTHON_MINOR_VERSION}/bin:${PATH}"
 
 # Install bazel
 RUN mkdir /bazel && \
@@ -52,7 +33,7 @@ RUN mkdir /bazel && \
 
 # Install dependencies needed for grain
 RUN --mount=type=cache,target=/root/.cache \
-  /usr/bin/python${PYTHON_VERSION} -m pip install -U \
+  python${PYTHON_VERSION} -m pip install -U \
     absl-py \
     array_record \
     build \
@@ -65,7 +46,8 @@ RUN --mount=type=cache,target=/root/.cache \
 
 # Install dependencies needed for grain tests
 RUN --mount=type=cache,target=/root/.cache \
-  /usr/bin/python${PYTHON_VERSION} -m pip install -U \
+  python${PYTHON_VERSION} -m pip install -U \
+    auditwheel \
     dill \
     jax \
     jaxlib \

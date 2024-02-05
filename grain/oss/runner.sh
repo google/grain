@@ -9,10 +9,11 @@ export TMP_FOLDER="/tmp/grain"
 # Clean previous folders/images.
 [ -f $TMP_FOLDER ] && rm -rf $TMP_FOLDER
 
-export PYTHON_MAJOR_VERSION="3"
-export PYTHON_MINOR_VERSION="10"
+PYTHON_MAJOR_VERSION="3"
+PYTHON_MINOR_VERSION="10"
 PYTHON_VERSION="${PYTHON_MAJOR_VERSION}.${PYTHON_MINOR_VERSION}"
-export PYTHON_VERSION="${PYTHON_VERSION}"
+
+AUDITWHEEL_PLATFORM="manylinux2014_x86_64"
 
  # Using a previous version of Blaze to avoid:
  # https://github.com/bazelbuild/bazel/issues/8622
@@ -29,6 +30,8 @@ cd $TMP_FOLDER
 
 DOCKER_BUILDKIT=1 docker build --progress=plain --no-cache \
   --build-arg PYTHON_VERSION=${PYTHON_VERSION} \
+  --build-arg PYTHON_MAJOR_VERSION=${PYTHON_MAJOR_VERSION} \
+  --build-arg PYTHON_MINOR_VERSION=${PYTHON_MINOR_VERSION} \
   --build-arg BAZEL_VERSION=${BAZEL_VERSION} \
   -t grain:${PYTHON_VERSION} - < grain/oss/build.Dockerfile
 
@@ -37,6 +40,7 @@ docker run --rm -a stdin -a stdout -a stderr \
   --env PYTHON_MAJOR_VERSION=${PYTHON_MAJOR_VERSION} \
   --env PYTHON_MINOR_VERSION=${PYTHON_MINOR_VERSION} \
   --env BAZEL_VERSION=${BAZEL_VERSION} \
+  --env AUDITWHEEL_PLATFORM=${AUDITWHEEL_PLATFORM} \
   -v $TMP_FOLDER:/tmp/grain \
   --name grain grain:${PYTHON_VERSION} \
   bash grain/oss/build_whl.sh
