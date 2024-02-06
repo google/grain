@@ -1,5 +1,7 @@
 """High level APIs that serve as a single endpoint for very common use cases."""
 
+from typing import Union
+
 from grain._src.core import sharding
 from grain._src.core import transforms
 from grain._src.core import usage_logging
@@ -12,15 +14,15 @@ from grain._src.python import samplers
 def load(
     source: data_sources.RandomAccessDataSource,
     *,
-    num_epochs: int | None = None,
+    num_epochs: Union[int, None] = None,
     shuffle: bool = False,
-    seed: int | None = None,
+    seed: Union[int, None] = None,
     shard_options: sharding.ShardOptions = sharding.NoSharding(),
     transformations: transforms.Transformations = (),
-    batch_size: int | None = None,
+    batch_size: Union[int, None] = None,
     drop_remainder: bool = False,
-    worker_count: int | None = 0,
-    read_options: options.ReadOptions | None = None,
+    worker_count: Union[int, None] = 0,
+    read_options: Union[options.ReadOptions, None] = None,
 ) -> data_loader.DataLoader:
   """Convenient method for simple pipelines on top of a data source.
 

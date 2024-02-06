@@ -13,6 +13,7 @@
 # limitations under the License.
 """Tests for batch transformation."""
 
+import sys
 from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.python.lazy_dataset import data_sources
@@ -25,6 +26,7 @@ import grain._src.python.lazy_dataset.transformations.shuffle
 # pylint: enable=unused-import
 import numpy as np
 
+PY310 = sys.version_info >= (3, 10)
 
 class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
 
@@ -47,7 +49,7 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
         # Second, fourth and five element packed together.
         ([5, 6, 7, 8], [1, 1, 2, 3], [0, 1, 0, 0]),
     ]
-    for actual, expected in zip(ds_iter, expected_elements, strict=True):
+    for actual, expected in zip(ds_iter, expected_elements, **({"strict": True} if PY310 else {})):
       # Elements are tuples with (inputs, inputs_segment_ids, inputs_positions).
       self.assertLen(actual, 3)
       np.testing.assert_array_equal(actual, expected)
@@ -72,7 +74,7 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
         ([5, 6, 7, 0], [1, 1, 2, 0], [0, 1, 0, 0]),
     ]
 
-    for actual, expected in zip(ds_iter, expected_elements, strict=True):
+    for actual, expected in zip(ds_iter, expected_elements, **({"strict": True} if PY310 else {})):
       # Elements are tuples with (inputs, inputs_segment_ids, inputs_positions).
       self.assertLen(actual, 3)
       np.testing.assert_array_equal(actual, expected)
@@ -129,7 +131,7 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
         },
     ]
 
-    for actual, expected in zip(ds_iter, expected_elements, strict=True):
+    for actual, expected in zip(ds_iter, expected_elements, **({"strict": True} if PY310 else {})):
       # Compare keys.
       self.assertSequenceEqual(sorted(actual), sorted(expected))
       np.testing.assert_array_equal(actual[feature], expected[feature])
@@ -199,7 +201,7 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
             "targets_positions": [0, 1, 2, 0],
         },
     ]
-    for actual, expected in zip(ds_iter, expected_elements, strict=True):
+    for actual, expected in zip(ds_iter, expected_elements, **({"strict": True} if PY310 else {})):
       # Compare keys.
       self.assertSequenceEqual(sorted(actual), sorted(expected))
       np.testing.assert_array_equal(actual[feature], expected[feature])
@@ -259,7 +261,7 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
             "targets_positions": [0, 1, 2, 0],
         },
     ]
-    for actual, expected in zip(ds_iter, expected_elements, strict=True):
+    for actual, expected in zip(ds_iter, expected_elements, **({"strict": True} if PY310 else {})):
       np.testing.assert_array_equal(actual[feature], expected[feature])
 
   @parameterized.parameters(
@@ -311,7 +313,7 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
             "input_vectors_positions": [0, 1, 0],
         },
     ]
-    for actual, expected in zip(ds_iter, expected_elements, strict=True):
+    for actual, expected in zip(ds_iter, expected_elements, **({"strict": True} if PY310 else {})):
       np.testing.assert_array_equal(actual[feature], expected[feature])
 
   def test_checkpointing(self):

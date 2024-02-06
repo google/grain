@@ -45,13 +45,12 @@ import contextlib
 import copy
 import functools
 import time
-from typing import Any, Callable, Optional, TypeVar, overload
+from typing import Any, Callable, Optional, TypeVar, overload, Union
 
 from concurrent import futures
 from grain._src.core import sharding
 from grain._src.core import tree
 from grain._src.core import usage_logging
-import multiprocessing as mp
 from grain._src.python import grain_pool
 from grain._src.python import options as grain_options
 from grain._src.python import shared_memory_array
@@ -66,7 +65,7 @@ class LazyMapDataset(Sequence[T], abc.ABC):
 
   _functions: dict[str, Callable[[LazyMapDataset], Any]] = {}
 
-  def __init__(self, parents: LazyMapDataset | Sequence[LazyMapDataset] = ()):
+  def __init__(self, parents: Union[LazyMapDataset, Sequence[LazyMapDataset]] = ()):
     if isinstance(parents, LazyMapDataset):
       self._parents = (parents,)
     else:
@@ -91,7 +90,7 @@ class LazyMapDataset(Sequence[T], abc.ABC):
     ...
 
   @overload
-  def __getitem__(self, index: int) -> T | None:
+  def __getitem__(self, index: int) -> Union[T, None]:
     ...
 
   @abc.abstractmethod
@@ -121,7 +120,7 @@ class LazyMapDataset(Sequence[T], abc.ABC):
     return self.to_iter_dataset().__iter__()
 
   def to_iter_dataset(
-      self, read_options: grain_options.ReadOptions | None = None
+      self, read_options: Union[grain_options.ReadOptions, None] = None
   ) -> LazyIterDataset[T]:
     """Syntactic sugar to construct a LazyIterDataset."""
     return PrefetchLazyIterDataset(
@@ -137,9 +136,10 @@ class LazyIterDataset(Iterable[T], abc.ABC):
   def __init__(
       self,
       parents: (
-          LazyMapDataset
-          | LazyIterDataset
-          | Sequence[LazyMapDataset | LazyIterDataset]
+          Union[
+            LazyMapDataset,
+            LazyIterDataset,
+            Sequence[Union[LazyMapDataset, LazyIterDataset]]]
       ) = (),
   ):
     if isinstance(parents, (LazyMapDataset, LazyIterDataset)):
@@ -149,11 +149,11 @@ class LazyIterDataset(Iterable[T], abc.ABC):
     usage_logging.log_event("LazyIterDataset", tag_3="PyGrain")
 
   @property
-  def parents(self) -> Sequence[LazyMapDataset | LazyIterDataset]:
+  def parents(self) -> Sequence[Union[LazyMapDataset, LazyIterDataset]]:
     return self._parents
 
   @property
-  def _parent(self) -> LazyMapDataset | LazyIterDataset:
+  def _parent(self) -> Union[LazyMapDataset, LazyIterDataset]:
     assert len(self._parents) == 1, self._parents
     return self._parents[0]
 
@@ -452,7 +452,7 @@ class MultiprocessPrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
 
       def get_element_producer_fn(
           worker_index: int, worker_count: int
-      ) -> Iterator[tuple[T, dict[str, Any] | None]]:
+      ) -> Iterator[tuple[T, Union[dict[str, Any], None]]]:
         # Recover from the last recorded state for the given worker.
         worker_state = state[_WORKERS_STATE][str(worker_index)]
         parent.set_parent_maps_slice(slice(worker_index, None, worker_count))
@@ -502,7 +502,7 @@ class MultiprocessPrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
 class RangeLazyMapDataset(LazyMapDataset[int]):
   """Range data source, similar to python range() function."""
 
-  def __init__(self, start: int, stop: int | None = None, step: int = 1):
+  def __init__(self, start: int, stop: Union[int, None] = None, step: int = 1):
     super().__init__()
     self.start = 0 if stop is None else start
     self.stop = start if stop is None else stop
@@ -522,7 +522,7 @@ class RangeLazyMapDataset(LazyMapDataset[int]):
 
   def to_iter_dataset(
       self,
-      read_options: grain_options.ReadOptions | None = None,
+      read_options: Union[grain_options.ReadOptions, None] = None,
   ) -> LazyIterDataset[int]:
     """Syntactic sugar to construct a LazyIterDataset."""
     return PrefetchLazyIterDataset(
@@ -550,7 +550,7 @@ class ShardLazyDataset(LazyMapDataset[T]):
   def __len__(self) -> int:
     return self._end - self._start
 
-  def __getitem__(self, index: int | slice) -> Optional[T]:
+  def __getitem__(self, index: Union[int, slice]) -> Optional[T]:
     if isinstance(index, slice):
       return self.slice(index)
     epoch = index // len(self)

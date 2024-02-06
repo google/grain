@@ -1,0 +1,54 @@
+name: tests
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-and-test:
+    name: "Python ${{ matrix.python-version }} on ${{ matrix.os }}"
+    runs-on: "${{ matrix.os }}"
+
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
+        os: [ubuntu-latest]
+
+    steps:
+      - uses: "actions/checkout@v2"
+      # - uses: "actions/setup-python@v4"
+      #   with:
+      #       python-version: "${{ matrix.python-version }}"
+      - name: Create directory
+        run: |
+          mkdir -p /tmp/grain
+          cp -r . /tmp/grain
+      - name: Build package
+        run: |
+          set -xe
+          export PYTHON_VERSION=${{ matrix.python-version }}
+          export PYTHON_MAJOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f1)
+          export PYTHON_MINOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f2)
+          export CP_VERSION="cp${PYTHON_MAJOR_VERSION}${PYTHON_MINOR_VERSION}"
+          export BAZEL_VERSION="5.4.0"
+          export AUDITWHEEL_PLATFORM="manylinux2014_x86_64"
+          cd /tmp/grain
+          DOCKER_BUILDKIT=1 docker build --progress=plain --no-cache \
+            --build-arg PYTHON_VERSION=${PYTHON_VERSION} \
+            --build-arg PYTHON_MAJOR_VERSION=${PYTHON_MAJOR_VERSION} \
+            --build-arg PYTHON_MINOR_VERSION=${PYTHON_MINOR_VERSION} \
+            --build-arg BAZEL_VERSION=${BAZEL_VERSION} \
+            -t grain:${PYTHON_VERSION} - < grain/oss/build.Dockerfile
+          docker run --rm -a stdin -a stdout -a stderr \
+            --env PYTHON_VERSION=${PYTHON_VERSION} \
+            --env PYTHON_MAJOR_VERSION=${PYTHON_MAJOR_VERSION} \
+            --env PYTHON_MINOR_VERSION=${PYTHON_MINOR_VERSION} \
+            --env PYTHON_BIN_PATH="/opt/python/${CP_VERSION}-${CP_VERSION}/bin/python" \
+            --env BAZEL_VERSION=${BAZEL_VERSION} \
+            -v /tmp/grain:/tmp/grain \
+            --env AUDITWHEEL_PLATFORM=${AUDITWHEEL_PLATFORM} \
+            --name grain grain:${PYTHON_VERSION} \
+            bash grain/oss/build_whl.sh
+

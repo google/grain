@@ -14,13 +14,14 @@
 """Define record class used by various modules in the Grain Python Backend."""
 
 import dataclasses
+import sys
 from typing import Optional, Generic, TypeVar
 import numpy as np
 
 T = TypeVar("T")
+PY310 = sys.version_info >= (3, 10)
 
-
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass(**({"slots": True} if PY310 else {}))
 class RecordMetadata:
   """RecordMetadata contains metadata about indidivual records.
 
@@ -47,7 +48,7 @@ class RecordMetadata:
     )
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass(**({"slots": True} if PY310 else {}))
 class Record(Generic[T]):
   metadata: RecordMetadata
   data: T

@@ -13,7 +13,7 @@
 # limitations under the License.
 """Implements repeat transformation."""
 import sys
-from typing import TypeVar
+from typing import TypeVar, Union
 
 from grain._src.python.lazy_dataset import lazy_dataset
 
@@ -32,7 +32,7 @@ class RepeatLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   def __init__(
       self,
       parent: lazy_dataset.LazyMapDataset[T],
-      num_epochs: int | None = None,
+      num_epochs: Union[int, None] = None,
   ):
     super().__init__(parent)
     if len(parent) >= sys.maxsize:

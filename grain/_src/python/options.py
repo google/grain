@@ -13,9 +13,11 @@
 # limitations under the License.
 """Dataclasses for holdings options."""
 import dataclasses
+import sys
 
+PY310 = sys.version_info >= (3, 10)
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass(**({"slots": True} if PY310 else {}))
 class ReadOptions:
   """Options for reading data from the DataSource.
 
@@ -38,7 +40,7 @@ class ReadOptions:
   prefetch_buffer_size: int = 500
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass(**({"slots": True} if PY310 else {}))
 class MultiprocessingOptions:
   """Options for using Python multiprocessing.
 

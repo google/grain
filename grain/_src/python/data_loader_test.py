@@ -16,6 +16,7 @@
 from collections.abc import Sequence
 import pathlib
 from unittest import mock
+from typing import Union
 
 from absl import flags
 from absl.testing import absltest
@@ -144,7 +145,7 @@ class DataLoaderTest(parameterized.TestCase):
     self.testdata_dir = pathlib.Path(FLAGS.test_srcdir) / "testdata"
 
   def _create_data_loader_for_short_sequence(
-      self, transformations, *, worker_count: int = 0, seed: int | None = None
+      self, transformations, *, worker_count: int = 0, seed: Union[int, None] = None
   ) -> data_loader_lib.DataLoader:
     # Generates elements [0, 1, 2, 3, 4, 5, 6, 7].
     range_data_source = RangeDataSource(start=0, stop=8, step=1)

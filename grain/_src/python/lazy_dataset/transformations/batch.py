@@ -25,13 +25,12 @@ T = TypeVar("T")
 
 
 def _make_batch(values: Sequence[T]) -> T:
-  match len(values):
-    case 0:
-      return ()
-    case 1:
-      tree.map_structure(lambda x: np.expand_dims(x, axis=0), values[0])
-  return tree.map_structure(lambda *xs: np.stack(xs), values[0], *values[1:])
-
+  if len(values) == 0:
+    return ()
+  elif len(values) == 1:
+    return tree.map_structure(lambda x: np.expand_dims(x, axis=0), values[0])
+  else:
+    return tree.map_structure(lambda *xs: np.stack(xs), values[0], *values[1:])
 
 class _BatchLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
   """Iterator that batches elements."""

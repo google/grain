@@ -13,7 +13,7 @@
 # limitations under the License.
 """Filter transformation for LazyDataset."""
 
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, TypeVar, Union
 
 from grain._src.core import transforms
 from grain._src.python.lazy_dataset import lazy_dataset
@@ -30,7 +30,7 @@ class FilterLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   def __init__(
       self,
       parent: lazy_dataset.LazyMapDataset[T],
-      transform: transforms.FilterTransform | Callable[[T], bool],
+      transform: Union[transforms.FilterTransform, Callable[[T], bool]],
   ):
     super().__init__(parent)
     if isinstance(transform, transforms.FilterTransform):
@@ -97,7 +97,7 @@ class FilterLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
   def __init__(
       self,
       parent: lazy_dataset.LazyIterDataset,
-      transform: transforms.FilterTransform | Callable[[T], bool],
+      transform: Union[transforms.FilterTransform, Callable[[T], bool]],
   ):
     super().__init__(parent)
     if isinstance(transform, transforms.FilterTransform):

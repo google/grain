@@ -52,7 +52,7 @@ class SelectionWithProportionsMap(DatasetSelectionMap):
   def __init__(
       self,
       parents: Sequence[lazy_dataset.LazyMapDataset],
-      proportions: Sequence[float | int] | None = None,
+      proportions: Union[Sequence[Union[float, int]], None] = None,
   ):
     # Normalize proportions
     if proportions is None:
@@ -90,8 +90,8 @@ class MixedLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   def __init__(
       self,
       parents: Sequence[lazy_dataset.LazyMapDataset[T]],
-      proportions: Sequence[float | int] | None = None,
-      selection_map: DatasetSelectionMap | None = None,
+      proportions: Union[Sequence[Union[float, int]], None] = None,
+      selection_map: Union[DatasetSelectionMap, None] = None,
   ):
     """Initializes the mixed dataset.
 
@@ -139,7 +139,7 @@ class _MixedLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
   def __init__(
       self,
       parents: Sequence[lazy_dataset.LazyDatasetIterator[T]],
-      proportions: Sequence[float | int] | None = None,
+      proportions: Union[Sequence[Union[float, int]], None] = None,
   ):
     super().__init__()
     self._parents = parents
@@ -190,7 +190,7 @@ class MixedLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
   def __init__(
       self,
       parents: Sequence[lazy_dataset.LazyIterDataset],
-      proportions: Sequence[float | int] | None = None,
+      proportions: Union[Sequence[Union[float, int]], None] = None,
   ):
     super().__init__(parents)
     # Normalize proportions

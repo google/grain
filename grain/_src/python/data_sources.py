@@ -25,15 +25,11 @@ import collections
 from collections.abc import Sequence
 import math
 from multiprocessing import shared_memory
-import os
-import threading
 import typing
-from typing import Any, Generic, Protocol, SupportsIndex, TypeVar
+from typing import Any, Generic, Protocol, SupportsIndex, TypeVar, Union
 
 from absl import logging
 import array_record.python.array_record_data_source as array_record
-from etils import epath
-from grain._src.core import usage_logging
 
 T = TypeVar("T")
 
@@ -113,9 +109,9 @@ class InMemoryDataSource(shared_memory.ShareableList):
 
   def __init__(
       self,
-      elements: Sequence[Any] | None = None,
+      elements: Union[Sequence[Any], None] = None,
       *,
-      name: str | None = None,
+      name: Union[str, None] = None,
   ):
     """Creates a new InMemoryDataSource object.
 

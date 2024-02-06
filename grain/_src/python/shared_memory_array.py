@@ -14,6 +14,7 @@
 """Shared memory array."""
 from __future__ import annotations
 
+import sys
 import dataclasses
 import math
 import mmap
@@ -25,8 +26,9 @@ from typing import Any, Iterable
 import numpy as np
 import numpy.typing as npt
 
+PY310 = sys.version_info >= (3, 10)
 
-@dataclasses.dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(**({"slots": True, "frozen": True} if PY310 else {"frozen": True}))
 class SharedMemoryArrayMetadata:
   name: str
   shape: Iterable[int]
