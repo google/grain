@@ -314,6 +314,42 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
     for actual, expected in zip(ds_iter, expected_elements, strict=True):
       np.testing.assert_array_equal(actual[feature], expected[feature])
 
+  def test_pack_truncation(self):
+    # 5 elements of variable sequence length.
+    input_elements = [[1, 2, 3], [4, 5]]
+    ds = data_sources.SourceLazyMapDataset(input_elements)
+    ds = ds.map(np.asarray)
+    ds = ds.to_iter_dataset()
+    ds = packing.SingleBinPackLazyIterDataset(ds, length_struct=4)
+    ds_iter = iter(ds)
+
+    # Elements are tuples with (inputs, inputs_segment_ids, inputs_positions).
+    # Trailing 5 is truncated.
+    expected_elements = [
+        ([1, 2, 3, 4], [1, 1, 1, 2], [0, 1, 2, 0]),
+    ]
+    for actual, expected in zip(ds_iter, expected_elements, strict=True):
+      np.testing.assert_array_equal(actual, expected)
+
+  def test_pack_no_truncation(self):
+    # 5 elements of variable sequence length.
+    input_elements = [[1, 2, 3], [4, 5]]
+    ds = data_sources.SourceLazyMapDataset(input_elements)
+    ds = ds.map(np.asarray)
+    ds = ds.to_iter_dataset()
+    ds = packing.SingleBinPackLazyIterDataset(
+        ds, length_struct=4, allow_truncation=False
+    )
+    ds_iter = iter(ds)
+
+    # Elements are tuples with (inputs, inputs_segment_ids, inputs_positions).
+    expected_elements = [
+        ([1, 2, 3, 0], [1, 1, 1, 0], [0, 1, 2, 0]),
+        ([4, 5, 0, 0], [1, 1, 0, 0], [0, 1, 0, 0]),
+    ]
+    for actual, expected in zip(ds_iter, expected_elements, strict=True):
+      np.testing.assert_array_equal(actual, expected)
+
   def test_checkpointing(self):
     ds = lazy_dataset.RangeLazyMapDataset(1, 12).map(
         lambda x: {"x": 2**x + np.arange(x)}
