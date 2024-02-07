@@ -41,6 +41,7 @@ from ._src.python.lazy_dataset.transformations.flatmap import FlatMapLazyMapData
 from ._src.python.lazy_dataset.transformations.map import (
     MapLazyMapDataset,
     MapLazyIterDataset,
+    RngPool,
 )
 from ._src.python.lazy_dataset.transformations.mix import (
     DatasetSelectionMap,
