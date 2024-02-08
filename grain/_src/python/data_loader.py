@@ -23,7 +23,8 @@ import functools
 import json
 from multiprocessing import pool
 import os
-from typing import Any, Callable, Optional, Sequence, Tuple, TypeVar
+import sys
+from typing import Any, Callable, Optional, Sequence, Tuple, TypeVar, Union
 
 from absl import logging
 from concurrent import futures
@@ -45,6 +46,7 @@ import numpy as np
 
 _T = TypeVar("_T")
 _IteratorState = dict[str, Any]
+_IS_PY310 = sys.version_info >= (3, 10)
 
 # Dictionary keys used in checkpoints.
 _VERSION = "version"
@@ -82,7 +84,9 @@ def _determine_worker_count(input_worker_count: int | None) -> int:
     raise ValueError("Can't determine worker count. Please set worker count.")
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(
+    **({"slots": True, "frozen": True} if _IS_PY310 else {"frozen": True})
+)
 class _ReaderQueueElement:
   """Element to be added to the reader queue."""
 
@@ -99,7 +103,9 @@ class _GrainPoolProcessingComplete:
 
 
 _GRAIN_POOL_PROCESSING_COMPLETE = _GrainPoolProcessingComplete()
-_QueueElement = _ReaderQueueElement | _GrainPoolProcessingComplete | Exception
+_QueueElement = Union[
+    _ReaderQueueElement, _GrainPoolProcessingComplete, Exception
+]
 
 
 @contextlib.contextmanager
@@ -447,38 +453,35 @@ def _apply_transform(
   fn: Callable[[record.Record], Tuple[record.Record, bool]] = None
   # pylint: disable=g-long-lambda
   # pytype: disable=attribute-error
-  match transform:
-    case transforms.MapTransform():
-      fn = lambda r: (record.Record(r.metadata, transform.map(r.data)), True)
-    case transforms.RandomMapTransform():
-      fn = lambda r: (
-          record.Record(
-              r.metadata, transform.random_map(r.data, r.metadata.rng)
-          ),
-          True,
-      )
-    case transforms.TfRandomMapTransform():
-      fn = lambda r: (
-          record.Record(
-              r.metadata, transform.np_random_map(r.data, r.metadata.rng)
-          ),
-          True,
-      )
-    case transforms.FilterTransform():
-      fn = lambda r: (r, bool(transform.filter(r.data)))
-    case transforms.BatchTransform():
-      batch_op = BatchOperation(
-          batch_size=transform.batch_size,
-          drop_remainder=transform.drop_remainder,
-      )
-      batch_op.disable_deprecation_message()
-      for r in batch_op(input_iterator):
-        yield r
-    case _:
-      # Transform is a legacy style operation and __call__() yield output
-      # records.
-      for r in transform(input_iterator):
-        yield r
+  if isinstance(transform, transforms.MapTransform):
+    fn = lambda r: (record.Record(r.metadata, transform.map(r.data)), True)
+  elif isinstance(transform, transforms.RandomMapTransform):
+    fn = lambda r: (
+        record.Record(r.metadata, transform.random_map(r.data, r.metadata.rng)),
+        True,
+    )
+  elif isinstance(transform, transforms.TfRandomMapTransform):
+    fn = lambda r: (
+        record.Record(
+            r.metadata, transform.np_random_map(r.data, r.metadata.rng)
+        ),
+        True,
+    )
+  elif isinstance(transform, transforms.FilterTransform):
+    fn = lambda r: (r, bool(transform.filter(r.data)))
+  elif isinstance(transform, transforms.BatchTransform):
+    batch_op = BatchOperation(
+        batch_size=transform.batch_size,
+        drop_remainder=transform.drop_remainder,
+    )
+    batch_op.disable_deprecation_message()
+    for r in batch_op(input_iterator):
+      yield r
+  else:
+    # Transform is a legacy style operation and __call__() yield output
+    # records.
+    for r in transform(input_iterator):
+      yield r
   # pytype: enable=attribute-error
   # pylint: enable=g-long-lambda
 

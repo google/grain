@@ -17,7 +17,7 @@ import abc
 import dataclasses
 import functools
 import sys
-from typing import Any, Sequence, Tuple, TypeVar, Union
+from typing import Any, Optional, Sequence, Tuple, TypeVar, Union
 
 from grain._src.core import exceptions
 from grain._src.python.lazy_dataset import lazy_dataset
@@ -52,7 +52,7 @@ class SelectionWithProportionsMap(DatasetSelectionMap):
   def __init__(
       self,
       parents: Sequence[lazy_dataset.LazyMapDataset],
-      proportions: Sequence[float | int] | None = None,
+      proportions: Optional[Sequence[Union[float, int]]] = None,
   ):
     # Normalize proportions
     if proportions is None:
@@ -90,8 +90,8 @@ class MixedLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   def __init__(
       self,
       parents: Sequence[lazy_dataset.LazyMapDataset[T]],
-      proportions: Sequence[float | int] | None = None,
-      selection_map: DatasetSelectionMap | None = None,
+      proportions: Optional[Sequence[Union[float, int]]] = None,
+      selection_map: Optional[DatasetSelectionMap] = None,
   ):
     """Initializes the mixed dataset.
 
@@ -139,7 +139,7 @@ class _MixedLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
   def __init__(
       self,
       parents: Sequence[lazy_dataset.LazyDatasetIterator[T]],
-      proportions: Sequence[float | int] | None = None,
+      proportions: Optional[Sequence[Union[float, int]]] = None,
   ):
     super().__init__()
     self._parents = parents
@@ -190,7 +190,7 @@ class MixedLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
   def __init__(
       self,
       parents: Sequence[lazy_dataset.LazyIterDataset],
-      proportions: Sequence[float | int] | None = None,
+      proportions: Optional[Sequence[Union[float, int]]] = None,
   ):
     super().__init__(parents)
     # Normalize proportions

@@ -19,14 +19,19 @@ import math
 import mmap
 from multiprocessing import pool
 from multiprocessing import shared_memory
+import sys
 import threading
 from typing import Any, Iterable
 
 import numpy as np
 import numpy.typing as npt
 
+_IS_PY310 = sys.version_info >= (3, 10)
 
-@dataclasses.dataclass(frozen=True, slots=True)
+
+@dataclasses.dataclass(
+    **({"slots": True, "frozen": True} if _IS_PY310 else {"frozen": True})
+)
 class SharedMemoryArrayMetadata:
   name: str
   shape: Iterable[int]

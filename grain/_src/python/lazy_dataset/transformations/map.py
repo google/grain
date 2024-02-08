@@ -14,7 +14,7 @@
 """Map transformation for LazyDataset."""
 
 import threading
-from typing import Any, Callable, TypeVar, Union
+from typing import Any, Callable, Optional, TypeVar, Union
 
 from absl import logging
 from grain._src.core import transforms
@@ -73,8 +73,8 @@ class RngPool:
 
 
 def _get_map_fn_and_seed(
-    transform: _MapTransformType, seed: int | None = None
-) -> tuple[Callable[..., T], int | None]:
+    transform: _MapTransformType, seed: Optional[int] = None
+) -> tuple[Callable[..., T], Optional[int]]:
   """Extracts a map fn from `transform`.
 
   If a seed is returned map fn requires a seed.
@@ -117,7 +117,7 @@ class MapLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
       self,
       parent: lazy_dataset.LazyMapDataset,
       transform: _MapTransformType,
-      seed: int | None = None,
+      seed: Optional[int] = None,
   ):
     super().__init__(parent)
     self._map_fn, seed = _get_map_fn_and_seed(transform, seed)
@@ -148,7 +148,9 @@ class MapWithIndexLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   def __init__(
       self,
       parent: lazy_dataset.LazyMapDataset,
-      transform: transforms.MapWithIndexTransform | Callable[[int, Any], T],
+      transform: Union[
+          transforms.MapWithIndexTransform, Callable[[int, Any], T]
+      ],
   ):
     super().__init__(parent)
     if isinstance(transform, transforms.MapWithIndexTransform):
@@ -176,7 +178,7 @@ class _MapLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
       self,
       parent: lazy_dataset.LazyDatasetIterator,
       map_fn: Callable[..., T],
-      seed: int | None = None,
+      seed: Optional[int] = None,
   ):
     super().__init__()
     self._parent = parent
@@ -223,7 +225,7 @@ class MapLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
       self,
       parent: lazy_dataset.LazyIterDataset,
       transform: _MapTransformType,
-      seed: int | None = None,
+      seed: Optional[int] = None,
   ):
     super().__init__(parent)
     self._map_fn, self._seed = _get_map_fn_and_seed(transform, seed)

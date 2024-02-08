@@ -28,7 +28,7 @@ from multiprocessing import shared_memory
 import os
 import threading
 import typing
-from typing import Any, Generic, Protocol, SupportsIndex, TypeVar
+from typing import Any, Generic, Optional, Protocol, SupportsIndex, TypeVar
 
 from absl import logging
 import array_record.python.array_record_data_source as array_record
@@ -113,9 +113,9 @@ class InMemoryDataSource(shared_memory.ShareableList):
 
   def __init__(
       self,
-      elements: Sequence[Any] | None = None,
+      elements: Optional[Sequence[Any]] = None,
       *,
-      name: str | None = None,
+      name: Optional[str] = None,
   ):
     """Creates a new InMemoryDataSource object.
 

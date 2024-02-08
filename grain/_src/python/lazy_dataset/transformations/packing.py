@@ -14,7 +14,7 @@
 """Implements packing transformations."""
 import collections
 import copy
-from typing import Any
+from typing import Any, Optional
 
 from grain._src.core import tree
 from grain._src.python.lazy_dataset import lazy_dataset
@@ -81,7 +81,7 @@ class SingleBinPackLazyIterDataset(lazy_dataset.LazyIterDataset):
   def __init__(
       self,
       parent: lazy_dataset.LazyIterDataset,
-      length_struct: PyTree[int | None],
+      length_struct: PyTree[Optional[int]],
   ):
     super().__init__(parent)
     self._length_struct = length_struct
@@ -101,13 +101,13 @@ class SingleBinPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
   def __init__(
       self,
       parent: lazy_dataset.LazyDatasetIterator,
-      length_struct: PyTree[int | None],
+      length_struct: PyTree[Optional[int]],
   ):
     self._parent = parent
     self._length_struct = length_struct
     # Same as above but flattened. Some operations are easier using the
     # flattened representation.
-    self._flat_lengths: list[int | None] = tree.flatten(length_struct)
+    self._flat_lengths: list[Optional[int]] = tree.flatten(length_struct)
     # Buffer for fully packed elements (not flattened)
     self._packed_elements = collections.deque()
     # Variable length list of flat elements going into the next packed example.

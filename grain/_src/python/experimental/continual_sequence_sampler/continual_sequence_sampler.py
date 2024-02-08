@@ -51,7 +51,7 @@ import bisect
 from collections.abc import Sequence
 import dataclasses
 import heapq
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 from grain._src.core import sharding
 from grain._src.python import record
@@ -362,7 +362,7 @@ class SamplerWrapper:
 
   def __init__(
       self,
-      sampler: ContinualSequenceSampler | BatchedContinualSequenceSampler,
+      sampler: Union[ContinualSequenceSampler, BatchedContinualSequenceSampler],
       start_index_ordered: np.ndarray,
       seed: int,
   ):

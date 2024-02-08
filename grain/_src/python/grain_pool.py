@@ -52,9 +52,10 @@ from multiprocessing import queues
 from multiprocessing import synchronize
 import pstats
 import queue
+import sys
 import threading
 import traceback
-from typing import Any, Protocol, TypeVar
+from typing import Any, Protocol, TypeVar, Union
 
 from absl import logging
 import cloudpickle
@@ -68,6 +69,7 @@ from grain._src.python import shared_memory_array
 from grain._src.python.options import MultiprocessingOptions  # pylint: disable=g-importing-member
 
 T = TypeVar("T")
+_IS_PY310 = sys.version_info >= (3, 10)
 
 # Maximum number of threads for starting and stopping processes.
 _PROCESS_MANAGEMENT_MAX_THREADS = 64
@@ -86,7 +88,9 @@ class _ProcessingComplete:
 _PROCESSING_COMPLETE = _ProcessingComplete()
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(
+    **({"slots": True, "frozen": True} if _IS_PY310 else {"frozen": True})
+)
 class GrainPoolElement:
   """Wrapper for output records emited by Grain Pool."""
 
@@ -412,7 +416,9 @@ class GrainPool(Iterator[T]):
           process.terminate()
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(
+    **({"slots": True, "frozen": True} if _IS_PY310 else {"frozen": True})
+)
 class _ReaderQueueElement:
   """Element to be added to the reader queue."""
 
@@ -427,7 +433,9 @@ class _GrainPoolProcessingComplete:
 
 
 _GRAIN_POOL_PROCESSING_COMPLETE = _GrainPoolProcessingComplete()
-_QueueElement = _ReaderQueueElement | _GrainPoolProcessingComplete | Exception
+_QueueElement = Union[
+    _ReaderQueueElement, _GrainPoolProcessingComplete, Exception
+]
 
 
 class GrainPoolProcessingError(Exception):

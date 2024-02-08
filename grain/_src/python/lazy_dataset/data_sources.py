@@ -13,7 +13,7 @@
 # limitations under the License.
 """LazyDataset data sources."""
 
-from typing import Protocol
+from typing import Protocol, Union
 
 from absl import logging
 from grain._src.python.lazy_dataset import lazy_dataset
@@ -51,7 +51,7 @@ class SourceLazyMapDataset(lazy_dataset.LazyMapDataset):
 
 
 def log_lineage_for_sources(
-    root: lazy_dataset.LazyMapDataset | lazy_dataset.LazyIterDataset,
+    root: Union[lazy_dataset.LazyMapDataset, lazy_dataset.LazyIterDataset]
 ):
   """Traverses tree of transformations and logs lineage on source datasets."""
   pass

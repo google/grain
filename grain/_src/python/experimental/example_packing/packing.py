@@ -12,7 +12,7 @@ can't be added, we construct a new batch to which the element is added.
 """
 
 import dataclasses
-from typing import Generic, Iterator, TypeVar, cast
+from typing import Generic, Iterator, TypeVar, Union, cast
 
 from grain._src.core import tree
 from grain._src.python import record
@@ -180,7 +180,7 @@ class PackAndBatchOperation(Generic[_T]):
   length_struct: jt.PyTree[int]
   batch_size: int
   # We don't know input shapes and corresponding buffer shapes until __call__.
-  _cur_batch: _PackedBatch | None = None
+  _cur_batch: Union[_PackedBatch, None] = None
 
   def __call__(
       self, input_iterator: Iterator[record.Record[_T]]
