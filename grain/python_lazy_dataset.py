@@ -18,17 +18,14 @@
 # pylint: disable=unused-import
 # pylint: disable=wildcard-import
 
-from ._src.python.lazy_dataset.data_sources import (
-    SourceLazyMapDataset,
-    log_lineage_for_sources,
-)
-from ._src.python.lazy_dataset.grain_pool_v2 import GrainPool
+from ._src.python.lazy_dataset.data_sources import SourceLazyMapDataset
 from ._src.python.lazy_dataset.lazy_dataset import (
     LazyMapDataset,
     LazyIterDataset,
     LazyDatasetIterator,
     RangeLazyMapDataset,
 )
+from ._src.python.lazy_dataset.lazy_dataset_data_loader import LazyDatasetDataLoader
 from ._src.python.lazy_dataset.transformations.batch import (
     BatchLazyMapDataset,
     BatchLazyIterDataset,

@@ -51,22 +51,22 @@ py_test(
 )
 
 py_library(
-    name = "grain_pool_v2",
-    srcs = ["grain_pool_v2.py"],
+    name = "lazy_dataset_data_loader",
+    srcs = ["lazy_dataset_data_loader.py"],
     srcs_version = "PY3",
     deps = [
-        "//grain/_src/core:parallel",
-        "//grain/_src/python:multiprocessing_common",
+        ":lazy_dataset",
+        "//grain/_src/python:options",
     ],
 )
 
 py_test(
-    name = "grain_pool_v2_test",
-    srcs = ["grain_pool_v2_test.py"],
+    name = "lazy_dataset_data_loader_test",
+    srcs = ["lazy_dataset_data_loader_test.py"],
     srcs_version = "PY3",
     deps = [
-        ":grain_pool_v2",
-        "//grain/_src/core:sharding",
-        "//grain/_src/python:samplers",
+        ":lazy_dataset_data_loader",
+        "//grain:python_experimental",
+        "//grain/_src/core:transforms",
     ],
 )
