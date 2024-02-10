@@ -57,6 +57,9 @@ class RngPool:
     self._generator_cache = []
     self._lock = threading.Lock()
 
+  def __reduce__(self):
+    return (RngPool, (self._seed,))
+
   def acquire_rng(self, index: int, *, op_seed: int = 0) -> np.random.Generator:
     """Acquire RNG."""
     if self._generator_cache:

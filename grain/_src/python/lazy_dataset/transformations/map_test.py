@@ -14,8 +14,9 @@
 """Tests for map transformation."""
 
 import dataclasses
-
 from absl.testing import absltest
+from absl.testing import parameterized
+import cloudpickle
 from grain._src.core import transforms
 from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import map as ldmap
@@ -58,7 +59,7 @@ class AddIndexTransform(transforms.MapWithIndexTransform):
     return (index, element)
 
 
-class MapLazyMapDatasetTest(absltest.TestCase):
+class MapLazyMapDatasetTest(parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
@@ -77,6 +78,16 @@ class MapLazyMapDatasetTest(absltest.TestCase):
     self.assertLen(map_ds_no_transform, len(self.range_ds))
     self.assertLen(map_ds_with_transform, len(self.range_ds))
     self.assertLen(map_ds_with_random_transform, len(self.range_ds))
+
+  @parameterized.parameters(
+      MapWithNoTransform,
+      MapWithTransform,
+      RandomMapWithTransform,
+  )
+  def test_map_picklable(self, map_cls):
+    ds = ldmap.MapLazyMapDataset(self.range_ds, map_cls(), seed=0)
+    ds = cloudpickle.loads(cloudpickle.dumps(ds))
+    self.assertLen(ds, len(self.range_ds))
 
   def test_map_data_no_transform(self):
     map_ds_no_transform = ldmap.MapLazyMapDataset(
