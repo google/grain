@@ -21,6 +21,7 @@
 from . import python_experimental as experimental
 
 from ._src.core.config import config
+from ._src.core.constants import DATASET_INDEX, EPOCH, INDEX, META_FEATURES, RECORD, RECORD_KEY, SEED
 from ._src.core.sharding import NoSharding, ShardByJaxProcess, ShardOptions
 from ._src.core.transforms import (
     BatchTransform as Batch,
