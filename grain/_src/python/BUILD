@@ -227,6 +227,10 @@ py_library(
     name = "options",
     srcs = ["options.py"],
     srcs_version = "PY3",
+    visibility = [
+        "//third_party/py/chirp/projects/contrastive:__pkg__",
+        "//third_party/py/grain:internal",
+    ],
 )
 
 py_library(

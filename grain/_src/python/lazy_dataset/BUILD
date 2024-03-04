@@ -7,6 +7,10 @@ py_library(
     srcs = ["lazy_dataset.py"],
     data = ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
     srcs_version = "PY3",
+    visibility = [
+        "//third_party/py/chirp/projects/contrastive:__pkg__",
+        "//third_party/py/grain:internal",
+    ],
     deps = [
         "//grain/_src/core:sharding",
         "//grain/_src/core:tree",
