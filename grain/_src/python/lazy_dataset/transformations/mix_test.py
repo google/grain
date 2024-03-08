@@ -20,6 +20,7 @@ from absl.testing import absltest
 from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import mix
 from grain._src.python.lazy_dataset.transformations import repeat  # pylint: disable=unused-import
+from grain._src.python.lazy_dataset.transformations import slice as slice_transform  # pylint: disable=unused-import
 import numpy as np
 
 
@@ -469,6 +470,53 @@ class MixedLazyIterDatasetTest(absltest.TestCase):
         np.testing.assert_array_equal(
             next(ds_iter), values_without_interruption[i]
         )
+
+
+class ConcatenateLazyMapTest(absltest.TestCase):
+
+  def test_concat_selection_map(self):
+    evens = lazy_dataset.RangeLazyMapDataset(0, 4, 2)
+    odds = lazy_dataset.RangeLazyMapDataset(1, 6, 2)
+    consecutive = lazy_dataset.RangeLazyMapDataset(7, 9)
+    selection_map = mix.ConcatSelectionMap([evens, odds, consecutive])
+    self.assertLen(selection_map, len(evens) + len(odds) + len(consecutive))
+
+    actual_indices = [selection_map[i] for i in range(len(selection_map))]
+    expected_indices = [(0, 0), (0, 1), (1, 0), (1, 1), (1, 2), (2, 0), (2, 1)]
+    self.assertListEqual(actual_indices, expected_indices)
+
+  def test_concatenate_finite_datasets(self):
+    evens = lazy_dataset.RangeLazyMapDataset(0, 10, 2)
+    odds = lazy_dataset.RangeLazyMapDataset(1, 10, 2)
+    ds = mix.ConcatenateLazyMapDataset([evens, odds])
+    self.assertLen(evens, 5)
+    self.assertLen(odds, 5)
+    self.assertLen(ds, 10)
+
+    ds_iter = ds.to_iter_dataset()
+    actual_values = list(ds_iter)
+    expected_values = [0, 2, 4, 6, 8, 1, 3, 5, 7, 9]
+    self.assertListEqual(actual_values, expected_values)
+
+  def test_slice_concatenated_finite_datasets(self):
+    evens = lazy_dataset.RangeLazyMapDataset(0, 10, 2)
+    odds = lazy_dataset.RangeLazyMapDataset(1, 10, 2)
+    ds = mix.ConcatenateLazyMapDataset([evens, odds])[4:7]
+    self.assertLen(ds, 3)
+
+    ds_iter = ds.to_iter_dataset()
+    actual_values = list(ds_iter)
+    # full=[0, 2, 4, 6, 8, 1, 3, 5, 7, 9], sliced=full[4:7]
+    expected_values = [8, 1, 3]
+    self.assertListEqual(actual_values, expected_values)
+
+  def test_cannot_concatenate_infinite_datasets(self):
+    zeros = lazy_dataset.RangeLazyMapDataset(0, 1).repeat()
+    ones = lazy_dataset.RangeLazyMapDataset(1, 2).repeat()
+    with self.assertRaisesRegex(
+        ValueError, "Cannot concatenate infinite datasets"
+    ):
+      _ = mix.ConcatSelectionMap([zeros, ones])
 
 
 if __name__ == "__main__":
