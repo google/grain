@@ -364,6 +364,58 @@ class DataLoaderTest(parameterized.TestCase):
 
     np.testing.assert_equal(actual, expected)
 
+  def test_data_loader_drop_remainder(self):
+    data_source = ArrayRecordDataSource([
+        str(self.testdata_dir / "digits.array_record-00000-of-00002"),
+    ])
+    num_workers = 0
+    shard_count = 2
+    drop_remainder = True
+    expected = [[b"0", b"2"], [b"1", b"3"]]
+
+    for shard in range(shard_count):
+      sampler = samplers.IndexSampler(
+          num_records=len(data_source),
+          shard_options=sharding.NoSharding(),
+          shuffle=False,
+          num_epochs=1,
+      )
+      shard_options = sharding.ShardOptions(shard, shard_count, drop_remainder)
+
+      data_loader = data_loader_lib.DataLoader(
+          data_source=data_source,
+          sampler=sampler,
+          worker_count=num_workers,
+          shard_options=shard_options,
+      )
+      np.testing.assert_equal(list(data_loader), expected[shard])
+
+  def test_data_loader_with_remainder(self):
+    data_source = ArrayRecordDataSource([
+        str(self.testdata_dir / "digits.array_record-00000-of-00002"),
+    ])
+    num_workers = 0
+    shard_count = 2
+    drop_remainder = False
+    expected = [[b"0", b"2", b"4"], [b"1", b"3"]]
+
+    for shard in range(shard_count):
+      sampler = samplers.IndexSampler(
+          num_records=len(data_source),
+          shard_options=sharding.NoSharding(),
+          shuffle=False,
+          num_epochs=1,
+      )
+      shard_options = sharding.ShardOptions(shard, shard_count, drop_remainder)
+
+      data_loader = data_loader_lib.DataLoader(
+          data_source=data_source,
+          sampler=sampler,
+          worker_count=num_workers,
+          shard_options=shard_options,
+      )
+      np.testing.assert_equal(list(data_loader), expected[shard])
+
   def test_data_loader_with_invalid_number_of_workers(self):
     """Test a value error is raised when an invlaid number of workers is used."""
     ar_data_source = ArrayRecordDataSource([
