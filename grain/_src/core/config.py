@@ -73,6 +73,16 @@ _LOOKUP_FAST_WARMUP = flags.DEFINE_bool(
     ),
 )
 
+_OPTIMIZED_SEQUENTIAL_READ = flags.DEFINE_bool(
+    "grain_tf_optimized_sequential_read",
+    False,
+    (
+        "Enables optimized reads in TfMixtureDataLoader in case when sampler"
+        " produces sequential indices and the input sources support it."
+        " Experimental -- do not use."
+    ),
+)
+
 _GRAIN_FLAGS = (
     _INTERLEAVED_SHUFFLE,
     _INTERLEAVED_SHUFFLE_BLOCK_SIZE,
@@ -80,6 +90,7 @@ _GRAIN_FLAGS = (
     _LOOKUP_BATCH_SIZE,
     _LOOKUP_NUM_PARALLEL_CALLS,
     _LOOKUP_FAST_WARMUP,
+    _OPTIMIZED_SEQUENTIAL_READ,
 )
 
 
