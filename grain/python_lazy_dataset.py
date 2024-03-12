@@ -43,6 +43,7 @@ from ._src.python.lazy_dataset.transformations.map import (
     RngPool,
 )
 from ._src.python.lazy_dataset.transformations.mix import (
+    ConcatenateLazyMapDataset,
     DatasetSelectionMap,
     MixedLazyMapDataset,
     MixedLazyIterDataset,
