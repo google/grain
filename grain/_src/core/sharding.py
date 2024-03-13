@@ -15,7 +15,6 @@
 import dataclasses
 
 from absl import logging
-import jax
 
 
 @dataclasses.dataclass(frozen=True)
@@ -59,6 +58,9 @@ class ShardByJaxProcess(ShardOptions):
   """Shards the data across JAX processes."""
 
   def __init__(self, drop_remainder: bool = False):
+    # pylint: disable=g-import-not-at-top
+    import jax  # pytype: disable=import-error
+    # pylint: enable=g-import-not-at-top
     super().__init__(
         shard_index=jax.process_index(),
         shard_count=jax.process_count(),
