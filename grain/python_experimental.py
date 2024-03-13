@@ -14,6 +14,7 @@
 """Experimental PyGrain APIs."""
 
 # pylint: disable=g-importing-member
+# pylint: disable=g-bad-import-order
 # pylint: disable=g-multiple-import
 # pylint: disable=unused-import
 # pylint: disable=wildcard-import
