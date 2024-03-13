@@ -102,6 +102,7 @@ py_test(
     deps = [
         ":mix",
         ":repeat",
+        ":slice",
         "//grain/_src/python/lazy_dataset",
     ],
 )

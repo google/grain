@@ -14,6 +14,7 @@
 """Mixing transformation for LazyDataset."""
 
 import abc
+import bisect
 import dataclasses
 import functools
 import sys
@@ -295,3 +296,66 @@ def _dataset_and_key_of_next_element(
   raise exceptions.PyGrainInternalError(
       "PyGrain internal error: please file a bug with the Grain team."
   )
+
+
+@dataclasses.dataclass
+class _ConcatSelectionMap(DatasetSelectionMap):
+  """Concatenated datasets selection map.
+
+  Selection map that concatenates the elements from a sequence of finite parent
+  datasets. Elements from a dataset with index i will appear after the elements
+  of all previous datasets with indices 0, 1, ..., i-1 and before the elements
+  of datasets with indices i+1, i+2, ...
+  """
+
+  def __init__(
+      self,
+      parents: Sequence[lazy_dataset.LazyMapDataset],
+  ):
+    dataset_sizes = [len(parent) for parent in parents]
+    for i, dataset_size in enumerate(dataset_sizes):
+      if dataset_size >= sys.maxsize:
+        raise ValueError(
+            f"Cannot concatenate infinite datasets. {parents[i]} is infinite."
+        )
+    cumulative_sizes = [0] * (len(parents) + 1)
+    for i in range(len(parents)):
+      cumulative_sizes[i + 1] = cumulative_sizes[i] + dataset_sizes[i]
+    self._cumulative_dataset_sizes = cumulative_sizes
+
+  def __len__(self) -> int:
+    return self._cumulative_dataset_sizes[-1]
+
+  def __getitem__(self, index: int) -> tuple[int, int]:
+    dataset_index = (
+        bisect.bisect_right(self._cumulative_dataset_sizes, index) - 1
+    )
+    return dataset_index, index - self._cumulative_dataset_sizes[dataset_index]
+
+
+@dataclasses.dataclass
+class ConcatenateLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
+  """LazyDataset for concatenating the elements from a sequence of datasets."""
+
+  def __init__(
+      self,
+      parents: Sequence[lazy_dataset.LazyMapDataset[T]],
+  ):
+    """Initializes the concatenated dataset.
+
+    Args:
+      parents: Component datasets to draw from. We will draw elements in order
+        of their appearance in `parents`.
+    """
+    super().__init__(parents)
+    self._selection_map = _ConcatSelectionMap(parents)
+    self._length = len(self._selection_map)
+
+  def __len__(self) -> int:
+    return self._length
+
+  def __getitem__(self, index):
+    if isinstance(index, slice):
+      return self.slice(index)
+    dataset, dataset_index = self._selection_map[index]
+    return self._parents[dataset][dataset_index]
