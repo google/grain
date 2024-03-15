@@ -1,8 +1,11 @@
 #!/bin/bash
-# build wheel for python version specified in $PYTHON
+# build wheel for python version specified in $PYTHON_VERSION
 
 set -e -x
 
+# TODO(iindyk): Generalize the python bin path and only copy the repaired wheels
+# once we publish aarch64 wheels and Nvidia does not rely on this script in
+# https://github.com/NVIDIA/JAX-Toolbox/blob/main/.github/container/Dockerfile.t5x.arm64
 CP_VERSION="cp${PYTHON_MAJOR_VERSION}${PYTHON_MINOR_VERSION}"
 PYTHON_BIN_PATH="/opt/python/${CP_VERSION}-${CP_VERSION}/bin/python"
 
