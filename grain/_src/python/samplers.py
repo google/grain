@@ -28,6 +28,9 @@ class Sampler(Protocol):
   def __getitem__(self, index: int) -> record.RecordMetadata:
     """Returns the RecordMetadata for a global index."""
 
+  def get_max_index(self) -> int | None:
+    """Returns the number of records."""
+
 
 class SequentialSampler:
   """Basic sampler implementation that provides records in order."""
@@ -69,6 +72,9 @@ class SequentialSampler:
     if self._seed is not None:
       rng = np.random.Generator(np.random.Philox(key=self._seed + index))
     return record.RecordMetadata(index=index, record_key=index, rng=rng)
+
+  def get_max_index(self) -> int | None:
+    return self._max_index
 
 
 class IndexSampler:
@@ -154,3 +160,6 @@ class IndexSampler:
         index=index, record_key=record_key, rng=rng
     )
     return next_record
+
+  def get_max_index(self) -> int | None:
+    return self._max_index
