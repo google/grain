@@ -119,6 +119,10 @@ class IndexSampler:
     self._max_index = None if num_epochs is None else num_epochs * num_records
 
     self._record_keys = lazy_dataset.RangeLazyMapDataset(num_records)
+
+    if shuffle:
+      self._record_keys = ShuffleLazyMapDataset(self._record_keys, seed=seed)
+
     if not isinstance(shard_options, sharding.NoSharding):
       self._record_keys = lazy_dataset.ShardLazyDataset(
           self._record_keys, shard_options
@@ -128,8 +132,6 @@ class IndexSampler:
             self._max_index,
             len(self._record_keys) * shard_options.shard_count * num_epochs,
         )
-    if shuffle:
-      self._record_keys = ShuffleLazyMapDataset(self._record_keys, seed=seed)
 
   def __repr__(self) -> str:
     return (
