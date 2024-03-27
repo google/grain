@@ -63,8 +63,8 @@ py_library(
     # Implicit build flag
     deps = [
         "//grain/_src/python/lazy_dataset",  # build_cleaner: keep
+        "//grain/_src/python/lazy_dataset:data_loader",  # build_cleaner: keep
         "//grain/_src/python/lazy_dataset:data_sources",  # build_cleaner: keep
-        "//grain/_src/python/lazy_dataset:grain_pool_v2",  # build_cleaner: keep
         "//grain/_src/python/lazy_dataset/transformations:batch",  # build_cleaner: keep
         "//grain/_src/python/lazy_dataset/transformations:filter",  # build_cleaner: keep
         "//grain/_src/python/lazy_dataset/transformations:flatmap",  # build_cleaner: keep

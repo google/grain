@@ -18,6 +18,7 @@
 # pylint: disable=unused-import
 # pylint: disable=wildcard-import
 
+from ._src.python.lazy_dataset.data_loader import DataLoader
 from ._src.python.lazy_dataset.data_sources import (
     SourceLazyMapDataset,
     log_lineage_for_sources,
