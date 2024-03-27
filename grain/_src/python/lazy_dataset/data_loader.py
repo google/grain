@@ -1,4 +1,5 @@
 """DataLoader for LazyDataset."""
+from typing import Optional, Union
 
 import cloudpickle
 from grain._src.python import options as grain_options
@@ -6,7 +7,7 @@ from grain._src.python.lazy_dataset import lazy_dataset
 
 
 def _confirm_picklable_and_copy_lazy_dataset(
-    lazy_ds: lazy_dataset.LazyMapDataset | lazy_dataset.LazyIterDataset,
+    lazy_ds: Union[lazy_dataset.LazyMapDataset, lazy_dataset.LazyIterDataset],
 ):
   """This function may be used to prevent the user-specified LazyDataset from being mutated."""
   try:
@@ -23,11 +24,11 @@ class DataLoader:
   def __init__(
       self,
       *,
-      lazy_ds: lazy_dataset.LazyMapDataset | lazy_dataset.LazyIterDataset,
-      multiprocessing_options: (
-          grain_options.MultiprocessingOptions | None
-      ) = None,
-      read_options: grain_options.ReadOptions | None = None,
+      lazy_ds: Union[lazy_dataset.LazyMapDataset, lazy_dataset.LazyIterDataset],
+      multiprocessing_options: Optional[
+          grain_options.MultiprocessingOptions
+      ] = None,
+      read_options: Optional[grain_options.ReadOptions] = None,
   ):
     """Initialize a LazyDataset GrainPool.
 
