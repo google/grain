@@ -27,11 +27,20 @@ RUN mkdir /bazel && \
     cd / && \
     rm -f /bazel/bazel-$BAZEL_VERSION-installer-linux-$ARCH.sh
 
+# If the context (Dockerfile) folder has array_record subfolder, then we expect
+# it to have array_record wheels that we will install. Otherwise we install
+# released array_record.
+# We use glob pattern in the directory name to only copy the directory if it
+# exists.
+COPY /array_recor[d] /tmp/grain/array_record
+RUN --mount=type=cache,target=/root/.cache \
+  ${PYTHON_BIN}/python -m pip install -U \
+    --find-links=/tmp/grain/array_record array_record;
+
 # Install dependencies needed for grain.
 RUN --mount=type=cache,target=/root/.cache \
   ${PYTHON_BIN}/python -m pip install -U \
     absl-py \
-    array_record \
     build \
     cloudpickle \
     dm-tree \

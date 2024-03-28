@@ -16,8 +16,7 @@ function build_and_test_grain() {
 
   # Build wheels for multiple Python minor versions.
   PYTHON_MAJOR_VERSION=3
-  # TODO(iindyk): Build wheels for Python 3.12 once array_record supports it.
-  for PYTHON_MINOR_VERSION in 9 10 11
+  for PYTHON_MINOR_VERSION in 9 10 11 12
   do
     PYTHON_VERSION=$PYTHON_MAJOR_VERSION$PYTHON_MINOR_VERSION
     docker rmi -f grain:${PYTHON_VERSION}
@@ -27,7 +26,7 @@ function build_and_test_grain() {
       --build-arg AUDITWHEEL_PLATFORM=${AUDITWHEEL_PLATFORM} \
       --build-arg PYTHON_VERSION=${PYTHON_VERSION} \
       --build-arg BAZEL_VERSION=${BAZEL_VERSION} \
-      -t grain:${PYTHON_VERSION} - < ${SOURCE_DIR}/grain/oss/build.Dockerfile
+      -t grain:${PYTHON_VERSION} ${SOURCE_DIR}/grain/oss
 
     docker run --rm -a stdin -a stdout -a stderr \
       --env PYTHON_VERSION=$PYTHON_MAJOR_VERSION.$PYTHON_MINOR_VERSION \
