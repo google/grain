@@ -28,23 +28,21 @@ jobs:
           export PYTHON_VERSION=${{ matrix.python-version }}
           export PYTHON_MAJOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f1)
           export PYTHON_MINOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f2)
-          export CP_VERSION="cp${PYTHON_MAJOR_VERSION}${PYTHON_MINOR_VERSION}"
           export BAZEL_VERSION="5.4.0"
           export AUDITWHEEL_PLATFORM="manylinux2014_x86_64"
           cd /tmp/grain
           DOCKER_BUILDKIT=1 docker build --progress=plain --no-cache \
+            --build-arg ARCH="x86_64" \
+            --build-arg AUDITWHEEL_PLATFORM=${AUDITWHEEL_PLATFORM} \
             --build-arg PYTHON_VERSION=${PYTHON_VERSION} \
-            --build-arg PYTHON_MAJOR_VERSION=${PYTHON_MAJOR_VERSION} \
-            --build-arg PYTHON_MINOR_VERSION=${PYTHON_MINOR_VERSION} \
             --build-arg BAZEL_VERSION=${BAZEL_VERSION} \
-            -t grain:${PYTHON_VERSION} - < grain/oss/build.Dockerfile
+            -t grain:${PYTHON_VERSION} grain/oss
           docker run --rm -a stdin -a stdout -a stderr \
             --env PYTHON_VERSION=${PYTHON_VERSION} \
             --env PYTHON_MAJOR_VERSION=${PYTHON_MAJOR_VERSION} \
             --env PYTHON_MINOR_VERSION=${PYTHON_MINOR_VERSION} \
-            --env PYTHON_BIN_PATH="/opt/python/${CP_VERSION}-${CP_VERSION}/bin/python" \
             --env BAZEL_VERSION=${BAZEL_VERSION} \
-            -v /tmp/grain:/tmp/grain \
             --env AUDITWHEEL_PLATFORM=${AUDITWHEEL_PLATFORM} \
+            -v /tmp/grain:/tmp/grain \
             --name grain grain:${PYTHON_VERSION} \
             bash grain/oss/build_whl.sh
