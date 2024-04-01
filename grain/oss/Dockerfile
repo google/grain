@@ -6,7 +6,6 @@ ARG AUDITWHEEL_PLATFORM
 FROM quay.io/pypa/${AUDITWHEEL_PLATFORM}
 LABEL maintainer="Grain team <grain-dev@google.com>"
 
-ARG ARCH
 ARG PYTHON_VERSION
 ARG BAZEL_VERSION
 
@@ -17,15 +16,10 @@ RUN yum install -y rsync
 ENV PYTHON_BIN=/opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin
 ENV PATH="${PYTHON_BIN}:${PATH}"
 
-# Install bazel
-RUN mkdir /bazel && \
-    cd /bazel && \
-    curl -H "User-Agent: Mozilla/5.0 (X11; Linux ${ARCH}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36" -fSsL -O https://github.com/bazelbuild/bazel/releases/download/$BAZEL_VERSION/bazel-$BAZEL_VERSION-installer-linux-x86_64.sh && \
-    curl -H "User-Agent: Mozilla/5.0 (X11; Linux ${ARCH}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36" -fSsL -o /bazel/LICENSE.txt https://raw.githubusercontent.com/bazelbuild/bazel/master/LICENSE && \
-    chmod +x bazel-*.sh && \
-    ./bazel-$BAZEL_VERSION-installer-linux-$ARCH.sh && \
-    cd / && \
-    rm -f /bazel/bazel-$BAZEL_VERSION-installer-linux-$ARCH.sh
+# Download the correct bazel version and make sure it's on path.
+RUN BAZEL_ARCH_SUFFIX="$(uname -m | sed s/aarch64/arm64/)" \
+  && curl -sSL --fail -o /usr/local/bin/bazel "https://github.com/bazelbuild/bazel/releases/download/$BAZEL_VERSION/bazel-$BAZEL_VERSION-linux-$BAZEL_ARCH_SUFFIX" \
+  && chmod a+x /usr/local/bin/bazel
 
 # If the context (Dockerfile) folder has array_record subfolder, then we expect
 # it to have array_record wheels that we will install. Otherwise we install

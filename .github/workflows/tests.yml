@@ -32,7 +32,6 @@ jobs:
           export AUDITWHEEL_PLATFORM="manylinux2014_x86_64"
           cd /tmp/grain
           DOCKER_BUILDKIT=1 docker build --progress=plain --no-cache \
-            --build-arg ARCH="x86_64" \
             --build-arg AUDITWHEEL_PLATFORM=${AUDITWHEEL_PLATFORM} \
             --build-arg PYTHON_VERSION=${PYTHON_MAJOR_VERSION}${PYTHON_MINOR_VERSION} \
             --build-arg BAZEL_VERSION=${BAZEL_VERSION} \

@@ -7,8 +7,7 @@ function build_and_test_grain() {
 
   # Automatically decide which platform to build for by checking on which
   # platform this runs.
-  ARCH=$(uname -m)
-  AUDITWHEEL_PLATFORM="manylinux2014_${ARCH}"
+  AUDITWHEEL_PLATFORM="manylinux2014_$(uname -m)"
 
   # Using a previous version of Blaze to avoid:
   # https://github.com/bazelbuild/bazel/issues/8622
@@ -22,7 +21,6 @@ function build_and_test_grain() {
     docker rmi -f grain:${PYTHON_VERSION}
     docker rm -f grain
     DOCKER_BUILDKIT=1 docker build --progress=plain --no-cache \
-      --build-arg ARCH=${ARCH} \
       --build-arg AUDITWHEEL_PLATFORM=${AUDITWHEEL_PLATFORM} \
       --build-arg PYTHON_VERSION=${PYTHON_VERSION} \
       --build-arg BAZEL_VERSION=${BAZEL_VERSION} \
