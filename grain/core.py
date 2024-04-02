@@ -16,7 +16,6 @@
 # pylint: disable=g-multiple-import
 # pylint: disable=unused-import
 
-from ._src.core import grain_random as random
 from ._src.core.config import config
 from ._src.core.constants import DATASET_INDEX, EPOCH, INDEX, META_FEATURES, RECORD, RECORD_KEY, SEED
 from ._src.core.sharding import NoSharding, ShardByJaxProcess, ShardOptions
