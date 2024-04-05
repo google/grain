@@ -1,3 +1,16 @@
+# Copyright 2024 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """DataLoader for LazyDataset."""
 from typing import Optional, Union
 
@@ -9,17 +22,16 @@ from grain._src.python.lazy_dataset import lazy_dataset
 def _confirm_picklable_and_copy_lazy_dataset(
     lazy_ds: Union[lazy_dataset.LazyMapDataset, lazy_dataset.LazyIterDataset],
 ):
-  """This function may be used to prevent the user-specified LazyDataset from being mutated."""
+  """Makes a copy of the given LazyDataset through pickling roundtrip."""
   try:
     pickled_lazy_ds = cloudpickle.dumps(lazy_ds)
-    new_lazy_ds = cloudpickle.loads(pickled_lazy_ds)
-    return new_lazy_ds
+    return cloudpickle.loads(pickled_lazy_ds)
   except Exception as e:
-    raise ValueError("LazyDataset is not picklable.") from e
+    raise ValueError(f"{lazy_ds} is not picklable.") from e
 
 
 class DataLoader:
-  """User-friendly DataLoader abstraction to parallelize processing of LazyDataset PyGrain pipelines among a set of processes."""
+  """Reads and transforms data as described by the given LazyDataset."""
 
   def __init__(
       self,
@@ -30,46 +42,28 @@ class DataLoader:
       ] = None,
       read_options: Optional[grain_options.ReadOptions] = None,
   ):
-    """Initialize a LazyDataset GrainPool.
+    """Initializes DataLoader.
 
     Args:
       lazy_ds: User-defined LazyMapDataset or LazyIterDataset.
       multiprocessing_options: Options to use for executing LazyDataset pipeline
-        on multiprocessing.
+        in multiple processes.
       read_options: Options to use for reading data from disk.
     """
     self._multiprocessing_options = multiprocessing_options
 
-    if read_options:
-      self._read_options = read_options
-    else:
-      # num_threads = 16, prefetch_buffer_size=500
-      self._read_options = grain_options.ReadOptions()
-
-    # Don't mutate original lazydataset.
-    self._lazy_ds = _confirm_picklable_and_copy_lazy_dataset(lazy_ds)
+    # Avoid mutating the original LazyDataset.
+    lazy_ds = _confirm_picklable_and_copy_lazy_dataset(lazy_ds)
+    self._iter_ds = (
+        lazy_ds.to_iter_dataset(read_options)
+        if isinstance(lazy_ds, lazy_dataset.LazyMapDataset)
+        else lazy_ds
+    )
 
     if self._multiprocessing_options:
-      self._iter_ds = self._set_up_multiprocessing_iter_ds()
-    else:
-      self._iter_ds = (
-          self._lazy_ds.to_iter_dataset()
-          if isinstance(self._lazy_ds, lazy_dataset.LazyMapDataset)
-          else self._lazy_ds
+      self._iter_ds = lazy_dataset.MultiprocessPrefetchLazyIterDataset(
+          self._iter_ds, self._multiprocessing_options
       )
-
-  def _set_up_multiprocessing_iter_ds(self) -> lazy_dataset.LazyIterDataset:
-    """Create iterator for pipeline with desired concurrency settings."""
-    if isinstance(self._lazy_ds, lazy_dataset.LazyMapDataset):
-      # This already has elasticity.
-      return lazy_dataset.MultiprocessPrefetchLazyIterDataset(
-          self._lazy_ds.to_iter_dataset(), self._multiprocessing_options
-      )
-
-    # LazyIterDataset without elasticity
-    return lazy_dataset.MultiprocessPrefetchLazyIterDataset(
-        self._lazy_ds, self._multiprocessing_options
-    )
 
   def __iter__(self):
     """Return iterator for lazy_ds."""
