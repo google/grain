@@ -83,6 +83,21 @@ _OPTIMIZED_SEQUENTIAL_READ = flags.DEFINE_bool(
     ),
 )
 
+_PREFETCH_BUFFER_SIZE = flags.DEFINE_integer(
+    "grain_tf_prefetch_buffer_size",
+    -1,  # tf.data.AUTOTUNE
+    (
+        "Sets the prefetch buffer size for TfDataLoader/TfMixtureDataLoader"
+        " dataset. This allows later elements to be prepared while the current"
+        " element is being processed. This often improves latency and"
+        " throughput, at the cost of using additional memory to store"
+        " prefetched elements. This number represents the maximum number of"
+        " elements that will be buffered when prefetching. Defaults -1 is"
+        " equivalent to tf.data.AUTOTUNE where the buffer size is dynamically"
+        " tuned."
+    ),
+)
+
 _GRAIN_FLAGS = (
     _INTERLEAVED_SHUFFLE,
     _INTERLEAVED_SHUFFLE_BLOCK_SIZE,
@@ -91,6 +106,7 @@ _GRAIN_FLAGS = (
     _LOOKUP_NUM_PARALLEL_CALLS,
     _LOOKUP_FAST_WARMUP,
     _OPTIMIZED_SEQUENTIAL_READ,
+    _PREFETCH_BUFFER_SIZE,
 )
 
 
