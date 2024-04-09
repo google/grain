@@ -75,5 +75,6 @@ py_library(
         "//grain/_src/python/lazy_dataset/transformations:repeat",  # build_cleaner: keep
         "//grain/_src/python/lazy_dataset/transformations:shuffle",  # build_cleaner: keep
         "//grain/_src/python/lazy_dataset/transformations:slice",  # build_cleaner: keep
+        "//grain/_src/python/lazy_dataset/transformations:zip",  # build_cleaner: keep
     ],
 )

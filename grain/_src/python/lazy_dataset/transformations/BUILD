@@ -207,3 +207,20 @@ py_test(
         "//grain/_src/python/lazy_dataset",
     ],
 )
+
+py_library(
+    name = "zip",
+    srcs = ["zip.py"],
+    srcs_version = "PY3",
+    deps = ["//grain/_src/python/lazy_dataset"],
+)
+
+py_test(
+    name = "zip_test",
+    srcs = ["zip_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":zip",
+        "//grain/_src/python/lazy_dataset",
+    ],
+)
