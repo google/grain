@@ -45,6 +45,9 @@ py_library(
     name = "sharding",
     srcs = ["sharding.py"],
     srcs_version = "PY3",
+    visibility = [
+        "//third_party/py/grain:internal",
+    ],
 )
 
 py_test(
