@@ -22,7 +22,7 @@ from typing import Any, Optional, Sequence, Tuple, TypeVar, Union
 
 from grain._src.core import exceptions
 from grain._src.python.lazy_dataset import lazy_dataset
-
+from grain._src.python.lazy_dataset.transformations import slice as lazy_slice_ds
 
 Element = Any
 T = TypeVar("T")  # pylint: disable=invalid-name
@@ -354,7 +354,9 @@ class ConcatenateLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   def __len__(self) -> int:
     return self._length
 
-  def __getitem__(self, index):
+  def __getitem__(
+      self, index: int | slice
+  ) -> T | lazy_slice_ds.SliceLazyMapDataset[T]:
     if isinstance(index, slice):
       return self.slice(index)
     dataset, dataset_index = self._selection_map[index]

@@ -90,6 +90,7 @@ py_library(
     srcs = ["mix.py"],
     srcs_version = "PY3",
     deps = [
+        ":slice",
         "//grain/_src/core:exceptions",
         "//grain/_src/python/lazy_dataset",
     ],

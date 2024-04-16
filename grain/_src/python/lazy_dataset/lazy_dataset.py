@@ -45,7 +45,7 @@ import contextlib
 import copy
 import functools
 import time
-from typing import Any, Callable, Optional, TypeVar, Union, overload
+from typing import Any, Optional, Protocol, TypeVar, Union, overload
 
 from concurrent import futures
 from grain._src.core import sharding
@@ -61,10 +61,25 @@ T = TypeVar("T")
 _MAX_PREFETCH_THREADS = 1000
 
 
+class RegisterableLazyMapDatasetFn(Protocol):
+  """Interface for functions registered on all LazyMapDatasets."""
+
+  def __call__(self, dataset: LazyMapDataset, *args, **kwargs) -> Any:
+    ...
+
+
+class RegisterableLazyIterDatasetFn(Protocol):
+  """Interface for functions registered on all LazyIterDatasets."""
+
+  def __call__(self, dataset: LazyIterDataset, *args, **kwargs) -> Any:
+    ...
+
+
 class LazyMapDataset(Sequence[T], abc.ABC):
   """Abstract base class for all LazyMapDataset classes."""
 
-  _functions: dict[str, Callable[[LazyMapDataset], Any]] = {}
+  _functions: dict[str, RegisterableLazyMapDatasetFn] = {}
+  """Functions registered on all LazyMapdatasets via a decoration."""
 
   def __init__(
       self, parents: Union[LazyMapDataset, Sequence[LazyMapDataset]] = ()
@@ -101,9 +116,7 @@ class LazyMapDataset(Sequence[T], abc.ABC):
     """Returns the element for the index or None if missing."""
 
   @classmethod
-  def register_function(
-      cls, name: str, function: Callable[[LazyMapDataset], Any]
-  ):
+  def register_function(cls, name: str, function: RegisterableLazyMapDatasetFn):
     if name in cls._functions:
       raise ValueError(
           f"Cannot register {function} as dataset function '{name}' since it's"
@@ -134,7 +147,7 @@ class LazyMapDataset(Sequence[T], abc.ABC):
 class LazyIterDataset(Iterable[T], abc.ABC):
   """Abstract base class for all LazyIterDataset classes."""
 
-  _functions: dict[str, Callable[[LazyIterDataset], Any]] = {}
+  _functions: dict[str, RegisterableLazyIterDatasetFn] = {}
 
   def __init__(
       self,
@@ -181,9 +194,7 @@ class LazyIterDataset(Iterable[T], abc.ABC):
     """Returns an iterator for this dataset."""
 
   @classmethod
-  def register_function(
-      cls, name: str, function: Callable[[LazyIterDataset], Any]
-  ):
+  def register_function(cls, name: str, function: RegisterableLazyMapDatasetFn):
     if name in cls._functions:
       raise ValueError(
           f"Cannot register {function} as dataset function '{name}' since it's"
@@ -201,6 +212,8 @@ class LazyIterDataset(Iterable[T], abc.ABC):
 
 
 def lazy_map_dataset_function(name: str):
+  """Registers a function as a LazyMapDataset function."""
+
   def _fn(cls):
     LazyMapDataset.register_function(name=name, function=cls)
     return cls
@@ -209,6 +222,8 @@ def lazy_map_dataset_function(name: str):
 
 
 def lazy_iter_dataset_function(name: str):
+  """Registers a function as a LazyIterDataset function."""
+
   def _fn(cls):
     LazyIterDataset.register_function(name=name, function=cls)
     return cls
