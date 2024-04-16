@@ -13,10 +13,10 @@ py_library(
     srcs_version = "PY3",
     # Implicit build flag
     deps = [
-        "//grain/_src/core:config",
-        "//grain/_src/core:constants",
-        "//grain/_src/core:grain_random",
-        "//grain/_src/core:sharding",
+        "//grain/_src/core:config",  # build_cleaner: keep
+        "//grain/_src/core:constants",  # build_cleaner: keep
+        "//grain/_src/core:grain_random",  # build_cleaner: keep
+        "//grain/_src/core:sharding",  # build_cleaner: keep
     ],
 )
 
@@ -29,7 +29,7 @@ py_library(
     deps = [
         ":core",  # build_cleaner: keep
         ":python_experimental",  # build_cleaner: keep
-        "//grain/_src/core:constants",
+        "//grain/_src/core:constants",  # build_cleaner: keep
         "//grain/_src/core:transforms",  # build_cleaner: keep
         "//grain/_src/python:checkpoint_handlers",  # build_cleaner: keep
         "//grain/_src/python:data_loader",  # build_cleaner: keep
@@ -61,6 +61,7 @@ py_library(
     srcs = ["python_lazy_dataset.py"],
     srcs_version = "PY3",
     # Implicit build flag
+    visibility = ["//visibility:public"],
     deps = [
         "//grain/_src/python/lazy_dataset",  # build_cleaner: keep
         "//grain/_src/python/lazy_dataset:data_loader",  # build_cleaner: keep
