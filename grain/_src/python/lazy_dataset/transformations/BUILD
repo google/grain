@@ -113,7 +113,7 @@ py_library(
     srcs = ["packing.py"],
     srcs_version = "PY3",
     deps = [
-        "//grain/_src/core:tree",
+        ":packing_packed_batch",
         "//grain/_src/python/lazy_dataset",
     ],
 )
@@ -130,6 +130,12 @@ py_test(
         "//grain/_src/python/lazy_dataset",
         "//grain/_src/python/lazy_dataset:data_sources",
     ],
+)
+
+py_library(
+    name = "packing_packed_batch",
+    srcs = ["packing_packed_batch.py"],
+    srcs_version = "PY3",
 )
 
 py_library(

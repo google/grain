@@ -1,5 +1,8 @@
 """This module provides an implementation for example packing in pure python.
 
+This module is deprecated. Please use APIs in
+_src/python/lazy_dataset/transformations/packing.py.
+
 Example packing is a step in many input pipelines for sequence to sequence
 models where multiple examples are packed together as a single example in order
 to maximise data fed to a TPU per batch. Our approach is implemented in pure
@@ -14,6 +17,7 @@ can't be added, we construct a new batch to which the element is added.
 import dataclasses
 from typing import Generic, Iterator, TypeVar, Union, cast
 
+from absl import logging
 from grain._src.core import tree
 from grain._src.python import record
 import jax
@@ -148,6 +152,9 @@ class _PackedBatch:
 class PackAndBatchOperation(Generic[_T]):
   """PyGrain pack-and-batch operation - see module docstring.
 
+  WARNING: This class is deprecated. Please use
+  lazy_dataset.FirstFitPackLazyIterDataset instead.
+
   Attributes:
     batch_size: int, the batch size.
     length_struct: A pytree, with the same structure as `input_iterator`
@@ -181,6 +188,12 @@ class PackAndBatchOperation(Generic[_T]):
   batch_size: int
   # We don't know input shapes and corresponding buffer shapes until __call__.
   _cur_batch: Union[_PackedBatch, None] = None
+
+  def __post_init__(self):
+    logging.error(
+        "PackAndBatchOperation is deprecated. Please use"
+        " lazy_dataset.FirstFitPackLazyIterDataset instead."
+    )
 
   def __call__(
       self, input_iterator: Iterator[record.Record[_T]]
