@@ -62,11 +62,11 @@ class RngPool:
 
   def acquire_rng(self, index: int, *, op_seed: int = 0) -> np.random.Generator:
     """Acquire RNG."""
-    if self._generator_cache:
-      with self._lock:
+    with self._lock:
+      if self._generator_cache:
         rng = self._generator_cache.pop()
-    else:
-      rng = np.random.Generator(np.random.Philox(self._seed))
+      else:
+        rng = np.random.Generator(np.random.Philox(self._seed))
     _reset_rng_state(rng, op_seed=op_seed, index=index)
     return rng
 
