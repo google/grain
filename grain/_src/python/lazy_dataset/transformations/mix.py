@@ -227,7 +227,7 @@ def _float_to_int_proportions(
 
 
 @functools.cache
-def _counts_per_dataset(k: int, proportions: tuple[int]) -> Sequence[int]:
+def _counts_per_dataset(k: int, proportions: tuple[int, ...]) -> Sequence[int]:
   """Calculates the counts per dataset at n elements accordings to proportions.
 
   We are interleaving n infinite datasets into one combined dataset.
@@ -270,7 +270,7 @@ def _counts_per_dataset(k: int, proportions: tuple[int]) -> Sequence[int]:
 
 
 def _dataset_and_key_of_next_element(
-    k: int, proportions: tuple[int]
+    k: int, proportions: tuple[int, ...]
 ) -> Tuple[int, int]:
   """Compute the dataset and the key for interleaved datasets at position k.
 
