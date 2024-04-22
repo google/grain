@@ -13,13 +13,15 @@
 # limitations under the License.
 """Implements packing transformations."""
 import collections
+from collections.abc import Sequence
 import copy
 from typing import Any, Optional
 
-from grain._src.core import tree
 from grain._src.python.lazy_dataset import lazy_dataset
+from grain._src.python.lazy_dataset.transformations import packing_packed_batch
 from jaxtyping import PyTree  # pylint: disable=g-importing-member
 import numpy as np
+import tree
 
 
 # SingleBinPackLazyDatasetIterator's state is defined by the a state of the
@@ -40,7 +42,7 @@ class SingleBinPackLazyIterDataset(lazy_dataset.LazyIterDataset):
   This is one implementation of the often called "example packing"
   transformation. The parent produces examples that contain sequences of
   variable length and this transformations outputs examples of the desired
-  sequence length while minizing the amound of padding.
+  sequence length while minizing the amount of padding.
 
   # Properties of SingleBinPack:
   SingleBinPack packs a single example at a time and passes through any examples
@@ -243,3 +245,193 @@ class SingleBinPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
     for _ in range(state["num_next_calls"]):
       next(self)
     assert self._num_next_calls == state["num_next_calls"]
+
+
+class FirstFitPackLazyIterDataset(lazy_dataset.LazyIterDataset):
+  """Implements first-fit packing of sequences.
+
+  Packing sequences, compared to concat-and-split, avoids splitting sequences
+  but adds padding. Larger number of packing bins reduce the amount of padding.
+
+  This uses a simple first-fit packing algorithm that creates N bins and add
+  elements (in the order coming from the parent) to the first bin that has
+  enough. Once an element doesn't fit all bins are emited as elements and N new
+  empty bins are created.
+  This is easy to make deterministic but has the downside that some bins
+  (usually the botton bins) have a lot of padding. To avoid this pattern we add
+  an option to shuffle the bins before emitting. If the number of bins is large
+  and multiple epochs are seen, this can cause epoch leakage.
+  """
+
+  def __init__(
+      self,
+      parent: lazy_dataset.LazyIterDataset,
+      *,
+      length_struct: Any,
+      num_packing_bins: int,
+      shuffle_bins: bool = True,
+      meta_features: Sequence[str] = (),
+  ):
+    """Creates a dataset that packs sequences from the parent dataset.
+
+    Args:
+      parent: Parent dataset with variable length sequences. Sequence cannot be
+        longer than their length_struct value.
+      length_struct: Target sequence length for each feature.
+      num_packing_bins: Number of bins to pack sequences into.
+      shuffle_bins: Whether to shuffle bins after packing.
+      meta_features: Meta features that do not need *_segment_ids and
+        *_positions features.
+    """
+    super().__init__(parent)
+    self._length_struct = length_struct
+    self._num_packing_bins = num_packing_bins
+    self._shuffle_bins = shuffle_bins
+    self._meta_features = meta_features
+
+  def __iter__(self) -> lazy_dataset.LazyDatasetIterator:
+    return FirstFitPackLazyDatasetIterator(
+        iter(self._parent),
+        num_packing_bins=self._num_packing_bins,
+        length_struct=self._length_struct,
+        shuffle_bins=self._shuffle_bins,
+        meta_features=self._meta_features,
+    )  # pytype: disable=wrong-arg-types
+
+
+class FirstFitPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
+  """Iterator for the first-fit packing transformation."""
+
+  def __init__(
+      self,
+      parent: lazy_dataset.LazyDatasetIterator,
+      *,
+      num_packing_bins: int,
+      length_struct: PyTree[Optional[int]],
+      shuffle_bins: bool,
+      meta_features: Sequence[str],
+  ):
+    self._parent = parent
+    self._num_packing_bins = num_packing_bins
+    self._length_struct = length_struct
+    self._shuffle_bins = shuffle_bins
+    self._meta_features = meta_features
+    self._reset()
+
+  def _reset(self):
+    self._current_batch = None  # Not yet fully packed.
+    self._current_batch_parent_state = None
+    # If available, fully packed but rows [:self._next_row] were already
+    # emitted.
+    self._packed_batch = None
+    # The last packed batch can be partial and have few bins with elements.
+    self._packed_batch_num_bins = None
+    self._packed_batch_parent_state = None
+    self._next_row = 0
+    self._shuffled_rows = None
+
+  def get_state(self) -> dict[str, Any]:
+    return {
+        "parent": self._packed_batch_parent_state,
+        "next_row": self._next_row,
+    }
+
+  def set_state(self, state: dict[str, Any]):
+    self._reset()
+    self._parent.set_state(state["parent"])
+    self._next_row = state["next_row"]
+
+  def _finalize_current_batch(self, element_for_shapes=None):
+    assert self._current_batch is not None
+    self._packed_batch = self._current_batch.get_packed_batch()
+    self._packed_batch_parent_state = self._current_batch_parent_state
+    # Detect number of bins. The last batch can be partial.
+    self._packed_batch_num_bins = max(
+        tree.flatten(
+            tree.map_structure(lambda x: x.shape[0], self._packed_batch)
+        )
+    )
+    assert self._packed_batch_num_bins <= self._num_packing_bins
+    if self._shuffle_bins:
+      seed = abs(hash(tuple(sorted(self._packed_batch_parent_state.items()))))  # pytype: disable=attribute-error
+      self._shuffled_rows = np.random.default_rng(seed).permuted(
+          range(self._packed_batch_num_bins)
+      )
+
+    if element_for_shapes is None:
+      self._current_batch = None
+    else:
+      self._current_batch = packing_packed_batch.PackedBatch(
+          element_for_shapes,
+          self._num_packing_bins,
+          self._length_struct,
+          meta_features=self._meta_features,
+      )
+    self._current_batch_parent_state = None
+
+  def __next__(self):
+    if self._packed_batch is not None:
+      if self._shuffle_bins:
+        next_row = self._shuffled_rows[self._next_row]
+      else:
+        next_row = self._next_row
+      element = tree.map_structure(lambda x: x[next_row], self._packed_batch)
+      self._next_row += 1
+      if self._next_row >= self._packed_batch_num_bins:
+        self._packed_batch = None
+        self._packed_batch_parent_state = None
+        self._next_row = 0
+        self._shuffled_rows = None
+      return element
+
+    while True:
+      try:
+        prior_iterator_state = self._parent.get_state()
+        assert prior_iterator_state is not None
+        element = next(self._parent)
+        # Remove elements not in packing struct.
+        element = tree.map_structure_up_to(
+            self._length_struct, lambda x: x, element
+        )
+
+        if self._current_batch is None:  # pytype: disable=attribute-error
+          # Use `element` to set dtypes + trailing dimensions.
+          # We are not adding the element to the batch, just initializing it.
+          self._current_batch = packing_packed_batch.PackedBatch(
+              element,
+              self._num_packing_bins,
+              self._length_struct,
+              meta_features=self._meta_features,
+          )
+          self._current_batch_parent_state = prior_iterator_state
+
+        # Try adding element to the current packed batch.
+        failing_components = self._current_batch.try_add_to_batch(element)
+
+        # When we have a full batch, yield the current packed data,
+        # and then start a new batch with this element.
+        if failing_components is not None:
+          self._finalize_current_batch(element)
+          self._current_batch_parent_state = prior_iterator_state
+          assert self._current_batch is not None
+
+          if self._current_batch.try_add_to_batch(element) is not None:
+            # If we can't pack a single example into an empty batch then we
+            # can't continue at all.
+            element_shape = tree.map_structure(lambda x: x.shape, element)
+            raise ValueError(
+                "Could not add element to empty packed batch! Packed batch has"
+                f" packing sequence_lengths: {self._length_struct} while"
+                f" element has shape: {element_shape}"
+            )
+          # We now have packed batch.
+          return self.__next__()
+
+      except StopIteration as e:
+        if self._current_batch:
+          self._finalize_current_batch()
+          return self.__next__()
+        else:
+          # The inner iterator is exhausted and there is no current batch, so
+          # the packed iterator is also exhausted.
+          raise StopIteration() from e

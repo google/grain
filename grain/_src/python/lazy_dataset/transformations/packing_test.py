@@ -25,6 +25,7 @@ import grain._src.python.lazy_dataset.transformations.repeat
 import grain._src.python.lazy_dataset.transformations.shuffle
 # pylint: enable=unused-import
 import numpy as np
+import tree
 
 _IS_PY310 = sys.version_info >= (3, 10)
 
@@ -352,6 +353,399 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
         value = next(ds_iter)
         for k, v in value.items():
           np.testing.assert_array_equal(v, values_without_interruption[i][k])
+
+
+def _common_test_body(
+    input_elements,
+    expected_elements,
+    length_struct,
+    *,
+    num_packing_bins: int,
+    shuffle_bins: bool = False,
+):
+  """Factor out common test operations in a separate function."""
+  input_elements = [
+      {k: np.asarray(v) for k, v in d.items()} for d in input_elements
+  ]
+  expected_elements = [
+      {k: np.asarray(v) for k, v in d.items()} for d in expected_elements
+  ]
+  ld = packing.FirstFitPackLazyIterDataset(
+      data_sources.SourceLazyMapDataset(input_elements).to_iter_dataset(),
+      num_packing_bins=num_packing_bins,
+      length_struct=length_struct,
+      shuffle_bins=shuffle_bins,
+  )
+  actual_elements = list(ld)
+  np.testing.assert_equal(len(actual_elements), len(expected_elements))
+
+  def _check_equivalence(path, actual_val, expected_val):
+    np.testing.assert_array_equal(
+        actual_val,
+        expected_val,
+        err_msg=(
+            f"Pytrees differ at path {path}.\n\n"
+            f"Actual: {actual_val}\n\nExpected: {expected_val}"
+        ),
+    )
+
+  for actual, expected in zip(actual_elements, expected_elements):
+    tree.map_structure_with_path(_check_equivalence, actual, expected)
+
+
+class FirstFitPackLazyIterDatasetTest(parameterized.TestCase):
+  """Tests for FirstFitPackLazyIterDataset."""
+
+  @parameterized.parameters(
+      {"num_packing_bins": 1},
+      {"num_packing_bins": 2},
+      {"num_packing_bins": 3},
+  )
+  def test_pack_sequences_length_3(self, num_packing_bins: int):
+    input_elements = [
+        {
+            "inputs": [1, 2, 3],
+            "targets": [10],
+        },
+        {
+            "inputs": [4, 5],
+            "targets": [20, 30, 40],
+        },
+        {
+            "inputs": [6],
+            "targets": [50, 60],
+        },
+    ]
+
+    length_struct = {"inputs": 3, "targets": 3}
+
+    expected_elements = [
+        {
+            "inputs": [1, 2, 3],
+            "targets": [10, 0, 0],
+            "inputs_segment_ids": [1, 1, 1],
+            "targets_segment_ids": [1, 0, 0],
+            "inputs_positions": [0, 1, 2],
+            "targets_positions": [0, 0, 0],
+        },
+        {
+            "inputs": [4, 5, 0],
+            "targets": [20, 30, 40],
+            "inputs_segment_ids": [1, 1, 0],
+            "targets_segment_ids": [1, 1, 1],
+            "inputs_positions": [0, 1, 0],
+            "targets_positions": [0, 1, 2],
+        },
+        {
+            "inputs": [6, 0, 0],
+            "targets": [50, 60, 0],
+            "inputs_segment_ids": [1, 0, 0],
+            "targets_segment_ids": [1, 1, 0],
+            "inputs_positions": [0, 0, 0],
+            "targets_positions": [0, 1, 0],
+        },
+    ]
+
+    _common_test_body(
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=num_packing_bins,
+    )
+
+  @parameterized.parameters(
+      {"num_packing_bins": 3},
+      {"num_packing_bins": 5},
+  )
+  def test_pack_sequences_length_shuffle_bins(self, num_packing_bins: int):
+    input_elements = [
+        {
+            "inputs": [1, 2, 3],
+            "targets": [10],
+        },
+        {
+            "inputs": [4, 5],
+            "targets": [20, 30, 40],
+        },
+        {
+            "inputs": [6],
+            "targets": [50, 60],
+        },
+    ]
+
+    length_struct = {"inputs": 3, "targets": 3}
+
+    expected_elements = [
+        {
+            "inputs": [6, 0, 0],
+            "targets": [50, 60, 0],
+            "inputs_segment_ids": [1, 0, 0],
+            "targets_segment_ids": [1, 1, 0],
+            "inputs_positions": [0, 0, 0],
+            "targets_positions": [0, 1, 0],
+        },
+        {
+            "inputs": [1, 2, 3],
+            "targets": [10, 0, 0],
+            "inputs_segment_ids": [1, 1, 1],
+            "targets_segment_ids": [1, 0, 0],
+            "inputs_positions": [0, 1, 2],
+            "targets_positions": [0, 0, 0],
+        },
+        {
+            "inputs": [4, 5, 0],
+            "targets": [20, 30, 40],
+            "inputs_segment_ids": [1, 1, 0],
+            "targets_segment_ids": [1, 1, 1],
+            "inputs_positions": [0, 1, 0],
+            "targets_positions": [0, 1, 2],
+        },
+    ]
+
+    _common_test_body(
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=num_packing_bins,
+        shuffle_bins=True,
+    )
+
+  def test_pack_sequences_length_4(self):
+    input_elements = [
+        {
+            "inputs": [1, 2, 3],
+            "targets": [10],
+        },
+        {
+            "inputs": [4, 5],
+            "targets": [20, 30, 40],
+        },
+        {
+            "inputs": [6],
+            "targets": [50, 60],
+        },
+    ]
+    length_struct = {"inputs": 4, "targets": 4}
+
+    expected_elements = [
+        {
+            "inputs": [1, 2, 3, 6],
+            "targets": [10, 50, 60, 0],
+            "inputs_segment_ids": [1, 1, 1, 2],
+            "targets_segment_ids": [1, 2, 2, 0],
+            "inputs_positions": [0, 1, 2, 0],
+            "targets_positions": [0, 0, 1, 0],
+        },
+        {
+            "inputs": [4, 5, 0, 0],
+            "targets": [20, 30, 40, 0],
+            "inputs_segment_ids": [1, 1, 0, 0],
+            "targets_segment_ids": [1, 1, 1, 0],
+            "inputs_positions": [0, 1, 0, 0],
+            "targets_positions": [0, 1, 2, 0],
+        },
+    ]
+
+    _common_test_body(
+        input_elements, expected_elements, length_struct, num_packing_bins=2
+    )
+
+  def test_pack_sequences_length_5(self):
+    input_elements = [
+        {
+            "inputs": [1, 2, 3],
+            "targets": [10],
+        },
+        {
+            "inputs": [4, 5],
+            "targets": [20, 30, 40],
+        },
+        {
+            "inputs": [6],
+            "targets": [50, 60],
+        },
+    ]
+    length_struct = {"inputs": 5, "targets": 5}
+
+    expected_elements = [
+        {
+            "inputs": [1, 2, 3, 4, 5],
+            "targets": [10, 20, 30, 40, 0],
+            "inputs_segment_ids": [1, 1, 1, 2, 2],
+            "targets_segment_ids": [1, 2, 2, 2, 0],
+            "inputs_positions": [0, 1, 2, 0, 1],
+            "targets_positions": [0, 0, 1, 2, 0],
+        },
+        {
+            "inputs": [6, 0, 0, 0, 0],
+            "targets": [50, 60, 0, 0, 0],
+            "inputs_segment_ids": [1, 0, 0, 0, 0],
+            "targets_segment_ids": [1, 1, 0, 0, 0],
+            "inputs_positions": [0, 0, 0, 0, 0],
+            "targets_positions": [0, 1, 0, 0, 0],
+        },
+    ]
+
+    _common_test_body(
+        input_elements, expected_elements, length_struct, num_packing_bins=2
+    )
+
+  def test_pack_sequences_length_6(self):
+    input_elements = [
+        {
+            "inputs": [1, 2, 3],
+            "targets": [10],
+        },
+        {
+            "inputs": [4, 5],
+            "targets": [20, 30, 40],
+        },
+        {
+            "inputs": [6],
+            "targets": [50, 60],
+        },
+    ]
+    length_struct = {"inputs": 6, "targets": 6}
+
+    expected_elements = [{
+        "inputs": [1, 2, 3, 4, 5, 6],
+        "targets": [10, 20, 30, 40, 50, 60],
+        "inputs_segment_ids": [1, 1, 1, 2, 2, 3],
+        "targets_segment_ids": [1, 2, 2, 2, 3, 3],
+        "inputs_positions": [0, 1, 2, 0, 1, 0],
+        "targets_positions": [0, 0, 1, 2, 0, 1],
+    }]
+
+    _common_test_body(
+        input_elements, expected_elements, length_struct, num_packing_bins=2
+    )
+
+  def test_pack_sequences_length_7(self):
+    input_elements = [
+        {
+            "inputs": [1, 2, 3],
+            "targets": [10],
+        },
+        {
+            "inputs": [4, 5],
+            "targets": [20, 30, 40],
+        },
+        {
+            "inputs": [6],
+            "targets": [50, 60],
+        },
+    ]
+    length_struct = {"inputs": 7, "targets": 7}
+
+    expected_elements = [{
+        "inputs": [1, 2, 3, 4, 5, 6, 0],
+        "targets": [10, 20, 30, 40, 50, 60, 0],
+        "inputs_segment_ids": [1, 1, 1, 2, 2, 3, 0],
+        "targets_segment_ids": [1, 2, 2, 2, 3, 3, 0],
+        "inputs_positions": [0, 1, 2, 0, 1, 0, 0],
+        "targets_positions": [0, 0, 1, 2, 0, 1, 0],
+    }]
+
+    _common_test_body(
+        input_elements, expected_elements, length_struct, num_packing_bins=1
+    )
+
+  def test_pack_sequences_different_lengths(self):
+    input_elements = [
+        {
+            "inputs": [1, 2, 3],
+            "targets": [10],
+        },
+        {
+            "inputs": [4, 5],
+            "targets": [20, 30, 40],
+        },
+        {
+            "inputs": [6],
+            "targets": [50, 60],
+        },
+    ]
+    length_struct = {"inputs": 3, "targets": 4}
+
+    expected_elements = [
+        {
+            "inputs": [1, 2, 3],
+            "targets": [10, 0, 0, 0],
+            "inputs_segment_ids": [1, 1, 1],
+            "targets_segment_ids": [1, 0, 0, 0],
+            "inputs_positions": [0, 1, 2],
+            "targets_positions": [0, 0, 0, 0],
+        },
+        {
+            "inputs": [4, 5, 0],
+            "targets": [20, 30, 40, 0],
+            "inputs_segment_ids": [1, 1, 0],
+            "targets_segment_ids": [1, 1, 1, 0],
+            "inputs_positions": [0, 1, 0],
+            "targets_positions": [0, 1, 2, 0],
+        },
+        {
+            "inputs": [6, 0, 0],
+            "targets": [50, 60, 0, 0],
+            "inputs_segment_ids": [1, 0, 0],
+            "targets_segment_ids": [1, 1, 0, 0],
+            "inputs_positions": [0, 0, 0],
+            "targets_positions": [0, 1, 0, 0],
+        },
+    ]
+    _common_test_body(
+        input_elements, expected_elements, length_struct, num_packing_bins=3
+    )
+
+  def test_pack_sequences_two_dimensional_features(self):
+    input_elements = [
+        {
+            "input_tokens": [1, 2, 3],
+            "input_vectors": [[0, 1, 2], [1, 2, 3], [2, 3, 4]],
+            "targets": [10],
+        },
+        {
+            "input_tokens": [4, 5],
+            "input_vectors": [[3, 4, 5], [4, 5, 6]],
+            "targets": [20, 30, 40],
+        },
+        {
+            "input_tokens": [6],
+            "input_vectors": [[5, 6, 7]],
+            "targets": [50, 60],
+        },
+    ]
+
+    length_struct = {"input_tokens": 5, "input_vectors": 3, "targets": 5}
+
+    expected_elements = [
+        {
+            "input_tokens": [1, 2, 3, 0, 0],
+            "input_vectors": [[0, 1, 2], [1, 2, 3], [2, 3, 4]],
+            "targets": [10, 0, 0, 0, 0],
+            "input_tokens_segment_ids": [1, 1, 1, 0, 0],
+            "input_vectors_segment_ids": [1, 1, 1],
+            "targets_segment_ids": [1, 0, 0, 0, 0],
+            "input_tokens_positions": [0, 1, 2, 0, 0],
+            "input_vectors_positions": [0, 1, 2],
+            "targets_positions": [0, 0, 0, 0, 0],
+        },
+        {
+            "input_tokens": [4, 5, 6, 0, 0],
+            "input_vectors": [[3, 4, 5], [4, 5, 6], [5, 6, 7]],
+            "targets": [20, 30, 40, 50, 60],
+            "input_tokens_segment_ids": [1, 1, 2, 0, 0],
+            "input_vectors_segment_ids": [1, 1, 2],
+            "targets_segment_ids": [1, 1, 1, 2, 2],
+            "input_tokens_positions": [0, 1, 0, 0, 0],
+            "input_vectors_positions": [0, 1, 0],
+            "targets_positions": [0, 1, 2, 0, 1],
+        },
+    ]
+
+    _common_test_body(
+        input_elements, expected_elements, length_struct, num_packing_bins=2
+    )
 
 
 if __name__ == "__main__":
