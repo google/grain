@@ -472,6 +472,102 @@ class MixedLazyIterDatasetTest(absltest.TestCase):
         )
 
 
+class TokenAdjustedMixedDatasetTest(absltest.TestCase):
+
+  def test_even_mixing(self):
+    even_ds = lazy_dataset.RangeLazyMapDataset(0, 100, 2).to_iter_dataset()
+    odd_ds = lazy_dataset.RangeLazyMapDataset(1, 100, 2).to_iter_dataset()
+
+    ds = mix.TokenAdjustedMixedDataset(
+        parents=[even_ds, odd_ds],
+        tokens_func=lambda x: 1,
+        seed=42,
+    )
+    it = iter(ds)
+    result = [next(it) for _ in range(20)]
+    self.assertCountEqual(list(range(0, 20, 2)) + list(range(1, 20, 2)), result)
+
+  def test_token_adjustment(self):
+    even_ds = lazy_dataset.RangeLazyMapDataset(0, 100, 2).to_iter_dataset()
+    odd_ds = lazy_dataset.RangeLazyMapDataset(1, 100, 2).to_iter_dataset()
+
+    ds = mix.TokenAdjustedMixedDataset(
+        parents=[even_ds, odd_ds],
+        # Weight even elements 3x the odd elements.
+        tokens_func=lambda x: 3 if x % 2 == 0 else 1,
+        seed=42,
+    )
+    it = iter(ds)
+    result = [next(it) for _ in range(20)]
+    self.assertCountEqual(list(range(0, 10, 2)) + list(range(1, 30, 2)), result)
+
+  def test_token_adjustment_with_weights(self):
+    even_ds = lazy_dataset.RangeLazyMapDataset(0, 100, 2).to_iter_dataset()
+    odd_ds = lazy_dataset.RangeLazyMapDataset(1, 100, 2).to_iter_dataset()
+
+    ds = mix.TokenAdjustedMixedDataset(
+        parents=[even_ds, odd_ds],
+        # Weight even elements 3x the odd elements.
+        tokens_func=lambda x: 3 if x % 2 == 0 else 1,
+        seed=42,
+        weights=[0.75, 0.25],
+    )
+    it = iter(ds)
+    result = [next(it) for _ in range(20)]
+    self.assertCountEqual(list(range(0, 20, 2)) + list(range(1, 20, 2)), result)
+
+  def test_many_sources(self):
+    num_sources = 5
+    sources = [
+        lazy_dataset.RangeLazyMapDataset(i, 1000, num_sources).to_iter_dataset()
+        for i in range(num_sources)
+    ]
+
+    ds = mix.TokenAdjustedMixedDataset(
+        parents=sources,
+        # Weight first source 6x.
+        tokens_func=lambda x: 6 if x % num_sources == 0 else 1,
+        seed=42,
+        weights=[0.1, 0.1, 0.1, 0.2, 0.5],
+    )
+    it = iter(ds)
+    result = [next(it) for _ in range(50)]
+    expected_counts = [1, 6, 5, 11, 27]
+    actual_counts = [0] * num_sources
+    for x in result:
+      actual_counts[x % 5] += 1
+    self.assertEqual(expected_counts, actual_counts)
+
+  def test_checkpointing(self):
+    even_ds = lazy_dataset.RangeLazyMapDataset(0, 100, 2).to_iter_dataset()
+    odd_ds = lazy_dataset.RangeLazyMapDataset(1, 100, 2).to_iter_dataset()
+
+    ds = mix.TokenAdjustedMixedDataset(
+        parents=[even_ds, odd_ds],
+        # Weight even elements 3x the odd elements.
+        tokens_func=lambda x: 3 if x % 2 == 0 else 1,
+        seed=42,
+    )
+
+    # TODO(aaudibert): Refactor generic checkpoint testing code to a test util.
+    ds_iter = iter(ds)
+
+    max_steps = 10
+    values_without_interruption = []
+    checkpoints = []
+
+    for _ in range(max_steps):
+      checkpoints.append(ds_iter.get_state())  # pytype: disable=attribute-error
+      values_without_interruption.append(next(ds_iter))
+
+    for starting_step in [0, 1, 5, 8]:
+      ds_iter.set_state(checkpoints[starting_step])  # pytype: disable=attribute-error
+      for i in range(starting_step, max_steps):
+        np.testing.assert_array_equal(
+            next(ds_iter), values_without_interruption[i]
+        )
+
+
 class ConcatenateLazyMapTest(absltest.TestCase):
 
   def test_concat_selection_map(self):

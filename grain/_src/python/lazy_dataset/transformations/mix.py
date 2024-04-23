@@ -16,13 +16,15 @@
 import abc
 import bisect
 import dataclasses
+import enum
 import functools
 import sys
-from typing import Any, Optional, Sequence, Tuple, TypeVar, Union
+from typing import Any, Callable, Optional, Sequence, Tuple, TypeVar, Union
 
 from grain._src.core import exceptions
 from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import slice as lazy_slice_ds
+import numpy as np
 
 Element = Any
 T = TypeVar("T")  # pylint: disable=invalid-name
@@ -215,6 +217,167 @@ class MixedLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
     return (
         f"MixedLazyIterDataset(parents={self._parents},"
         f" proportions={self._proportions})"
+    )
+
+
+# Replace string from the RandomState.get_state() with int values.
+@enum.unique
+class _RandomStateGeneratorMapping(enum.Enum):
+  MT19937 = 0
+
+
+def _checkpoint_rng_state(
+    random_state: np.random.RandomState,
+) -> tuple[Any, ...]:
+  """Gets a RandomState state as values which are compatible with jax.Arrays.
+
+  RandomState.get_state() is a tuple, where the first entry is a string, the
+  name of the random number generator, and the following entries are either
+  arrays or scalars.
+
+  The first entry string is replaced with an int value, making the returned
+  tuple compatible with jax.Arrays.
+
+  The inverse mapping is done in
+  _restore_rng_state.
+
+  Args:
+    random_state: NumPy RandomState from which to retrieve the state.
+
+  Returns:
+    Modified state, with string values replaced by an int value.
+  """
+  state = random_state.get_state()
+  state_0_int = _RandomStateGeneratorMapping[state[0]].value
+  return state_0_int, *state[1:]
+
+
+def _restore_rng_state(
+    random_state: tuple[Any, ...],
+) -> np.random.RandomState:
+  """Restores a RandomState using a state modified to be compatible with jax."""
+  state_0_int = random_state[0]
+  state_0_str = _RandomStateGeneratorMapping(state_0_int).name
+  state = state_0_str, *random_state[1:]
+  result = np.random.RandomState()
+  result.set_state(state)
+  return result
+
+
+class _TokenAdjustedMixedDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
+  """Iterator that mixes tokens from iterators based on given weights."""
+
+  def __init__(
+      self,
+      parents: Sequence[lazy_dataset.LazyDatasetIterator[T]],
+      tokens_func: Callable[[T], int],
+      seed: int,
+      weights: tuple[float, ...],
+  ):
+    super().__init__()
+    self._parents = parents
+    self._tokens_func = tokens_func
+    self._seed = seed
+    self._random_state = np.random.RandomState(seed)
+    self._weights = np.asarray(weights).astype(np.float32)
+    self._tokens_seen = np.zeros(len(self._parents)).astype(np.int64)
+    self._total_tokens_seen = 0
+
+  def __next__(self):
+    num_tokens_desired = (
+        self._weights * self._total_tokens_seen - self._tokens_seen
+    )
+    # We take a random argmax so the datasets are less correlated across shards
+    # Otherwise at the beginning each shard will sample from the same datasets
+    # in order
+    parent_idx = self._random_state.choice(
+        np.where(num_tokens_desired == num_tokens_desired.max())[0]
+    )
+    elem = next(self._parents[parent_idx])
+    tokens = self._tokens_func(elem)
+    np.add.at(self._tokens_seen, parent_idx, tokens)
+    self._total_tokens_seen += tokens
+    return elem
+
+  def get_state(self):
+    return {
+        "parents": [parent.get_state() for parent in self._parents],
+        "tokens_seen": np.copy(self._tokens_seen),
+        "rng_state": _checkpoint_rng_state(self._random_state),
+    }
+
+  def set_state(self, state):
+    for parent, parent_state in zip(self._parents, state["parents"]):
+      parent.set_state(parent_state)
+    self._tokens_seen = state["tokens_seen"]
+    self._random_state = _restore_rng_state(state["rng_state"])
+
+  def __str__(self) -> str:
+    return (
+        f"MixedLazyDatasetIterator(parents={self._parents},"
+        f" weights={self._weights})"
+        f" token_seen={self._tokens_seen}"
+    )
+
+
+class TokenAdjustedMixedDataset(lazy_dataset.LazyIterDataset[T]):
+  """Dataset that mixes sources based on given weights.
+
+  Sources are sampled such that the number of *tokens* contributed by each
+  source matches the specified weights. For example, equal-weight mixing of
+  tweets and books in this way would result in many more tweets than books,
+  since each book has many more tokens than a single tweet.
+  """
+
+  def __init__(
+      self,
+      parents: Sequence[lazy_dataset.LazyIterDataset],
+      tokens_func: Callable[[T], int],
+      seed: int,
+      weights: Optional[Sequence[Union[float, int]]] = None,
+  ):
+    """Initializes the dataset.
+
+    Args:
+      parents: Component datasets to draw from.
+      tokens_func: Function to compute how many tokens an element contains.
+        Parents are balanced so that they each contribute a number of tokens
+        matching the specified weights.
+      seed: Seed used to influence random decisions. This is used so that
+        different shards will make different mixing decisions, avoiding unwanted
+        correlations.
+      weights: Weights from which to draw from each parent dataset. Defaults to
+        uniform weight.
+    """
+    super().__init__(parents)
+    self._tokens_func = tokens_func
+    self._seed = seed
+    if weights is None:
+      weights = [1 / len(parents)] * len(parents)
+    if 0 in weights:
+      raise ValueError("Must specify all non-zero weights for mixing.")
+    for w in weights:
+      if not isinstance(w, (float, int)):
+        raise ValueError(f"weight values must be float or int, but got {w}")
+    if abs(sum(weights) - 1) > 1e-5:
+      raise ValueError(f"weights must sum to 1, but summed to {sum(weights)}")
+    if len(parents) != len(weights):
+      raise ValueError("weights must be the same length as parents.")
+    self._weights = tuple(float(w) for w in weights)
+
+  def __iter__(self) -> lazy_dataset.LazyDatasetIterator[T]:
+    parent_iters = [parent.__iter__() for parent in self._parents]
+    return _TokenAdjustedMixedDatasetIterator(
+        parent_iters,
+        weights=self._weights,
+        tokens_func=self._tokens_func,
+        seed=self._seed,
+    )
+
+  def __str__(self) -> str:
+    return (
+        f"TokenAdjustedMixedDataset(parents={self._parents},"
+        f" weights={self._weights})"
     )
 
 
