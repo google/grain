@@ -326,7 +326,7 @@ class FirstFitPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
     self._packed_batch = None
     # The last packed batch can be partial and have few bins with elements.
     self._packed_batch_num_bins = None
-    self._packed_batch_parent_state = None
+    self._packed_batch_parent_state = self._parent.get_state()
     self._next_row = 0
     self._shuffled_rows = None
 
