@@ -31,8 +31,8 @@ starting from filenames that need to be shuffled and interleaved to shuffle the
 data, PyGrain pipeline starts by sampling indices.
 
 Indices are globally unique, monotonically increasing values used to track
-progress of the pipeline (for checkpointing). These indices are then mapped into
-record keys in the range [0, len(dataset)]. Doing so enables *global
+the progress of the pipeline (for checkpointing). These indices are then mapped
+into record keys in the range [0, len(dataset)-1]. Doing so enables *global
 transformations* to be performed (e.g. global shuffling, mixing, repeating for
 multiple epochs, sharding across multiple machines) before reading any records.
 *Local transformations* that map/filter (aka preprocessing) a single example or
@@ -48,8 +48,8 @@ Steps in the pipeline:
     derive a unique random seed for each record.
 3.  Read the value of the record. Elements now contain the example and the extra
     info from the previous step.
-4.  Transform and filter each elements.
-5.  Combine consecutive elements (example packing, batching).
+4.  Transform and filter each element.
+5.  Combine consecutive elements (e.g., packing, batching).
 6.  Keep track of the last seen index. We can always restart the pipeline from a
     given index.
 
@@ -68,7 +68,7 @@ need:
 
 ## Global Shuffle
 
-In traditional *tf.data* pipelines global shuffle is implementing hierarchical
+In traditional *tf.data* pipelines global shuffle is implemented in a hierarchical manner
 ([explanation 1](https://www.moderndescartes.com/essays/shuffle_viz/),
 [explanation 2](https://colab.research.google.com/github/christianmerkwirth/colabs/blob/master/Understanding_Randomization_in_TF_Datasets.ipynb)):
 
