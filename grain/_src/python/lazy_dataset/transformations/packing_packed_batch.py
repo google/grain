@@ -84,10 +84,18 @@ class PackedBatch(Generic[_T]):
     self._meta_features = meta_features
 
     # Define the main buffers we will pack the data into.
-    def make_packed_buffer(length: int, input_arr: np.ndarray):
+    def make_packed_buffer(length: int, x: np.ndarray | int):
+      is_scalar = np.ndim(x) == 0
+      if is_scalar:
+        shape = ()
+        dtype = np.int64 if isinstance(x, int) else np.asarray(x).dtype
+      else:
+        assert isinstance(x, np.ndarray)
+        shape = x.shape[1:]
+        dtype = x.dtype
       return np.zeros(
-          shape=(num_packing_bins, length, *input_arr.shape[1:]),  # (B, T, ...)
-          dtype=input_arr.dtype,
+          shape=(num_packing_bins, length, *shape),  # (B, T, ...)
+          dtype=dtype,
       )
 
     self._values = jax.tree.map(
@@ -141,7 +149,9 @@ class PackedBatch(Generic[_T]):
         return the index of that row. If it doesn't fit in any of the rows,
         return the names of the components that caused it to fail to fit.
     """
-    element_feature_lengths = jax.tree.map(len, element)
+    element_feature_lengths = jax.tree.map(
+        lambda x: 1 if np.ndim(x) == 0 else len(x), element
+    )
 
     # Check no feature exceeds max length
     length_exceeded = jax.tree.map(
@@ -205,14 +215,15 @@ class PackedBatch(Generic[_T]):
       value, batch_value, segment_ids, positions, first_free_cell_per_row = (
           per_feature_data
       )
+      value_length = 1 if np.ndim(value) == 0 else len(value)
       # Update batch value, segmentations, and positions.
       start = first_free_cell_per_row[row]
-      end = first_free_cell_per_row[row] + len(value)
+      end = first_free_cell_per_row[row] + value_length
       batch_value[row][start:end] = value
       segment_ids[row][start:end] = self._num_examples_per_row[row] + 1
       positions[row][start:end] = np.arange(end - start)
       # Update first_free_cell_per_row.
-      first_free_cell_per_row[row] += len(value)
+      first_free_cell_per_row[row] += value_length
 
     self._num_examples_per_row[row] += 1
 
