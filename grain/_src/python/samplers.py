@@ -33,6 +33,20 @@ _api_usage_counter = monitoring.Counter(
     root=grain_monitoring.get_monitoring_root(),
     fields=[("name", str)],
 )
+_sampler_definition_counter = monitoring.Counter(
+    "/grain/python/samplers/sampler_definition",
+    metadata=monitoring.Metadata(description="Sampler Definition Counter."),
+    root=grain_monitoring.get_monitoring_root(),
+    fields=[
+        ("num_records", int),
+        ("shard_index", int),
+        ("shard_count", int),
+        ("drop_remainder", str),
+        ("seed", str),
+        ("shuffle", str),  # None for SequentialSampler
+        ("num_epochs", str),  # None for SequentialSampler
+    ],
+)
 
 
 class Sampler(Protocol):
@@ -66,6 +80,15 @@ class SequentialSampler:
       self._max_index = self._num_records
     self._seed = seed
     _api_usage_counter.Increment("SequentialSampler")
+    _sampler_definition_counter.Increment(
+        self._num_records,
+        self._shard_options.shard_index,
+        self._shard_options.shard_count,
+        str(self._shard_options.drop_remainder),
+        str(self._seed),
+        "None",
+        "None",
+    )
 
   def __repr__(self) -> str:
     return (
@@ -145,6 +168,15 @@ class IndexSampler:
     if shuffle:
       self._record_keys = ShuffleLazyMapDataset(self._record_keys, seed=seed)
     _api_usage_counter.Increment("IndexSampler")
+    _sampler_definition_counter.Increment(
+        self._num_records,
+        self._shard_options.shard_index,
+        self._shard_options.shard_count,
+        str(self._shard_options.drop_remainder),
+        str(self._seed),
+        str(self._shuffle),
+        str(self._num_epochs),
+    )
 
   def __repr__(self) -> str:
     return (
