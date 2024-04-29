@@ -41,6 +41,7 @@ from grain._src.python.operations import BatchOperation
 from grain._src.python.operations import Operation
 from grain._src.python.samplers import Sampler
 from grain._src.python.shared_memory_array import SharedMemoryArray
+from grain._src.core import monitoring
 import numpy as np
 
 
@@ -173,6 +174,7 @@ class DataLoader:
         supports worker_count >= 1 at the moment.
     """
     usage_logging.log_event("PyGrainDataLoader", tag_3="PyGrain")
+    monitoring.record_event("/grain/python/data_loader/data_loader_beacon")
     if worker_count and worker_count < 0:
       raise ValueError(
           "Worker count should be greater than or equal zero."

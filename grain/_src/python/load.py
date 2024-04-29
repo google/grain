@@ -9,6 +9,7 @@ from grain._src.python import data_loader
 from grain._src.python import data_sources
 from grain._src.python import options
 from grain._src.python import samplers
+from grain._src.core import monitoring
 
 
 def load(
@@ -45,6 +46,7 @@ def load(
     DataLoader for this dataset.
   """
   usage_logging.log_event("load", tag_3="PyGrain")
+  monitoring.record_event("/grain/python/load/load_beacon")
   sampler = samplers.IndexSampler(
       num_records=len(source),
       shuffle=shuffle,

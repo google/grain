@@ -34,6 +34,7 @@ from absl import logging
 import array_record.python.array_record_data_source as array_record
 from etils import epath
 from grain._src.core import usage_logging
+from grain._src.core import monitoring
 
 T = TypeVar("T")
 
@@ -85,6 +86,9 @@ class RangeDataSource:
     self._step = step
     self._len = int(math.ceil((self._stop - self._start) / step))
     assert self._len >= 0, "length can't be negative."
+    monitoring.record_event(
+        "/grain/python/data_sources/range_data_source_beacon"
+    )
 
   def __len__(self) -> int:
     return self._len
@@ -134,6 +138,9 @@ class InMemoryDataSource(shared_memory.ShareableList):
     else:
       raise ValueError("Elements or name must be provided.")
     super().__init__(elements, name=name)
+    monitoring.record_event(
+        "/grain/python/data_sources/in_memory_data_source_beacon"
+    )
 
   def __str__(self):
     return f"InMemoryDataSource(name={self.shm.name}, len={len(self)})"
