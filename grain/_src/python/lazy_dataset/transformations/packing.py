@@ -15,6 +15,7 @@
 import collections
 from collections.abc import Sequence
 import copy
+import hashlib
 from typing import Any, Optional
 
 from grain._src.python.lazy_dataset import lazy_dataset
@@ -353,7 +354,14 @@ class FirstFitPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
     )
     assert self._packed_batch_num_bins <= self._num_packing_bins
     if self._shuffle_bins:
-      seed = abs(hash(tuple(sorted(self._packed_batch_parent_state.items()))))  # pytype: disable=attribute-error
+      seed = int.from_bytes(
+          hashlib.sha256(
+              str(sorted(self._packed_batch_parent_state.items())).encode(
+                  "utf-8"
+              )  # pytype: disable=attribute-error
+          ).digest(),
+          "big",
+      )
       self._shuffled_rows = np.random.default_rng(seed).permuted(
           range(self._packed_batch_num_bins)
       )
