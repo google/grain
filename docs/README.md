@@ -56,15 +56,12 @@ Steps in the pipeline:
 ## Training Loop
 
 *PyGrain* has no opinion on how you write your training loop. Instead PyGrain
-will always return a subclass of `DatasetIterator`. This should contain all you
-need:
+will return an iterator that implements:
 
--   `element_spec` describes the final features using dtype and shape.
--   `reset()` sets the iterator back to the beginning (useful for evaluation).
 -   `next(ds_iter)` returns the element as NumPy arrays.
--   `save()` and `load()` allow you to checkpoint the state of the input
-    pipelines. We aim to keep checkpoints small and strongly recommend users to
-    checkpoint input pipelines together with the model.
+-   `get_state()` and `set_state()` allow you to checkpoint the state of the
+    input pipelines. We aim to keep checkpoints small and strongly recommend
+    users to checkpoint input pipelines together with the model.
 
 ## Global Shuffle
 
@@ -77,10 +74,10 @@ In traditional *tf.data* pipelines global shuffle is implementing hierarchical
 3.  An in-memory shuffle buffer with ~10k elements shuffles elements on the fly.
 
 This is complex and makes it impossible to keep track of the position without
-storing massive checkpoints. Instead *PyGrain* performs a global shuffle of the
-indices in the beginning in each epoch and then reads the elements according to
-the random order. We have found this to be generally fast enough, even when
-using hard drives and distributed file systems.
+storing massive checkpoints. Instead *PyGrain* performs streaming global shuffle
+of the indices in the beginning of each epoch and then reads the elements
+according to the random order. We have found this to be generally fast enough,
+even when using hard drives and distributed file systems.
 
 The index shuffle code can be found [here](https://github.com/google/grain/tree/main/grain/_src/python/experimental/index_shuffle).
 
