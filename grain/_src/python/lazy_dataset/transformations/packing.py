@@ -353,7 +353,16 @@ class FirstFitPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
     )
     assert self._packed_batch_num_bins <= self._num_packing_bins
     if self._shuffle_bins:
-      seed = abs(hash(tuple(sorted(self._packed_batch_parent_state.items()))))  # pytype: disable=attribute-error
+
+      seed = abs(
+          hash(
+              tuple(
+                  sorted(
+                      tree.flatten_with_path(self._packed_batch_parent_state)
+                  )
+              )
+          )
+      )  # pytype: disable=attribute-error
       self._shuffled_rows = np.random.default_rng(seed).permuted(
           range(self._packed_batch_num_bins)
       )
