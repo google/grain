@@ -485,20 +485,20 @@ class FirstFitPackLazyIterDatasetTest(parameterized.TestCase):
             "targets_positions": [0, 1, 2],
         },
         {
-            "inputs": [1, 2, 3],
-            "targets": [10, 0, 0],
-            "inputs_segment_ids": [1, 1, 1],
-            "targets_segment_ids": [1, 0, 0],
-            "inputs_positions": [0, 1, 2],
-            "targets_positions": [0, 0, 0],
-        },
-        {
             "inputs": [6, 0, 0],
             "targets": [50, 60, 0],
             "inputs_segment_ids": [1, 0, 0],
             "targets_segment_ids": [1, 1, 0],
             "inputs_positions": [0, 0, 0],
             "targets_positions": [0, 1, 0],
+        },
+        {
+            "inputs": [1, 2, 3],
+            "targets": [10, 0, 0],
+            "inputs_segment_ids": [1, 1, 1],
+            "targets_segment_ids": [1, 0, 0],
+            "inputs_positions": [0, 1, 2],
+            "targets_positions": [0, 0, 0],
         },
     ]
 

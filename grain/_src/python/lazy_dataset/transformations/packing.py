@@ -12,9 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Implements packing transformations."""
+
 import collections
 from collections.abc import Sequence
 import copy
+import hashlib
+import json
 from typing import Any, Optional
 
 from grain._src.python.lazy_dataset import lazy_dataset
@@ -353,7 +356,10 @@ class FirstFitPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
     )
     assert self._packed_batch_num_bins <= self._num_packing_bins
     if self._shuffle_bins:
-      seed = abs(hash(tuple(sorted(self._packed_batch_parent_state.items()))))  # pytype: disable=attribute-error
+      hash_str = hashlib.sha1(
+          json.dumps(self._packed_batch_parent_state, sort_keys=True).encode()
+      ).hexdigest()
+      seed = abs(int(hash_str, 16))
       self._shuffled_rows = np.random.default_rng(seed).permuted(
           range(self._packed_batch_num_bins)
       )
