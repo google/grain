@@ -13,12 +13,15 @@
 # limitations under the License.
 """Mixing transformation for LazyDataset."""
 
+from __future__ import annotations
+
 import abc
 import bisect
+from collections.abc import Sequence
 import dataclasses
 import functools
 import sys
-from typing import Any, Optional, Sequence, Tuple, TypeVar, Union
+from typing import Any, TypeVar
 
 from grain._src.core import exceptions
 from grain._src.python.lazy_dataset import lazy_dataset
@@ -42,7 +45,7 @@ class DatasetSelectionMap(abc.ABC):
     """Returns the length of this dataset."""
 
   @abc.abstractmethod
-  def __getitem__(self, index: int) -> Tuple[int, int]:
+  def __getitem__(self, index: int) -> tuple[int, int]:
     """Returns the dataset and the index within the dataset of global index."""
 
 
@@ -53,7 +56,7 @@ class SelectionWithProportionsMap(DatasetSelectionMap):
   def __init__(
       self,
       parents: Sequence[lazy_dataset.LazyMapDataset],
-      proportions: Optional[Sequence[Union[float, int]]] = None,
+      proportions: Sequence[float] | None = None,
   ):
     # Normalize proportions
     if proportions is None:
@@ -91,8 +94,8 @@ class MixedLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   def __init__(
       self,
       parents: Sequence[lazy_dataset.LazyMapDataset[T]],
-      proportions: Optional[Sequence[Union[float, int]]] = None,
-      selection_map: Optional[DatasetSelectionMap] = None,
+      proportions: Sequence[float] | None = None,
+      selection_map: DatasetSelectionMap | None = None,
   ):
     """Initializes the mixed dataset.
 
@@ -140,7 +143,7 @@ class _MixedLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
   def __init__(
       self,
       parents: Sequence[lazy_dataset.LazyDatasetIterator[T]],
-      proportions: Optional[Sequence[Union[float, int]]] = None,
+      proportions: Sequence[int] | None = None,
   ):
     super().__init__()
     self._parents = parents
@@ -191,7 +194,7 @@ class MixedLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
   def __init__(
       self,
       parents: Sequence[lazy_dataset.LazyIterDataset],
-      proportions: Optional[Sequence[Union[float, int]]] = None,
+      proportions: Sequence[float] | None = None,
   ):
     super().__init__(parents)
     # Normalize proportions
@@ -219,7 +222,7 @@ class MixedLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
 
 
 def _float_to_int_proportions(
-    values: Sequence[Union[float, int]], scale_min_to: int = 100
+    values: Sequence[float], scale_min_to: int = 100
 ) -> Sequence[int]:
   """Scales at values by `scale_min_to/min(proportions)` and cast to int."""
   scale_factor = scale_min_to / min(values)
@@ -271,7 +274,7 @@ def _counts_per_dataset(k: int, proportions: tuple[int, ...]) -> Sequence[int]:
 
 def _dataset_and_key_of_next_element(
     k: int, proportions: tuple[int, ...]
-) -> Tuple[int, int]:
+) -> tuple[int, int]:
   """Compute the dataset and the key for interleaved datasets at position k.
 
   We are interleaving n infinite datasets into one combined dataset.

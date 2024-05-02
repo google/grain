@@ -13,9 +13,12 @@ This is equivalent to first-fit bin backing
 (https://en.wikipedia.org/wiki/First-fit_bin_packing).
 """
 
+from __future__ import annotations
+
 from collections.abc import Sequence
 import copy
 import dataclasses
+import sys
 from typing import Generic, TypeVar
 
 import jax
@@ -25,9 +28,12 @@ import tree
 
 
 _T = TypeVar("_T")
+_IS_PY310 = sys.version_info >= (3, 10)
 
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
+@dataclasses.dataclass(
+    **({"frozen": True, "kw_only": True} if _IS_PY310 else {"frozen": True})
+)
 class _SuccessfulRowOrFailingComponents:
   # Holds the index of the row to put a new element into if it can fit,
   # or None if it can't fit into any row.
