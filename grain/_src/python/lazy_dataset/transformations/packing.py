@@ -327,19 +327,24 @@ class FirstFitPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
     # The last packed batch can be partial and have few bins with elements.
     self._packed_batch_num_bins = None
     self._packed_batch_parent_state = self._parent.get_state()
+    # _next_row gets reset between batches.
+    # _counter is a global counter for rows emitted, does not get reset.
     self._next_row = 0
+    self._counter = 0  # Used for RNG seed.
     self._shuffled_rows = None
 
   def get_state(self) -> dict[str, Any]:
     return {
         "parent": self._packed_batch_parent_state,
         "next_row": self._next_row,
+        "counter": self._counter,
     }
 
   def set_state(self, state: dict[str, Any]):
     self._reset()
     self._parent.set_state(state["parent"])
     self._next_row = state["next_row"]
+    self._counter = state["counter"]
 
   def _finalize_current_batch(self, element_for_shapes=None):
     assert self._current_batch is not None
@@ -353,7 +358,7 @@ class FirstFitPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
     )
     assert self._packed_batch_num_bins <= self._num_packing_bins
     if self._shuffle_bins:
-      seed = abs(hash(tuple(sorted(self._packed_batch_parent_state.items()))))  # pytype: disable=attribute-error
+      seed = self._counter
       self._shuffled_rows = np.random.default_rng(seed).permuted(
           range(self._packed_batch_num_bins)
       )
@@ -377,6 +382,7 @@ class FirstFitPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
         next_row = self._next_row
       element = tree.map_structure(lambda x: x[next_row], self._packed_batch)
       self._next_row += 1
+      self._counter += 1
       if self._next_row >= self._packed_batch_num_bins:
         self._packed_batch = None
         self._packed_batch_parent_state = None

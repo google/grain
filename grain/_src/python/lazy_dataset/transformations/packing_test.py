@@ -477,12 +477,12 @@ class FirstFitPackLazyIterDatasetTest(parameterized.TestCase):
 
     expected_elements = [
         {
-            "inputs": [4, 5, 0],
-            "targets": [20, 30, 40],
-            "inputs_segment_ids": [1, 1, 0],
-            "targets_segment_ids": [1, 1, 1],
-            "inputs_positions": [0, 1, 0],
-            "targets_positions": [0, 1, 2],
+            "inputs": [6, 0, 0],
+            "targets": [50, 60, 0],
+            "inputs_segment_ids": [1, 0, 0],
+            "targets_segment_ids": [1, 1, 0],
+            "inputs_positions": [0, 0, 0],
+            "targets_positions": [0, 1, 0],
         },
         {
             "inputs": [1, 2, 3],
@@ -493,12 +493,12 @@ class FirstFitPackLazyIterDatasetTest(parameterized.TestCase):
             "targets_positions": [0, 0, 0],
         },
         {
-            "inputs": [6, 0, 0],
-            "targets": [50, 60, 0],
-            "inputs_segment_ids": [1, 0, 0],
-            "targets_segment_ids": [1, 1, 0],
-            "inputs_positions": [0, 0, 0],
-            "targets_positions": [0, 1, 0],
+            "inputs": [4, 5, 0],
+            "targets": [20, 30, 40],
+            "inputs_segment_ids": [1, 1, 0],
+            "targets_segment_ids": [1, 1, 1],
+            "inputs_positions": [0, 1, 0],
+            "targets_positions": [0, 1, 2],
         },
     ]
 
