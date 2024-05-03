@@ -113,6 +113,13 @@ class FlatMapLazyMapDatasetTest(absltest.TestCase):
     actual_data = [flatmap_ds[i] for i in range(len(flatmap_ds))]
     self.assertEqual(expected_data, actual_data)
 
+  def test_empty_dataset(self):
+    flatmap_ds = flatmap.FlatMapLazyMapDataset(
+        lazy_dataset.RangeLazyMapDataset(0, 0),
+        VariableSizeCappedSplitWithNoTransform(max_fan_out=self.fan_out),
+    )
+    self.assertEmpty(flatmap_ds)
+
   def test_fan_out_exceeds_max_size_raises_error(self):
     with self.assertRaises(ValueError):
       longer_range_ds = lazy_dataset.RangeLazyMapDataset(0, 20)
