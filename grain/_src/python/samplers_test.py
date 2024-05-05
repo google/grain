@@ -233,15 +233,15 @@ class IndexSamplerTest(absltest.TestCase):
         shard_index=0, shard_count=3, drop_remainder=True
     )
     sampler = samplers.IndexSampler(
-        num_records=6,
+        num_records=8,
         shard_options=shard_options,
         shuffle=True,
         num_epochs=1,
         seed=32,
     )
     expected_metadata = [
-        record.RecordMetadata(index=0, record_key=0),
-        record.RecordMetadata(index=3, record_key=1),
+        record.RecordMetadata(index=0, record_key=6),
+        record.RecordMetadata(index=3, record_key=4),
     ]
     self.assertRecordMetadata(sampler, shard_options, expected_metadata)
 
@@ -249,15 +249,15 @@ class IndexSamplerTest(absltest.TestCase):
         shard_index=1, shard_count=3, drop_remainder=True
     )
     sampler = samplers.IndexSampler(
-        num_records=6,
+        num_records=8,
         shard_options=shard_options,
         shuffle=True,
         num_epochs=1,
         seed=32,
     )
     expected_metadata = [
-        record.RecordMetadata(index=1, record_key=2),
-        record.RecordMetadata(index=4, record_key=3),
+        record.RecordMetadata(index=1, record_key=7),
+        record.RecordMetadata(index=4, record_key=0),
     ]
     self.assertRecordMetadata(sampler, shard_options, expected_metadata)
 
@@ -265,15 +265,15 @@ class IndexSamplerTest(absltest.TestCase):
         shard_index=2, shard_count=3, drop_remainder=True
     )
     sampler = samplers.IndexSampler(
-        num_records=6,
+        num_records=8,
         shard_options=shard_options,
         shuffle=True,
         num_epochs=1,
         seed=32,
     )
     expected_metadata = [
-        record.RecordMetadata(index=2, record_key=4),
-        record.RecordMetadata(index=5, record_key=5),
+        record.RecordMetadata(index=2, record_key=1),
+        record.RecordMetadata(index=5, record_key=3),
     ]
     self.assertRecordMetadata(sampler, shard_options, expected_metadata)
 
@@ -289,9 +289,9 @@ class IndexSamplerTest(absltest.TestCase):
         seed=32,
     )
     expected_metadata = [
-        record.RecordMetadata(index=0, record_key=2),
-        record.RecordMetadata(index=3, record_key=1),
-        record.RecordMetadata(index=6, record_key=0),
+        record.RecordMetadata(index=0, record_key=6),
+        record.RecordMetadata(index=3, record_key=4),
+        record.RecordMetadata(index=6, record_key=7),
     ]
     self.assertRecordMetadata(sampler, shard_options, expected_metadata)
 
@@ -306,8 +306,8 @@ class IndexSamplerTest(absltest.TestCase):
         seed=32,
     )
     expected_metadata = [
-        record.RecordMetadata(index=1, record_key=5),
-        record.RecordMetadata(index=4, record_key=4),
+        record.RecordMetadata(index=1, record_key=0),
+        record.RecordMetadata(index=4, record_key=1),
         record.RecordMetadata(index=7, record_key=3),
     ]
     self.assertRecordMetadata(sampler, shard_options, expected_metadata)
@@ -323,8 +323,8 @@ class IndexSamplerTest(absltest.TestCase):
         seed=32,
     )
     expected_metadata = [
-        record.RecordMetadata(index=2, record_key=6),
-        record.RecordMetadata(index=5, record_key=7),
+        record.RecordMetadata(index=2, record_key=2),
+        record.RecordMetadata(index=5, record_key=5),
     ]
     self.assertRecordMetadata(sampler, shard_options, expected_metadata)
 
@@ -333,17 +333,17 @@ class IndexSamplerTest(absltest.TestCase):
         shard_index=0, shard_count=3, drop_remainder=True
     )
     sampler = samplers.IndexSampler(
-        num_records=6,
+        num_records=8,
         shard_options=shard_options,
         shuffle=True,
         num_epochs=2,
         seed=32,
     )
     expected_metadata = [
-        record.RecordMetadata(index=0, record_key=0),
-        record.RecordMetadata(index=3, record_key=1),
+        record.RecordMetadata(index=0, record_key=6),
+        record.RecordMetadata(index=3, record_key=4),
         record.RecordMetadata(index=6, record_key=0),
-        record.RecordMetadata(index=9, record_key=1),
+        record.RecordMetadata(index=9, record_key=2),
     ]
     self.assertRecordMetadata(sampler, shard_options, expected_metadata)
 
@@ -351,17 +351,17 @@ class IndexSamplerTest(absltest.TestCase):
         shard_index=1, shard_count=3, drop_remainder=True
     )
     sampler = samplers.IndexSampler(
-        num_records=6,
+        num_records=8,
         shard_options=shard_options,
         shuffle=True,
         num_epochs=2,
         seed=32,
     )
     expected_metadata = [
-        record.RecordMetadata(index=1, record_key=2),
-        record.RecordMetadata(index=4, record_key=3),
-        record.RecordMetadata(index=7, record_key=2),
-        record.RecordMetadata(index=10, record_key=3),
+        record.RecordMetadata(index=1, record_key=7),
+        record.RecordMetadata(index=4, record_key=0),
+        record.RecordMetadata(index=7, record_key=4),
+        record.RecordMetadata(index=10, record_key=1),
     ]
     self.assertRecordMetadata(sampler, shard_options, expected_metadata)
 
@@ -369,17 +369,17 @@ class IndexSamplerTest(absltest.TestCase):
         shard_index=2, shard_count=3, drop_remainder=True
     )
     sampler = samplers.IndexSampler(
-        num_records=6,
+        num_records=8,
         shard_options=shard_options,
         shuffle=True,
         num_epochs=2,
         seed=32,
     )
     expected_metadata = [
-        record.RecordMetadata(index=2, record_key=4),
-        record.RecordMetadata(index=5, record_key=5),
-        record.RecordMetadata(index=8, record_key=4),
-        record.RecordMetadata(index=11, record_key=5),
+        record.RecordMetadata(index=2, record_key=1),
+        record.RecordMetadata(index=5, record_key=3),
+        record.RecordMetadata(index=8, record_key=5),
+        record.RecordMetadata(index=11, record_key=7),
     ]
     self.assertRecordMetadata(sampler, shard_options, expected_metadata)
 
@@ -395,12 +395,12 @@ class IndexSamplerTest(absltest.TestCase):
         seed=32,
     )
     expected_metadata = [
-        record.RecordMetadata(index=0, record_key=2),
-        record.RecordMetadata(index=3, record_key=1),
-        record.RecordMetadata(index=6, record_key=0),
+        record.RecordMetadata(index=0, record_key=6),
+        record.RecordMetadata(index=3, record_key=4),
+        record.RecordMetadata(index=6, record_key=7),
         record.RecordMetadata(index=9, record_key=0),
         record.RecordMetadata(index=12, record_key=2),
-        record.RecordMetadata(index=15, record_key=1),
+        record.RecordMetadata(index=15, record_key=4),
     ]
     self.assertRecordMetadata(sampler, shard_options, expected_metadata)
 
@@ -415,10 +415,10 @@ class IndexSamplerTest(absltest.TestCase):
         seed=32,
     )
     expected_metadata = [
-        record.RecordMetadata(index=1, record_key=5),
-        record.RecordMetadata(index=4, record_key=4),
+        record.RecordMetadata(index=1, record_key=0),
+        record.RecordMetadata(index=4, record_key=1),
         record.RecordMetadata(index=7, record_key=3),
-        record.RecordMetadata(index=10, record_key=3),
+        record.RecordMetadata(index=10, record_key=1),
         record.RecordMetadata(index=13, record_key=5),
     ]
     self.assertRecordMetadata(sampler, shard_options, expected_metadata)
@@ -434,11 +434,11 @@ class IndexSamplerTest(absltest.TestCase):
         seed=32,
     )
     expected_metadata = [
-        record.RecordMetadata(index=2, record_key=6),
-        record.RecordMetadata(index=5, record_key=7),
+        record.RecordMetadata(index=2, record_key=2),
+        record.RecordMetadata(index=5, record_key=5),
         record.RecordMetadata(index=8, record_key=6),
-        record.RecordMetadata(index=11, record_key=7),
-        record.RecordMetadata(index=14, record_key=6),
+        record.RecordMetadata(index=11, record_key=3),
+        record.RecordMetadata(index=14, record_key=7),
     ]
     self.assertRecordMetadata(sampler, shard_options, expected_metadata)
 
