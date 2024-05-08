@@ -320,13 +320,13 @@ class FirstFitPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
 
   def _reset(self):
     self._current_batch = None  # Not yet fully packed.
-    self._current_batch_parent_state = None
+    self._current_batch_parent_state = self._parent.get_state()
     # If available, fully packed but rows [:self._next_row] were already
     # emitted.
     self._packed_batch = None
     # The last packed batch can be partial and have few bins with elements.
     self._packed_batch_num_bins = None
-    self._packed_batch_parent_state = self._parent.get_state()
+    self._packed_batch_parent_state = None
     # _next_row gets reset between batches.
     # _counter is a global counter for rows emitted, does not get reset.
     self._next_row = 0
@@ -334,20 +334,28 @@ class FirstFitPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
     self._shuffled_rows = None
 
   def get_state(self) -> dict[str, Any]:
+    if self._packed_batch_parent_state is None:
+      # If we haven't finished packing a batch or exausted the parent iterator
+      # packed_batch_parent_state will be None and current_batch_parent_state
+      # will point to the state before the first element in the current batch.
+      parent_state = self._current_batch_parent_state
+    else:
+      parent_state = self._packed_batch_parent_state
     return {
-        "parent": self._packed_batch_parent_state,
+        "parent": parent_state,
         "next_row": self._next_row,
         "counter": self._counter,
     }
 
   def set_state(self, state: dict[str, Any]):
-    self._reset()
     self._parent.set_state(state["parent"])
+    self._reset()
     self._next_row = state["next_row"]
     self._counter = state["counter"]
 
-  def _finalize_current_batch(self, element_for_shapes=None):
+  def _finalize_current_batch(self, element_for_shapes):
     assert self._current_batch is not None
+    assert self._current_batch_parent_state is not None
     self._packed_batch = self._current_batch.get_packed_batch()
     self._packed_batch_parent_state = self._current_batch_parent_state
     # Detect number of bins. The last batch can be partial.
@@ -372,7 +380,6 @@ class FirstFitPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
           self._length_struct,
           meta_features=self._meta_features,
       )
-    self._current_batch_parent_state = None
 
   def __next__(self):
     if self._packed_batch is not None:
@@ -391,53 +398,54 @@ class FirstFitPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
       return element
 
     while True:
+      prior_iterator_state = self._parent.get_state()
+      assert prior_iterator_state is not None
       try:
-        prior_iterator_state = self._parent.get_state()
-        assert prior_iterator_state is not None
         element = next(self._parent)
-        # Remove elements not in packing struct.
-        element = tree.map_structure_up_to(
-            self._length_struct, lambda x: x, element
-        )
-
-        if self._current_batch is None:  # pytype: disable=attribute-error
-          # Use `element` to set dtypes + trailing dimensions.
-          # We are not adding the element to the batch, just initializing it.
-          self._current_batch = packing_packed_batch.PackedBatch(
-              element,
-              self._num_packing_bins,
-              self._length_struct,
-              meta_features=self._meta_features,
-          )
-          self._current_batch_parent_state = prior_iterator_state
-
-        # Try adding element to the current packed batch.
-        failing_components = self._current_batch.try_add_to_batch(element)
-
-        # When we have a full batch, yield the current packed data,
-        # and then start a new batch with this element.
-        if failing_components is not None:
-          self._finalize_current_batch(element)
-          self._current_batch_parent_state = prior_iterator_state
-          assert self._current_batch is not None
-
-          if self._current_batch.try_add_to_batch(element) is not None:
-            # If we can't pack a single example into an empty batch then we
-            # can't continue at all.
-            element_shape = tree.map_structure(lambda x: x.shape, element)
-            raise ValueError(
-                "Could not add element to empty packed batch! Packed batch has"
-                f" packing sequence_lengths: {self._length_struct} while"
-                f" element has shape: {element_shape}"
-            )
-          # We now have packed batch.
-          return self.__next__()
-
       except StopIteration as e:
         if self._current_batch:
-          self._finalize_current_batch()
-          return self.__next__()
+          self._finalize_current_batch(None)
+          self._current_batch_parent_state = prior_iterator_state
+          return next(self)
         else:
           # The inner iterator is exhausted and there is no current batch, so
           # the packed iterator is also exhausted.
           raise StopIteration() from e
+        # Remove elements not in packing struct.
+
+      element = tree.map_structure_up_to(
+          self._length_struct, lambda x: x, element
+      )
+
+      if self._current_batch is None:  # pytype: disable=attribute-error
+        # Use `element` to set dtypes + trailing dimensions.
+        # We are not adding the element to the batch, just initializing it.
+        self._current_batch = packing_packed_batch.PackedBatch(
+            element,
+            self._num_packing_bins,
+            self._length_struct,
+            meta_features=self._meta_features,
+        )
+        self._current_batch_parent_state = prior_iterator_state
+
+      # Try adding element to the current packed batch.
+      failing_components = self._current_batch.try_add_to_batch(element)
+
+      # When we have a full batch, yield the current packed data,
+      # and then start a new batch with this element.
+      if failing_components is not None:
+        self._finalize_current_batch(element)
+        self._current_batch_parent_state = prior_iterator_state
+        assert self._current_batch is not None
+
+        if self._current_batch.try_add_to_batch(element) is not None:
+          # If we can't pack a single example into an empty batch then we
+          # can't continue at all.
+          element_shape = tree.map_structure(lambda x: x.shape, element)
+          raise ValueError(
+              "Could not add element to empty packed batch! Packed batch has"
+              f" packing sequence_lengths: {self._length_struct} while"
+              f" element has shape: {element_shape}"
+          )
+        # We now have packed batch.
+        return next(self)

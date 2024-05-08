@@ -747,6 +747,94 @@ class FirstFitPackLazyIterDatasetTest(parameterized.TestCase):
         input_elements, expected_elements, length_struct, num_packing_bins=2
     )
 
+  @parameterized.parameters(
+      {"restore_at_step": 0},
+      {"restore_at_step": 1},
+      {"restore_at_step": 2},
+      {"restore_at_step": 3},
+  )
+  def test_checkpointing(self, restore_at_step: int):
+    input_elements = [
+        {
+            "inputs": [1, 2, 3],
+            "targets": [10],
+        },
+        {
+            "inputs": [4, 5],
+            "targets": [20, 30, 40],
+        },
+        {
+            "inputs": [6],
+            "targets": [50, 60],
+        },
+    ]
+    input_elements = [
+        {k: np.asarray(v) for k, v in d.items()} for d in input_elements
+    ]
+    length_struct = {"inputs": 3, "targets": 3}
+    ld = packing.FirstFitPackLazyIterDataset(
+        data_sources.SourceLazyMapDataset(input_elements).to_iter_dataset(),
+        num_packing_bins=2,
+        length_struct=length_struct,
+        shuffle_bins=True,
+    )
+    # There will be 3 packed sequences as output.
+    data_iter = ld.__iter__()
+    actual_elements = []
+    for step in range(5):
+      state = data_iter.get_state()
+      if restore_at_step == step:
+        data_iter.set_state(state)
+      try:
+        next_element = next(data_iter)
+      except StopIteration:
+        continue
+      actual_elements.append(next_element)
+
+    expected_elements = [
+        {
+            "inputs": [1, 2, 3],
+            "targets": [10, 0, 0],
+            "inputs_segment_ids": [1, 1, 1],
+            "targets_segment_ids": [1, 0, 0],
+            "inputs_positions": [0, 1, 2],
+            "targets_positions": [0, 0, 0],
+        },
+        {
+            "inputs": [4, 5, 0],
+            "targets": [20, 30, 40],
+            "inputs_segment_ids": [1, 1, 0],
+            "targets_segment_ids": [1, 1, 1],
+            "inputs_positions": [0, 1, 0],
+            "targets_positions": [0, 1, 2],
+        },
+        {
+            "inputs": [6, 0, 0],
+            "targets": [50, 60, 0],
+            "inputs_segment_ids": [1, 0, 0],
+            "targets_segment_ids": [1, 1, 0],
+            "inputs_positions": [0, 0, 0],
+            "targets_positions": [0, 1, 0],
+        },
+    ]
+    expected_elements = [
+        {k: np.asarray(v) for k, v in d.items()} for d in expected_elements
+    ]
+
+    def _check_equivalence(path, actual_val, expected_val):
+      np.testing.assert_array_equal(
+          actual_val,
+          expected_val,
+          err_msg=(
+              f"Pytrees differ at path {path}.\n\n"
+              f"Actual: {actual_val}\n\nExpected: {expected_val}"
+          ),
+      )
+
+    np.testing.assert_equal(len(actual_elements), len(expected_elements))
+    for actual, expected in zip(actual_elements, expected_elements):
+      tree.map_structure_with_path(_check_equivalence, actual, expected)
+
 
 if __name__ == "__main__":
   absltest.main()
