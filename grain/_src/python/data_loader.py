@@ -43,6 +43,13 @@ from grain._src.python.samplers import Sampler
 from grain._src.python.shared_memory_array import SharedMemoryArray
 import numpy as np
 
+from grain._src.core import monitoring
+
+_api_usage_counter = monitoring.Counter(
+    "/grain/python/data_loader/api",
+    monitoring.Metadata(description="API initialization counter."),
+    fields=[("name", str)],
+)
 
 _T = TypeVar("_T")
 _IteratorState = dict[str, Any]
@@ -173,6 +180,7 @@ class DataLoader:
         supports worker_count >= 1 at the moment.
     """
     usage_logging.log_event("PyGrainDataLoader", tag_3="PyGrain")
+    _api_usage_counter.Increment("DataLoader")
     if worker_count and worker_count < 0:
       raise ValueError(
           "Worker count should be greater than or equal zero."

@@ -10,6 +10,14 @@ from grain._src.python import data_sources
 from grain._src.python import options
 from grain._src.python import samplers
 
+from grain._src.core import monitoring
+
+_api_usage_counter = monitoring.Counter(
+    "/grain/python/load/api",
+    monitoring.Metadata(description="API initialization counter."),
+    fields=[("name", str)],
+)
+
 
 def load(
     source: data_sources.RandomAccessDataSource,
@@ -45,6 +53,7 @@ def load(
     DataLoader for this dataset.
   """
   usage_logging.log_event("load", tag_3="PyGrain")
+  _api_usage_counter.Increment("load")
   sampler = samplers.IndexSampler(
       num_records=len(source),
       shuffle=shuffle,

@@ -28,14 +28,26 @@ from multiprocessing import shared_memory
 import os
 import threading
 import typing
-from typing import Any, Generic, Optional, Protocol, SupportsIndex, TypeVar
+from typing import Any, Generic, Optional, Protocol, SupportsIndex, TypeVar, Union
 
 from absl import logging
 import array_record.python.array_record_data_source as array_record
 from etils import epath
 from grain._src.core import usage_logging
 
+from grain._src.core import monitoring  # pylint: disable=g-bad-import-order
+from array_record.python.array_record_data_source import PathLikeOrFileInstruction
+
+_api_usage_counter = monitoring.Counter(
+    "/grain/python/data_sources/api",
+    monitoring.Metadata(description="API initialization counter."),
+    fields=[("name", str)],
+)
+
 T = TypeVar("T")
+ArrayRecordDataSourcePaths = Union[
+    PathLikeOrFileInstruction, Sequence[PathLikeOrFileInstruction]
+]
 
 _SparseArray = collections.namedtuple(
     "SparseArray", ["indices", "values", "dense_shape"]
@@ -43,7 +55,18 @@ _SparseArray = collections.namedtuple(
 
 
 class ArrayRecordDataSource(array_record.ArrayRecordDataSource):
-  pass
+  """Data source for ArrayRecord files."""
+
+  def __init__(self, paths: ArrayRecordDataSourcePaths):
+    """Creates a new ArrayRecordDataSource object.
+
+    See `array_record.ArrayRecordDataSource` for more details.
+
+    Args:
+      paths: A single path/FileInstruction or list of paths/FileInstructions.
+    """
+    super().__init__(paths)
+    _api_usage_counter.Increment("ArrayRecordDataSource")
 
 
 @typing.runtime_checkable
@@ -85,6 +108,7 @@ class RangeDataSource:
     self._step = step
     self._len = int(math.ceil((self._stop - self._start) / step))
     assert self._len >= 0, "length can't be negative."
+    _api_usage_counter.Increment("RangeDataSource")
 
   def __len__(self) -> int:
     return self._len
@@ -134,6 +158,7 @@ class InMemoryDataSource(shared_memory.ShareableList):
     else:
       raise ValueError("Elements or name must be provided.")
     super().__init__(elements, name=name)
+    _api_usage_counter.Increment("InMemoryDataSource")
 
   def __str__(self):
     return f"InMemoryDataSource(name={self.shm.name}, len={len(self)})"

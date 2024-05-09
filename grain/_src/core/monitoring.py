@@ -21,3 +21,13 @@ class NoOpMetric:
 
   def Get(self, *args, **kwargs):
     del args, kwargs
+
+
+class Metadata:
+  """Grain metric no-op metadata."""
+
+  def __init__(self, *args, **kwargs):
+    del args, kwargs
+
+
+Counter = Metric = EventMetric = NoOpMetric

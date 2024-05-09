@@ -21,6 +21,12 @@ py_library(
 )
 
 py_library(
+    name = "monitoring",
+    srcs = ["monitoring.py"],
+    srcs_version = "PY3",
+)
+
+py_library(
     name = "parallel",
     srcs = ["parallel.py"],
     srcs_version = "PY3",
