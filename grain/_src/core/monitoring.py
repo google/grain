@@ -21,15 +21,3 @@ class NoOpMetric:
 
   def Get(self, *args, **kwargs):
     del args, kwargs
-
-
-# pylint: disable=invalid-name
-def get_metric(*args, **kwargs) -> NoOpMetric:
-  return NoOpMetric(*args, **kwargs)
-
-
-def record_event(*args):
-  del args
-
-
-counter_metric = value_metric = gauge_metric = get_metric
