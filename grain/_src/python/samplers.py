@@ -21,6 +21,16 @@ from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations.shuffle import ShuffleLazyMapDataset
 import numpy as np
 
+from grain._src.core import monitoring
+
+_api_usage_counter = monitoring.Counter(
+    "/grain/python/samplers/api",
+    metadata=monitoring.Metadata(
+        description="Sampler API initialization counter."
+    ),
+    fields=[("name", str)],
+)
+
 
 class Sampler(Protocol):
   """Interface for PyGrain-compatible sampler."""
@@ -52,6 +62,7 @@ class SequentialSampler:
     else:
       self._max_index = self._num_records
     self._seed = seed
+    _api_usage_counter.Increment("SequentialSampler")
 
   def __repr__(self) -> str:
     return (
@@ -130,6 +141,7 @@ class IndexSampler:
         )
     if shuffle:
       self._record_keys = ShuffleLazyMapDataset(self._record_keys, seed=seed)
+    _api_usage_counter.Increment("IndexSampler")
 
   def __repr__(self) -> str:
     return (

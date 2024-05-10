@@ -57,6 +57,16 @@ from grain._src.python import options as grain_options
 from grain._src.python import shared_memory_array
 import numpy as np
 
+from grain._src.core import monitoring
+
+_api_usage_counter = monitoring.Counter(
+    "/grain/python/lazy_dataset/api",
+    metadata=monitoring.Metadata(
+        description="Lazy Dataset API initialization counter."
+    ),
+    fields=[("name", str)],
+)
+
 T = TypeVar("T")
 _MAX_PREFETCH_THREADS = 1000
 
@@ -89,6 +99,7 @@ class LazyMapDataset(Sequence[T], abc.ABC):
     else:
       self._parents = tuple(parents)
     usage_logging.log_event("LazyMapDataset", tag_3="PyGrain")
+    _api_usage_counter.Increment("LazyMapDataset")
 
   @property
   def parents(self) -> Sequence[LazyMapDataset]:
@@ -162,6 +173,7 @@ class LazyIterDataset(Iterable[T], abc.ABC):
     else:
       self._parents = tuple(parents)
     usage_logging.log_event("LazyIterDataset", tag_3="PyGrain")
+    _api_usage_counter.Increment("LazyIterDataset")
 
   @property
   def parents(self) -> Sequence[Union[LazyMapDataset, LazyIterDataset]]:
