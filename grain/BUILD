@@ -61,6 +61,7 @@ py_library(
     srcs = ["python_lazy_dataset.py"],
     srcs_version = "PY3",
     # Implicit build flag
+    visibility = ["//visibility:public"],
     deps = [
         "//grain/_src/python/lazy_dataset",  # build_cleaner: keep
         "//grain/_src/python/lazy_dataset:data_loader",  # build_cleaner: keep
