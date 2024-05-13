@@ -339,13 +339,17 @@ class DataLoader:
       raise ValueError(
           "Sampler in checkpoint does not match dataloader sampler.\n"
           f"sampler in checkpoint: {state[_SAMPLER]}\n"
-          f"sampler in dataloader: {repr(self._sampler)}"
+          f"sampler in dataloader: {repr(self._sampler)}\n"
+          "Grain uses `repr(sampler)` to validate the sampler, so you "
+          "may need to implement a custom `__repr__`."
       )
     if state[_DATA_SOURCE] != repr(self._data_source):
       raise ValueError(
           "DataSource in checkpoint does not match datasource in dataloader.\n"
           f"data source in checkpoint: {state[_DATA_SOURCE]}\n"
-          f"data source in dataloader: {repr(self._data_source)}"
+          f"data source in dataloader: {repr(self._data_source)}\n"
+          "Grain uses `repr(data_source)` to validate the source, so you "
+          "may need to implement a custom `__repr__`."
       )
 
 
