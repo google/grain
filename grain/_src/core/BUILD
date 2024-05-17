@@ -24,6 +24,8 @@ py_library(
     name = "monitoring",
     srcs = ["monitoring.py"],
     srcs_version = "PY3",
+    deps = [
+    ],
 )
 
 py_library(
