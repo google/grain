@@ -33,7 +33,12 @@ EPOCH = "_epoch"
 SEED = "_seed"
 # Serialized record.
 RECORD = "_record"
+# If `TfFlatMapIndexSampler` is used, the sampler emits each input record for
+# `max_fan_out` times. This field indicates the offset of the current record
+# between [0, max_fant_out). A MapTransform should then apply a map function and
+# extract the element at the offset.
+FLAT_MAP_OFFSET = "_flat_map_offset"
 
 META_FEATURES = frozenset(
-    [INDEX, RECORD_KEY, DATASET_INDEX, EPOCH, SEED, RECORD]
+    [INDEX, RECORD_KEY, DATASET_INDEX, EPOCH, FLAT_MAP_OFFSET, SEED, RECORD]
 )
