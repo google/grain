@@ -30,6 +30,7 @@ py_library(
         ":core",  # build_cleaner: keep
         ":python_experimental",  # build_cleaner: keep
         "//grain/_src/core:constants",  # build_cleaner: keep
+        "//grain/_src/core:monitoring",  # build_cleaner: keep
         "//grain/_src/core:transforms",  # build_cleaner: keep
         "//grain/_src/python:checkpoint_handlers",  # build_cleaner: keep
         "//grain/_src/python:data_loader",  # build_cleaner: keep
