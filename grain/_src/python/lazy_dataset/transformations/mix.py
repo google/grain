@@ -62,7 +62,10 @@ class SelectionWithProportionsMap(DatasetSelectionMap):
     if proportions is None:
       proportions = [1] * len(parents)
     elif 0 in proportions:
-      raise ValueError("Must specify all non-zero proportions for mixing.")
+      raise ValueError(
+          "Must specify all non-zero proportions for mixing,"
+          f" but specified proportions are {proportions}."
+      )
     else:
       proportions = _float_to_int_proportions(proportions)
     assert len(parents) == len(proportions)
