@@ -19,7 +19,6 @@ import abc
 import bisect
 from collections.abc import Sequence
 import dataclasses
-import functools
 import sys
 from typing import Any, TypeVar
 
@@ -229,7 +228,6 @@ def _float_to_int_proportions(
   return [int(p * scale_factor) for p in values]
 
 
-@functools.cache
 def _counts_per_dataset(k: int, proportions: tuple[int, ...]) -> Sequence[int]:
   """Calculates the counts per dataset at n elements accordings to proportions.
 
