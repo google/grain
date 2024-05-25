@@ -230,6 +230,13 @@ class DataLoader:
             "DataLoader for greater flexibility."
         )
       # pylint: enable=protected-access
+    self._max_index = self._sampler.get_max_index()
+    if self._max_index is not None and self._shard_options.drop_remainder:
+      self._max_index = (
+          self._max_index
+          // self._shard_options.shard_count
+          * self._shard_options.shard_count
+      )
 
   @property
   def multiprocessing_options(self) -> options.MultiprocessingOptions:
@@ -300,7 +307,9 @@ class DataLoader:
 
     with futures.ThreadPoolExecutor(self._read_options.num_threads) as executor:
       # Fill the buffer initially.
-      while len(buffer) < buffer_size:
+      while len(buffer) < buffer_size and (
+          self._max_index is None or next_index < self._max_index
+      ):
         buffer.append(executor.submit(prefetch_element, next_index))
         next_index += self._global_num_workers
 
@@ -313,8 +322,9 @@ class DataLoader:
           # End of sampler.
           return
         yield element
-        buffer.append(executor.submit(prefetch_element, next_index))
-        next_index += self._global_num_workers
+        if self._max_index is None or next_index < self._max_index:
+          buffer.append(executor.submit(prefetch_element, next_index))
+          next_index += self._global_num_workers
 
   def _read_and_transform_data(
       self, last_seen_index: int
