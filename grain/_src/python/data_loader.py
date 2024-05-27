@@ -91,9 +91,7 @@ def _determine_worker_count(input_worker_count: int | None) -> int:
     raise ValueError("Can't determine worker count. Please set worker count.")
 
 
-@dataclasses.dataclass(
-    **({"slots": True, "frozen": True} if _IS_PY310 else {"frozen": True})
-)
+@dataclasses.dataclass(**{"slots": True, "frozen": True})
 class _ReaderQueueElement:
   """Element to be added to the reader queue."""
 
