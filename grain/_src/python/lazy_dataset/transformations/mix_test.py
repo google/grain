@@ -415,7 +415,7 @@ class MixedLazyIterDatasetTest(absltest.TestCase):
     self.assertEqual(expected_two_epochs, actual_values)
 
   def test_mixing_zero_one_probability_fails_with_error(self):
-    with self.assertRaises(ValueError):
+    with self.assertRaisesRegex(ValueError, "[0, 1]"):
       _ = mix.MixedLazyIterDataset(
           parents=[self.even_ds, self.odd_ds], proportions=[0, 1]
       )
