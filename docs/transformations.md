@@ -76,7 +76,7 @@ class RemoveEvenElements(FilterTransform):
     return element % 2
 ```
 
-## BatchTransform
+## Batch
 
 To apply the Batch transform, just pass `grain.Batch(batch_size=batch_size, drop_remainder=drop_remainder)`.
 
