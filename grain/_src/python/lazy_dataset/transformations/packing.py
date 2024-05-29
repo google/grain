@@ -411,8 +411,8 @@ class FirstFitPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
           # The inner iterator is exhausted and there is no current batch, so
           # the packed iterator is also exhausted.
           raise StopIteration() from e
-        # Remove elements not in packing struct.
 
+      # Remove elements not in packing struct.
       element = tree.map_structure_up_to(
           self._length_struct, lambda x: x, element
       )
