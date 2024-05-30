@@ -25,25 +25,13 @@ T = TypeVar("T")
 
 
 def _make_batch(values: Sequence[T]) -> T:
-  """Returns a batch of values with a new batch dimension at the front."""
   num_values = len(values)
-  if num_values <= 0:
-    raise ValueError("Cannot batch 0 values. Please file a bug.")
-  if num_values == 1:
+  if num_values == 0:
+    return ()
+  elif num_values == 1:
     return tree.map_structure(lambda x: np.expand_dims(x, axis=0), values[0])
-  try:
+  else:
     return tree.map_structure(lambda *xs: np.stack(xs), values[0], *values[1:])
-  except ValueError as e:
-    # NumPy error message doesn't include actual shapes and dtypes. Provide a
-    # more helpful error message.
-    element_specs = tree.map_structure(
-        lambda x: f"{x.dtype}{list(x.shape)}", values
-    )
-    element_specs = "\n".join([str(x) for x in element_specs])
-    raise ValueError(
-        "All input elements have the same structure and shape but"
-        f" got:\n{element_specs}"
-    ) from e
 
 
 class _BatchLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
@@ -119,8 +107,7 @@ class BatchLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   def __str__(self) -> str:
     return (
         f"BatchMapLazyDataset(parent={self._parent},"
-        f" batch_size={self._batch_size},"
-        f" drop_remainder={self._drop_remainder})"
+        f" batch_size={self._batch_size})"
     )
 
 
