@@ -154,6 +154,12 @@ class LazyMapDataset(Sequence[T], abc.ABC):
         self, read_options=read_options or grain_options.ReadOptions()
     )
 
+  def __str__(self) -> str:
+    """Provides a default string representation for the dataset."""
+    return (
+        f"{self.__class__.__name__}(parents={[str(p) for p in self._parents]})"
+    )
+
 
 class LazyIterDataset(Iterable[T], abc.ABC):
   """Abstract base class for all LazyIterDataset classes."""
@@ -342,6 +348,13 @@ class PrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
     self._next_index = state["next_index"]
     if self._prefetch_buffer_size > 0:
       self._buffer = None
+
+  def __str__(self) -> str:
+    return (
+        f"PrefetchLazyDatasetIterator(dataset={self._dataset},"
+        f" dataset_length={self._dataset_length},"
+        f" next_index={self._next_index}, allow_nones={self._allow_nones})"
+    )
 
 
 def _iterator_with_context(
