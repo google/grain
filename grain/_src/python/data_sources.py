@@ -43,6 +43,13 @@ _api_usage_counter = monitoring.Counter(
     monitoring.Metadata(description="API initialization counter."),
     fields=[("name", str)],
 )
+_bytes_read_counter = monitoring.Counter(
+    "/grain/python/data_sources/bytes_read",
+    monitoring.Metadata(
+        description="Number of bytes read by a data source.",
+    ),
+    fields=[("source", str)],
+)
 
 T = TypeVar("T")
 ArrayRecordDataSourcePaths = Union[
@@ -67,6 +74,11 @@ class ArrayRecordDataSource(array_record.ArrayRecordDataSource):
     """
     super().__init__(paths)
     _api_usage_counter.Increment("ArrayRecordDataSource")
+
+  def __getitem__(self, record_key: SupportsIndex) -> bytes:
+    data = super().__getitem__(record_key)
+    _bytes_read_counter.IncrementBy(len(data), self.__class__.__name__)
+    return data
 
 
 @typing.runtime_checkable
@@ -116,6 +128,7 @@ class RangeDataSource:
   def __getitem__(self, record_key: SupportsIndex) -> int:
     record_key = record_key.__index__()
     assert record_key >= 0 and record_key < self._len
+    _bytes_read_counter.IncrementBy(4, self.__class__.__name__)  # sizeof(int)=4
     return self._start + record_key * self._step
 
   def __repr__(self) -> str:
