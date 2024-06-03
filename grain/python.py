@@ -43,6 +43,7 @@ from ._src.python.data_sources import (
     RandomAccessDataSource,
     RangeDataSource,
 )
+from ._src.python.experimental.index_shuffle.python import index_shuffle_module as index_shuffle
 from ._src.python.grain_pool import (GrainPool, GrainPoolElement)
 from ._src.python.load import load
 from ._src.python.operations import (
