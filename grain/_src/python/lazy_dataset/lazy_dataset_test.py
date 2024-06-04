@@ -32,6 +32,13 @@ class FilterEvenElementsOnly(transforms.FilterTransform):
     return element % 2
 
 
+@dataclasses.dataclass(frozen=True)
+class NoneEvenElementsOnly(transforms.MapTransform):
+
+  def map(self, element: int):
+    return element if element % 2 else None
+
+
 class RangeLazyMapDatasetTest(absltest.TestCase):
 
   def test_len(self):
@@ -221,7 +228,7 @@ class MultiprocessPrefetchLazyIterDatasetTest(parameterized.TestCase):
           record_state_interval=lazy_dataset._RECORD_STATE_INTERVAL_S,
       ),
       dict(
-          testcase_name='10_workers_with_continuous_state_rcording',
+          testcase_name='10_workers_with_continuous_state_recording',
           num_workers=10,
           record_state_interval=0,
       ),
@@ -272,6 +279,77 @@ class MultiprocessPrefetchLazyIterDatasetTest(parameterized.TestCase):
           ds,
           options.MultiprocessingOptions(num_workers=1),
       )
+
+
+class ThreadPrefetchLazyIterDatasetTest(parameterized.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    self.ds = filter_lazy_dataset.FilterLazyIterDataset(
+        lazy_dataset.RangeLazyMapDataset(20).to_iter_dataset(),
+        FilterEvenElementsOnly(),
+    )
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='thread',
+          prefetch_buffer_size=1,
+          warm_start=True,
+      ),
+      dict(
+          testcase_name='thread_large_buffer',
+          prefetch_buffer_size=20,
+          warm_start=False,
+      ),
+      dict(
+          testcase_name='thread_huge_buffer',
+          prefetch_buffer_size=200,
+          warm_start=True,
+      ),
+  )
+  def test_prefetch_data(self, prefetch_buffer_size: int, warm_start: bool):
+    prefetch_lazy_iter_ds = lazy_dataset.ThreadPrefetchLazyIterDataset(
+        self.ds, prefetch_buffer_size=prefetch_buffer_size
+    )
+    ds = prefetch_lazy_iter_ds.__iter__()
+    if warm_start:
+      ds.start_prefetch()
+    actual = list(ds)
+    expected = list(range(1, 20, 2))
+    self.assertSequenceEqual(actual, expected)
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='default_record_state_interval',
+          warm_start=False,
+      ),
+      dict(
+          testcase_name='continuous_state_recording',
+          warm_start=True,
+      ),
+  )
+  def test_checkpoint(self, warm_start: bool):
+    with mock.patch.object(lazy_dataset, '_RECORD_STATE_INTERVAL_S', 0):
+      ds = lazy_dataset.ThreadPrefetchLazyIterDataset(
+          self.ds,
+          prefetch_buffer_size=500,
+      )
+      ds_iter = ds.__iter__()
+      if warm_start:
+        ds_iter.start_prefetch()
+
+      max_steps = 10
+      values_without_interruption = []
+      checkpoints = []
+      for _ in range(max_steps):
+        checkpoints.append(ds_iter.get_state())  # pytype: disable=attribute-error
+        values_without_interruption.append(next(ds_iter))
+
+      for starting_step in range(9):
+        ds_iter.set_state(checkpoints[starting_step])  # pytype: disable=attribute-error
+        for i in range(starting_step, max_steps):
+          value = next(ds_iter)
+          self.assertEqual(value, values_without_interruption[i])
 
 
 if __name__ == '__main__':

@@ -28,6 +28,7 @@ from ._src.python.lazy_dataset.lazy_dataset import (
     LazyIterDataset,
     LazyDatasetIterator,
     RangeLazyMapDataset,
+    ThreadPrefetchLazyIterDataset,
 )
 from ._src.python.lazy_dataset.transformations.batch import (
     BatchLazyMapDataset,

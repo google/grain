@@ -28,6 +28,7 @@ py_test(
         "//grain/_src/core:transforms",
         "//grain/_src/python:options",
         "//grain/_src/python/lazy_dataset/transformations:filter",
+        "//grain/_src/python/lazy_dataset/transformations:map",
         "//grain/_src/python/lazy_dataset/transformations:slice",
     ],
 )

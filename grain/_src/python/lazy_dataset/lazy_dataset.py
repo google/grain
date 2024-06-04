@@ -44,8 +44,10 @@ from collections.abc import Iterable, Iterator, Sequence
 import contextlib
 import copy
 import functools
+import queue
+import threading
 import time
-from typing import Any, Optional, Protocol, TypeVar, Union, overload
+from typing import Any, Callable, Mapping, Optional, Protocol, TypeVar, Union, overload
 
 from concurrent import futures
 from grain._src.core import sharding
@@ -302,7 +304,7 @@ class PrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
 
   def __next__(self) -> T:
     # We loop here to skip all None elements (in case the underlying dataset
-    # is sparse), if self._allow_sparsity = False, else we return Nones too.
+    # is sparse), if self._allow_nones = False, else we return Nones too.
     while True:
       if self._next_index == self._dataset_length:
         break
@@ -531,6 +533,224 @@ class MultiprocessPrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
         (self._state[_LAST_WORKER_INDEX] + 1)
         % self._multiprocessing_options.num_workers,
     )
+
+
+class ThreadPrefetchLazyIterDataset(LazyIterDataset[T]):
+  """Iterable dataset that uses a synchronized queue for prefetching.
+
+  This is a thread-based alternative to `MultiprocessPrefetchLazyIterDataset`.
+
+  Attributes:
+    parent: The parent dataset to prefetch from.
+    prefetch_buffer_size: The size of the prefetch buffer.
+  """
+
+  def __init__(
+      self,
+      parent: LazyIterDataset[T],
+      *,
+      prefetch_buffer_size: int,
+  ):
+    super().__init__(parent)
+    self._prefetch_buffer_size = prefetch_buffer_size
+
+  def __iter__(self) -> ThreadPrefetchLazyDatasetIterator[T]:
+    return ThreadPrefetchLazyDatasetIterator(
+        self._parent, self._prefetch_buffer_size
+    )
+
+
+# Type for the iterator state.
+StateT = Mapping[str, Any]
+
+
+# Representation of the initial state, pre-next.
+_INITIAL_STATE_SENTINEL = object()
+
+
+class ThreadPrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
+  """Iterator that performs prefetching using a synchronized queue."""
+
+  def __init__(
+      self,
+      dataset: LazyIterDataset[T],
+      prefetch_buffer_size: int,
+  ):
+    super().__init__()
+    self._dataset: LazyIterDataset[T] = dataset
+    self._iterator: LazyDatasetIterator[T] = dataset.__iter__()
+    self._prefetch_buffer_size = prefetch_buffer_size
+    self._state: StateT | None = None
+
+    self._work_queue = queue.Queue[Callable[[], Any]]()
+    self._work_thread: threading.Thread | None = None
+    # Whether this iterator is closed, meaning it should no longer be used.
+    self._closed = False
+    self._producer_running: threading.Event = None
+    self._buffer: queue.Queue[tuple[T, StateT, Exception | None]] = None
+
+  def _start_producer(self, initial_state: None):
+    """Starts the producer.
+
+    Args:
+      initial_state: An optional initial state to set on the delegate.
+
+    Raises:
+      ValueError: If the iterator has been closed, or if the producer is already
+        running.
+    """
+    if self._closed:
+      raise ValueError("Attempting to use a closed iterator.")
+    if self._producer_running is not None:
+      raise ValueError("The producer is already running.")
+
+    if self._work_thread is None:
+      self._work_thread = threading.Thread(
+          target=self._work_loop, daemon=True, name=f"Prefetch-{self._dataset}"
+      )
+      self._work_thread.start()
+
+    self._state = initial_state
+    self._producer_running = threading.Event()
+    self._producer_running.set()
+    self._buffer = queue.Queue(maxsize=self._prefetch_buffer_size)
+    self._work_queue.put(
+        functools.partial(
+            self._producer,
+            initial_state=initial_state,
+            output_buffer=self._buffer,
+            running=self._producer_running,
+        )
+    )
+
+  def _producer(
+      self,
+      initial_state,
+      output_buffer: queue.Queue[tuple[T, StateT, Exception | None]],
+      running: threading.Event,
+  ) -> None:
+    """Functor that fills the queue to its capacity.
+
+    Should be run on a separate thread.
+
+    Args:
+      initial_state: state to initialize the itertor to.
+      output_buffer: queue to fill.
+      running: an sync event for whether the thread should run.
+    """
+    try:
+      if initial_state is not None:
+        self._iterator.set_state(initial_state)
+      else:
+        # Put the initial state of the iterator with a sentinel value, which
+        # will be discarded. This avoids having to call a potentially expensive
+        # and unused get_state() on the main thread.
+        output_buffer.put(
+            (_INITIAL_STATE_SENTINEL, self._iterator.get_state(), None)
+        )
+      # Check if the producer thread should be running every time an item is
+      # retrieved from the queue.
+      while running.is_set():
+        while True:
+          element, state = next(self._iterator), self._iterator.get_state()
+          output_buffer.put((element, state, None))
+          break
+    except Exception as e:  # pylint: disable=broad-except
+      output_buffer.put((None, None, e))
+
+  def __next__(self):
+    self.start_prefetch()
+    assert self._buffer is not None
+    element, state, err = self._buffer.get()
+
+    if err is not None:
+      raise err
+    if self._state is None or element is _INITIAL_STATE_SENTINEL:
+      # Both conditions should be simultaneously true and only once.
+      assert element is _INITIAL_STATE_SENTINEL
+      if self._state is not None:
+        raise AssertionError(f"Expected {self._state=} to be None. {state=}.")
+      self._state = state
+      # Current call has retrieved a sentinel value and the initial state,
+      # make another call to retrieve the actual first value from the delegate
+      # iterator.
+      return next(self)
+    else:
+      self._state = state
+      return element
+
+  def close(self):
+    """Stops the iterator. No further calls to the iterator are expected."""
+    self._closed = True
+    self._stop_producer()
+    # Make sure the work thread isn't blocked, so it can exit.
+    self._work_queue.put(lambda: None)
+
+  def start_prefetch(self):
+    """Starts the producer if it's not already running.
+
+    Raises:
+      ValueError: If the iterator has been closed, or if there's already a
+        running producer.
+    """
+    if self._closed:
+      raise ValueError("Attempting to use a closed iterator.")
+    if self._producer_running is None:
+      self._start_producer(None)
+
+  def _stop_producer(self):
+    """Stops the producer if it's currently running."""
+    producer_running = self._producer_running
+    buffer = self._buffer
+    if producer_running is None:
+      # Nothing to stop.
+      return
+
+    producer_running.clear()
+    # Remove entries from the buffer to unblock the producer, so that it checks
+    # producer_running.is_set() and exits.
+    assert buffer is not None  # PyType.
+    while True:
+      try:
+        buffer.get_nowait()
+      except queue.Empty:
+        break
+    self._producer_running = None
+    self._buffer = None
+
+  def get_state(self):
+    self.start_prefetch()
+    if self._state is None:
+      # `__next__` has not been called, the first tuple in the buffer should be
+      # made up of the `_INITIAL_STATE_SENTINEL` value and the initial state of
+      # the delegate iterator.
+      buffer = self._buffer
+      assert buffer is not None  # PyType.
+      val, state, err = buffer.get()
+      if err is not None:
+        raise err
+      assert val is _INITIAL_STATE_SENTINEL
+      assert state is not None
+      self._state = state
+    return self._state
+
+  def set_state(self, state):
+    self._stop_producer()
+    self._state = state
+    if self._prefetch_buffer_size > 0:
+      self._buffer = None
+    self._start_producer(state)
+
+  def _work_loop(self):
+    while not self._closed:
+      self._work_queue.get()()
+
+  def _start_worker(self):
+    if self._work_thread is None:
+      self._work_thread = threading.Thread(
+          target=self._work_loop, daemon=True, name=f"Prefetch-{self._dataset}"
+      )
+      self._work_thread.start()
 
 
 class RangeLazyMapDataset(LazyMapDataset[int]):
