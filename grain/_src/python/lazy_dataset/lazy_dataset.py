@@ -476,36 +476,7 @@ class MultiprocessPrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
 
   def __next__(self) -> T:
     if self._iterator is None:
-      state = self._state
-      parent = self._parent
-
-      def get_element_producer_fn(
-          worker_index: int, worker_count: int
-      ) -> Iterator[tuple[T, Optional[dict[str, Any]]]]:
-        # Recover from the last recorded state for the given worker.
-        worker_state = state[_WORKERS_STATE][str(worker_index)]
-        parent.set_parent_maps_slice(slice(worker_index, None, worker_count))
-        it = iter(parent)
-        it.set_state(worker_state)  # pytype: disable=attribute-error
-        # Skip the required number of iterations after the last recorded state.
-        for _ in range(state[_ITERATIONS_TO_SKIP][str(worker_index)]):
-          _ = next(it)
-        last_recorded_state_time = time.time()
-        for element in it:
-          now = time.time()
-          element = _copy_struct_to_shm(element)
-          if now - last_recorded_state_time >= _RECORD_STATE_INTERVAL_S:
-            last_recorded_state_time = now
-            yield (element, it.get_state())  # pytype: disable=attribute-error
-          else:
-            yield (element, None)
-
-      self._raw_iterator = grain_pool.MultiProcessIterator(
-          get_element_producer_fn,
-          self._multiprocessing_options,
-          (self._state[_LAST_WORKER_INDEX] + 1)
-          % self._multiprocessing_options.num_workers,
-      )
+      self._raw_iterator = self._create_iterator_context()
       self._iterator = _iterator_with_context(self._raw_iterator)
 
     result, state = next(self._iterator)
@@ -526,6 +497,40 @@ class MultiprocessPrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
 
   def get_state(self) -> dict[str, Any]:
     return copy.deepcopy(self._state)
+
+  def _create_iterator_context(self) -> grain_pool.MultiProcessIterator[T]:
+    """Creates a `MultiProcessIterator`."""
+
+    state = self._state
+    parent = self._parent
+
+    def get_element_producer_fn(
+        worker_index: int, worker_count: int
+    ) -> Iterator[tuple[T, Optional[dict[str, Any]]]]:
+      # Recover from the last recorded state for the given worker.
+      worker_state = state[_WORKERS_STATE][str(worker_index)]
+      parent.set_parent_maps_slice(slice(worker_index, None, worker_count))
+      it = iter(parent)
+      it.set_state(worker_state)  # pytype: disable=attribute-error
+      # Skip the required number of iterations after the last recorded state.
+      for _ in range(state[_ITERATIONS_TO_SKIP][str(worker_index)]):
+        _ = next(it)
+      last_recorded_state_time = time.time()
+      for element in it:
+        now = time.time()
+        element = _copy_struct_to_shm(element)
+        if now - last_recorded_state_time >= _RECORD_STATE_INTERVAL_S:
+          last_recorded_state_time = now
+          yield (element, it.get_state())  # pytype: disable=attribute-error
+        else:
+          yield (element, None)
+
+    return grain_pool.MultiProcessIterator(
+        get_element_producer_fn,
+        self._multiprocessing_options,
+        (self._state[_LAST_WORKER_INDEX] + 1)
+        % self._multiprocessing_options.num_workers,
+    )
 
 
 class RangeLazyMapDataset(LazyMapDataset[int]):
