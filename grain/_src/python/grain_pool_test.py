@@ -17,6 +17,7 @@ from collections.abc import Iterator
 import multiprocessing
 import os
 import signal
+import sys
 from typing import Any
 
 from absl.testing import absltest

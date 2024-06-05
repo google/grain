@@ -319,7 +319,6 @@ class GrainPool(Iterator[T]):
         ],
         num_workers=min(_PROCESS_MANAGEMENT_MAX_THREADS, self.num_processes),
     )
-
     logging.info("Grain pool started all child processes.")
     self._next_worker_index = worker_index_to_start_reading
 
