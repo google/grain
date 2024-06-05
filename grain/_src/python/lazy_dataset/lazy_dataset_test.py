@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Tests for LazyDataset."""
+
 import dataclasses
-from typing import cast
+from typing import cast, TypeVar
 from unittest import mock
+
 from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.core import transforms
@@ -23,13 +25,17 @@ from grain._src.python import options
 from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import filter as filter_lazy_dataset
 from grain._src.python.lazy_dataset.transformations import slice as slice_lazy_dataset  # pylint: disable=unused-import
+from typing_extensions import override
+
+
+_T = TypeVar('_T')
 
 
 @dataclasses.dataclass(frozen=True)
-class FilterEvenElementsOnly(transforms.FilterTransform):
+class FilterKeepingOddElementsOnly(transforms.FilterTransform):
 
-  def filter(self, element: int):
-    return element % 2
+  def filter(self, element: int) -> bool:
+    return bool(element % 2)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -86,7 +92,7 @@ class PrefetchLazyIterDatasetTest(parameterized.TestCase):
     super().setUp()
     self.range_ds = lazy_dataset.RangeLazyMapDataset(20)
     self.filtered_range_ds = filter_lazy_dataset.FilterLazyMapDataset(
-        self.range_ds, FilterEvenElementsOnly()
+        self.range_ds, FilterKeepingOddElementsOnly()
     )
     self.prefetch_lazy_iter_ds = lazy_dataset.PrefetchLazyIterDataset(
         self.range_ds, read_options=options.ReadOptions()
@@ -182,7 +188,7 @@ class MultiprocessPrefetchLazyIterDatasetTest(parameterized.TestCase):
         ds, read_options=options.ReadOptions()
     )
     self.iter_ds = filter_lazy_dataset.FilterLazyIterDataset(
-        ds, FilterEvenElementsOnly()
+        ds, FilterKeepingOddElementsOnly()
     )
 
   @parameterized.named_parameters(
@@ -287,7 +293,7 @@ class ThreadPrefetchLazyIterDatasetTest(parameterized.TestCase):
     super().setUp()
     self.ds = filter_lazy_dataset.FilterLazyIterDataset(
         lazy_dataset.RangeLazyMapDataset(20).to_iter_dataset(),
-        FilterEvenElementsOnly(),
+        FilterKeepingOddElementsOnly(),
     )
 
   @parameterized.named_parameters(
@@ -350,6 +356,47 @@ class ThreadPrefetchLazyIterDatasetTest(parameterized.TestCase):
         for i in range(starting_step, max_steps):
           value = next(ds_iter)
           self.assertEqual(value, values_without_interruption[i])
+
+
+class Source15IntsFrom0LazyMapDataset(lazy_dataset.LazyMapDataset[int]):
+
+  def __init__(self):
+    super().__init__(parents=[])
+
+  @override
+  def __len__(self) -> int:
+    return 15
+
+  @override
+  def __getitem__(self, index):
+    return index
+
+
+class IdentityLazyMapDataset(lazy_dataset.LazyMapDataset[_T]):
+
+  def __init__(self, parent: lazy_dataset.LazyMapDataset[_T]):
+    super().__init__(parents=parent)
+
+  @override
+  def __len__(self) -> int:
+    return len(self._parent)
+
+  @override
+  def __getitem__(self, index):
+    return self._parent[index]
+
+
+class LazyMapDatasetTest(absltest.TestCase):
+
+  def test_parents_source_dataset_has_no_parents(self):
+    ds = Source15IntsFrom0LazyMapDataset()
+    self.assertEmpty(ds.parents)
+
+  def test_parents_single_source_dataset_has_one_parent(self):
+    source_ds = Source15IntsFrom0LazyMapDataset()
+    ds = IdentityLazyMapDataset(source_ds)
+    self.assertLen(ds.parents, 1)
+    self.assertEqual(ds.parents[0], source_ds)
 
 
 if __name__ == '__main__':
