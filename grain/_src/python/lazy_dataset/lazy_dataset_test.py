@@ -372,6 +372,16 @@ class Source15IntsFrom0LazyMapDataset(lazy_dataset.LazyMapDataset[int]):
     return index
 
 
+class Source15IntsFrom0LazyIterDataset(lazy_dataset.LazyIterDataset[int]):
+
+  def __init__(self):
+    super().__init__(parents=[])
+
+  @override
+  def __iter__(self):
+    return iter(range(15))
+
+
 class IdentityLazyMapDataset(lazy_dataset.LazyMapDataset[_T]):
 
   def __init__(self, parent: lazy_dataset.LazyMapDataset[_T]):
@@ -386,7 +396,7 @@ class IdentityLazyMapDataset(lazy_dataset.LazyMapDataset[_T]):
     return self._parent[index]
 
 
-class LazyMapDatasetTest(absltest.TestCase):
+class LazyDatasetTest(parameterized.TestCase):
 
   def test_parents_source_dataset_has_no_parents(self):
     ds = Source15IntsFrom0LazyMapDataset()
@@ -397,6 +407,50 @@ class LazyMapDatasetTest(absltest.TestCase):
     ds = IdentityLazyMapDataset(source_ds)
     self.assertLen(ds.parents, 1)
     self.assertEqual(ds.parents[0], source_ds)
+
+  @parameterized.parameters(
+      dict(initial_ds=Source15IntsFrom0LazyMapDataset()),
+      dict(initial_ds=Source15IntsFrom0LazyIterDataset()),
+  )
+  def test_filter_with_callable(self, initial_ds):
+    ds = initial_ds.filter(lambda x: x % 2 == 0)
+    self.assertSequenceEqual(list(iter(ds)), [0, 2, 4, 6, 8, 10, 12, 14])
+
+  @parameterized.parameters(
+      dict(initial_ds=Source15IntsFrom0LazyMapDataset()),
+      dict(initial_ds=Source15IntsFrom0LazyIterDataset()),
+  )
+  def test_filter_with_transform(self, initial_ds):
+    ds = initial_ds.filter(FilterKeepingOddElementsOnly())
+    self.assertSequenceEqual(list(iter(ds)), [1, 3, 5, 7, 9, 11, 13])
+
+  @parameterized.parameters(
+      dict(initial_ds=Source15IntsFrom0LazyMapDataset()),
+      dict(initial_ds=Source15IntsFrom0LazyIterDataset()),
+  )
+  def test_filter_with_callable_and_transform_combined(self, initial_ds):
+    ds = initial_ds.filter(lambda x: 3 < x < 10).filter(
+        FilterKeepingOddElementsOnly()
+    )
+    self.assertSequenceEqual(list(iter(ds)), [5, 7, 9])
+
+  @parameterized.parameters(
+      dict(initial_ds=Source15IntsFrom0LazyMapDataset()),
+      dict(initial_ds=Source15IntsFrom0LazyIterDataset()),
+  )
+  def test_filter_has_one_parent(self, initial_ds):
+    ds = initial_ds.filter(lambda x: True)
+    self.assertLen(ds.parents, 1)
+
+  def test_filter_subscription_returns_correct_elements(self):
+    ds = Source15IntsFrom0LazyMapDataset().filter(lambda x: x % 2 == 0)
+    self.assertSequenceEqual(list(iter(ds)), [0, 2, 4, 6, 8, 10, 12, 14])
+    self.assertEqual(ds[0], 0)
+    self.assertEqual(ds[12], 12)
+    self.assertEqual(ds[8], 8)
+    self.assertIsNone(ds[3])
+    self.assertIsNone(ds[5])
+    self.assertIsNone(ds[13])
 
 
 if __name__ == '__main__':

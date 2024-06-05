@@ -23,7 +23,6 @@ Element = Any
 T = TypeVar("T")  # pylint: disable=invalid-name
 
 
-@lazy_dataset.lazy_map_dataset_function("filter")
 class FilterLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   """Filter LazyMapDataset."""
 
@@ -90,7 +89,6 @@ class _FilterLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
     return f"FilterLazyDatasetIterator(parent={self._parent}"
 
 
-@lazy_dataset.lazy_iter_dataset_function("filter")
 class FilterLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
   """Filter transformation for LazyIterDatasets."""
 

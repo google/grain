@@ -4,12 +4,16 @@ licenses(["notice"])
 
 py_library(
     name = "lazy_dataset",
-    srcs = ["lazy_dataset.py"],
+    srcs = [
+        "lazy_dataset.py",
+        "//grain/_src/python/lazy_dataset/transformations:core_transformations",
+    ],
     data = ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
     srcs_version = "PY3",
     deps = [
         "//grain/_src/core:monitoring",
         "//grain/_src/core:sharding",
+        "//grain/_src/core:transforms",
         "//grain/_src/core:tree",
         "//grain/_src/core:usage_logging",
         "//grain/_src/python:grain_pool",
@@ -27,7 +31,6 @@ py_test(
         ":lazy_dataset",
         "//grain/_src/core:transforms",
         "//grain/_src/python:options",
-        "//grain/_src/python/lazy_dataset/transformations:filter",
         "//grain/_src/python/lazy_dataset/transformations:map",
         "//grain/_src/python/lazy_dataset/transformations:slice",
     ],

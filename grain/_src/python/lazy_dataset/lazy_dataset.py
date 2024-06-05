@@ -40,17 +40,18 @@ from __future__ import annotations
 
 import abc
 import collections
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 import contextlib
 import copy
 import functools
 import queue
 import threading
 import time
-from typing import Any, Callable, Mapping, Optional, Protocol, TypeVar, Union, overload
+from typing import Any, Mapping, Optional, Protocol, TypeVar, Union, overload
 
 from concurrent import futures
 from grain._src.core import sharding
+from grain._src.core import transforms
 from grain._src.core import tree
 from grain._src.core import usage_logging
 import multiprocessing as mp
@@ -128,6 +129,29 @@ class LazyMapDataset(Sequence[T], abc.ABC):
   def __getitem__(self, index):
     """Returns the element for the index or None if missing."""
 
+  def filter(
+      self, transform: transforms.FilterTransform | Callable[[T], bool]
+  ) -> "LazyMapDataset[T]":
+    """Returns a dataset containing only the elements that match the filter.
+
+    `ds = ds.filter(lambda x: x > 5)`
+    is equivalent to
+    `ds = FilterLazyMapDataset(ds, lambda x: x > 5)`
+
+    Args:
+      transform: Either a `FilterTransform` containing the `filter` method or a
+        callable that takes an element and returns a boolean.
+
+    Returns:
+      A dataset of the same type containing only the elements for which the
+      filter transform returns `True`.
+    """
+    # Loaded lazily due to a circular dependency (lazy_dataset <-> filter).
+    # pylint: disable=g-import-not-at-top
+    from grain._src.python.lazy_dataset.transformations import filter as filter_dataset
+    # pylint: enable=g-import-not-at-top
+    return filter_dataset.FilterLazyMapDataset(parent=self, transform=transform)
+
   @classmethod
   def register_function(cls, name: str, function: RegisterableLazyMapDatasetFn):
     if name in cls._functions:
@@ -185,6 +209,31 @@ class LazyIterDataset(Iterable[T], abc.ABC):
   def _parent(self) -> Union[LazyMapDataset, LazyIterDataset]:
     assert len(self._parents) == 1, self._parents
     return self._parents[0]
+
+  def filter(
+      self, transform: transforms.FilterTransform | Callable[[T], bool]
+  ) -> "LazyIterDataset[T]":
+    """Returns a dataset containing only the elements that match the filter.
+
+    `ds = ds.filter(lambda x: x > 5)`
+    is equivalent to
+    `ds = FilterLazyIterDataset(ds, lambda x: x > 5)`
+
+    Args:
+      transform: Either a `FilterTransform` containing the `filter` method or a
+        callable that takes an element and returns a boolean.
+
+    Returns:
+      A dataset of the same type containing only the elements for which the
+      filter transform returns `True`.
+    """
+    # Loaded lazily due to a circular dependency (lazy_dataset <-> filter).
+    # pylint: disable=g-import-not-at-top
+    from grain._src.python.lazy_dataset.transformations import filter as filter_dataset
+    # pylint: enable=g-import-not-at-top
+    return filter_dataset.FilterLazyIterDataset(
+        parent=self, transform=transform
+    )
 
   def set_parent_maps_slice(self, sl: slice) -> None:
     """Replaces LazyMapDataset-type parents with their sliced versions.

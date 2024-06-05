@@ -67,7 +67,6 @@ py_library(
         "//grain/_src/python/lazy_dataset:data_loader",  # build_cleaner: keep
         "//grain/_src/python/lazy_dataset:data_sources",  # build_cleaner: keep
         "//grain/_src/python/lazy_dataset/transformations:batch",  # build_cleaner: keep
-        "//grain/_src/python/lazy_dataset/transformations:filter",  # build_cleaner: keep
         "//grain/_src/python/lazy_dataset/transformations:flatmap",  # build_cleaner: keep
         "//grain/_src/python/lazy_dataset/transformations:map",  # build_cleaner: keep
         "//grain/_src/python/lazy_dataset/transformations:mix",  # build_cleaner: keep

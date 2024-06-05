@@ -2,6 +2,15 @@ package(default_visibility = ["//grain:__subpackages__"])
 
 licenses(["notice"])
 
+# Transformations that are considered core and are supported by the convenient API in
+# LazyMapDataset or LazyIterDataset.
+filegroup(
+    name = "core_transformations",
+    srcs = [
+        "filter.py",
+    ],
+)
+
 py_library(
     name = "batch",
     srcs = ["batch.py"],
@@ -22,22 +31,11 @@ py_test(
     ],
 )
 
-py_library(
-    name = "filter",
-    srcs = ["filter.py"],
-    srcs_version = "PY3",
-    deps = [
-        "//grain/_src/core:transforms",
-        "//grain/_src/python/lazy_dataset",
-    ],
-)
-
 py_test(
     name = "filter_test",
     srcs = ["filter_test.py"],
     srcs_version = "PY3",
     deps = [
-        ":filter",
         "//grain/_src/core:transforms",
         "//grain/_src/python/lazy_dataset",
     ],
