@@ -48,7 +48,9 @@ _api_usage_counter = monitoring.Counter(
 _bytes_read_counter = monitoring.Counter(
     "/grain/python/data_sources/bytes_read",
     monitoring.Metadata(
-        description="Number of bytes read by a data source.",
+        description=(
+            "Number of bytes produced by a data source via random access."
+        ),
     ),
     root=grain_monitoring.get_monitoring_root(),
     fields=[("source", str)],
@@ -131,7 +133,6 @@ class RangeDataSource:
   def __getitem__(self, record_key: SupportsIndex) -> int:
     record_key = record_key.__index__()
     assert record_key >= 0 and record_key < self._len
-    _bytes_read_counter.IncrementBy(4, self.__class__.__name__)  # sizeof(int)=4
     return self._start + record_key * self._step
 
   def __repr__(self) -> str:
