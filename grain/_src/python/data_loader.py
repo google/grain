@@ -24,6 +24,7 @@ import json
 from multiprocessing import pool
 import os
 import sys
+import time
 from typing import Any, Callable, Optional, Sequence, Tuple, TypeVar, Union
 
 from absl import logging
@@ -51,6 +52,14 @@ _api_usage_counter = monitoring.Counter(
     monitoring.Metadata(description="API initialization counter."),
     root=grain_monitoring.get_monitoring_root(),
     fields=[("name", str)],
+)
+_iterator_get_next_metric = monitoring.EventMetric(
+    "/grain/python/data_loader/iterator_get_next",
+    monitoring.Metadata(
+        description="Gauge for PyGrainDatasetIterator.__next__() latency.",
+        units=monitoring.Units.SECONDS,
+    ),
+    root=grain_monitoring.get_monitoring_root(),
 )
 
 _T = TypeVar("_T")
@@ -424,6 +433,7 @@ class PyGrainDatasetIterator(collections.abc.Iterator[_T]):
       self._iterator = _iterator_with_context(self._raw_iterator)
 
   def __next__(self) -> _T:
+    start_time = time.time()
     if self._iterator is None:
       self._create_iterator()
 
@@ -437,6 +447,7 @@ class PyGrainDatasetIterator(collections.abc.Iterator[_T]):
     self._state[_LAST_SEEN_INDICES][
         str(last_worker_index)
     ] = result_record.metadata.index
+    _iterator_get_next_metric.Record(time.time() - start_time)
     return result_record.data
 
   def get_state(self) -> bytes:

@@ -1,6 +1,12 @@
 """Grain metrics."""
 
 
+class Units:
+  """Grain metric units."""
+
+  SECONDS = 'seconds'
+
+
 class NoOpMetric:
   """Grain metric no-op implementation."""
 
