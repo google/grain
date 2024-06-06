@@ -50,7 +50,7 @@ from grain._src.core import monitoring
 _api_usage_counter = monitoring.Counter(
     "/grain/python/data_loader/api",
     monitoring.Metadata(description="API initialization counter."),
-    root=grain_monitoring.get_monitoring_root(),
+    root=grain_monitoring.GRAIN_MONITORING_ROOT,
     fields=[("name", str)],
 )
 _iterator_get_next_metric = monitoring.EventMetric(
@@ -59,7 +59,7 @@ _iterator_get_next_metric = monitoring.EventMetric(
         description="Gauge for PyGrainDatasetIterator.__next__() latency.",
         units=monitoring.Units.SECONDS,
     ),
-    root=grain_monitoring.get_monitoring_root(),
+    root=grain_monitoring.GRAIN_MONITORING_ROOT,
 )
 
 _T = TypeVar("_T")

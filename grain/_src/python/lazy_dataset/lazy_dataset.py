@@ -70,7 +70,7 @@ _api_usage_counter = monitoring.Counter(
     metadata=monitoring.Metadata(
         description="Lazy Dataset API initialization counter."
     ),
-    root=grain_monitoring.get_monitoring_root(),
+    root=grain_monitoring.GRAIN_MONITORING_ROOT,
     fields=[("name", str)],
 )
 
