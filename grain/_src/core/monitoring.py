@@ -32,5 +32,5 @@ class Metadata:
 
 Counter = Metric = EventMetric = NoOpMetric
 
-def get_custom_root() -> None:
+def get_monitoring_root() -> None:
   return None

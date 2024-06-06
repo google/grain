@@ -28,6 +28,7 @@ from typing import Any, Callable, Optional, Sequence, Tuple, TypeVar, Union
 
 from absl import logging
 from concurrent import futures
+from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import sharding
 from grain._src.core import transforms
 from grain._src.core import tree
@@ -48,6 +49,7 @@ from grain._src.core import monitoring
 _api_usage_counter = monitoring.Counter(
     "/grain/python/data_loader/api",
     monitoring.Metadata(description="API initialization counter."),
+    root=grain_monitoring.get_monitoring_root(),
     fields=[("name", str)],
 )
 

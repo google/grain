@@ -36,6 +36,7 @@ Using the interfaces defined in `collections.abc` you can think of
 LazyMapDataset as (infinite) Sequence, LazyIterDataset as Iterable and
 LazyDatasetIterator as Iterator.
 """
+
 from __future__ import annotations
 
 import abc
@@ -50,6 +51,7 @@ import time
 from typing import Any, Mapping, Optional, Protocol, TypeVar, Union, overload
 
 from concurrent import futures
+from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import sharding
 from grain._src.core import transforms
 from grain._src.core import tree
@@ -62,11 +64,13 @@ import numpy as np
 
 from grain._src.core import monitoring
 
+
 _api_usage_counter = monitoring.Counter(
     "/grain/python/lazy_dataset/api",
     metadata=monitoring.Metadata(
         description="Lazy Dataset API initialization counter."
     ),
+    root=grain_monitoring.get_monitoring_root(),
     fields=[("name", str)],
 )
 

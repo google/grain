@@ -33,6 +33,7 @@ from typing import Any, Generic, Optional, Protocol, SupportsIndex, TypeVar, Uni
 from absl import logging
 import array_record.python.array_record_data_source as array_record
 from etils import epath
+from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import usage_logging
 
 from grain._src.core import monitoring  # pylint: disable=g-bad-import-order
@@ -41,6 +42,7 @@ from array_record.python.array_record_data_source import PathLikeOrFileInstructi
 _api_usage_counter = monitoring.Counter(
     "/grain/python/data_sources/api",
     monitoring.Metadata(description="API initialization counter."),
+    root=grain_monitoring.get_monitoring_root(),
     fields=[("name", str)],
 )
 _bytes_read_counter = monitoring.Counter(
@@ -48,6 +50,7 @@ _bytes_read_counter = monitoring.Counter(
     monitoring.Metadata(
         description="Number of bytes read by a data source.",
     ),
+    root=grain_monitoring.get_monitoring_root(),
     fields=[("source", str)],
 )
 
