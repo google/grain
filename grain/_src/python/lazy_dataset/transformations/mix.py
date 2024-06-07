@@ -128,6 +128,13 @@ class MixedLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     dataset, dataset_index = self._selection_map[index]
     return self._parents[dataset][dataset_index]
 
+  def __str__(self) -> str:
+    return (
+        f"MixedLazyMapDataset(parents={[str(p) for p in self._parents]},"
+        f" selection_map={self._selection_map},"
+        f" proportions={self._proportions})"
+    )
+
 
 @dataclasses.dataclass
 class _MixedLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):

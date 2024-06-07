@@ -58,7 +58,7 @@ class _BatchLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
           raise e
         break
     if not values:
-      raise StopIteration
+      raise StopIteration(f"Running out of data in {self._parent}")
     return _make_batch(values)
 
   def get_state(self):
