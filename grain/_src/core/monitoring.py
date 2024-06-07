@@ -1,42 +1,33 @@
 """Grain metrics."""
 
 
+# pylint: disable=invalid-name
+# pylint: disable=g-statement-before-imports
+def __getattr__(name, *args, **kwargs):
+  """Intercepts all attribute lookups and returns a no-op function."""
+  del args, kwargs
+  if name == 'Units':
+    return Units
+  return NoOp
+
+
 class Units:
   """Grain metric units."""
 
   SECONDS = 'seconds'
 
 
-class NoOpMetric:
-  """Grain metric no-op implementation."""
+class NoOp:
+  """No-Op Grain metric."""
 
   def __init__(self, *args, **kwargs):
-    del args, kwargs
+    """No-op initialization method."""
+    pass
 
-  def IncrementBy(self, *args, **kwargs):
-    del args, kwargs
+  def __getattribute__(self, name):
+    """Handles all other method calls and does nothing."""
+    return lambda *args, **kwargs: self
 
-  def Increment(self, *args, **kwargs):
-    self.IncrementBy(1, *args, **kwargs)
-
-  def Set(self, *args, **kwargs):
-    del args, kwargs
-
-  def Record(self, *args, **kwargs):
-    del args, kwargs
-
-  def Get(self, *args, **kwargs):
-    del args, kwargs
-
-
-class Metadata:
-  """Grain metric no-op metadata."""
-
-  def __init__(self, *args, **kwargs):
-    del args, kwargs
-
-
-Counter = Metric = EventMetric = NoOpMetric
 
 def get_monitoring_root() -> None:
   return None
