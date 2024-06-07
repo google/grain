@@ -23,12 +23,6 @@ import grain._src.python.lazy_dataset.transformations.slice as slice_ds
 
 class SliceLazyMapDatasetTest(parameterized.TestCase):
 
-  def setUp(self):
-    super().setUp()
-    self.data_len = 20
-    self.range_ds = lazy_dataset.RangeLazyMapDataset(self.data_len)
-    self.range_py_list = list(range(self.data_len))
-
   @parameterized.parameters(
       (0, 1, 20),
       (0, 2, 10),
@@ -38,38 +32,38 @@ class SliceLazyMapDatasetTest(parameterized.TestCase):
       (2, 3, 6),
   )
   def test_len(self, start: int, step: int, expected_len: int):
-    range_ds_for_process = slice_ds.SliceLazyMapDataset(
-        self.range_ds, slice(start, self.data_len, step)
-    )
+    ds = lazy_dataset.RangeLazyMapDataset(20)
+    sl = slice(start, 20, step)
+    range_ds_for_process = slice_ds.SliceLazyMapDataset(ds, sl)
     self.assertLen(range_ds_for_process, expected_len)
 
   @parameterized.parameters(
       itertools.product(range(-8, 8), range(-9, 8), [-2, -1, 1, 2])
   )
   def test_getitem(self, start: int, stop: int, step: int):
-    expected = self.range_py_list[start:stop:step]
-    ds = slice_ds.SliceLazyMapDataset(self.range_ds, slice(start, stop, step))
-    actual = [ds[i] for i in range(len(ds))]
-    self.assertSequenceEqual(actual, expected)
+    ds = lazy_dataset.RangeLazyMapDataset(20)
+    ds = slice_ds.SliceLazyMapDataset(ds, slice(start, stop, step))
+    ds_items = [ds[i] for i in range(len(ds))]
+    self.assertSequenceEqual(ds_items, list(range(20))[start:stop:step])
 
   @parameterized.parameters(
       itertools.product(range(-8, 8), range(-9, 8), [-2, -1, 1, 2])
   )
   def test_getitem_sice(self, start: int, stop: int, step: int):
-    expected = self.range_py_list[start:stop:step]
-    ds = self.range_ds[start:stop:step]
-    actual = [ds[i] for i in range(len(ds))]
-    self.assertSequenceEqual(actual, expected)
+    ds = lazy_dataset.RangeLazyMapDataset(20)
+    ds = ds[start:stop:step]
+    ds_items = [ds[i] for i in range(len(ds))]
+    self.assertSequenceEqual(ds_items, list(range(20))[start:stop:step])
 
   @parameterized.parameters(
       itertools.product(range(-8, 8), range(-9, 8), [-2, -1, 1, 2])
   )
   def test_iter(self, start: int, stop: int, step: int):
-    expected = self.range_py_list[start:stop:step]
-    ds = slice_ds.SliceLazyMapDataset(self.range_ds, slice(start, stop, step))
+    ds = lazy_dataset.RangeLazyMapDataset(20)
+    ds = slice_ds.SliceLazyMapDataset(ds, slice(start, stop, step))
     ds_iter = iter(ds)
-    actual = list(ds_iter)
-    self.assertSequenceEqual(actual, expected)
+    ds_items = list(ds_iter)
+    self.assertSequenceEqual(ds_items, list(range(20))[start:stop:step])
 
 
 if __name__ == "__main__":
