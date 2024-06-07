@@ -61,6 +61,17 @@ _iterator_get_next_metric = monitoring.EventMetric(
     ),
     root=grain_monitoring.get_monitoring_root(),
 )
+_time_to_first_batch_metric = monitoring.EventMetric(
+    "/grain/python/data_loader/time_to_first_batch",
+    metadata=monitoring.Metadata(
+        description=(
+            "Time for the first PyGrainDatasetIterator.__next__() call"
+            " execution."
+        )
+    ),
+    root=grain_monitoring.get_monitoring_root(),
+    fields=[("source", str)],
+)
 
 _T = TypeVar("_T")
 _IteratorState = dict[str, Any]
@@ -398,6 +409,7 @@ class PyGrainDatasetIterator(collections.abc.Iterator[_T]):
     self._state = state
     self._raw_iterator = None
     self._iterator = None
+    self._first_batch_read = False
 
   def __iter__(self) -> PyGrainDatasetIterator[_T]:
     return self
@@ -448,6 +460,12 @@ class PyGrainDatasetIterator(collections.abc.Iterator[_T]):
         str(last_worker_index)
     ] = result_record.metadata.index
     _iterator_get_next_metric.Record(time.time() - start_time)
+    if not self._first_batch_read:
+      _time_to_first_batch_metric.Record(
+          time.time() - start_time,
+          self._data_loader._data_source.__class__.__name__,  # pylint: disable=protected-access
+      )
+      self._first_batch_read = True
     return result_record.data
 
   def get_state(self) -> bytes:
