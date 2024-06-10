@@ -19,6 +19,9 @@ Config options can be set via flags starting with '--grain_' or by calling
 from typing import Any
 
 from absl import flags
+from grain._src.core import monitoring as grain_monitoring
+
+from grain._src.core import monitoring
 
 # Performance optimisations. Consider most of these experimental. We might
 # remove them once we are confident that the default values work well for
@@ -109,6 +112,14 @@ _GRAIN_FLAGS = (
     _PREFETCH_BUFFER_SIZE,
 )
 
+_grain_experiment_metric = monitoring.Metric(
+    "/grain/experiment",
+    value_type=int,
+    metadata=monitoring.Metadata(description="Grain experiment opt-in metric."),
+    root=grain_monitoring.get_monitoring_root(),
+    fields=[("name", str)],
+)
+
 
 class Config:
   """Class for holding current Grain configuration."""
@@ -119,7 +130,9 @@ class Config:
   def __getattr__(self, name: str) -> Any:
     flag_name = f"grain_{name}"
     if any(f.name == flag_name for f in _GRAIN_FLAGS):
-      return getattr(flags.FLAGS, flag_name)
+      value = getattr(flags.FLAGS, flag_name)
+      _grain_experiment_metric.Set(int(value), flag_name)
+      return value
     raise ValueError(f"Unrecognized config option: {name}")
 
   def __setattr__(self, name: str, value: Any):

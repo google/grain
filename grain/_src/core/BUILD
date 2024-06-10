@@ -6,6 +6,9 @@ py_library(
     name = "config",
     srcs = ["config.py"],
     srcs_version = "PY3",
+    deps = [
+        ":monitoring",
+    ],
 )
 
 py_library(
