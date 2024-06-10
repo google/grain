@@ -19,6 +19,21 @@ from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.python.lazy_dataset import lazy_dataset
 import grain._src.python.lazy_dataset.transformations.slice as slice_ds
+from typing_extensions import override
+
+
+class EmptyLazyMapDataset(lazy_dataset.LazyMapDataset[int]):
+
+  def __init__(self):
+    super().__init__(parents=[])
+
+  @override
+  def __len__(self) -> int:
+    return 0
+
+  @override
+  def __getitem__(self, index):
+    raise IndexError("Index out of range")
 
 
 class SliceLazyMapDatasetTest(parameterized.TestCase):
@@ -30,6 +45,7 @@ class SliceLazyMapDatasetTest(parameterized.TestCase):
       (0, 3, 7),
       (1, 3, 7),
       (2, 3, 6),
+      (30, 100, 0),
   )
   def test_len(self, start: int, step: int, expected_len: int):
     ds = lazy_dataset.RangeLazyMapDataset(20)
@@ -64,6 +80,11 @@ class SliceLazyMapDatasetTest(parameterized.TestCase):
     ds_iter = iter(ds)
     ds_items = list(ds_iter)
     self.assertSequenceEqual(ds_items, list(range(20))[start:stop:step])
+
+  def test_slice_of_empty_dataset_is_empty(self):
+    ds = EmptyLazyMapDataset()
+    ds = slice_ds.SliceLazyMapDataset(ds, slice(0, 10))
+    self.assertEmpty(ds)
 
 
 if __name__ == "__main__":
