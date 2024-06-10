@@ -20,11 +20,12 @@ import bisect
 from collections.abc import Sequence
 import dataclasses
 import sys
-from typing import Any, TypeVar
+from typing import Any, TypeVar, overload
 
 from grain._src.core import exceptions
 from grain._src.python.lazy_dataset import lazy_dataset
-from grain._src.python.lazy_dataset.transformations import slice as lazy_slice_ds
+from grain._src.python.lazy_dataset.transformations import slice as lazy_slice_ds  # pylint: disable=unused-import
+from typing_extensions import override
 
 Element = Any
 T = TypeVar("T")  # pylint: disable=invalid-name
@@ -355,9 +356,16 @@ class ConcatenateLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   def __len__(self) -> int:
     return self._length
 
-  def __getitem__(
-      self, index: int | slice
-  ) -> T | lazy_slice_ds.SliceLazyMapDataset[T]:
+  @overload
+  def __getitem__(self, index: slice) -> lazy_dataset.LazyMapDataset[T]:
+    ...
+
+  @overload
+  def __getitem__(self, index: int) -> T | None:
+    ...
+
+  @override
+  def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
     dataset, dataset_index = self._selection_map[index]
