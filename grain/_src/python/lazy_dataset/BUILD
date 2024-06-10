@@ -31,6 +31,7 @@ py_test(
         ":lazy_dataset",
         "//grain/_src/core:transforms",
         "//grain/_src/python:options",
+        "//grain/_src/python/lazy_dataset/transformations:map",
     ],
 )
 

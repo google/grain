@@ -14,9 +14,11 @@
 """Tests for LazyDataset."""
 
 import dataclasses
-from typing import cast, TypeVar
+import time
+from typing import TypeVar, cast
 from unittest import mock
 
+from absl import logging
 from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.core import transforms
@@ -24,6 +26,7 @@ import multiprocessing as mp
 from grain._src.python import options
 from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import filter as filter_lazy_dataset
+from grain._src.python.lazy_dataset.transformations import map as map_lazy_dataset
 from typing_extensions import override
 
 
@@ -277,6 +280,86 @@ class MultiprocessPrefetchLazyIterDatasetTest(parameterized.TestCase):
           ds,
           options.MultiprocessingOptions(num_workers=1),
       )
+
+  @parameterized.product(
+      start_prefetch_calls=[0, 1, 10],
+      num_workers=[6],
+      per_worker_buffer_size=[1, 20],
+  )
+  def test_start_prefetch(
+      self,
+      start_prefetch_calls: int,
+      num_workers: int,
+      per_worker_buffer_size: int,
+  ):
+    class _SleepTransform(transforms.MapTransform):
+
+      def map(self, features):
+        time.sleep(1)
+        return features
+
+    dataset = lazy_dataset.RangeLazyMapDataset(10)
+    dataset = map_lazy_dataset.MapLazyMapDataset(
+        parent=dataset, transform=_SleepTransform()
+    )
+    dataset = lazy_dataset.PrefetchLazyIterDataset(
+        dataset, read_options=options.ReadOptions()
+    )
+    dataset = lazy_dataset.MultiprocessPrefetchLazyIterDataset(
+        dataset,
+        options.MultiprocessingOptions(num_workers, per_worker_buffer_size),
+    )
+
+    it = iter(dataset)
+    assert isinstance(it, lazy_dataset.MultiprocessPrefetchLazyDatasetIterator)
+    for _ in range(start_prefetch_calls):
+      it.start_prefetch()
+
+    # Waits for prefetching.
+    start_time = time.time()
+    while time.time() - start_time < 30:
+      time.sleep(2)
+
+    # Measures time to read from the dataset.
+    start_time = time.time()
+    self.assertSequenceEqual(list(it), list(range(10)))
+
+    time_to_fetch = time.time() - start_time
+    logging.info('Reading dataset took %.2f seconds.', time_to_fetch)
+    if start_prefetch_calls:
+      self.assertLess(time_to_fetch, 5)
+    else:
+      self.assertGreater(time_to_fetch, 1)
+
+  def test_prefetch_but_no_read(self):
+    class _SleepTransform(transforms.MapTransform):
+
+      def map(self, features):
+        time.sleep(1)
+        return features
+
+    dataset = lazy_dataset.RangeLazyMapDataset(10)
+    dataset = map_lazy_dataset.MapLazyMapDataset(
+        parent=dataset, transform=_SleepTransform()
+    )
+    dataset = lazy_dataset.PrefetchLazyIterDataset(
+        dataset, read_options=options.ReadOptions()
+    )
+    dataset = lazy_dataset.MultiprocessPrefetchLazyIterDataset(
+        dataset,
+        options.MultiprocessingOptions(
+            num_workers=3, per_worker_buffer_size=20
+        ),
+    )
+
+    # Makes sure the iterator cleans up gracefully if it is prefetched but no
+    # elements are read.
+    it = iter(dataset)
+    assert isinstance(it, lazy_dataset.MultiprocessPrefetchLazyDatasetIterator)
+    it.start_prefetch()
+    # Waits for the processes to actually read some elements and put them into
+    # buffers.
+    time.sleep(30)
 
 
 class ThreadPrefetchLazyIterDatasetTest(parameterized.TestCase):

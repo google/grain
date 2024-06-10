@@ -485,7 +485,7 @@ class MultiprocessPrefetchLazyIterDataset(LazyIterDataset[T]):
         )
       to_check.extend(dataset.parents)
 
-  def __iter__(self) -> LazyDatasetIterator[T]:
+  def __iter__(self) -> MultiprocessPrefetchLazyDatasetIterator[T]:
     return MultiprocessPrefetchLazyDatasetIterator(
         self._parent, self._multiprocessing_options
     )
@@ -575,10 +575,7 @@ class MultiprocessPrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
     return self
 
   def __next__(self) -> T:
-    if self._iterator is None:
-      self._raw_iterator = self._create_iterator_context()
-      self._iterator = _iterator_with_context(self._raw_iterator)
-
+    self._ensure_iterator_initialized()
     result, state = next(self._iterator)
     worker_index = self._raw_iterator.get_last_worker_index()  # pytype: disable=attribute-error
     self._state[_LAST_WORKER_INDEX] = worker_index
@@ -590,13 +587,27 @@ class MultiprocessPrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
       self._state[_WORKERS_STATE][worker_index_str] = state
     return _open_struct_from_shm(result)
 
-  def set_state(self, state):
+  def start_prefetch(self) -> None:
+    """Prefetches elements from the iterator.
+
+    This will run background processes for prefetching. To make sure to clean up
+    the resources, it should be followed by at least one `next` call.
+    """
+    self._ensure_iterator_initialized()
+
+  def set_state(self, state) -> None:
     self._state = state
     self._raw_iterator = None
     self._iterator = None
 
   def get_state(self) -> dict[str, Any]:
     return copy.deepcopy(self._state)
+
+  def _ensure_iterator_initialized(self) -> None:
+    if self._iterator is None:
+      self._raw_iterator = self._create_iterator_context()
+      self._raw_iterator.start_prefetch()
+      self._iterator = _iterator_with_context(self._raw_iterator)
 
   def _create_iterator_context(self) -> grain_pool.MultiProcessIterator[T]:
     """Creates a `MultiProcessIterator`."""

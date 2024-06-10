@@ -478,7 +478,17 @@ class MultiProcessIterator(Iterator[T]):
     self._termination_event = None
     self._reader_thread = None
 
-  def __enter__(self):
+  def __del__(self):
+    if self._reader_thread:
+      logging.info("Destroying multiprocess iterator.")
+      self.stop_prefetch()
+
+  def start_prefetch(self) -> None:
+    """Starts the prefetching threads."""
+
+    if self._reader_thread:
+      return
+
     max_buffered_elements = (
         self._multiprocessing_options.num_workers
         * self._multiprocessing_options.per_worker_buffer_size
@@ -501,9 +511,13 @@ class MultiProcessIterator(Iterator[T]):
     shared_memory_array.SharedMemoryArray.enable_async_del(
         self._multiprocessing_options.num_workers
     )
-    return self
 
-  def __exit__(self, exc_type, exc_value, tb):
+  def stop_prefetch(self) -> None:
+    """Cleans up prefetching threads."""
+
+    if not self._reader_thread:
+      return
+
     # pytype: disable=attribute-error
     self._termination_event.set()
     self._reader_thread_pool.close()
@@ -514,6 +528,13 @@ class MultiProcessIterator(Iterator[T]):
     self._reader_thread_pool = None
     self._reader_thread = None
     self._reader_queue = None
+
+  def __enter__(self):
+    self.start_prefetch()
+    return self
+
+  def __exit__(self, exc_type, exc_value, tb):
+    self.stop_prefetch()
 
   @staticmethod
   def _open_shared_memory_for_leaf(element: Any) -> Any:
