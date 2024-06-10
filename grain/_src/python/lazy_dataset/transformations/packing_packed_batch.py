@@ -84,10 +84,12 @@ class PackedBatch(Generic[_T]):
       num_packing_bins: int,
       length_struct: jt.PyTree[int],
       meta_features: Sequence[str] = (),
+      pass_through_features_struct: jt.PyTree | None = None,
   ):
     self._num_packing_bins = num_packing_bins
     self._length_struct = length_struct
     self._meta_features = meta_features
+    self._pass_through_struct = pass_through_features_struct
 
     # Define the main buffers we will pack the data into.
     def make_packed_buffer(length: int, x: np.ndarray | int):
@@ -107,6 +109,10 @@ class PackedBatch(Generic[_T]):
     self._values = jax.tree.map(
         make_packed_buffer, length_struct, element_for_shapes
     )
+    self._pass_through_values = {
+        k: [[] for _ in range(num_packing_bins)]
+        for k in pass_through_features_struct
+    }
 
     def make_packed_aux_info(length: int):
       return np.zeros(shape=(num_packing_bins, length), dtype=np.int32)
@@ -135,11 +141,14 @@ class PackedBatch(Generic[_T]):
       self._positions = jax.tree.map(
           lambda x: x[:rows_with_values], self._positions
       )
-    return _extract_and_rekey_packed_batch(
-        self._values,
-        segment_ids=self._segment_ids,
-        positions=self._positions,
-        meta_features=self._meta_features,
+    return (
+        _extract_and_rekey_packed_batch(
+            self._values,
+            segment_ids=self._segment_ids,
+            positions=self._positions,
+            meta_features=self._meta_features,
+        ),
+        self._pass_through_values,
     )
 
   def _can_add_at_row(
@@ -233,11 +242,13 @@ class PackedBatch(Generic[_T]):
 
     self._num_examples_per_row[row] += 1
 
-  def try_add_to_batch(self, element) -> list[str] | None:
+  def try_add_to_batch(self, element, pass_through_values) -> list[str] | None:
     """Finds a row in the batch at which element can be added.
 
     Args:
       element: The element we are trying to fit into a row in the batch.
+      pass_through_values: Dictionary of pass through values. These values are
+        not packed but passed through to the output.
 
     Returns:
       None if the element was successfully added to the batch. If the element
@@ -255,5 +266,7 @@ class PackedBatch(Generic[_T]):
         )
       return failing_components
     self.add_element_to_batch(element, successful_row)
+    for feature, value in pass_through_values.items():
+      self._pass_through_values[feature][successful_row].append(value)
 
     return None
