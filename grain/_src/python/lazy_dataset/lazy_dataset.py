@@ -138,9 +138,21 @@ class LazyMapDataset(Sequence[T], abc.ABC):
   ) -> "LazyMapDataset[T]":
     """Returns a dataset containing only the elements that match the filter.
 
-    `ds = ds.filter(lambda x: x > 5)`
-    is equivalent to
-    `ds = FilterLazyMapDataset(ds, lambda x: x > 5)`
+    Accessing an element of the returned dataset using subscription (`ds[i]`)
+    returns:
+
+    - `None` if `transform` returned `False`
+    - the element if `transform` returned `True`
+
+    Iterating over a filtered dataset skips `None` elements by default.
+
+    The following expressions are equivalent:
+
+    - `ds = ds.filter(lambda x: x > 5)`
+    - `ds = FilterLazyMapDataset(ds, lambda x: x > 5)`
+
+    The `ds.filter(...)` version allows chaining multiple transformations, e.g.,
+    `ds = ds.filter(...).map(...).filter(...)`
 
     Args:
       transform: Either a `FilterTransform` containing the `filter` method or a
