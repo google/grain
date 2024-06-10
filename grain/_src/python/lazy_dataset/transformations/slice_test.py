@@ -65,7 +65,7 @@ class SliceLazyMapDatasetTest(parameterized.TestCase):
   @parameterized.parameters(
       itertools.product(range(-8, 8), range(-9, 8), [-2, -1, 1, 2])
   )
-  def test_getitem_sice(self, start: int, stop: int, step: int):
+  def test_getitem_slice(self, start: int, stop: int, step: int):
     ds = lazy_dataset.RangeLazyMapDataset(20)
     ds = ds[start:stop:step]
     ds_items = [ds[i] for i in range(len(ds))]
@@ -85,6 +85,20 @@ class SliceLazyMapDatasetTest(parameterized.TestCase):
     ds = EmptyLazyMapDataset()
     ds = slice_ds.SliceLazyMapDataset(ds, slice(0, 10))
     self.assertEmpty(ds)
+
+  def test_accessing_items_beyond_len_minus_one_succeeds(self):
+    ds = lazy_dataset.RangeLazyMapDataset(20)
+    ds = slice_ds.SliceLazyMapDataset(ds, slice(5))  # 0, 1, 2, 3, 4
+    self.assertLen(ds, 5)
+    self.assertEqual(ds[5], 0)
+    self.assertEqual(ds[13], 3)
+    self.assertEqual(ds[42], 2)
+
+  def test_composing_slices_contains_correct_elements(self):
+    ds = lazy_dataset.RangeLazyMapDataset(20)
+    ds = slice_ds.SliceLazyMapDataset(ds, slice(0, 15, 3))  # 0, 3, 6, 9, 12
+    ds = slice_ds.SliceLazyMapDataset(ds, slice(0, 20, 2))  # 0, 6, 12
+    self.assertSequenceEqual(list(ds), [0, 6, 12])
 
 
 if __name__ == "__main__":

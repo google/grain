@@ -36,8 +36,8 @@ class SliceLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   def __getitem__(self, index):
     if isinstance(index, slice):
       return SliceLazyMapDataset(self, index)
-    new_index = self._start + (index % self._length) * self._step
-    return self._parent[new_index]
+    parent_index = self._start + (index % len(self)) * self._step
+    return self._parent[parent_index]
 
   def __str__(self) -> str:
     return f"{self._parent}[{self._start}:{self._stop}:{self._step}]"
