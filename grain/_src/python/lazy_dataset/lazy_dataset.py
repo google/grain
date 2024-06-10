@@ -177,11 +177,15 @@ class LazyMapDataset(Sequence[T], abc.ABC):
     return self.to_iter_dataset().__iter__()
 
   def to_iter_dataset(
-      self, read_options: Optional[grain_options.ReadOptions] = None
+      self,
+      read_options: Optional[grain_options.ReadOptions] = None,
+      allow_nones: bool = False,
   ) -> LazyIterDataset[T]:
     """Syntactic sugar to construct a LazyIterDataset."""
     return PrefetchLazyIterDataset(
-        self, read_options=read_options or grain_options.ReadOptions()
+        self,
+        read_options=read_options or grain_options.ReadOptions(),
+        allow_nones=allow_nones,
     )
 
 
@@ -830,6 +834,7 @@ class RangeLazyMapDataset(LazyMapDataset[int]):
   def to_iter_dataset(
       self,
       read_options: Optional[grain_options.ReadOptions] = None,
+      allow_nones: bool = False,
   ) -> LazyIterDataset[int]:
     """Syntactic sugar to construct a LazyIterDataset."""
     return PrefetchLazyIterDataset(
@@ -837,6 +842,7 @@ class RangeLazyMapDataset(LazyMapDataset[int]):
         read_options=(
             read_options or grain_options.ReadOptions(prefetch_buffer_size=0)
         ),
+        allow_nones=allow_nones,
     )
 
 

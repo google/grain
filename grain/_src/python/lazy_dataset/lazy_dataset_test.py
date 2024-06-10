@@ -452,6 +452,52 @@ class LazyDatasetTest(parameterized.TestCase):
     self.assertIsNone(ds[5])
     self.assertIsNone(ds[13])
 
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='default_args',
+          read_options=None,
+          allow_nones=False,
+          expected=[0, 2, 4, 6, 8, 10, 12, 14],
+      ),
+      dict(
+          testcase_name='custom_read_options',
+          read_options=options.ReadOptions(
+              num_threads=1, prefetch_buffer_size=1
+          ),
+          allow_nones=False,
+          expected=[0, 2, 4, 6, 8, 10, 12, 14],
+      ),
+      dict(
+          testcase_name='allow_nones',
+          read_options=None,
+          allow_nones=True,
+          expected=[
+              0,
+              None,
+              2,
+              None,
+              4,
+              None,
+              6,
+              None,
+              8,
+              None,
+              10,
+              None,
+              12,
+              None,
+              14,
+          ],
+      ),
+  )
+  def test_to_iter_dataset(self, read_options, allow_nones, expected):
+    ds = (
+        Source15IntsFrom0LazyMapDataset()
+        .filter(lambda x: x % 2 == 0)
+        .to_iter_dataset(read_options=read_options, allow_nones=allow_nones)
+    )
+    self.assertSequenceEqual(list(iter(ds)), expected)
+
 
 if __name__ == '__main__':
   absltest.main()
