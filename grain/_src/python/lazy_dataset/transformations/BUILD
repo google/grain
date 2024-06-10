@@ -8,6 +8,7 @@ filegroup(
     name = "core_transformations",
     srcs = [
         "filter.py",
+        "slice.py",
     ],
 )
 
@@ -88,7 +89,6 @@ py_library(
     srcs = ["mix.py"],
     srcs_version = "PY3",
     deps = [
-        ":slice",
         "//grain/_src/core:exceptions",
         "//grain/_src/python/lazy_dataset",
     ],
@@ -101,7 +101,6 @@ py_test(
     deps = [
         ":mix",
         ":repeat",
-        ":slice",
         "//grain/_src/python/lazy_dataset",
     ],
 )
@@ -136,23 +135,11 @@ py_library(
     srcs_version = "PY3",
 )
 
-py_library(
-    name = "slice",
-    srcs = ["slice.py"],
-    srcs_version = "PY3",
-    deps = [
-        "//grain/_src/python/lazy_dataset",
-    ],
-)
-
 py_test(
     name = "slice_test",
     srcs = ["slice_test.py"],
     srcs_version = "PY3",
-    deps = [
-        ":slice",
-        "//grain/_src/python/lazy_dataset",
-    ],
+    deps = ["//grain/_src/python/lazy_dataset"],
 )
 
 py_library(

@@ -24,7 +24,6 @@ import multiprocessing as mp
 from grain._src.python import options
 from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import filter as filter_lazy_dataset
-from grain._src.python.lazy_dataset.transformations import slice as slice_lazy_dataset  # pylint: disable=unused-import
 from typing_extensions import override
 
 
@@ -36,13 +35,6 @@ class FilterKeepingOddElementsOnly(transforms.FilterTransform):
 
   def filter(self, element: int) -> bool:
     return bool(element % 2)
-
-
-@dataclasses.dataclass(frozen=True)
-class NoneEvenElementsOnly(transforms.MapTransform):
-
-  def map(self, element: int):
-    return element if element % 2 else None
 
 
 class RangeLazyMapDatasetTest(absltest.TestCase):
@@ -508,6 +500,36 @@ class LazyDatasetTest(parameterized.TestCase):
         .to_iter_dataset(read_options=read_options, allow_nones=allow_nones)
     )
     self.assertSequenceEqual(list(iter(ds)), expected)
+
+  def test_slice_with_just_stop_returns_correct_elements(self):
+    ds = Source15IntsFrom0LazyMapDataset().slice(slice(7))
+    self.assertSequenceEqual(list(iter(ds)), [0, 1, 2, 3, 4, 5, 6])
+
+  def test_slice_with_start_and_stop_returns_correct_elements(self):
+    ds = Source15IntsFrom0LazyMapDataset().slice(slice(3, 9))
+    self.assertSequenceEqual(list(iter(ds)), [3, 4, 5, 6, 7, 8])
+
+  def test_slice_with_start_stop_and_step_returns_correct_elements(self):
+    ds = Source15IntsFrom0LazyMapDataset().slice(slice(2, 11, 3))
+    self.assertSequenceEqual(list(iter(ds)), [2, 5, 8])
+
+  def test_slice_composition_returns_correct_elements(self):
+    ds = (
+        Source15IntsFrom0LazyMapDataset()
+        .slice(slice(1, 10, 2))  # 1, 3, 5, 7, 9
+        .slice(slice(1, 3))  # 3, 5
+    )
+    self.assertSequenceEqual(list(iter(ds)), [3, 5])
+
+  def test_slice_and_filter_composed_returns_correct_elements(self):
+    ds = (
+        Source15IntsFrom0LazyMapDataset()
+        .slice(slice(1, 10, 2))  # 1, 3, 5, 7, 9
+        .filter(lambda x: x % 3 == 0 or x == 7)  # None, 3, None, 7, 9
+        .filter(lambda x: x > 5)  # None, None, None, 7, 9
+        .slice(slice(2, 4))  # None, 7
+    )
+    self.assertSequenceEqual(list(iter(ds)), [7])
 
 
 if __name__ == '__main__':

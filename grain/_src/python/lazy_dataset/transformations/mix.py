@@ -24,7 +24,6 @@ from typing import Any, TypeVar, overload
 
 from grain._src.core import exceptions
 from grain._src.python.lazy_dataset import lazy_dataset
-from grain._src.python.lazy_dataset.transformations import slice as lazy_slice_ds  # pylint: disable=unused-import
 from typing_extensions import override
 
 Element = Any

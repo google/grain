@@ -40,6 +40,7 @@ LazyDatasetIterator as Iterator.
 from __future__ import annotations
 
 import abc
+import builtins
 import collections
 from collections.abc import Callable, Iterable, Iterator, Sequence
 import contextlib
@@ -122,7 +123,7 @@ class LazyMapDataset(Sequence[T], abc.ABC):
     """Returns the length of this dataset."""
 
   @overload
-  def __getitem__(self, index: slice) -> LazyMapDataset:
+  def __getitem__(self, index: builtins.slice) -> LazyMapDataset:
     ...
 
   @overload
@@ -167,6 +168,34 @@ class LazyMapDataset(Sequence[T], abc.ABC):
     from grain._src.python.lazy_dataset.transformations import filter as filter_dataset
     # pylint: enable=g-import-not-at-top
     return filter_dataset.FilterLazyMapDataset(parent=self, transform=transform)
+
+  def slice(self, sl: builtins.slice) -> "LazyMapDataset[T]":
+    """Returns a dataset containing only the elements with indices in `sl`.
+
+    The following expressions are equivalent:
+
+    - `ds = ds.slice(slice(1, 10, 2))`
+    - `ds = SliceLazyMapDataset(ds, slice(1, 10, 2))`
+    - `ds = ds[1:10:2]` (for `LazyMapDataset`s supporting `slice` objects in
+      subscriptions)
+
+    The `ds.slice(...)` and `ds[...]` versions allow chaining multiple
+    transformations, e.g.,
+    `ds = ds[10::4].filter(...).map(...)`.
+
+    Args:
+      sl: A `slice` object
+        (https://docs.python.org/3/library/functions.html#slice) representing
+        the slice of elements to that should constitute the returned dataset.
+
+    Returns:
+      A dataset containing only the elements with indices in the `sl` slice.
+    """
+    # Loaded lazily due to a circular dependency (lazy_dataset <-> slice).
+    # pylint: disable=g-import-not-at-top
+    from grain._src.python.lazy_dataset.transformations import slice as slice_dataset
+    # pylint: enable=g-import-not-at-top
+    return slice_dataset.SliceLazyMapDataset(parent=self, sl=sl)
 
   @classmethod
   def register_function(cls, name: str, function: RegisterableLazyMapDatasetFn):

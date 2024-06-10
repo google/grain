@@ -19,7 +19,6 @@ from grain._src.python.lazy_dataset import lazy_dataset
 T = TypeVar("T")
 
 
-@lazy_dataset.lazy_map_dataset_function("slice")
 class SliceLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   """Slices a LazyMapDataset similar to the slicing syntax in Python."""
 

@@ -20,7 +20,6 @@ from absl.testing import absltest
 from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import mix
 from grain._src.python.lazy_dataset.transformations import repeat  # pylint: disable=unused-import
-from grain._src.python.lazy_dataset.transformations import slice as slice_transform  # pylint: disable=unused-import
 import numpy as np
 
 
