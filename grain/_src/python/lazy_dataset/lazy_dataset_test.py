@@ -452,6 +452,17 @@ class LazyDatasetTest(parameterized.TestCase):
     self.assertIsNone(ds[5])
     self.assertIsNone(ds[13])
 
+  @parameterized.parameters(
+      (0),
+      (9),
+      (30),
+  )
+  def test_filter_does_not_affect_len(self, ds_length):
+    ds = lazy_dataset.RangeLazyMapDataset(ds_length)
+    self.assertLen(ds, ds_length)
+    ds = ds.filter(lambda x: x % 2 == 0)
+    self.assertLen(ds, ds_length)
+
   @parameterized.named_parameters(
       dict(
           testcase_name='default_args',
