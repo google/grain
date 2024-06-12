@@ -35,6 +35,8 @@ class RepeatLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
       num_epochs: Optional[int] = None,
   ):
     super().__init__(parent)
+    if num_epochs is not None and num_epochs <= 0:
+      raise ValueError(f"num_epochs must be positive, but got {num_epochs}.")
     if len(parent) >= sys.maxsize:
       raise ValueError(
           f"Repeating already infinite dataset {parent} does nothing."

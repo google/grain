@@ -58,6 +58,16 @@ class RepeatLazyMapDatasetTest(absltest.TestCase):
     with self.assertRaises(ValueError):
       repeat.RepeatLazyMapDataset(ds, num_epochs=2)
 
+  def test_setting_zero_epochs_raises_value_error(self):
+    ds = lazy_dataset.RangeLazyMapDataset(6)
+    with self.assertRaises(ValueError):
+      repeat.RepeatLazyMapDataset(ds, num_epochs=0)
+
+  def test_setting_negative_epochs_raises_value_error(self):
+    ds = lazy_dataset.RangeLazyMapDataset(6)
+    with self.assertRaises(ValueError):
+      repeat.RepeatLazyMapDataset(ds, num_epochs=-1)
+
   def test_infinite_epochs_of_empty_dataset_keeps_length_zero(self):
     ds = EmptyLazyMapDataset()
     ds = repeat.RepeatLazyMapDataset(ds, num_epochs=None)
