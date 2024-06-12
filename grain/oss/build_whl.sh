@@ -3,7 +3,7 @@
 
 set -e -x
 
-# TODO(iindyk): Generalize the python bin path and only copy the repaired wheels
+# TODO: Generalize the python bin path and only copy the repaired wheels
 # once we publish aarch64 wheels and Nvidia does not rely on this script in
 # https://github.com/NVIDIA/JAX-Toolbox/blob/main/.github/container/Dockerfile.t5x.arm64
 CP_VERSION="cp${PYTHON_MAJOR_VERSION}${PYTHON_MINOR_VERSION}"

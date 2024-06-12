@@ -137,7 +137,7 @@ class BatchOperation(Generic[_IN, _OUT]):
           f"batch_size must be a positive integer. Got {self.batch_size}."
       )
     self._use_shared_memory = False
-    # TODO(b/301931658): Split this class into implementation and an operation
+    # TODO: Split this class into implementation and an operation
     # wrapping the implementation. Only the operation level should emit the
     # message.
     self._display_deprecation_message = True
