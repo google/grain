@@ -197,39 +197,6 @@ class LazyMapDataset(Sequence[T], abc.ABC):
     # pylint: enable=g-import-not-at-top
     return slice_dataset.SliceLazyMapDataset(parent=self, sl=sl)
 
-  def repeat(self, num_epochs: int | None = None) -> "LazyMapDataset[T]":
-    """Returns a dataset repeating the elements of this dataset multiple times.
-
-    Specifying `None` for `num_epochs` will repeat the dataset infinitely, and
-    causes `len(ds)` to return `sys.maxsize`.
-
-    Since `LazyMapDataset`s allow accessing elements past `len(ds) - 1` anyway
-    (and use the index modulo `len(ds)`), this transformation effecively only
-    changes the length of the dataset.
-
-    `repeat(...)` shouldn't be called on an infinite dataset.
-
-    The following expressions are equivalent:
-
-    - `ds = ds.repeat(42)`
-    - `ds = RepeatLazyMapDataset(ds, 42)`
-
-    The `ds.repeat(...)` version allows chaining multiple transformations, e.g.,
-    `ds = ds.filter(...).map(...).repeat(...)`.
-
-    Args:
-      num_epochs: Either a positive integer representing the number of times
-        this dataset should be repeated or `None` to repeat infinitely.
-
-    Returns:
-      A dataset repeating the elements of this dataset multiple times.
-    """
-    # Loaded lazily due to a circular dependency (lazy_dataset <-> repeat).
-    # pylint: disable=g-import-not-at-top
-    from grain._src.python.lazy_dataset.transformations import repeat
-    # pylint: enable=g-import-not-at-top
-    return repeat.RepeatLazyMapDataset(parent=self, num_epochs=num_epochs)
-
   @classmethod
   def register_function(cls, name: str, function: RegisterableLazyMapDatasetFn):
     if name in cls._functions:

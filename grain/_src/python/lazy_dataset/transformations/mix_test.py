@@ -19,6 +19,7 @@ from typing import Callable, Tuple
 from absl.testing import absltest
 from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import mix
+from grain._src.python.lazy_dataset.transformations import repeat  # pylint: disable=unused-import
 import numpy as np
 
 

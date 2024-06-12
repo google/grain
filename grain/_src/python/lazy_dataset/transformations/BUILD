@@ -8,7 +8,6 @@ filegroup(
     name = "core_transformations",
     srcs = [
         "filter.py",
-        "repeat.py",
         "slice.py",
     ],
 )
@@ -101,6 +100,7 @@ py_test(
     srcs_version = "PY3",
     deps = [
         ":mix",
+        ":repeat",
         "//grain/_src/python/lazy_dataset",
     ],
 )
@@ -122,6 +122,7 @@ py_test(
     deps = [
         ":map",
         ":packing",
+        ":repeat",
         ":shuffle",
         "//grain/_src/python/lazy_dataset",
         "//grain/_src/python/lazy_dataset:data_sources",
@@ -182,11 +183,21 @@ py_test(
     ],
 )
 
+py_library(
+    name = "repeat",
+    srcs = ["repeat.py"],
+    srcs_version = "PY3",
+    deps = ["//grain/_src/python/lazy_dataset"],
+)
+
 py_test(
     name = "repeat_test",
     srcs = ["repeat_test.py"],
     srcs_version = "PY3",
-    deps = ["//grain/_src/python/lazy_dataset"],
+    deps = [
+        ":repeat",
+        "//grain/_src/python/lazy_dataset",
+    ],
 )
 
 py_library(
