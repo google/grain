@@ -41,7 +41,10 @@ class RepeatLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
       )
     self._num_epochs = num_epochs
     if num_epochs is None:
-      self._length: int = sys.maxsize
+      if len(parent) == 0:  # pylint: disable=g-explicit-length-test
+        self._length: int = 0
+      else:
+        self._length: int = sys.maxsize
     else:
       self._length = num_epochs * len(parent)
 

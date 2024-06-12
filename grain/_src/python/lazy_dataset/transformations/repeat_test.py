@@ -17,6 +17,21 @@ import sys
 from absl.testing import absltest
 from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import repeat
+from typing_extensions import override
+
+
+class EmptyLazyMapDataset(lazy_dataset.LazyMapDataset[int]):
+
+  def __init__(self):
+    super().__init__(parents=[])
+
+  @override
+  def __len__(self) -> int:
+    return 0
+
+  @override
+  def __getitem__(self, index):
+    raise IndexError("Index out of range")
 
 
 class RepeatLazyMapDatasetTest(absltest.TestCase):
@@ -42,6 +57,11 @@ class RepeatLazyMapDatasetTest(absltest.TestCase):
     ds = repeat.RepeatLazyMapDataset(ds, num_epochs=None)
     with self.assertRaises(ValueError):
       repeat.RepeatLazyMapDataset(ds, num_epochs=2)
+
+  def test_infinite_epochs_of_empty_dataset_keeps_length_zero(self):
+    ds = EmptyLazyMapDataset()
+    ds = repeat.RepeatLazyMapDataset(ds, num_epochs=None)
+    self.assertEmpty(ds)
 
 
 if __name__ == "__main__":
