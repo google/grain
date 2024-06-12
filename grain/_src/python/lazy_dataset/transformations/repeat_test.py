@@ -21,18 +21,25 @@ from grain._src.python.lazy_dataset.transformations import repeat
 
 class RepeatLazyMapDatasetTest(absltest.TestCase):
 
-  def test_fixed_num_epochs(self):
+  def test_finite_num_epochs_changes_length(self):
     ds = lazy_dataset.RangeLazyMapDataset(6)
     self.assertLen(ds, 6)
     ds = repeat.RepeatLazyMapDataset(ds, num_epochs=3)
-    self.assertLen(ds, 3 * 6)
-    self.assertEqual(list(ds), 3 * list(range(6)))
+    self.assertLen(ds, 18)
 
-  def test_infinite_epochs(self):
+  def test_finite_num_epochs_produces_expected_elements_when_iterated(self):
+    ds = lazy_dataset.RangeLazyMapDataset(4)
+    ds = repeat.RepeatLazyMapDataset(ds, num_epochs=3)
+    self.assertSequenceEqual(list(ds), [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3])
+
+  def test_infinite_epochs_sets_length_to_maxsize(self):
     ds = lazy_dataset.RangeLazyMapDataset(6)
     ds = repeat.RepeatLazyMapDataset(ds, num_epochs=None)
     self.assertLen(ds, sys.maxsize)
-    # Repeating again fails.
+
+  def test_repeat_after_setting_infinite_epochs_raises_value_error(self):
+    ds = lazy_dataset.RangeLazyMapDataset(6)
+    ds = repeat.RepeatLazyMapDataset(ds, num_epochs=None)
     with self.assertRaises(ValueError):
       repeat.RepeatLazyMapDataset(ds, num_epochs=2)
 
