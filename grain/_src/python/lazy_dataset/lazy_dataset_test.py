@@ -14,6 +14,7 @@
 """Tests for LazyDataset."""
 
 import dataclasses
+import sys
 import time
 from typing import TypeVar, cast
 from unittest import mock
@@ -444,7 +445,9 @@ class Source15IntsFrom0LazyMapDataset(lazy_dataset.LazyMapDataset[int]):
 
   @override
   def __getitem__(self, index):
-    return index
+    if isinstance(index, slice):
+      return self.slice(index)
+    return index % len(self)
 
 
 class Source15IntsFrom0LazyIterDataset(lazy_dataset.LazyIterDataset[int]):
@@ -613,6 +616,27 @@ class LazyDatasetTest(parameterized.TestCase):
         .slice(slice(2, 4))  # None, 7
     )
     self.assertSequenceEqual(list(iter(ds)), [7])
+
+  def test_repeat_updates_length(self):
+    ds = Source15IntsFrom0LazyMapDataset().repeat(3)
+    self.assertLen(ds, 45)
+
+  def test_repeat_with_none_epochs_updates_length_to_maxsize(self):
+    ds = Source15IntsFrom0LazyMapDataset().repeat(num_epochs=None)
+    self.assertLen(ds, sys.maxsize)
+
+  def test_repeat_produces_additional_elements_when_iterated(self):
+    ds = Source15IntsFrom0LazyMapDataset()[:5].repeat(2)
+    self.assertSequenceEqual(list(ds), [0, 1, 2, 3, 4, 0, 1, 2, 3, 4])
+
+  def test_slice_filter_repeat_composed_returns_correct_elements(self):
+    ds = (
+        Source15IntsFrom0LazyMapDataset()
+        .slice(slice(1, 10, 2))  # 1, 3, 5, 7, 9
+        .filter(lambda x: x < 6)  # 1, 3, 5, None, None
+        .repeat(2)
+    )
+    self.assertSequenceEqual(list(ds), [1, 3, 5, 1, 3, 5])
 
 
 if __name__ == '__main__':

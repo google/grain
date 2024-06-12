@@ -21,7 +21,6 @@ from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import packing
 # pylint: disable=unused-import
 import grain._src.python.lazy_dataset.transformations.map
-import grain._src.python.lazy_dataset.transformations.repeat
 import grain._src.python.lazy_dataset.transformations.shuffle
 # pylint: enable=unused-import
 import numpy as np
