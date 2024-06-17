@@ -42,7 +42,7 @@ from array_record.python.array_record_data_source import PathLikeOrFileInstructi
 _api_usage_counter = monitoring.Counter(
     "/grain/python/data_sources/api",
     monitoring.Metadata(description="API initialization counter."),
-    root=grain_monitoring.get_monitoring_root(),
+    root=grain_monitoring.GRAIN_MONITORING_ROOT,
     fields=[("name", str)],
 )
 _bytes_read_counter = monitoring.Counter(
@@ -52,7 +52,7 @@ _bytes_read_counter = monitoring.Counter(
             "Number of bytes produced by a data source via random access."
         ),
     ),
-    root=grain_monitoring.get_monitoring_root(),
+    root=grain_monitoring.GRAIN_MONITORING_ROOT,
     fields=[("source", str)],
 )
 
