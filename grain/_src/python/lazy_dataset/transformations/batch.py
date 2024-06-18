@@ -99,8 +99,15 @@ class BatchLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
-    start = index * self._batch_size
-    stop = min(len(self._parent), (index + 1) * self._batch_size)
+    # Each epoch gets batched separately. If users want to batch across epochs
+    # they can repeat() before the batch().
+    epoch, index_in_epoch = divmod(index, self._length)
+    # Get range within the epoch without going outside the epoch.
+    start = index_in_epoch * self._batch_size
+    stop = min(len(self._parent), (index_in_epoch + 1) * self._batch_size)
+    # Add offset for epoch.
+    start += epoch * len(self._parent)
+    stop += epoch * len(self._parent)
     values = [self._parent[i] for i in range(start, stop)]
     return _make_batch(values)
 

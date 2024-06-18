@@ -14,12 +14,14 @@
 """Tests for batch transformation."""
 
 from absl.testing import absltest
+from absl.testing import parameterized
 from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import batch
+from grain._src.python.lazy_dataset.transformations import repeat
 import numpy as np
 
 
-class BatchLazyMapDatasetTest(absltest.TestCase):
+class BatchLazyMapDatasetTest(parameterized.TestCase):
 
   def test_batch_size_2(self):
     ds = lazy_dataset.RangeLazyMapDataset(0, 10)
@@ -29,23 +31,103 @@ class BatchLazyMapDatasetTest(absltest.TestCase):
     expected = [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]]
     np.testing.assert_allclose(actual, expected)
 
-  def test_batch_size_3(self):
+  @parameterized.named_parameters(
+      dict(testcase_name="drop_remainder", drop_remainder=True),
+      dict(testcase_name="", drop_remainder=False),
+  )
+  def test_batch_size_3(self, drop_remainder: bool):
     ds = lazy_dataset.RangeLazyMapDataset(0, 10)
-    # drop_remainder defaults to False
-    ds = batch.BatchLazyMapDataset(ds, batch_size=3)
-    self.assertLen(ds, 4)  # ceil(10 / 3).
-    actual = [ds[i] for i in range(4)]
-    expected = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
-    for i in range(4):
+    ds = batch.BatchLazyMapDataset(
+        ds, batch_size=3, drop_remainder=drop_remainder
+    )
+    if drop_remainder:
+      self.assertLen(ds, 3)  # 10 // 3.
+      expected = [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
+    else:
+      self.assertLen(ds, 4)  # ceil(10 / 3).
+      expected = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
+    actual = [ds[i] for i in range(len(ds))]
+    for i in range(len(ds)):
       np.testing.assert_allclose(actual[i], expected[i])
 
-  def test_batch_size_3_drop_remainder(self):
+  @parameterized.named_parameters(
+      dict(testcase_name="drop_remainder", drop_remainder=True),
+      dict(testcase_name="", drop_remainder=False),
+  )
+  def test_epoch_boundaries(self, drop_remainder: bool):
+    num_epochs = 4
     ds = lazy_dataset.RangeLazyMapDataset(0, 10)
-    ds = batch.BatchLazyMapDataset(ds, batch_size=3, drop_remainder=True)
-    self.assertLen(ds, 3)  # 10 // 3.
-    actual = [ds[i] for i in range(3)]
-    expected = [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
-    np.testing.assert_allclose(actual, expected)
+    ds = batch.BatchLazyMapDataset(
+        ds, batch_size=3, drop_remainder=drop_remainder
+    )
+    if drop_remainder:
+      self.assertLen(ds, 3)
+      expected = num_epochs * [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
+    else:
+      self.assertLen(ds, 4)
+      expected = num_epochs * [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
+    actual = [ds[i] for i in range(num_epochs * len(ds))]
+    for i in range(len(actual)):
+      np.testing.assert_allclose(actual[i], expected[i])
+
+  @parameterized.named_parameters(
+      dict(testcase_name="drop_remainder", drop_remainder=True),
+      dict(testcase_name="", drop_remainder=False),
+  )
+  def test_epoch_boundaries_repeat_after_batch(self, drop_remainder: bool):
+    num_epochs = 2
+    ds = lazy_dataset.RangeLazyMapDataset(0, 10)
+    ds = batch.BatchLazyMapDataset(
+        ds, batch_size=3, drop_remainder=drop_remainder
+    )
+    ds = repeat.RepeatLazyMapDataset(ds, num_epochs=num_epochs)
+    if drop_remainder:
+      self.assertLen(ds, 6)
+      # Remainder gets dropped in both epochs.
+      expected = num_epochs * [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
+    else:
+      self.assertLen(ds, 8)
+      expected = num_epochs * [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
+    actual = [ds[i] for i in range(len(ds))]
+    for i in range(len(actual)):
+      np.testing.assert_allclose(actual[i], expected[i])
+
+  @parameterized.named_parameters(
+      dict(testcase_name="drop_remainder", drop_remainder=True),
+      dict(testcase_name="", drop_remainder=False),
+  )
+  def test_epoch_boundaries_repeat_before_batch(self, drop_remainder: bool):
+    num_epochs = 2
+    ds = lazy_dataset.RangeLazyMapDataset(0, 10)
+    ds = repeat.RepeatLazyMapDataset(ds, num_epochs=num_epochs)
+    ds = batch.BatchLazyMapDataset(
+        ds, batch_size=3, drop_remainder=drop_remainder
+    )
+    if drop_remainder:
+      self.assertLen(ds, 6)
+      # Remainder of last epoch gets dropped.
+      expected = [
+          [0, 1, 2],
+          [3, 4, 5],
+          [6, 7, 8],
+          [9, 0, 1],
+          [2, 3, 4],
+          [5, 6, 7],
+      ]
+    else:
+      self.assertLen(ds, 7)
+      expected = [
+          [0, 1, 2],
+          [3, 4, 5],
+          [6, 7, 8],
+          [9, 0, 1],
+          [2, 3, 4],
+          [5, 6, 7],
+          [8, 9],
+      ]
+    actual = [ds[i] for i in range(len(ds))]
+    for i in range(len(actual)):
+      np.testing.assert_allclose(actual[i], expected[i])
 
 
 class BatchLazyIterDatasetTest(absltest.TestCase):

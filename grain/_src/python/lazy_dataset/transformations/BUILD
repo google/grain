@@ -28,6 +28,7 @@ py_test(
     srcs_version = "PY3",
     deps = [
         ":batch",
+        ":repeat",
         "//grain/_src/python/lazy_dataset",
     ],
 )
