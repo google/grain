@@ -20,7 +20,6 @@ from grain._src.python.lazy_dataset import lazy_dataset
 T = TypeVar("T")
 
 
-@lazy_dataset.lazy_map_dataset_function("repeat")
 class RepeatLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   """Repeats the underlying dataset for num_epochs.
 
