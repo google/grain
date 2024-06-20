@@ -26,13 +26,12 @@ T = TypeVar("T")
 
 def _make_batch(values: Sequence[T]) -> T:
   """Returns a batch of values with a new batch dimension at the front."""
-  num_values = len(values)
-  if num_values <= 0:
+  if not values:
     raise ValueError("Cannot batch 0 values. Please file a bug.")
-  if num_values == 1:
-    return tree.map_structure(lambda x: np.expand_dims(x, axis=0), values[0])
+
   try:
-    return tree.map_structure(lambda *xs: np.stack(xs), values[0], *values[1:])
+    return tree.map_structure(lambda *xs: np.stack(xs), *values)
+
   except ValueError as e:
     # NumPy error message doesn't include actual shapes and dtypes. Provide a
     # more helpful error message.
