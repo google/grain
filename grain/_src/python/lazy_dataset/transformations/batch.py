@@ -15,7 +15,7 @@
 
 from collections.abc import Sequence
 import math
-from typing import TypeVar
+from typing import Callable, TypeVar
 
 from grain._src.core import tree
 from grain._src.python.lazy_dataset import lazy_dataset
@@ -28,10 +28,8 @@ def _make_batch(values: Sequence[T]) -> T:
   """Returns a batch of values with a new batch dimension at the front."""
   if not values:
     raise ValueError("Cannot batch 0 values. Please file a bug.")
-
   try:
     return tree.map_structure(lambda *xs: np.stack(xs), *values)
-
   except ValueError as e:
     # NumPy error message doesn't include actual shapes and dtypes. Provide a
     # more helpful error message.
@@ -53,11 +51,13 @@ class _BatchLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
       parent: lazy_dataset.LazyDatasetIterator,
       batch_size: int,
       drop_remainder: bool,
+      batch_fn: Callable[[Sequence[T]], T] = _make_batch,
   ):
     super().__init__()
     self._parent = parent
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
+    self._batch_fn = batch_fn
 
   def __next__(self):
     values = []
@@ -70,7 +70,7 @@ class _BatchLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
         break
     if not values:
       raise StopIteration
-    return _make_batch(values)
+    return self._batch_fn(values)
 
   def get_state(self):
     return self._parent.get_state()
@@ -95,10 +95,12 @@ class BatchLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
       parent: lazy_dataset.LazyMapDataset,
       batch_size: int,
       drop_remainder: bool = False,
+      batch_fn: Callable[[Sequence[T]], T] = _make_batch,
   ):
     super().__init__(parent)
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
+    self._batch_fn = batch_fn
     if self._drop_remainder:
       self._length = len(self._parent) // self._batch_size
     else:
@@ -120,7 +122,7 @@ class BatchLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     start += epoch * len(self._parent)
     stop += epoch * len(self._parent)
     values = [self._parent[i] for i in range(start, stop)]
-    return _make_batch(values)
+    return self._batch_fn(values)
 
   def __str__(self) -> str:
     return (
@@ -139,15 +141,20 @@ class BatchLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
       parent: lazy_dataset.LazyIterDataset,
       batch_size: int,
       drop_remainder: bool = False,
+      batch_fn: Callable[[Sequence[T]], T] = _make_batch,
   ):
     super().__init__(parent)
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
+    self._batch_fn = batch_fn
 
   def __iter__(self) -> _BatchLazyDatasetIterator[T]:
     parent_iter = self._parent.__iter__()
     return _BatchLazyDatasetIterator(
-        parent_iter, self._batch_size, drop_remainder=self._drop_remainder
+        parent_iter,
+        self._batch_size,
+        drop_remainder=self._drop_remainder,
+        batch_fn=self._batch_fn,
     )
 
   def __str__(self) -> str:
