@@ -15,10 +15,12 @@
 
 from absl.testing import absltest
 from absl.testing import parameterized
+from grain._src.python.lazy_dataset import data_sources
 from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import batch
 from grain._src.python.lazy_dataset.transformations import repeat
 import numpy as np
+import tree
 
 
 class MakeBatchTest(absltest.TestCase):
@@ -74,6 +76,26 @@ class BatchLazyMapDatasetTest(parameterized.TestCase):
     actual = [ds[i] for i in range(5)]
     expected = [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]]
     np.testing.assert_allclose(actual, expected)
+
+  def test_custom_batch_fn(self):
+    ds = data_sources.SourceLazyMapDataset(
+        [{"a": f"element_{i}"} for i in range(10)]
+    )
+
+    def _batch_fn(xs):
+      return tree.map_structure(lambda *x: tuple(x), *xs)
+
+    ds = batch.BatchLazyMapDataset(ds, batch_size=2, batch_fn=_batch_fn)
+    self.assertLen(ds, 5)  # 10 // 2 = 5.
+    actual = [ds[i] for i in range(5)]
+    expected = [
+        {"a": ("element_0", "element_1")},
+        {"a": ("element_2", "element_3")},
+        {"a": ("element_4", "element_5")},
+        {"a": ("element_6", "element_7")},
+        {"a": ("element_8", "element_9")},
+    ]
+    self.assertEqual(actual, expected)
 
   @parameterized.named_parameters(
       dict(testcase_name="drop_remainder", drop_remainder=True),
@@ -183,6 +205,28 @@ class BatchLazyIterDatasetTest(absltest.TestCase):
     actual = [next(ds_iter) for _ in range(5)]
     expected = [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]]
     np.testing.assert_allclose(actual, expected)
+
+  def test_custom_batch_fn(self):
+    iter_ds = data_sources.SourceLazyMapDataset(
+        [{"a": f"element_{i}"} for i in range(10)]
+    ).to_iter_dataset()
+
+    def _batch_fn(xs):
+      return tree.map_structure(lambda *x: tuple(x), *xs)
+
+    iter_ds = batch.BatchLazyIterDataset(
+        iter_ds, batch_size=2, batch_fn=_batch_fn
+    )
+    is_iter = iter(iter_ds)
+    actual = [next(is_iter) for _ in range(5)]
+    expected = [
+        {"a": ("element_0", "element_1")},
+        {"a": ("element_2", "element_3")},
+        {"a": ("element_4", "element_5")},
+        {"a": ("element_6", "element_7")},
+        {"a": ("element_8", "element_9")},
+    ]
+    self.assertEqual(actual, expected)
 
   def test_batch_size_3(self):
     ds = lazy_dataset.RangeLazyMapDataset(0, 10).to_iter_dataset()
