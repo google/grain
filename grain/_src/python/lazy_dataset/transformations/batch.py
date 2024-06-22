@@ -15,6 +15,7 @@
 
 from collections.abc import Sequence
 import math
+import pprint
 from typing import TypeVar
 
 from grain._src.core import tree
@@ -38,10 +39,10 @@ def _make_batch(values: Sequence[T]) -> T:
     element_specs = tree.map_structure(
         lambda x: f"{np.asarray(x).dtype}{list(np.asarray(x).shape)}", values
     )
-    element_specs = "\n".join([str(x) for x in element_specs])
+    element_specs = "\n".join(str(x) for x in element_specs)
     raise ValueError(
         "Expected all input elements to have the same structure but got:\n"
-        f"{element_specs}"
+        f"{pprint.pformat(element_specs)}"
     ) from e
 
 
