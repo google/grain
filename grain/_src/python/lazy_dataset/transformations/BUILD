@@ -30,6 +30,7 @@ py_test(
     deps = [
         ":batch",
         "//grain/_src/python/lazy_dataset",
+        "//grain/_src/python/lazy_dataset:data_sources",
     ],
 )
 
