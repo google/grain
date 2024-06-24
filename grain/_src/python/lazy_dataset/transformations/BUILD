@@ -9,6 +9,7 @@ filegroup(
     srcs = [
         "filter.py",
         "repeat.py",
+        "shuffle.py",
         "slice.py",
     ],
 )
@@ -122,7 +123,6 @@ py_test(
     deps = [
         ":map",
         ":packing",
-        ":shuffle",
         "//grain/_src/python/lazy_dataset",
         "//grain/_src/python/lazy_dataset:data_sources",
     ],
@@ -141,22 +141,11 @@ py_test(
     deps = ["//grain/_src/python/lazy_dataset"],
 )
 
-py_library(
-    name = "shuffle",
-    srcs = ["shuffle.py"],
-    data = ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
-    srcs_version = "PY3",
-    deps = ["//grain/_src/python/lazy_dataset"],
-)
-
 py_test(
     name = "shuffle_test",
     srcs = ["shuffle_test.py"],
     srcs_version = "PY3",
-    deps = [
-        ":shuffle",
-        "//grain/_src/python/lazy_dataset",
-    ],
+    deps = ["//grain/_src/python/lazy_dataset"],
 )
 
 py_library(

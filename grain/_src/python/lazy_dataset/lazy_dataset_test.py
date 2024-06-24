@@ -638,6 +638,35 @@ class LazyDatasetTest(parameterized.TestCase):
     )
     self.assertSequenceEqual(list(ds), [1, 3, 5, 1, 3, 5])
 
+  def test_shuffle_does_not_affect_len(self):
+    ds = Source15IntsFrom0LazyMapDataset().shuffle(seed=123)
+    self.assertLen(ds, 15)
+
+  def test_shuffle_does_not_affect_elements(self):
+    ds = Source15IntsFrom0LazyMapDataset()
+    elements_before_shuffle = list(ds)
+    ds = ds.shuffle(seed=123)
+    self.assertSameElements(list(ds), elements_before_shuffle)
+
+  def test_shuffle_with_same_seed_returns_same_elements(self):
+    ds1 = Source15IntsFrom0LazyMapDataset().shuffle(seed=123)
+    ds2 = Source15IntsFrom0LazyMapDataset().shuffle(seed=123)
+    self.assertSequenceEqual(list(ds1), list(ds2))
+
+  # While it's possible for two orders to be the same, it's very unlikely
+  # (1 / 15!) so we don't bother mocking the random number generator.
+  def test_shuffle_with_different_seed_returns_different_elements(self):
+    ds1 = Source15IntsFrom0LazyMapDataset().shuffle(seed=123)
+    ds2 = Source15IntsFrom0LazyMapDataset().shuffle(seed=456)
+    self.assertNotEqual(list(ds1), list(ds2))
+
+  def test_shuffle_uses_different_order_for_different_epochs(self):
+    ds = Source15IntsFrom0LazyMapDataset().shuffle(seed=123)
+    epoch_1 = [ds[i] for i in range(15)]
+    epoch_2 = [ds[i] for i in range(15, 30)]
+    self.assertSameElements(epoch_1, epoch_2)
+    self.assertNotEqual(epoch_1, epoch_2)
+
 
 if __name__ == '__main__':
   absltest.main()

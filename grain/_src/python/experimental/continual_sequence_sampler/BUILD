@@ -10,7 +10,6 @@ py_library(
         "//grain/_src/core:sharding",
         "//grain/_src/python:record",
         "//grain/_src/python/lazy_dataset",
-        "//grain/_src/python/lazy_dataset/transformations:shuffle",
     ],
 )
 
@@ -22,6 +21,5 @@ py_test(
         ":continual_sequence_sampler",
         "//grain/_src/core:sharding",
         "//grain/_src/python/lazy_dataset",
-        "//grain/_src/python/lazy_dataset/transformations:shuffle",
     ],
 )

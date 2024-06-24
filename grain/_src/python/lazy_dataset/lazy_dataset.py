@@ -169,6 +169,31 @@ class LazyMapDataset(Sequence[T], abc.ABC):
     # pylint: enable=g-import-not-at-top
     return filter_dataset.FilterLazyMapDataset(parent=self, transform=transform)
 
+  def shuffle(self, *, seed: int) -> "LazyMapDataset[T]":
+    """Returns a dataset containing the same elements but in a shuffled order.
+
+    The following expressions are equivalent:
+
+    - `ds = ds.shuffle(seed=42)`
+    - `ds = ShuffleLazyMapDataset(ds, seed=42)`
+
+    The `ds.shuffle(...)` version allows chaining multiple transformations,
+    e.g.,
+    `ds = ds.filter(...).map(...).shuffle(...)`.
+
+    Args:
+      seed: An integer between 0 and 2**32-1 representing the seed used by the
+        shuffling algorithm.
+
+    Returns:
+      A dataset containing the same elements but in a shuffled order.
+    """
+    # Loaded lazily due to a circular dependency (lazy_dataset <-> shuffle).
+    # pylint: disable=g-import-not-at-top
+    from grain._src.python.lazy_dataset.transformations import shuffle
+    # pylint: enable=g-import-not-at-top
+    return shuffle.ShuffleLazyMapDataset(parent=self, seed=seed)
+
   def slice(self, sl: builtins.slice) -> "LazyMapDataset[T]":
     """Returns a dataset containing only the elements with indices in `sl`.
 

@@ -22,7 +22,6 @@ from grain._src.python.lazy_dataset import lazy_dataset
 T = TypeVar("T")
 
 
-@lazy_dataset.lazy_map_dataset_function("shuffle")
 class ShuffleLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   """Shuffles the parent dataset."""
 

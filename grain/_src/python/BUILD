@@ -100,7 +100,6 @@ py_library(
         "//grain/_src/core:monitoring",
         "//grain/_src/core:sharding",
         "//grain/_src/python/lazy_dataset",
-        "//grain/_src/python/lazy_dataset/transformations:shuffle",
     ],
 )
 
