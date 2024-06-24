@@ -14,11 +14,12 @@
 """Tests for shuffle transformation."""
 
 from absl.testing import absltest
+from absl.testing import parameterized
 from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import shuffle
 
 
-class ShuffleLazyMapDatasetTest(absltest.TestCase):
+class ShuffleLazyMapDatasetTest(parameterized.TestCase):
 
   def test_len(self):
     ds = shuffle.ShuffleLazyMapDataset(
@@ -44,6 +45,13 @@ class ShuffleLazyMapDatasetTest(absltest.TestCase):
     ds_iter = iter(ds)
     elements = [next(ds_iter) for _ in range(400)]
     self.assertLen(elements, 400)
+
+  @parameterized.parameters(-1000, -1, 2**32, 2**32 + 1, 2**64 + 1)
+  def test_init_with_invalid_seed_returns_value_error(self, seed):
+    with self.assertRaises(ValueError):
+      shuffle.ShuffleLazyMapDataset(
+          lazy_dataset.RangeLazyMapDataset(400), seed=seed
+      )
 
 
 class WindowShuffleLazyMapDatasetTest(absltest.TestCase):

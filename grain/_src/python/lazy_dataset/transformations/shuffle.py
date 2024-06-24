@@ -32,6 +32,10 @@ class ShuffleLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
       seed: int,
   ):
     super().__init__(parent)
+    if seed < 0 or seed >= 2**32:
+      raise ValueError(
+          f"Seed must be an integer between 0 and 2**32-1 (got {seed=})."
+      )
     self._seed = seed
 
   def __len__(self) -> int:
@@ -41,8 +45,7 @@ class ShuffleLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     if isinstance(index, slice):
       return self.slice(index)
     length = len(self._parent)
-    epoch = index // length
-    index_in_epoch = index % length
+    epoch, index_in_epoch = divmod(index, length)
     # Note:
     #   - index_shuffle expects 32-bit integers
     #   - we use different seeds for each epoch to ensure that the shuffle is
