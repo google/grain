@@ -30,12 +30,10 @@ class ShuffleLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
       self,
       parent: lazy_dataset.LazyMapDataset[T],
       *,
-      reshuffle_each_epoch: bool = True,
       seed: int,
   ):
     super().__init__(parent)
     self._seed = seed
-    self._reshuffle_each_epoch = reshuffle_each_epoch
 
   def __len__(self) -> int:
     return len(self._parent)
@@ -46,13 +44,13 @@ class ShuffleLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     length = len(self._parent)
     epoch = index // length
     index_in_epoch = index % length
-    if self._reshuffle_each_epoch:
-      # index_shuffle expects 32-bit integers
-      seed = (self._seed + epoch) % 2**32
-    else:
-      seed = self._seed
+    # Note:
+    #   - index_shuffle expects 32-bit integers
+    #   - we use different seeds for each epoch to ensure that the shuffle is
+    #     different for each epoch
+    per_epoch_seed = (self._seed + epoch) % 2**32
     shuffled_index_in_epoch = index_shuffle.index_shuffle(
-        index_in_epoch, max_index=length - 1, seed=seed, rounds=4
+        index_in_epoch, max_index=length - 1, seed=per_epoch_seed, rounds=4
     )
     shuffled_index = shuffled_index_in_epoch + epoch * length
     return self._parent[shuffled_index]

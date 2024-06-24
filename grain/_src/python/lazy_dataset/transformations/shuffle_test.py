@@ -28,19 +28,6 @@ class ShuffleLazyMapDatasetTest(absltest.TestCase):
 
   def test_getitem(self):
     ds = shuffle.ShuffleLazyMapDataset(
-        lazy_dataset.RangeLazyMapDataset(400),
-        reshuffle_each_epoch=False,
-        seed=42,
-    )
-    shuffled_indices = [ds[i] for i in range(400)]
-    self.assertLen(set(shuffled_indices), 400)
-    for x in shuffled_indices:
-      self.assertBetween(x, 0, 400)
-    shuffled_indices_epoch2 = [ds[400 + i] for i in range(400)]
-    self.assertEqual(shuffled_indices, shuffled_indices_epoch2)
-
-  def test_getitem_reshuffle(self):
-    ds = shuffle.ShuffleLazyMapDataset(
         lazy_dataset.RangeLazyMapDataset(400), seed=42
     )
     shuffled_indices = [ds[i] for i in range(400)]
