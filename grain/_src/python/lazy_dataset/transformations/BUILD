@@ -149,29 +149,6 @@ py_test(
     deps = ["//grain/_src/python/lazy_dataset"],
 )
 
-py_library(
-    name = "ragged_batch",
-    srcs = ["ragged_batch.py"],
-    srcs_version = "PY3",
-    deps = [
-        "//grain/_src/core:transforms",
-        "//grain/_src/python/lazy_dataset",
-    ],
-)
-
-py_test(
-    name = "ragged_batch_test",
-    srcs = ["ragged_batch_test.py"],
-    srcs_version = "PY3",
-    deps = [
-        ":map",
-        ":ragged_batch",
-        "//grain/_src/core:transforms",
-        "//grain/_src/python/lazy_dataset",
-        "//grain/_src/python/lazy_dataset:data_sources",
-    ],
-)
-
 py_test(
     name = "repeat_test",
     srcs = ["repeat_test.py"],

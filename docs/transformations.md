@@ -79,7 +79,3 @@ class RemoveEvenElements(FilterTransform):
 ## Batch
 
 To apply the Batch transform, just pass `grain.Batch(batch_size=batch_size, drop_remainder=drop_remainder)`.
-
-## RaggedBatchTransform
-
-To apply the RaggedBatchTransform transform, just pass `grain.RaggedBatchTransform(batch_size=batch_size)`.

@@ -54,7 +54,6 @@ from ._src.python.lazy_dataset.transformations.packing import (
     FirstFitPackLazyIterDataset,
     SingleBinPackLazyIterDataset,
 )
-from ._src.python.lazy_dataset.transformations.ragged_batch import RaggedBatchLazyMapDataset
 from ._src.python.lazy_dataset.transformations.repeat import RepeatLazyMapDataset
 from ._src.python.lazy_dataset.transformations.shuffle import (
     ShuffleLazyMapDataset,

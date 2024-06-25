@@ -101,17 +101,6 @@ class BatchTransform:
   drop_remainder: bool = False
 
 
-@dataclasses.dataclass
-class RaggedBatchTransform:
-  """Abstract base class for batching elements that can be of different size.
-
-  Attributes
-    batch_size: Number of elements to batch.
-  """
-
-  batch_size: int
-
-
 Transformation = Union[
     BatchTransform,
     MapTransform,
@@ -119,6 +108,5 @@ Transformation = Union[
     TfRandomMapTransform,
     FilterTransform,
     FlatMapTransform,
-    RaggedBatchTransform,
 ]
 Transformations = Sequence[Transformation]
