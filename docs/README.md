@@ -18,7 +18,7 @@ output.
 checkpoints have minimal size. After pre-emption, PyGrain can resume from where
 it left off and produce the same output as if it was never preempted.
 * **Performant.** We took care while designing PyGrain to ensure that it's
-performant (refer to [Behind the Scenes](http://https://github.com/google/grain/tree/main/docs/behind_the_scenes).md
+performant (refer to [Behind the Scenes](https://github.com/google/grain/blob/main/docs/behind_the_scenes.md).md
 section.) We also tested it against multiple data modalities (e.g.
 Text/Audio/Images/Videos).
 * **With minimal dependencies.** PyGrain should minimize its set
