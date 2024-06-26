@@ -1,10 +1,13 @@
 """Grain metrics."""
 
+import enum
 
-class Units:
+
+@enum.unique
+class Units(enum.Enum):
   """Grain metric units."""
 
-  SECONDS = 'seconds'
+  NANOSECONDS = enum.auto()
 
 
 class NoOpMetric:
