@@ -42,6 +42,20 @@ class IndexShuffleTest(absltest.TestCase):
         0, index_shuffle.index_shuffle(index=0, max_index=0, seed=0, rounds=4)
     )
 
+  def test_negative_index(self):
+    with self.assertRaises(TypeError):
+      index_shuffle.index_shuffle(index=-1, max_index=10, seed=42, rounds=4)
+
+  def test_negative_max_index(self):
+    with self.assertRaises(TypeError):
+      index_shuffle.index_shuffle(index=0, max_index=-1, seed=42, rounds=4)
+
+  def test_index_greater_than_max_index(self):
+    with self.assertRaisesRegex(
+        ValueError, r'index must be in \[0, 4\] but was 5'
+    ):
+      index_shuffle.index_shuffle(index=5, max_index=4, seed=42, rounds=4)
+
 
 if __name__ == '__main__':
   absltest.main()

@@ -9,6 +9,7 @@ pybind_extension(
     srcs = ["index_shuffle_module.cc"],
     deps = [
         "//grain/_src/python/experimental/index_shuffle",
+        "//third_party/absl/strings:str_format",
     ],
 )
 
