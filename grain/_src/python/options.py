@@ -48,8 +48,8 @@ class MultiprocessingOptions:
   Attributes:
     num_workers: Number of Python worker processes. More processes can speed up
       the pipeline if it's compute bound and bottlenecked on the CPython's GIL.
-      0 means no Python multiprocessing. All data loading and transformation
-      will run in the main Python process.
+      The default value of 0 means no Python multiprocessing, and as a result
+      all data loading and transformation will run in the main Python process.
     per_worker_buffer_size: Size of the buffer for preprocessed elements that
       each worker maintains. These are elements after all transformations. If
       your transformations include batching this means a single element is a
