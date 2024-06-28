@@ -29,6 +29,7 @@ py_library(
     deps = [
         ":core",  # build_cleaner: keep
         ":python_experimental",  # build_cleaner: keep
+        ":python_proto",  # build_cleaner: keep
         "//grain/_src/core:constants",  # build_cleaner: keep
         "//grain/_src/core:monitoring",  # build_cleaner: keep
         "//grain/_src/core:transforms",  # build_cleaner: keep
@@ -40,6 +41,8 @@ py_library(
         "//grain/_src/python:operations",  # build_cleaner: keep
         "//grain/_src/python:options",  # build_cleaner: keep
         "//grain/_src/python:samplers",  # build_cleaner: keep
+        "//grain/_src/python/proto:decode",  # build_cleaner: keep
+        "//grain/_src/python/proto:encode",  # build_cleaner: keep
     ],
 )
 
@@ -54,6 +57,17 @@ py_library(
         "//grain/_src/core:transforms",  # build_cleaner: keep
         "//grain/_src/python/experimental/continual_sequence_sampler",  # build_cleaner: keep
         "//grain/_src/python/experimental/example_packing:packing",  # build_cleaner: keep
+    ],
+)
+
+py_library(
+    name = "python_proto",
+    srcs = ["python_proto.py"],
+    srcs_version = "PY3",
+    # Implicit build flag
+    deps = [
+        "//grain/_src/python/proto:decode",  # build_cleaner: keep
+        "//grain/_src/python/proto:encode",  # build_cleaner: keep
     ],
 )
 
