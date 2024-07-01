@@ -29,7 +29,7 @@ jobs:
           export PYTHON_MAJOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f1)
           export PYTHON_MINOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f2)
           export BAZEL_VERSION="5.4.0"
-          export AUDITWHEEL_PLATFORM="manylinux2014_x86_64"
+          export AUDITWHEEL_PLATFORM="manylinux_2_28_x86_64"
           cd /tmp/grain
           DOCKER_BUILDKIT=1 docker build --progress=plain --no-cache \
             --build-arg AUDITWHEEL_PLATFORM=${AUDITWHEEL_PLATFORM} \
