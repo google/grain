@@ -696,6 +696,54 @@ class FirstFitPackLazyIterDatasetTest(parameterized.TestCase):
         input_elements, expected_elements, length_struct, num_packing_bins=3
     )
 
+  def test_do_not_pack_marked_features(self):
+    input_elements = [
+        {
+            "inputs": [1, 2, 3, 4],
+            "targets": [10, 20],
+            "id": [1, 1],
+        },
+        {
+            "inputs": [5, 6],
+            "targets": [30, 40, 50],
+            "id": [1, 2],
+        },
+        {
+            "inputs": [11, 12, 13, 14],
+            "targets": [31],
+            "id": [2, 1],
+        },
+        {
+            "inputs": [7],
+            "targets": [60],
+            "id": [2, 2],
+        },
+    ]
+    length_struct = {"inputs": 6, "targets": 4, "id": None}
+    expected_elements = [
+        {
+            "id": [[1, 1], [2, 2]],
+            "inputs": [1, 2, 3, 4, 7, 0],
+            "targets": [10, 20, 60, 0],
+            "inputs_segment_ids": [1, 1, 1, 1, 2, 0],
+            "inputs_positions": [0, 1, 2, 3, 0, 0],
+            "targets_segment_ids": [1, 1, 2, 0],
+            "targets_positions": [0, 1, 0, 0],
+        },
+        {
+            "id": [[1, 2], [2, 1]],
+            "inputs": [5, 6, 11, 12, 13, 14],
+            "targets": [30, 40, 50, 31],
+            "inputs_segment_ids": [1, 1, 2, 2, 2, 2],
+            "inputs_positions": [0, 1, 0, 1, 2, 3],
+            "targets_segment_ids": [1, 1, 1, 2],
+            "targets_positions": [0, 1, 2, 0],
+        },
+    ]
+    _common_test_body(
+        input_elements, expected_elements, length_struct, num_packing_bins=2
+    )
+
   def test_pack_sequences_two_dimensional_features(self):
     input_elements = [
         {

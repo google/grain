@@ -317,6 +317,25 @@ class FirstFitPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
     self._shuffle_bins = shuffle_bins
     self._meta_features = meta_features
     self._reset()
+    self._packable_struct = {}
+    self._pass_through_struct = {}
+    for feature in self._length_struct:
+      if self._length_struct[feature] is None:
+        self._pass_through_struct[feature] = self._length_struct[feature]
+      else:
+        self._packable_struct[feature] = self._length_struct[feature]
+
+  def _split_element(self, element):
+    """Splits element into packable and pass-through features."""
+    packable_features = {}
+    pass_through_features = {}
+    for feature in element:
+      if feature in self._packable_struct:
+        packable_features[feature] = element[feature]
+      else:
+        pass_through_features[feature] = element[feature]
+
+    return packable_features, pass_through_features
 
   def _reset(self):
     self._current_batch = None  # Not yet fully packed.
@@ -356,7 +375,9 @@ class FirstFitPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
   def _finalize_current_batch(self, element_for_shapes):
     assert self._current_batch is not None
     assert self._current_batch_parent_state is not None
-    self._packed_batch = self._current_batch.get_packed_batch()
+    self._packed_batch, self._pass_through_batch = (
+        self._current_batch.get_packed_batch()
+    )
     self._packed_batch_parent_state = self._current_batch_parent_state
     # Detect number of bins. The last batch can be partial.
     self._packed_batch_num_bins = max(
@@ -377,8 +398,9 @@ class FirstFitPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
       self._current_batch = packing_packed_batch.PackedBatch(
           element_for_shapes,
           self._num_packing_bins,
-          self._length_struct,
+          self._packable_struct,
           meta_features=self._meta_features,
+          pass_through_features_struct=self._pass_through_struct,
       )
 
   def __next__(self):
@@ -387,6 +409,10 @@ class FirstFitPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
         next_row = self._shuffled_rows[self._next_row]
       else:
         next_row = self._next_row
+      self._pass_through_batch = tree.map_structure_up_to(
+          self._pass_through_struct, np.asarray, self._pass_through_batch
+      )
+      self._packed_batch |= self._pass_through_batch
       element = tree.map_structure(lambda x: x[next_row], self._packed_batch)
       self._next_row += 1
       self._counter += 1
@@ -413,8 +439,9 @@ class FirstFitPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
           raise StopIteration() from e
 
       # Remove elements not in packing struct.
+      element, pass_through_features = self._split_element(element)
       element = tree.map_structure_up_to(
-          self._length_struct, lambda x: x, element
+          self._packable_struct, lambda x: x, element
       )
 
       if self._current_batch is None:  # pytype: disable=attribute-error
@@ -423,13 +450,16 @@ class FirstFitPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
         self._current_batch = packing_packed_batch.PackedBatch(
             element,
             self._num_packing_bins,
-            self._length_struct,
+            self._packable_struct,
             meta_features=self._meta_features,
+            pass_through_features_struct=self._pass_through_struct,
         )
         self._current_batch_parent_state = prior_iterator_state
 
       # Try adding element to the current packed batch.
-      failing_components = self._current_batch.try_add_to_batch(element)
+      failing_components = self._current_batch.try_add_to_batch(
+          element, pass_through_features
+      )
 
       # When we have a full batch, yield the current packed data,
       # and then start a new batch with this element.
@@ -438,7 +468,10 @@ class FirstFitPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
         self._current_batch_parent_state = prior_iterator_state
         assert self._current_batch is not None
 
-        if self._current_batch.try_add_to_batch(element) is not None:
+        if (
+            self._current_batch.try_add_to_batch(element, pass_through_features)
+            is not None
+        ):
           # If we can't pack a single example into an empty batch then we
           # can't continue at all.
           element_shape = tree.map_structure(lambda x: x.shape, element)
