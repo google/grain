@@ -14,19 +14,35 @@
 """Tests for batch transformation."""
 
 import sys
+
 from absl.testing import absltest
 from absl.testing import parameterized
+# pylint: enable=unused-import
 from grain._src.python.lazy_dataset import data_sources
 from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import packing
 # pylint: disable=unused-import
 import grain._src.python.lazy_dataset.transformations.map
 import grain._src.python.lazy_dataset.transformations.shuffle
-# pylint: enable=unused-import
 import numpy as np
 import tree
 
+
 _IS_PY310 = sys.version_info >= (3, 10)
+
+
+def _assert_trees_equal(actual, expected):
+  def _check_equivalence(path, actual_val, expected_val):
+    np.testing.assert_array_equal(
+        actual_val,
+        expected_val,
+        err_msg=(
+            f"Pytrees differ at path {path}.\n\n"
+            f"Actual: {actual_val}\n\nExpected: {expected_val}"
+        ),
+    )
+
+  tree.map_structure_with_path(_check_equivalence, actual, expected)
 
 
 class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
@@ -820,19 +836,44 @@ class FirstFitPackLazyIterDatasetTest(parameterized.TestCase):
         {k: np.asarray(v) for k, v in d.items()} for d in expected_elements
     ]
 
-    def _check_equivalence(path, actual_val, expected_val):
-      np.testing.assert_array_equal(
-          actual_val,
-          expected_val,
-          err_msg=(
-              f"Pytrees differ at path {path}.\n\n"
-              f"Actual: {actual_val}\n\nExpected: {expected_val}"
-          ),
-      )
-
     np.testing.assert_equal(len(actual_elements), len(expected_elements))
     for actual, expected in zip(actual_elements, expected_elements):
-      tree.map_structure_with_path(_check_equivalence, actual, expected)
+      _assert_trees_equal(actual, expected)
+
+  @parameterized.product(
+      shuffle_bins=[True, False],
+  )
+  def test_deterministic_restore(self, shuffle_bins: bool):
+    # Tests whether the dataset is deterministic after checkpointing+restore.
+    steps_to_skip = 10
+    examples_to_compare = 3
+
+    rng = np.random.default_rng(42)
+    elements = [
+        dict(row=rng.integers(0, 10, size=rng.integers(5, 30)))
+        for _ in range(100)
+    ]
+    ld = packing.FirstFitPackLazyIterDataset(
+        data_sources.SourceLazyMapDataset(elements).repeat().to_iter_dataset(),
+        num_packing_bins=4,
+        length_struct=dict(row=100),
+        shuffle_bins=shuffle_bins,
+    )
+
+    it = ld.__iter__()
+
+    for _ in range(steps_to_skip):
+      _ = next(it)
+    state = it.get_state()
+
+    first_elements = [next(it) for _ in range(examples_to_compare)]
+
+    it = ld.__iter__()
+    it.set_state(state)
+
+    second_elements = [next(it) for _ in range(examples_to_compare)]
+
+    _assert_trees_equal(first_elements, second_elements)
 
 
 if __name__ == "__main__":
