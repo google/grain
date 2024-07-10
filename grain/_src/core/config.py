@@ -101,6 +101,15 @@ _PREFETCH_BUFFER_SIZE = flags.DEFINE_integer(
     ),
 )
 
+_DEBUG_MODE = flags.DEFINE_bool(
+    "grain_py_debug_mode",
+    False,
+    (
+        "If True, will enable debug mode for Grain. This will enable reporting"
+        "extra streamz metrics."
+    ),
+)
+
 _GRAIN_FLAGS = (
     _INTERLEAVED_SHUFFLE,
     _INTERLEAVED_SHUFFLE_BLOCK_SIZE,
@@ -110,6 +119,7 @@ _GRAIN_FLAGS = (
     _LOOKUP_FAST_WARMUP,
     _OPTIMIZED_SEQUENTIAL_READ,
     _PREFETCH_BUFFER_SIZE,
+    _DEBUG_MODE,
 )
 
 _grain_experiment_metric = monitoring.Metric(

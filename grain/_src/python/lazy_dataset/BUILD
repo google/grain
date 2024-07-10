@@ -11,6 +11,7 @@ py_library(
     data = ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
     srcs_version = "PY3",
     deps = [
+        "//grain/_src/core:config",
         "//grain/_src/core:monitoring",
         "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
