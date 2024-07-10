@@ -498,6 +498,11 @@ class PrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
 
   def set_state(self, state):
     self._next_index = state["next_index"]
+    if self._next_index < 0 or self._next_index > self._dataset_length:
+      raise IndexError(
+          f"Checkpoint `next_index` {self._next_index} is out of range for"
+          f" dataset of length {self._dataset_length}."
+      )
     if self._prefetch_buffer_size > 0:
       self._buffer = None
 

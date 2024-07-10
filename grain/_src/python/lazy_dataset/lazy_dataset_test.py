@@ -174,6 +174,16 @@ class PrefetchLazyIterDatasetTest(parameterized.TestCase):
         value = next(ds_iter)
         self.assertEqual(value, values_without_interruption[i])
 
+  @parameterized.parameters(-1, 30)
+  def test_invalid_checkpoint(self, next_index: int):
+    ds_iter = iter(self.prefetch_lazy_iter_ds)
+    with self.assertRaisesRegex(
+        IndexError,
+        f'Checkpoint `next_index` {next_index} is out of range for dataset of'
+        ' length 20.',
+    ):
+      ds_iter.set_state({'next_index': next_index})  # pytype: disable=attribute-error
+
 
 class MultiprocessPrefetchLazyIterDatasetTest(parameterized.TestCase):
 
