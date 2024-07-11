@@ -453,6 +453,7 @@ class PrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
     self._dataset_length = len(dataset)
     self._next_index = 0
     self._buffer = None
+    self._lock = threading.Lock()
     self._prefetch_buffer_size = read_options.prefetch_buffer_size
     self._allow_nones = allow_nones
     if self._prefetch_buffer_size > 0:
@@ -464,31 +465,35 @@ class PrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
     while True:
       if self._next_index == self._dataset_length:
         break
-      if self._prefetch_buffer_size > 0:
-        if not self._buffer:
-          indices = range(
-              self._next_index,
-              min(
-                  self._next_index + self._prefetch_buffer_size,
-                  self._dataset_length,
-              ),
-          )
-          self._buffer = collections.deque(
-              self._executor.submit(self._dataset.__getitem__, i)
-              for i in indices
-          )
-        element = self._buffer.popleft()
-        if self._next_index + self._prefetch_buffer_size < self._dataset_length:
-          self._buffer.append(
-              self._executor.submit(
-                  self._dataset.__getitem__,
-                  self._next_index + self._prefetch_buffer_size,
-              )
-          )
-        element = element.result()
-      else:
-        element = self._dataset[self._next_index]
-      self._next_index += 1
+      with self._lock:
+        if self._prefetch_buffer_size > 0:
+          if not self._buffer:
+            indices = range(
+                self._next_index,
+                min(
+                    self._next_index + self._prefetch_buffer_size,
+                    self._dataset_length,
+                ),
+            )
+            self._buffer = collections.deque(
+                self._executor.submit(self._dataset.__getitem__, i)
+                for i in indices
+            )
+          element = self._buffer.popleft()
+          if (
+              self._next_index + self._prefetch_buffer_size
+              < self._dataset_length
+          ):
+            self._buffer.append(
+                self._executor.submit(
+                    self._dataset.__getitem__,
+                    self._next_index + self._prefetch_buffer_size,
+                )
+            )
+          element = element.result()
+        else:
+          element = self._dataset[self._next_index]
+        self._next_index += 1
       if self._allow_nones or element is not None:
         return element
     raise StopIteration
@@ -497,14 +502,15 @@ class PrefetchLazyDatasetIterator(LazyDatasetIterator[T]):
     return {"next_index": self._next_index}
 
   def set_state(self, state):
-    self._next_index = state["next_index"]
-    if self._next_index < 0 or self._next_index > self._dataset_length:
-      raise IndexError(
-          f"Checkpoint `next_index` {self._next_index} is out of range for"
-          f" dataset of length {self._dataset_length}."
-      )
-    if self._prefetch_buffer_size > 0:
-      self._buffer = None
+    with self._lock:
+      self._next_index = state["next_index"]
+      if self._next_index < 0 or self._next_index > self._dataset_length:
+        raise IndexError(
+            f"Checkpoint `next_index` {self._next_index} is out of range for"
+            f" dataset of length {self._dataset_length}."
+        )
+      if self._prefetch_buffer_size > 0:
+        self._buffer = None
 
 
 def _iterator_with_context(
