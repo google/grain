@@ -66,6 +66,26 @@ _SparseArray = collections.namedtuple(
 )
 
 
+class ArrayRecordDataSource(array_record.ArrayRecordDataSource):
+  """Data source for ArrayRecord files."""
+
+  def __init__(self, paths: ArrayRecordDataSourcePaths):
+    """Creates a new ArrayRecordDataSource object.
+
+    See `array_record.ArrayRecordDataSource` for more details.
+
+    Args:
+      paths: A single path/FileInstruction or list of paths/FileInstructions.
+    """
+    super().__init__(paths)
+    _api_usage_counter.Increment("ArrayRecordDataSource")
+
+  def __getitem__(self, record_key: SupportsIndex) -> bytes:
+    data = super().__getitem__(record_key)
+    _bytes_read_counter.IncrementBy(len(data), self.__class__.__name__)
+    return data
+
+
 @typing.runtime_checkable
 class RandomAccessDataSource(Protocol, Generic[T]):
   """Interface for datasources where storage supports efficient random access.
@@ -95,29 +115,7 @@ class RandomAccessDataSource(Protocol, Generic[T]):
     """
 
 
-class ArrayRecordDataSource(
-    array_record.ArrayRecordDataSource, RandomAccessDataSource[bytes]
-):
-  """Data source for ArrayRecord files."""
-
-  def __init__(self, paths: ArrayRecordDataSourcePaths):
-    """Creates a new ArrayRecordDataSource object.
-
-    See `array_record.ArrayRecordDataSource` for more details.
-
-    Args:
-      paths: A single path/FileInstruction or list of paths/FileInstructions.
-    """
-    super().__init__(paths)
-    _api_usage_counter.Increment("ArrayRecordDataSource")
-
-  def __getitem__(self, record_key: SupportsIndex) -> bytes:
-    data = super().__getitem__(record_key)
-    _bytes_read_counter.IncrementBy(len(data), self.__class__.__name__)
-    return data
-
-
-class RangeDataSource(RandomAccessDataSource[int]):
+class RangeDataSource:
   """Range data source, similar to python range() function."""
 
   def __init__(self, start: int, stop: int, step: int):

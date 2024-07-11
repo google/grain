@@ -13,39 +13,35 @@
 # limitations under the License.
 """LazyDataset data sources."""
 
-from __future__ import annotations
-
-from typing import Protocol, TypeVar, Union
+from typing import Protocol, Union
 
 from absl import logging
 from grain._src.python.lazy_dataset import lazy_dataset
 
-T = TypeVar("T")
 
-
-class RandomAccessDataSource(Protocol[T]):
+class RandomAccessDataSource(Protocol):
   """Interface for datasets where storage supports efficient random access."""
 
   def __len__(self):
     ...
 
-  def __getitem__(self, index: int) -> T:
+  def __getitem__(self, index: int):
     ...
 
 
-class SourceLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
+class SourceLazyMapDataset(lazy_dataset.LazyMapDataset):
   """Simple wrapper for random access data sources."""
 
-  _source: RandomAccessDataSource[T]
+  _source: RandomAccessDataSource
 
-  def __init__(self, source: RandomAccessDataSource[T]):
+  def __init__(self, source: RandomAccessDataSource):
     super().__init__()
     self._source = source
 
   def __len__(self) -> int:
     return len(self._source)
 
-  def __getitem__(self, index) -> T:
+  def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
     return self._source[index % len(self)]
@@ -53,12 +49,9 @@ class SourceLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   def log_lineage(self):
     pass
 
-  def __repr__(self):
-    return f"SourceLazyMapDataset(source={self._source!r})"
-
 
 def log_lineage_for_sources(
-    root: Union[lazy_dataset.LazyMapDataset, lazy_dataset.LazyIterDataset],
+    root: Union[lazy_dataset.LazyMapDataset, lazy_dataset.LazyIterDataset]
 ):
   """Traverses tree of transformations and logs lineage on source datasets."""
   pass
