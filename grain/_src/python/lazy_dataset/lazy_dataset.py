@@ -359,6 +359,29 @@ class LazyIterDataset(Iterable[T], abc.ABC):
         sliced_parents.append(parent)
     self._parents = tuple(sliced_parents)
 
+  def prefetch(
+      self, multiprocessing_options: grain_options.MultiprocessingOptions
+  ) -> "LazyIterDataset[T]":
+    """Returns a dataset prefetching the elements in multiple processes.
+
+    Each of the processes will process a slice of the dataset after all
+    MapDataset transformations.
+
+    WARNING: If the dataset contains many-to-one transformations (such as
+    `batch`), output after prefetch may change if you change the number of
+    workers. However, it is still going to be determisitic.
+
+    Args:
+      multiprocessing_options: options for the prefetching processes.
+        `num_workers` must be greater than 0.
+
+    Returns:
+      A dataset prefetching input elements concurrently.
+    """
+    return MultiprocessPrefetchLazyIterDataset(
+        self, multiprocessing_options=multiprocessing_options
+    )
+
   @abc.abstractmethod
   def __iter__(self) -> LazyDatasetIterator[T]:
     """Returns an iterator for this dataset."""
@@ -519,7 +542,6 @@ def _iterator_with_context(
     yield from it
 
 
-@lazy_iter_dataset_function("prefetch")
 class MultiprocessPrefetchLazyIterDataset(LazyIterDataset[T]):
   """Uses a pool of processes to prefetch elements ahead of time.
 

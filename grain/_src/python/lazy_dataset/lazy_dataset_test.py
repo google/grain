@@ -677,6 +677,14 @@ class LazyDatasetTest(parameterized.TestCase):
     self.assertSameElements(epoch_1, epoch_2)
     self.assertNotEqual(epoch_1, epoch_2)
 
+  def test_multiprocess_prefetch(self):
+    ds = (
+        Source15IntsFrom0LazyMapDataset()
+        .to_iter_dataset()
+        .prefetch(options.MultiprocessingOptions(num_workers=4))
+    )
+    self.assertSequenceEqual(list(ds), list(range(15)))
+
 
 if __name__ == '__main__':
   absltest.main()
