@@ -418,7 +418,6 @@ class LazyDatasetIterator(Iterator[T], abc.ABC):
     """Sets the current state of the iterator."""
 
 
-@lazy_map_dataset_function("prefetch")
 class PrefetchLazyIterDataset(LazyIterDataset[T]):
   """Iterable dataset that uses a thread pool for prefetching."""
 
