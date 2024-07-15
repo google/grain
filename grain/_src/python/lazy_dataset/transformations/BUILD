@@ -8,6 +8,7 @@ filegroup(
     name = "core_transformations",
     srcs = [
         "filter.py",
+        "prefetch.py",
         "repeat.py",
         "shuffle.py",
         "slice.py",
@@ -41,6 +42,19 @@ py_test(
     srcs_version = "PY3",
     deps = [
         "//grain/_src/core:transforms",
+        "//grain/_src/python/lazy_dataset",
+    ],
+)
+
+py_test(
+    name = "prefetch_test",
+    srcs = ["prefetch_test.py"],
+    shard_count = 20,
+    srcs_version = "PY3",
+    deps = [
+        ":map",
+        "//grain/_src/core:transforms",
+        "//grain/_src/python:options",
         "//grain/_src/python/lazy_dataset",
     ],
 )

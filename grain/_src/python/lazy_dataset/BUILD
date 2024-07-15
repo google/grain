@@ -25,7 +25,6 @@ py_library(
 py_test(
     name = "lazy_dataset_test",
     srcs = ["lazy_dataset_test.py"],
-    shard_count = 20,
     srcs_version = "PY3",
     deps = [
         ":lazy_dataset",

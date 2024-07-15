@@ -17,6 +17,7 @@ from typing import Optional, Union
 import cloudpickle
 from grain._src.python import options as grain_options
 from grain._src.python.lazy_dataset import lazy_dataset
+from grain._src.python.lazy_dataset.transformations import prefetch
 
 
 def _confirm_picklable_and_copy_lazy_dataset(
@@ -61,7 +62,7 @@ class DataLoader:
     )
 
     if self._multiprocessing_options:
-      self._iter_ds = lazy_dataset.MultiprocessPrefetchLazyIterDataset(
+      self._iter_ds = prefetch.MultiprocessPrefetchLazyIterDataset(
           self._iter_ds, self._multiprocessing_options
       )
 

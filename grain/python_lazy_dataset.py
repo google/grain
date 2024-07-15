@@ -28,7 +28,6 @@ from ._src.python.lazy_dataset.lazy_dataset import (
     LazyIterDataset,
     LazyDatasetIterator,
     RangeLazyMapDataset,
-    ThreadPrefetchLazyIterDataset,
 )
 from ._src.python.lazy_dataset.transformations.batch import (
     BatchLazyMapDataset,
@@ -54,6 +53,7 @@ from ._src.python.lazy_dataset.transformations.packing import (
     FirstFitPackLazyIterDataset,
     SingleBinPackLazyIterDataset,
 )
+from ._src.python.lazy_dataset.transformations.prefetch import ThreadPrefetchLazyIterDataset
 from ._src.python.lazy_dataset.transformations.repeat import RepeatLazyMapDataset
 from ._src.python.lazy_dataset.transformations.shuffle import (
     ShuffleLazyMapDataset,
