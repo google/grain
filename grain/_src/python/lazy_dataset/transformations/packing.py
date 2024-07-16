@@ -35,7 +35,6 @@ import tree
 _RECACHE_PARENT_STATE_EVERY_N = 100
 
 
-@lazy_dataset.lazy_iter_dataset_function("single_bin_pack")
 class SingleBinPackLazyIterDataset(lazy_dataset.LazyIterDataset):
   """Packs potentially multiple examples from the parent into a single example.
 
