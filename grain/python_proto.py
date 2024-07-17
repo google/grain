@@ -21,3 +21,5 @@
 
 from ._src.python.proto.decode import parse_tf_example
 from ._src.python.proto.encode import make_tf_example
+
+from ._src.python.proto import lazy_np
