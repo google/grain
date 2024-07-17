@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Flatmap transformation for LazyMapDataset."""
+"""Flatmap transformation for MapDataset."""
 
 from typing import Any, TypeVar
 
@@ -23,12 +23,12 @@ Element = Any
 T = TypeVar("T")  # pylint: disable=invalid-name
 
 
-class FlatMapLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
+class FlatMapMapDataset(lazy_dataset.MapDataset[T]):
   """Flat map for one-to-many split."""
 
   def __init__(
       self,
-      parent: lazy_dataset.LazyMapDataset,
+      parent: lazy_dataset.MapDataset,
       transform: transforms.FlatMapTransform,
   ):
     super().__init__(parent)

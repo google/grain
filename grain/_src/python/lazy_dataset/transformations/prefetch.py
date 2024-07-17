@@ -37,12 +37,12 @@ import numpy as np
 T = TypeVar("T")
 
 
-class PrefetchLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
+class PrefetchIterDataset(lazy_dataset.IterDataset[T]):
   """Iterable dataset that uses a thread pool for prefetching."""
 
   def __init__(
       self,
-      parent: lazy_dataset.LazyMapDataset[T],
+      parent: lazy_dataset.MapDataset[T],
       *,
       read_options: grain_options.ReadOptions,
       allow_nones: bool = False,
@@ -51,18 +51,18 @@ class PrefetchLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
     self._read_options = read_options
     self._allow_nones = allow_nones
 
-  def __iter__(self) -> lazy_dataset.LazyDatasetIterator[T]:
-    return PrefetchLazyDatasetIterator(
+  def __iter__(self) -> lazy_dataset.DatasetIterator[T]:
+    return PrefetchDatasetIterator(
         self._parent, self._read_options, self._allow_nones
     )
 
 
-class PrefetchLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
+class PrefetchDatasetIterator(lazy_dataset.DatasetIterator[T]):
   """Iterator that performs prefetching using a thread pool."""
 
   def __init__(
       self,
-      dataset: lazy_dataset.LazyMapDataset[T],
+      dataset: lazy_dataset.MapDataset[T],
       read_options: grain_options.ReadOptions,
       allow_nones: bool,
   ):
@@ -138,16 +138,16 @@ def _iterator_with_context(
     yield from it
 
 
-class MultiprocessPrefetchLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
+class MultiprocessPrefetchIterDataset(lazy_dataset.IterDataset[T]):
   """Uses a pool of processes to prefetch elements ahead of time.
 
   It usually makes sense to add this transformation in the end of the pipeline
-  since it will execute the parent LazyIterDataset in multiple processes.
+  since it will execute the parent IterDataset in multiple processes.
   """
 
   def __init__(
       self,
-      parent: lazy_dataset.LazyIterDataset[T],
+      parent: lazy_dataset.IterDataset[T],
       multiprocessing_options: grain_options.MultiprocessingOptions,
   ):
     if multiprocessing_options.num_workers < 1:
@@ -164,26 +164,26 @@ class MultiprocessPrefetchLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
     to_check = [self._parent]
     while to_check:
       dataset = to_check.pop(0)
-      if isinstance(dataset, MultiprocessPrefetchLazyIterDataset):
+      if isinstance(dataset, MultiprocessPrefetchIterDataset):
         raise ValueError(
-            "Having multiple `MultiprocessPrefetchLazyIterDataset`s is not "
+            "Having multiple `MultiprocessPrefetchIterDataset`s is not "
             "allowed. Consider only keeping the last one."
         )
       to_check.extend(dataset.parents)
 
-  def __iter__(self) -> MultiprocessPrefetchLazyDatasetIterator[T]:
-    return MultiprocessPrefetchLazyDatasetIterator(
+  def __iter__(self) -> MultiprocessPrefetchDatasetIterator[T]:
+    return MultiprocessPrefetchDatasetIterator(
         self._parent, self._multiprocessing_options
     )
 
 
-# Keys in `MultiprocessPrefetchLazyDatasetIterator` checkpoints.
+# Keys in `MultiprocessPrefetchDatasetIterator` checkpoints.
 _WORKERS_STATE = "workers_state"
 _ITERATIONS_TO_SKIP = "iterations_to_skip"
 _LAST_WORKER_INDEX = "last_worker_index"
 
 # Minimal interval (in seconds) between consecutive state recordings in worker
-# processes of `MultiprocessPrefetchLazyDatasetIterator`. We record the state
+# processes of `MultiprocessPrefetchDatasetIterator`. We record the state
 # periodically to reduce the overhead of sending the state from workers.
 # Note that this is also an approximate upper bound on how long it is going to
 # take to recover from a checkpointed state. Larger values will decrease the
@@ -226,14 +226,12 @@ def _open_struct_from_shm(struct: Any) -> Any:
   return tree.map_structure(_open_leaf_from_shm, struct)
 
 
-class MultiprocessPrefetchLazyDatasetIterator(
-    lazy_dataset.LazyDatasetIterator[T]
-):
+class MultiprocessPrefetchDatasetIterator(lazy_dataset.DatasetIterator[T]):
   """Iterator that performs prefetching using a multiprocessing pool."""
 
   def __init__(
       self,
-      parent: lazy_dataset.LazyIterDataset[T],
+      parent: lazy_dataset.IterDataset[T],
       multiprocessing_options: grain_options.MultiprocessingOptions,
   ):
     super().__init__()
@@ -259,7 +257,7 @@ class MultiprocessPrefetchLazyDatasetIterator(
         _LAST_WORKER_INDEX: -1,
     }
 
-  def __iter__(self) -> lazy_dataset.LazyDatasetIterator[T]:
+  def __iter__(self) -> lazy_dataset.DatasetIterator[T]:
     return self
 
   def __next__(self) -> T:
@@ -332,10 +330,10 @@ class MultiprocessPrefetchLazyDatasetIterator(
     )
 
 
-class ThreadPrefetchLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
+class ThreadPrefetchIterDataset(lazy_dataset.IterDataset[T]):
   """Iterable dataset that uses a synchronized queue for prefetching.
 
-  This is a thread-based alternative to `MultiprocessPrefetchLazyIterDataset`.
+  This is a thread-based alternative to `MultiprocessPrefetchIterDataset`.
 
   Attributes:
     parent: The parent dataset to prefetch from.
@@ -344,15 +342,15 @@ class ThreadPrefetchLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
 
   def __init__(
       self,
-      parent: lazy_dataset.LazyIterDataset[T],
+      parent: lazy_dataset.IterDataset[T],
       *,
       prefetch_buffer_size: int,
   ):
     super().__init__(parent)
     self._prefetch_buffer_size = prefetch_buffer_size
 
-  def __iter__(self) -> ThreadPrefetchLazyDatasetIterator[T]:
-    return ThreadPrefetchLazyDatasetIterator(
+  def __iter__(self) -> ThreadPrefetchDatasetIterator[T]:
+    return ThreadPrefetchDatasetIterator(
         self._parent, self._prefetch_buffer_size
     )
 
@@ -365,17 +363,17 @@ StateT = Mapping[str, Any]
 _INITIAL_STATE_SENTINEL = object()
 
 
-class ThreadPrefetchLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
+class ThreadPrefetchDatasetIterator(lazy_dataset.DatasetIterator[T]):
   """Iterator that performs prefetching using a synchronized queue."""
 
   def __init__(
       self,
-      dataset: lazy_dataset.LazyIterDataset[T],
+      dataset: lazy_dataset.IterDataset[T],
       prefetch_buffer_size: int,
   ):
     super().__init__()
-    self._dataset: lazy_dataset.LazyIterDataset[T] = dataset
-    self._iterator: lazy_dataset.LazyDatasetIterator[T] = dataset.__iter__()
+    self._dataset: lazy_dataset.IterDataset[T] = dataset
+    self._iterator: lazy_dataset.DatasetIterator[T] = dataset.__iter__()
     self._prefetch_buffer_size = prefetch_buffer_size
     self._state: StateT | None = None
 

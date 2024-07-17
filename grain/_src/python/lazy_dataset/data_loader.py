@@ -21,7 +21,7 @@ from grain._src.python.lazy_dataset.transformations import prefetch
 
 
 def _confirm_picklable_and_copy_lazy_dataset(
-    lazy_ds: Union[lazy_dataset.LazyMapDataset, lazy_dataset.LazyIterDataset],
+    lazy_ds: Union[lazy_dataset.MapDataset, lazy_dataset.IterDataset],
 ):
   """Makes a copy of the given LazyDataset through pickling roundtrip."""
   try:
@@ -37,7 +37,7 @@ class DataLoader:
   def __init__(
       self,
       *,
-      lazy_ds: Union[lazy_dataset.LazyMapDataset, lazy_dataset.LazyIterDataset],
+      lazy_ds: Union[lazy_dataset.MapDataset, lazy_dataset.IterDataset],
       multiprocessing_options: Optional[
           grain_options.MultiprocessingOptions
       ] = None,
@@ -46,7 +46,7 @@ class DataLoader:
     """Initializes DataLoader.
 
     Args:
-      lazy_ds: User-defined LazyMapDataset or LazyIterDataset.
+      lazy_ds: User-defined MapDataset or IterDataset.
       multiprocessing_options: Options to use for executing LazyDataset pipeline
         in multiple processes.
       read_options: Options to use for reading data from disk.
@@ -57,12 +57,12 @@ class DataLoader:
     lazy_ds = _confirm_picklable_and_copy_lazy_dataset(lazy_ds)
     self._iter_ds = (
         lazy_ds.to_iter_dataset(read_options)
-        if isinstance(lazy_ds, lazy_dataset.LazyMapDataset)
+        if isinstance(lazy_ds, lazy_dataset.MapDataset)
         else lazy_ds
     )
 
     if self._multiprocessing_options:
-      self._iter_ds = prefetch.MultiprocessPrefetchLazyIterDataset(
+      self._iter_ds = prefetch.MultiprocessPrefetchIterDataset(
           self._iter_ds, self._multiprocessing_options
       )
 

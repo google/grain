@@ -21,7 +21,9 @@ from grain._src.core import transforms
 import multiprocessing as mp
 from grain._src.python import options as grain_options
 from grain._src.python.lazy_dataset import data_loader as lazy_dataset_data_loader
-from grain.python_experimental import lazy_dataset
+from grain._src.python.lazy_dataset import lazy_dataset
+from grain._src.python.lazy_dataset.transformations import batch
+from grain._src.python.lazy_dataset.transformations import map as map_dataset
 import numpy as np
 
 
@@ -54,8 +56,8 @@ class LazyDatasetDataLoaderTest(parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.ds_src = lazy_dataset.RangeLazyMapDataset(start=0, stop=10, step=1)
-    self.lazy_ds = lazy_dataset.MapLazyMapDataset(
+    self.ds_src = lazy_dataset.RangeMapDataset(start=0, stop=10, step=1)
+    self.lazy_ds = map_dataset.MapMapDataset(
         parent=self.ds_src, transform=SimpleMapTransform()
     )
 
@@ -75,7 +77,7 @@ class LazyDatasetDataLoaderTest(parameterized.TestCase):
   def test_data_loader_produces_correct_batched_elements(
       self, multiprocessing_options
   ):
-    batched_lazy_iter_ds = lazy_dataset.BatchLazyIterDataset(
+    batched_lazy_iter_ds = batch.BatchIterDataset(
         parent=self.lazy_ds,
         batch_size=2,
     )
@@ -106,7 +108,7 @@ class LazyDatasetDataLoaderTest(parameterized.TestCase):
   def test_data_loader_non_picklable_transform_raises_value_error(
       self, multiprocessing_options
   ):
-    lazy_ds = lazy_dataset.MapLazyMapDataset(
+    lazy_ds = map_dataset.MapMapDataset(
         parent=self.ds_src,
         transform=NonPicklableTransform(),
     )

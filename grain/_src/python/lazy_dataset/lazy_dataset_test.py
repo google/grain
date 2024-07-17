@@ -36,29 +36,29 @@ class FilterKeepingOddElementsOnly(transforms.FilterTransform):
     return bool(element % 2)
 
 
-class RangeLazyMapDatasetTest(absltest.TestCase):
+class RangeMapDatasetTest(absltest.TestCase):
 
   def test_len(self):
-    ds = lazy_dataset.RangeLazyMapDataset(12)
+    ds = lazy_dataset.RangeMapDataset(12)
     self.assertLen(ds, 12)
-    ds = lazy_dataset.RangeLazyMapDataset(0, 12)
+    ds = lazy_dataset.RangeMapDataset(0, 12)
     self.assertLen(ds, 12)
-    ds = lazy_dataset.RangeLazyMapDataset(2, 12)
+    ds = lazy_dataset.RangeMapDataset(2, 12)
     self.assertLen(ds, 10)
-    ds = lazy_dataset.RangeLazyMapDataset(2, 12, 1)
+    ds = lazy_dataset.RangeMapDataset(2, 12, 1)
     self.assertLen(ds, 10)
-    ds = lazy_dataset.RangeLazyMapDataset(2, 12, 2)
+    ds = lazy_dataset.RangeMapDataset(2, 12, 2)
     self.assertLen(ds, 5)
-    ds = lazy_dataset.RangeLazyMapDataset(2, 13, 2)
+    ds = lazy_dataset.RangeMapDataset(2, 13, 2)
     self.assertLen(ds, 6)
 
   def test_getitem(self):
-    ds = lazy_dataset.RangeLazyMapDataset(12)
+    ds = lazy_dataset.RangeMapDataset(12)
     for i in range(12):
       self.assertEqual(ds[i], i)
     for i in range(12):
       self.assertEqual(ds[i + 12], i)
-    ds = lazy_dataset.RangeLazyMapDataset(2, 9, 2)
+    ds = lazy_dataset.RangeMapDataset(2, 9, 2)
     self.assertEqual(ds[0], 2)
     self.assertEqual(ds[1], 4)
     self.assertEqual(ds[2], 6)
@@ -67,17 +67,17 @@ class RangeLazyMapDatasetTest(absltest.TestCase):
     self.assertEqual(ds[5], 4)
 
   def test_iter(self):
-    ds = lazy_dataset.RangeLazyMapDataset(12)
+    ds = lazy_dataset.RangeMapDataset(12)
     ds_iter = iter(ds)
     elements = [next(ds_iter) for _ in range(12)]
     self.assertEqual(elements, list(range(12)))
-    ds = lazy_dataset.RangeLazyMapDataset(2, 9, 2)
+    ds = lazy_dataset.RangeMapDataset(2, 9, 2)
     ds_iter = iter(ds)
     elements = [next(ds_iter) for _ in range(4)]
     self.assertEqual(elements, [2, 4, 6, 8])
 
 
-class Source15IntsFrom0LazyMapDataset(lazy_dataset.LazyMapDataset[int]):
+class Source15IntsFrom0MapDataset(lazy_dataset.MapDataset[int]):
 
   def __init__(self):
     super().__init__(parents=[])
@@ -93,7 +93,7 @@ class Source15IntsFrom0LazyMapDataset(lazy_dataset.LazyMapDataset[int]):
     return index % len(self)
 
 
-class Source15IntsFrom0LazyIterDataset(lazy_dataset.LazyIterDataset[int]):
+class Source15IntsFrom0IterDataset(lazy_dataset.IterDataset[int]):
 
   def __init__(self):
     super().__init__(parents=[])
@@ -103,9 +103,9 @@ class Source15IntsFrom0LazyIterDataset(lazy_dataset.LazyIterDataset[int]):
     return iter(range(15))
 
 
-class IdentityLazyMapDataset(lazy_dataset.LazyMapDataset[_T]):
+class IdentityMapDataset(lazy_dataset.MapDataset[_T]):
 
-  def __init__(self, parent: lazy_dataset.LazyMapDataset[_T]):
+  def __init__(self, parent: lazy_dataset.MapDataset[_T]):
     super().__init__(parents=parent)
 
   @override
@@ -120,34 +120,34 @@ class IdentityLazyMapDataset(lazy_dataset.LazyMapDataset[_T]):
 class LazyDatasetTest(parameterized.TestCase):
 
   def test_parents_source_dataset_has_no_parents(self):
-    ds = Source15IntsFrom0LazyMapDataset()
+    ds = Source15IntsFrom0MapDataset()
     self.assertEmpty(ds.parents)
 
   def test_parents_single_source_dataset_has_one_parent(self):
-    source_ds = Source15IntsFrom0LazyMapDataset()
-    ds = IdentityLazyMapDataset(source_ds)
+    source_ds = Source15IntsFrom0MapDataset()
+    ds = IdentityMapDataset(source_ds)
     self.assertLen(ds.parents, 1)
     self.assertEqual(ds.parents[0], source_ds)
 
   @parameterized.parameters(
-      dict(initial_ds=Source15IntsFrom0LazyMapDataset()),
-      dict(initial_ds=Source15IntsFrom0LazyIterDataset()),
+      dict(initial_ds=Source15IntsFrom0MapDataset()),
+      dict(initial_ds=Source15IntsFrom0IterDataset()),
   )
   def test_filter_with_callable(self, initial_ds):
     ds = initial_ds.filter(lambda x: x % 2 == 0)
     self.assertSequenceEqual(list(iter(ds)), [0, 2, 4, 6, 8, 10, 12, 14])
 
   @parameterized.parameters(
-      dict(initial_ds=Source15IntsFrom0LazyMapDataset()),
-      dict(initial_ds=Source15IntsFrom0LazyIterDataset()),
+      dict(initial_ds=Source15IntsFrom0MapDataset()),
+      dict(initial_ds=Source15IntsFrom0IterDataset()),
   )
   def test_filter_with_transform(self, initial_ds):
     ds = initial_ds.filter(FilterKeepingOddElementsOnly())
     self.assertSequenceEqual(list(iter(ds)), [1, 3, 5, 7, 9, 11, 13])
 
   @parameterized.parameters(
-      dict(initial_ds=Source15IntsFrom0LazyMapDataset()),
-      dict(initial_ds=Source15IntsFrom0LazyIterDataset()),
+      dict(initial_ds=Source15IntsFrom0MapDataset()),
+      dict(initial_ds=Source15IntsFrom0IterDataset()),
   )
   def test_filter_with_callable_and_transform_combined(self, initial_ds):
     ds = initial_ds.filter(lambda x: 3 < x < 10).filter(
@@ -156,15 +156,15 @@ class LazyDatasetTest(parameterized.TestCase):
     self.assertSequenceEqual(list(iter(ds)), [5, 7, 9])
 
   @parameterized.parameters(
-      dict(initial_ds=Source15IntsFrom0LazyMapDataset()),
-      dict(initial_ds=Source15IntsFrom0LazyIterDataset()),
+      dict(initial_ds=Source15IntsFrom0MapDataset()),
+      dict(initial_ds=Source15IntsFrom0IterDataset()),
   )
   def test_filter_has_one_parent(self, initial_ds):
     ds = initial_ds.filter(lambda x: True)
     self.assertLen(ds.parents, 1)
 
   def test_filter_subscription_returns_correct_elements(self):
-    ds = Source15IntsFrom0LazyMapDataset().filter(lambda x: x % 2 == 0)
+    ds = Source15IntsFrom0MapDataset().filter(lambda x: x % 2 == 0)
     self.assertSequenceEqual(list(iter(ds)), [0, 2, 4, 6, 8, 10, 12, 14])
     self.assertEqual(ds[0], 0)
     self.assertEqual(ds[12], 12)
@@ -179,7 +179,7 @@ class LazyDatasetTest(parameterized.TestCase):
       (30),
   )
   def test_filter_does_not_affect_len(self, ds_length):
-    ds = lazy_dataset.RangeLazyMapDataset(ds_length)
+    ds = lazy_dataset.RangeMapDataset(ds_length)
     self.assertLen(ds, ds_length)
     ds = ds.filter(lambda x: x % 2 == 0)
     self.assertLen(ds, ds_length)
@@ -224,27 +224,27 @@ class LazyDatasetTest(parameterized.TestCase):
   )
   def test_to_iter_dataset(self, read_options, allow_nones, expected):
     ds = (
-        Source15IntsFrom0LazyMapDataset()
+        Source15IntsFrom0MapDataset()
         .filter(lambda x: x % 2 == 0)
         .to_iter_dataset(read_options=read_options, allow_nones=allow_nones)
     )
     self.assertSequenceEqual(list(iter(ds)), expected)
 
   def test_slice_with_just_stop_returns_correct_elements(self):
-    ds = Source15IntsFrom0LazyMapDataset().slice(slice(7))
+    ds = Source15IntsFrom0MapDataset().slice(slice(7))
     self.assertSequenceEqual(list(iter(ds)), [0, 1, 2, 3, 4, 5, 6])
 
   def test_slice_with_start_and_stop_returns_correct_elements(self):
-    ds = Source15IntsFrom0LazyMapDataset().slice(slice(3, 9))
+    ds = Source15IntsFrom0MapDataset().slice(slice(3, 9))
     self.assertSequenceEqual(list(iter(ds)), [3, 4, 5, 6, 7, 8])
 
   def test_slice_with_start_stop_and_step_returns_correct_elements(self):
-    ds = Source15IntsFrom0LazyMapDataset().slice(slice(2, 11, 3))
+    ds = Source15IntsFrom0MapDataset().slice(slice(2, 11, 3))
     self.assertSequenceEqual(list(iter(ds)), [2, 5, 8])
 
   def test_slice_composition_returns_correct_elements(self):
     ds = (
-        Source15IntsFrom0LazyMapDataset()
+        Source15IntsFrom0MapDataset()
         .slice(slice(1, 10, 2))  # 1, 3, 5, 7, 9
         .slice(slice(1, 3))  # 3, 5
     )
@@ -252,7 +252,7 @@ class LazyDatasetTest(parameterized.TestCase):
 
   def test_slice_and_filter_composed_returns_correct_elements(self):
     ds = (
-        Source15IntsFrom0LazyMapDataset()
+        Source15IntsFrom0MapDataset()
         .slice(slice(1, 10, 2))  # 1, 3, 5, 7, 9
         .filter(lambda x: x % 3 == 0 or x == 7)  # None, 3, None, 7, 9
         .filter(lambda x: x > 5)  # None, None, None, 7, 9
@@ -261,20 +261,20 @@ class LazyDatasetTest(parameterized.TestCase):
     self.assertSequenceEqual(list(iter(ds)), [7])
 
   def test_repeat_updates_length(self):
-    ds = Source15IntsFrom0LazyMapDataset().repeat(3)
+    ds = Source15IntsFrom0MapDataset().repeat(3)
     self.assertLen(ds, 45)
 
   def test_repeat_with_none_epochs_updates_length_to_maxsize(self):
-    ds = Source15IntsFrom0LazyMapDataset().repeat(num_epochs=None)
+    ds = Source15IntsFrom0MapDataset().repeat(num_epochs=None)
     self.assertLen(ds, sys.maxsize)
 
   def test_repeat_produces_additional_elements_when_iterated(self):
-    ds = Source15IntsFrom0LazyMapDataset()[:5].repeat(2)
+    ds = Source15IntsFrom0MapDataset()[:5].repeat(2)
     self.assertSequenceEqual(list(ds), [0, 1, 2, 3, 4, 0, 1, 2, 3, 4])
 
   def test_slice_filter_repeat_composed_returns_correct_elements(self):
     ds = (
-        Source15IntsFrom0LazyMapDataset()
+        Source15IntsFrom0MapDataset()
         .slice(slice(1, 10, 2))  # 1, 3, 5, 7, 9
         .filter(lambda x: x < 6)  # 1, 3, 5, None, None
         .repeat(2)
@@ -282,29 +282,29 @@ class LazyDatasetTest(parameterized.TestCase):
     self.assertSequenceEqual(list(ds), [1, 3, 5, 1, 3, 5])
 
   def test_shuffle_does_not_affect_len(self):
-    ds = Source15IntsFrom0LazyMapDataset().shuffle(seed=123)
+    ds = Source15IntsFrom0MapDataset().shuffle(seed=123)
     self.assertLen(ds, 15)
 
   def test_shuffle_does_not_affect_elements(self):
-    ds = Source15IntsFrom0LazyMapDataset()
+    ds = Source15IntsFrom0MapDataset()
     elements_before_shuffle = list(ds)
     ds = ds.shuffle(seed=123)
     self.assertSameElements(list(ds), elements_before_shuffle)
 
   def test_shuffle_with_same_seed_returns_same_elements(self):
-    ds1 = Source15IntsFrom0LazyMapDataset().shuffle(seed=123)
-    ds2 = Source15IntsFrom0LazyMapDataset().shuffle(seed=123)
+    ds1 = Source15IntsFrom0MapDataset().shuffle(seed=123)
+    ds2 = Source15IntsFrom0MapDataset().shuffle(seed=123)
     self.assertSequenceEqual(list(ds1), list(ds2))
 
   # While it's possible for two orders to be the same, it's very unlikely
   # (1 / 15!) so we don't bother mocking the random number generator.
   def test_shuffle_with_different_seed_returns_different_elements(self):
-    ds1 = Source15IntsFrom0LazyMapDataset().shuffle(seed=123)
-    ds2 = Source15IntsFrom0LazyMapDataset().shuffle(seed=456)
+    ds1 = Source15IntsFrom0MapDataset().shuffle(seed=123)
+    ds2 = Source15IntsFrom0MapDataset().shuffle(seed=456)
     self.assertNotEqual(list(ds1), list(ds2))
 
   def test_shuffle_uses_different_order_for_different_epochs(self):
-    ds = Source15IntsFrom0LazyMapDataset().shuffle(seed=123)
+    ds = Source15IntsFrom0MapDataset().shuffle(seed=123)
     epoch_1 = [ds[i] for i in range(15)]
     epoch_2 = [ds[i] for i in range(15, 30)]
     self.assertSameElements(epoch_1, epoch_2)
@@ -312,7 +312,7 @@ class LazyDatasetTest(parameterized.TestCase):
 
   def test_multiprocess_prefetch(self):
     ds = (
-        Source15IntsFrom0LazyMapDataset()
+        Source15IntsFrom0MapDataset()
         .to_iter_dataset()
         .prefetch(options.MultiprocessingOptions(num_workers=4))
     )

@@ -153,27 +153,27 @@ class MixedLazyMapTest(absltest.TestCase):
     self.assertEqual(expected_dataset, unrolled_dataset)
 
 
-class MixedLazyMapDatasetTest(absltest.TestCase):
+class MixedMapDatasetTest(absltest.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.even_ds = lazy_dataset.RangeLazyMapDataset(0, 10, 2)
-    self.odd_ds = lazy_dataset.RangeLazyMapDataset(1, 10, 2)
+    self.even_ds = lazy_dataset.RangeMapDataset(0, 10, 2)
+    self.odd_ds = lazy_dataset.RangeMapDataset(1, 10, 2)
 
   def test_len(self):
     # Mix dataset has length to see any element at most once.
-    ds1 = lazy_dataset.RangeLazyMapDataset(10)
-    ds2 = lazy_dataset.RangeLazyMapDataset(20)
-    ds3 = lazy_dataset.RangeLazyMapDataset(5)
+    ds1 = lazy_dataset.RangeMapDataset(10)
+    ds2 = lazy_dataset.RangeMapDataset(20)
+    ds3 = lazy_dataset.RangeMapDataset(5)
     # Equal proportions.
-    ds = mix.MixedLazyMapDataset([ds1, ds2, ds3])
+    ds = mix.MixedMapDataset([ds1, ds2, ds3])
     self.assertLen(ds, 15)
     # Heigher weight for second dataset.
-    ds = mix.MixedLazyMapDataset([ds1, ds2, ds3], proportions=[1, 2, 1])
+    ds = mix.MixedMapDataset([ds1, ds2, ds3], proportions=[1, 2, 1])
     self.assertLen(ds, 5 + 10 + 5)
 
   def test_mixing_equal_probability_with_integer_proportions(self):
-    mixed_lzds = mix.MixedLazyMapDataset(
+    mixed_lzds = mix.MixedMapDataset(
         parents=[self.even_ds, self.odd_ds], proportions=[2, 2]
     )
     actual_values = [mixed_lzds[i] for i in range(10)]
@@ -181,7 +181,7 @@ class MixedLazyMapDatasetTest(absltest.TestCase):
     self.assertEqual(expected_values, actual_values)
 
   def test_mixing_equal_probability_with_float_proportions(self):
-    mixed_lzds = mix.MixedLazyMapDataset(
+    mixed_lzds = mix.MixedMapDataset(
         parents=[self.even_ds, self.odd_ds], proportions=[0.5, 0.5]
     )
     actual_values = [mixed_lzds[i] for i in range(10)]
@@ -189,14 +189,14 @@ class MixedLazyMapDatasetTest(absltest.TestCase):
     self.assertEqual(expected_values, actual_values)
 
   def test_mixing_equal_probability_with_no_proportions_given(self):
-    mixed_lzds = mix.MixedLazyMapDataset(parents=[self.even_ds, self.odd_ds])
+    mixed_lzds = mix.MixedMapDataset(parents=[self.even_ds, self.odd_ds])
     # If no proportions specified, parents are mixed in equal proportions.
     actual_values = [mixed_lzds[i] for i in range(10)]
     expected_values = [val for val in range(10)]
     self.assertEqual(expected_values, actual_values)
 
   def test_mixing_with_float_proportions(self):
-    mixed_lzds = mix.MixedLazyMapDataset(
+    mixed_lzds = mix.MixedMapDataset(
         parents=[self.even_ds, self.odd_ds], proportions=[0.75, 0.25]
     )
     self.assertLen(mixed_lzds, 6)
@@ -223,7 +223,7 @@ class MixedLazyMapDatasetTest(absltest.TestCase):
     self.assertEqual(actual_vals, expected_two_epochs)
 
   def test_mixing_with_integer_proportions(self):
-    mixed_lzds = mix.MixedLazyMapDataset(
+    mixed_lzds = mix.MixedMapDataset(
         parents=[self.even_ds, self.odd_ds], proportions=[1, 2]
     )
     self.assertLen(list(mixed_lzds), 7)
@@ -238,19 +238,19 @@ class MixedLazyMapDatasetTest(absltest.TestCase):
 
   def test_mixing_zero_one_probability_fails_with_error(self):
     with self.assertRaises(ValueError):
-      _ = mix.MixedLazyMapDataset(
+      _ = mix.MixedMapDataset(
           parents=[self.even_ds, self.odd_ds], proportions=[0, 1]
       )
 
   def test_mix_infinite_datasets(self):
-    zeros = lazy_dataset.RangeLazyMapDataset(0, 1).repeat()
-    ones = lazy_dataset.RangeLazyMapDataset(1, 2).repeat()
+    zeros = lazy_dataset.RangeMapDataset(0, 1).repeat()
+    ones = lazy_dataset.RangeMapDataset(1, 2).repeat()
     self.assertLen(zeros, sys.maxsize)
     self.assertLen(ones, sys.maxsize)
-    ld = mix.MixedLazyMapDataset([zeros, ones], proportions=[4, 1])
+    ld = mix.MixedMapDataset([zeros, ones], proportions=[4, 1])
     self.assertLen(ld, sys.maxsize)
     # Mix again.
-    ld = mix.MixedLazyMapDataset([ld, ones], proportions=[1, 1])
+    ld = mix.MixedMapDataset([ld, ones], proportions=[1, 1])
     num_samples = 1000
     value_counts = np.bincount([ld[i] for i in range(num_samples)]).tolist()
     self.assertEqual(value_counts, [400, 600])
@@ -267,7 +267,7 @@ class MixedLazyMapDatasetTest(absltest.TestCase):
 
     interleaved_map = ExplicitSelectionMap(10, _inteleaved_dataset)
 
-    ds = mix.MixedLazyMapDataset(
+    ds = mix.MixedMapDataset(
         parents=[self.even_ds, self.odd_ds], selection_map=interleaved_map
     )
 
@@ -288,7 +288,7 @@ class MixedLazyMapDatasetTest(absltest.TestCase):
 
     sequential_map = ExplicitSelectionMap(10, _sequential_dataset)
 
-    ds = mix.MixedLazyMapDataset(
+    ds = mix.MixedMapDataset(
         parents=[self.even_ds, self.odd_ds], selection_map=sequential_map
     )
 
@@ -316,7 +316,7 @@ class MixedLazyMapDatasetTest(absltest.TestCase):
         10, _subset_and_shuffle_dataset
     )
 
-    ds = mix.MixedLazyMapDataset(
+    ds = mix.MixedMapDataset(
         parents=[self.even_ds, self.odd_ds],
         selection_map=subset_and_shuffle_map,
     )
@@ -324,35 +324,35 @@ class MixedLazyMapDatasetTest(absltest.TestCase):
     self.assertEqual(list(ds), expected_dataset)
 
 
-class MixedLazyIterDatasetTest(absltest.TestCase):
+class MixedIterDatasetTest(absltest.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.even_map_ds = lazy_dataset.RangeLazyMapDataset(0, 10, 2)
-    self.odd_map_ds = lazy_dataset.RangeLazyMapDataset(1, 10, 2)
+    self.even_map_ds = lazy_dataset.RangeMapDataset(0, 10, 2)
+    self.odd_map_ds = lazy_dataset.RangeMapDataset(1, 10, 2)
     self.even_ds = self.even_map_ds.to_iter_dataset()
     self.odd_ds = self.odd_map_ds.to_iter_dataset()
 
   def test_len(self):
     # Mixed dataset sees any element at most once.
-    ds1 = lazy_dataset.RangeLazyMapDataset(10).to_iter_dataset()
-    ds2 = lazy_dataset.RangeLazyMapDataset(20).to_iter_dataset()
-    ds3 = lazy_dataset.RangeLazyMapDataset(5).to_iter_dataset()
+    ds1 = lazy_dataset.RangeMapDataset(10).to_iter_dataset()
+    ds2 = lazy_dataset.RangeMapDataset(20).to_iter_dataset()
+    ds3 = lazy_dataset.RangeMapDataset(5).to_iter_dataset()
     # Equal proportions.
-    ds = mix.MixedLazyIterDataset([ds1, ds2, ds3])
+    ds = mix.MixedIterDataset([ds1, ds2, ds3])
     # While ds3 is empty after sampling 15 elements, a StopIteration is raised
     # when an example is sampled from ds3 the next time; an example is sampled
     # from ds1 and ds2 before then; hence the size of the mixed dataset is 17
     # instead of 15.
     self.assertLen(list(ds), 17)
     # Heigher weight for second dataset.
-    ds = mix.MixedLazyIterDataset([ds1, ds2, ds3], proportions=[1, 2, 1])
+    ds = mix.MixedIterDataset([ds1, ds2, ds3], proportions=[1, 2, 1])
     # ds1 is sampled from once and ds2 is sampled from twice before
     # StopIteration is raised by ds3
     self.assertLen(list(ds), 6 + 12 + 5)
 
   def test_mixing_equal_probability_with_integer_proportions(self):
-    mixed_lzds = mix.MixedLazyIterDataset(
+    mixed_lzds = mix.MixedIterDataset(
         parents=[self.even_ds, self.odd_ds], proportions=[2, 2]
     )
     actual_values = list(mixed_lzds)
@@ -360,7 +360,7 @@ class MixedLazyIterDatasetTest(absltest.TestCase):
     self.assertEqual(expected_values, actual_values)
 
   def test_mixing_equal_probability_with_float_proportions(self):
-    mixed_lzds = mix.MixedLazyIterDataset(
+    mixed_lzds = mix.MixedIterDataset(
         parents=[self.even_ds, self.odd_ds], proportions=[0.5, 0.5]
     )
     actual_values = list(mixed_lzds)
@@ -368,14 +368,14 @@ class MixedLazyIterDatasetTest(absltest.TestCase):
     self.assertEqual(expected_values, actual_values)
 
   def test_mixing_equal_probability_with_no_proportions_given(self):
-    mixed_lzds = mix.MixedLazyIterDataset(parents=[self.even_ds, self.odd_ds])
+    mixed_lzds = mix.MixedIterDataset(parents=[self.even_ds, self.odd_ds])
     # If no proportions specified, parents are mixed in equal proportions.
     actual_values = list(mixed_lzds)
     expected_values = [val for val in range(10)]
     self.assertEqual(expected_values, actual_values)
 
   def test_mixing_with_float_proportions(self):
-    mixed_lzds = mix.MixedLazyIterDataset(
+    mixed_lzds = mix.MixedIterDataset(
         parents=[self.even_ds, self.odd_ds], proportions=[0.75, 0.25]
     )
     actual_vals = list(mixed_lzds)
@@ -385,7 +385,7 @@ class MixedLazyIterDatasetTest(absltest.TestCase):
     # Mix with repeats.
     ds1 = self.even_map_ds.repeat(2).to_iter_dataset()
     ds2 = self.odd_map_ds.repeat(2).to_iter_dataset()
-    mixed_lzds = mix.MixedLazyIterDataset(
+    mixed_lzds = mix.MixedIterDataset(
         parents=[ds1, ds2], proportions=[0.75, 0.25]
     )
     actual_vals = list(mixed_lzds)
@@ -393,7 +393,7 @@ class MixedLazyIterDatasetTest(absltest.TestCase):
     self.assertEqual(actual_vals, expected_two_epochs)
 
   def test_mixing_with_integer_proportions(self):
-    mixed_lzds = mix.MixedLazyIterDataset(
+    mixed_lzds = mix.MixedIterDataset(
         parents=[self.even_ds, self.odd_ds], proportions=[1, 2]
     )
     self.assertLen(list(mixed_lzds), 8)
@@ -405,31 +405,27 @@ class MixedLazyIterDatasetTest(absltest.TestCase):
     # Mix with repeats.
     ds1 = self.even_map_ds.repeat(2).to_iter_dataset()
     ds2 = self.odd_map_ds.repeat(2).to_iter_dataset()
-    mixed_lzds = mix.MixedLazyIterDataset(
-        parents=[ds1, ds2], proportions=[1, 2]
-    )
+    mixed_lzds = mix.MixedIterDataset(parents=[ds1, ds2], proportions=[1, 2])
     actual_values = list(mixed_lzds)
     expected_two_epochs = [0, 1, 3, 2, 5, 7, 4, 9, 1, 6, 3, 5, 8, 7, 9, 0]
     self.assertEqual(expected_two_epochs, actual_values)
 
   def test_mixing_zero_one_probability_fails_with_error(self):
     with self.assertRaises(ValueError):
-      _ = mix.MixedLazyIterDataset(
+      _ = mix.MixedIterDataset(
           parents=[self.even_ds, self.odd_ds], proportions=[0, 1]
       )
 
   def test_mix_infinite_datasets(self):
-    zeros = lazy_dataset.RangeLazyMapDataset(0, 1).repeat()
-    ones = lazy_dataset.RangeLazyMapDataset(1, 2).repeat()
+    zeros = lazy_dataset.RangeMapDataset(0, 1).repeat()
+    ones = lazy_dataset.RangeMapDataset(1, 2).repeat()
     self.assertLen(zeros, sys.maxsize)
     self.assertLen(ones, sys.maxsize)
-    ld = mix.MixedLazyIterDataset(
+    ld = mix.MixedIterDataset(
         [zeros.to_iter_dataset(), ones.to_iter_dataset()], proportions=[4, 1]
     )
     # Mix again.
-    ld = mix.MixedLazyIterDataset(
-        [ld, ones.to_iter_dataset()], proportions=[1, 1]
-    )
+    ld = mix.MixedIterDataset([ld, ones.to_iter_dataset()], proportions=[1, 1])
     ld_iter = iter(ld)
     num_samples = 1000
     value_counts = np.bincount(
@@ -438,9 +434,9 @@ class MixedLazyIterDatasetTest(absltest.TestCase):
     self.assertEqual(value_counts, [400, 600])
 
   def test_stop_sampling_after_end_of_any_dataset(self):
-    smaller_ds = lazy_dataset.RangeLazyMapDataset(5).to_iter_dataset()
-    larger_ds = lazy_dataset.RangeLazyMapDataset(10).to_iter_dataset()
-    mixed_ds = mix.MixedLazyIterDataset([smaller_ds, larger_ds], [1.0, 1.0])
+    smaller_ds = lazy_dataset.RangeMapDataset(5).to_iter_dataset()
+    larger_ds = lazy_dataset.RangeMapDataset(10).to_iter_dataset()
+    mixed_ds = mix.MixedIterDataset([smaller_ds, larger_ds], [1.0, 1.0])
     ds_iter = iter(mixed_ds)
     for _ in range(10):  # Exhaust the iterator.
       _ = next(ds_iter)
@@ -449,7 +445,7 @@ class MixedLazyIterDatasetTest(absltest.TestCase):
         _ = next(ds_iter)
 
   def test_checkpointing(self):
-    ds = mix.MixedLazyIterDataset(
+    ds = mix.MixedIterDataset(
         parents=[self.even_ds, self.odd_ds], proportions=[1, 1]
     )
     ds_iter = iter(ds)
@@ -473,9 +469,9 @@ class MixedLazyIterDatasetTest(absltest.TestCase):
 class ConcatenateLazyMapTest(absltest.TestCase):
 
   def test_concat_selection_map(self):
-    evens = lazy_dataset.RangeLazyMapDataset(0, 4, 2)
-    odds = lazy_dataset.RangeLazyMapDataset(1, 6, 2)
-    consecutive = lazy_dataset.RangeLazyMapDataset(7, 9)
+    evens = lazy_dataset.RangeMapDataset(0, 4, 2)
+    odds = lazy_dataset.RangeMapDataset(1, 6, 2)
+    consecutive = lazy_dataset.RangeMapDataset(7, 9)
     selection_map = mix._ConcatSelectionMap([evens, odds, consecutive])
     self.assertLen(selection_map, len(evens) + len(odds) + len(consecutive))
 
@@ -484,9 +480,9 @@ class ConcatenateLazyMapTest(absltest.TestCase):
     self.assertListEqual(actual_indices, expected_indices)
 
   def test_concatenate_finite_datasets(self):
-    evens = lazy_dataset.RangeLazyMapDataset(0, 10, 2)
-    odds = lazy_dataset.RangeLazyMapDataset(1, 10, 2)
-    ds = mix.ConcatenateLazyMapDataset([evens, odds])
+    evens = lazy_dataset.RangeMapDataset(0, 10, 2)
+    odds = lazy_dataset.RangeMapDataset(1, 10, 2)
+    ds = mix.ConcatenateMapDataset([evens, odds])
     self.assertLen(evens, 5)
     self.assertLen(odds, 5)
     self.assertLen(ds, 10)
@@ -497,9 +493,9 @@ class ConcatenateLazyMapTest(absltest.TestCase):
     self.assertListEqual(actual_values, expected_values)
 
   def test_slice_concatenated_finite_datasets(self):
-    evens = lazy_dataset.RangeLazyMapDataset(0, 10, 2)
-    odds = lazy_dataset.RangeLazyMapDataset(1, 10, 2)
-    ds = mix.ConcatenateLazyMapDataset([evens, odds])[4:7]
+    evens = lazy_dataset.RangeMapDataset(0, 10, 2)
+    odds = lazy_dataset.RangeMapDataset(1, 10, 2)
+    ds = mix.ConcatenateMapDataset([evens, odds])[4:7]
     self.assertLen(ds, 3)
 
     ds_iter = ds.to_iter_dataset()
@@ -509,8 +505,8 @@ class ConcatenateLazyMapTest(absltest.TestCase):
     self.assertListEqual(actual_values, expected_values)
 
   def test_cannot_concatenate_infinite_datasets(self):
-    zeros = lazy_dataset.RangeLazyMapDataset(0, 1).repeat()
-    ones = lazy_dataset.RangeLazyMapDataset(1, 2).repeat()
+    zeros = lazy_dataset.RangeMapDataset(0, 1).repeat()
+    ones = lazy_dataset.RangeMapDataset(1, 2).repeat()
     with self.assertRaisesRegex(
         ValueError, "Cannot concatenate infinite datasets"
     ):

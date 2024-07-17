@@ -113,7 +113,7 @@ def _get_shuffled_element_index(
   num_elements = len(element_index)
   # If epoch > 0, then we index past the length of element_index. This works
   # with lazy datasets.
-  assert epoch == 0 or isinstance(element_index, lazy_dataset.LazyMapDataset)
+  assert epoch == 0 or isinstance(element_index, lazy_dataset.MapDataset)
   return element_index[epoch * num_elements + element_idx_in_epoch]
 
 
@@ -189,10 +189,10 @@ class ContinualSequenceSampler:
 
     self._clip_map = clip_map
 
-    self._element_index = lazy_dataset.RangeLazyMapDataset(len(clip_map))
+    self._element_index = lazy_dataset.RangeMapDataset(len(clip_map))
     self._shuffle_dataset = shuffle_dataset
     if shuffle_dataset:
-      self._element_index = shuffle.ShuffleLazyMapDataset(
+      self._element_index = shuffle.ShuffleMapDataset(
           self._element_index, seed=seed
       )
 

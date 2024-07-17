@@ -21,14 +21,14 @@ from grain._src.python.lazy_dataset import lazy_dataset
 import grain._src.python.lazy_dataset.transformations.zip as zip_ds
 
 
-class ZipLazyMapDatasetTest(parameterized.TestCase):
+class ZipMapDatasetTest(parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
     self.ds_list = [
-        lazy_dataset.RangeLazyMapDataset(0, 20),
-        lazy_dataset.RangeLazyMapDataset(1, 21),
-        lazy_dataset.RangeLazyMapDataset(2, 22),
+        lazy_dataset.RangeMapDataset(0, 20),
+        lazy_dataset.RangeMapDataset(1, 21),
+        lazy_dataset.RangeMapDataset(2, 22),
     ]
 
   @parameterized.parameters(
@@ -39,9 +39,7 @@ class ZipLazyMapDatasetTest(parameterized.TestCase):
   )
   def test_len(self, ds_idx_list):
     self.assertLen(
-        zip_ds.ZipLazyMapDataset(
-            parents=(self.ds_list[i] for i in ds_idx_list)
-        ),
+        zip_ds.ZipMapDataset(parents=(self.ds_list[i] for i in ds_idx_list)),
         20,
     )
 
@@ -52,9 +50,7 @@ class ZipLazyMapDatasetTest(parameterized.TestCase):
       + list(itertools.combinations(range(3), 1))
   )
   def test_getitem(self, ds_idx_list):
-    ds = zip_ds.ZipLazyMapDataset(
-        parents=(self.ds_list[i] for i in ds_idx_list)
-    )
+    ds = zip_ds.ZipMapDataset(parents=(self.ds_list[i] for i in ds_idx_list))
     for i in range(20):
       self.assertEqual(ds[i], tuple(i + ds_idx for ds_idx in ds_idx_list))
 

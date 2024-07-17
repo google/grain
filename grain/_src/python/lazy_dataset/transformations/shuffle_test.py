@@ -19,18 +19,14 @@ from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import shuffle
 
 
-class ShuffleLazyMapDatasetTest(parameterized.TestCase):
+class ShuffleMapDatasetTest(parameterized.TestCase):
 
   def test_len(self):
-    ds = shuffle.ShuffleLazyMapDataset(
-        lazy_dataset.RangeLazyMapDataset(400), seed=42
-    )
+    ds = shuffle.ShuffleMapDataset(lazy_dataset.RangeMapDataset(400), seed=42)
     self.assertLen(ds, 400)
 
   def test_getitem(self):
-    ds = shuffle.ShuffleLazyMapDataset(
-        lazy_dataset.RangeLazyMapDataset(400), seed=42
-    )
+    ds = shuffle.ShuffleMapDataset(lazy_dataset.RangeMapDataset(400), seed=42)
     shuffled_indices = [ds[i] for i in range(400)]
     self.assertLen(set(shuffled_indices), 400)
     for x in shuffled_indices:
@@ -39,9 +35,7 @@ class ShuffleLazyMapDatasetTest(parameterized.TestCase):
     self.assertNotEqual(shuffled_indices, shuffled_indices_epoch2)
 
   def test_iter(self):
-    ds = shuffle.ShuffleLazyMapDataset(
-        lazy_dataset.RangeLazyMapDataset(400), seed=42
-    )
+    ds = shuffle.ShuffleMapDataset(lazy_dataset.RangeMapDataset(400), seed=42)
     ds_iter = iter(ds)
     elements = [next(ds_iter) for _ in range(400)]
     self.assertLen(elements, 400)
@@ -49,23 +43,21 @@ class ShuffleLazyMapDatasetTest(parameterized.TestCase):
   @parameterized.parameters(-1000, -1, 2**32, 2**32 + 1, 2**64 + 1)
   def test_init_with_invalid_seed_returns_value_error(self, seed):
     with self.assertRaises(ValueError):
-      shuffle.ShuffleLazyMapDataset(
-          lazy_dataset.RangeLazyMapDataset(400), seed=seed
-      )
+      shuffle.ShuffleMapDataset(lazy_dataset.RangeMapDataset(400), seed=seed)
 
 
-class WindowShuffleLazyMapDatasetTest(absltest.TestCase):
+class WindowShuffleMapDatasetTest(absltest.TestCase):
 
   def test_len(self):
-    ds = shuffle.WindowShuffleLazyMapDataset(
-        lazy_dataset.RangeLazyMapDataset(400), window_size=10, seed=42
+    ds = shuffle.WindowShuffleMapDataset(
+        lazy_dataset.RangeMapDataset(400), window_size=10, seed=42
     )
     self.assertLen(ds, 400)
 
   def test_getitem(self):
     window_size = 10
-    ds = shuffle.WindowShuffleLazyMapDataset(
-        lazy_dataset.RangeLazyMapDataset(400),
+    ds = shuffle.WindowShuffleMapDataset(
+        lazy_dataset.RangeMapDataset(400),
         window_size=window_size,
         seed=42,
     )
@@ -76,8 +68,8 @@ class WindowShuffleLazyMapDatasetTest(absltest.TestCase):
 
   def test_getitem_multi_epochs(self):
     # Multiple epochs shouldn't affect window shuffling.
-    ds = shuffle.WindowShuffleLazyMapDataset(
-        lazy_dataset.RangeLazyMapDataset(400),
+    ds = shuffle.WindowShuffleMapDataset(
+        lazy_dataset.RangeMapDataset(400),
         window_size=10,
         seed=42,
     )
@@ -89,8 +81,8 @@ class WindowShuffleLazyMapDatasetTest(absltest.TestCase):
 
   def test_iter(self):
     window_size = 10
-    ds = shuffle.WindowShuffleLazyMapDataset(
-        lazy_dataset.RangeLazyMapDataset(400), window_size=window_size, seed=42
+    ds = shuffle.WindowShuffleMapDataset(
+        lazy_dataset.RangeMapDataset(400), window_size=window_size, seed=42
     )
     ds_iter = iter(ds)
     elements = [next(ds_iter) for _ in range(400)]

@@ -19,7 +19,7 @@ from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import sharding
 from grain._src.python import record
 from grain._src.python.lazy_dataset import lazy_dataset
-from grain._src.python.lazy_dataset.transformations.shuffle import ShuffleLazyMapDataset
+from grain._src.python.lazy_dataset.transformations import shuffle as shuffle_dataset
 import numpy as np
 
 from grain._src.core import monitoring
@@ -132,7 +132,7 @@ class IndexSampler:
     self._seed = seed
     self._max_index = None if num_epochs is None else num_epochs * num_records
 
-    self._record_keys = lazy_dataset.RangeLazyMapDataset(num_records)
+    self._record_keys = lazy_dataset.RangeMapDataset(num_records)
     if not isinstance(shard_options, sharding.NoSharding):
       self._record_keys = lazy_dataset.ShardLazyDataset(
           self._record_keys, shard_options
@@ -143,7 +143,9 @@ class IndexSampler:
             len(self._record_keys) * shard_options.shard_count * num_epochs,
         )
     if shuffle:
-      self._record_keys = ShuffleLazyMapDataset(self._record_keys, seed=seed)
+      self._record_keys = shuffle_dataset.ShuffleMapDataset(
+          self._record_keys, seed=seed
+      )
     _api_usage_counter.Increment("IndexSampler")
 
   def __repr__(self) -> str:

@@ -153,7 +153,7 @@ class PackAndBatchOperation(Generic[_T]):
   """PyGrain pack-and-batch operation - see module docstring.
 
   WARNING: This class is deprecated. Please use
-  lazy_dataset.FirstFitPackLazyIterDataset instead.
+  lazy_dataset.FirstFitPackIterDataset instead.
 
   Attributes:
     batch_size: int, the batch size.
@@ -192,7 +192,7 @@ class PackAndBatchOperation(Generic[_T]):
   def __post_init__(self):
     logging.error(
         "PackAndBatchOperation is deprecated. Please use"
-        " lazy_dataset.FirstFitPackLazyIterDataset instead."
+        " lazy_dataset.FirstFitPackIterDataset instead."
     )
 
   def __call__(

@@ -71,7 +71,7 @@ def _get_all_metadata(
   return metadata
 
 
-class FakeShuffledDataset(lazy_dataset.LazyMapDataset[int]):
+class FakeShuffledDataset(lazy_dataset.MapDataset[int]):
 
   def __init__(self, values: Sequence[int], length: int) -> None:
     self._values = values
@@ -191,7 +191,7 @@ class ContinualSequenceSamplerTest(absltest.TestCase):
     fake_shuffled_constructor = lambda *args, **kwargs: fake_shuffled
     with mock.patch.object(
         shuffle,
-        "ShuffleLazyMapDataset",
+        "ShuffleMapDataset",
         new_callable=lambda: fake_shuffled_constructor,
     ):
       sampler = continual_sequence_sampler.get_sampler(
@@ -413,7 +413,7 @@ class ContinualSequenceSamplerTest(absltest.TestCase):
     fake_shuffled_constructor = lambda *args, **kwargs: fake_shuffled
     with mock.patch.object(
         shuffle,
-        "ShuffleLazyMapDataset",
+        "ShuffleMapDataset",
         new_callable=lambda: fake_shuffled_constructor,
     ):
       sampler = continual_sequence_sampler.get_sampler(

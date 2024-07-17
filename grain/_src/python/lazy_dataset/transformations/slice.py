@@ -19,10 +19,10 @@ from grain._src.python.lazy_dataset import lazy_dataset
 T = TypeVar("T")
 
 
-class SliceLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
-  """Slices a LazyMapDataset similar to the slicing syntax in Python."""
+class SliceMapDataset(lazy_dataset.MapDataset[T]):
+  """Slices a MapDataset similar to the slicing syntax in Python."""
 
-  def __init__(self, parent: lazy_dataset.LazyMapDataset[T], sl: slice):
+  def __init__(self, parent: lazy_dataset.MapDataset[T], sl: slice):
     super().__init__(parent)
     if not isinstance(sl, slice):
       raise ValueError(f"sl is not a slice: {type(sl)}")
@@ -34,7 +34,7 @@ class SliceLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
 
   def __getitem__(self, index):
     if isinstance(index, slice):
-      return SliceLazyMapDataset(self, index)
+      return SliceMapDataset(self, index)
     parent_index = self._start + (index % len(self)) * self._step
     return self._parent[parent_index]
 

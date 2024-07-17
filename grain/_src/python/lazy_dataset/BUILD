@@ -69,8 +69,10 @@ py_test(
     srcs_version = "PY3",
     deps = [
         ":data_loader",
-        "//grain:python_experimental",
+        ":lazy_dataset",
         "//grain/_src/core:transforms",
         "//grain/_src/python:options",
+        "//grain/_src/python/lazy_dataset/transformations:batch",
+        "//grain/_src/python/lazy_dataset/transformations:map",
     ],
 )

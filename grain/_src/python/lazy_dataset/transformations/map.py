@@ -113,12 +113,12 @@ def _get_map_fn_and_seed(
 
 
 @lazy_dataset.lazy_map_dataset_function("map")
-class MapLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
-  """Map LazyMapDataset."""
+class MapMapDataset(lazy_dataset.MapDataset[T]):
+  """Map MapDataset."""
 
   def __init__(
       self,
-      parent: lazy_dataset.LazyMapDataset,
+      parent: lazy_dataset.MapDataset,
       transform: _MapTransformType,
       seed: Optional[int] = None,
   ):
@@ -145,12 +145,12 @@ class MapLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
 
 
 @lazy_dataset.lazy_map_dataset_function("map_with_index")
-class MapWithIndexLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
-  """Map with index LazyMapDataset."""
+class MapWithIndexMapDataset(lazy_dataset.MapDataset[T]):
+  """Map with index MapDataset."""
 
   def __init__(
       self,
-      parent: lazy_dataset.LazyMapDataset,
+      parent: lazy_dataset.MapDataset,
       transform: Union[
           transforms.MapWithIndexTransform, Callable[[int, Any], T]
       ],
@@ -174,12 +174,12 @@ class MapWithIndexLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     return self._map_fn(index, element)
 
 
-class _MapLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
+class _MapDatasetIterator(lazy_dataset.DatasetIterator[T]):
   """Iterator that applies map transformation to elements."""
 
   def __init__(
       self,
-      parent: lazy_dataset.LazyDatasetIterator,
+      parent: lazy_dataset.DatasetIterator,
       map_fn: Callable[..., T],
       seed: Optional[int] = None,
   ):
@@ -217,29 +217,29 @@ class _MapLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
     self._index_for_rng = state["index_for_rng"]
 
   def __str__(self) -> str:
-    return f"MapLazyDatasetIterator(parent={self._parent}"
+    return f"MapDatasetIterator(parent={self._parent}"
 
 
 @lazy_dataset.lazy_iter_dataset_function("map")
-class MapLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
-  """Map transformation for LazyIterDatasets."""
+class MapIterDataset(lazy_dataset.IterDataset[T]):
+  """Map transformation for IterDatasets."""
 
   def __init__(
       self,
-      parent: lazy_dataset.LazyIterDataset,
+      parent: lazy_dataset.IterDataset,
       transform: _MapTransformType,
       seed: Optional[int] = None,
   ):
     super().__init__(parent)
     self._map_fn, self._seed = _get_map_fn_and_seed(transform, seed)
 
-  def __iter__(self) -> _MapLazyDatasetIterator[T]:
+  def __iter__(self) -> _MapDatasetIterator[T]:
     parent_iter = self._parent.__iter__()
-    return _MapLazyDatasetIterator(
+    return _MapDatasetIterator(
         parent_iter,
         map_fn=self._map_fn,
         seed=self._seed,
     )
 
   def __str__(self) -> str:
-    return f"MapLazyIterDataset(parent={self._parent}"
+    return f"MapIterDataset(parent={self._parent}"

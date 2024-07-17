@@ -24,9 +24,9 @@ import numpy as np
 import tree
 
 
-# SingleBinPackLazyDatasetIterator's state is defined by the a state of the
-# `parent` (at which SingleBinPackLazyDatasetIterator had empty buffers) and the
-# number of __next__() calls. LazyDatasetIterators should have small state that
+# SingleBinPackDatasetIterator's state is defined by the a state of the
+# `parent` (at which SingleBinPackDatasetIterator had empty buffers) and the
+# number of __next__() calls. DatasetIterators should have small state that
 # is cheap to serialize but doing it on every __next__() call still poses a
 # performance risk. Only taking the state every N steps mostly avoids this and
 # still allow for relatively fast restores of the state.
@@ -35,7 +35,7 @@ import tree
 _RECACHE_PARENT_STATE_EVERY_N = 100
 
 
-class SingleBinPackLazyIterDataset(lazy_dataset.LazyIterDataset):
+class SingleBinPackIterDataset(lazy_dataset.IterDataset):
   """Packs potentially multiple examples from the parent into a single example.
 
   This is one implementation of the often called "example packing"
@@ -81,27 +81,25 @@ class SingleBinPackLazyIterDataset(lazy_dataset.LazyIterDataset):
 
   def __init__(
       self,
-      parent: lazy_dataset.LazyIterDataset,
+      parent: lazy_dataset.IterDataset,
       length_struct: PyTree[Optional[int]],
   ):
     super().__init__(parent)
     self._length_struct = length_struct
 
-  def __iter__(self) -> lazy_dataset.LazyDatasetIterator:
-    return SingleBinPackLazyDatasetIterator(
-        iter(self._parent), self._length_struct
-    )  # pytype: disable=wrong-arg-types
+  def __iter__(self) -> lazy_dataset.DatasetIterator:
+    return SingleBinPackDatasetIterator(iter(self._parent), self._length_struct)  # pytype: disable=wrong-arg-types
 
 
-class SingleBinPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
-  """See SingleBinPackLazyIterDataset.
+class SingleBinPackDatasetIterator(lazy_dataset.DatasetIterator):
+  """See SingleBinPackIterDataset.
 
   Warning: This object is not threadsafe!
   """
 
   def __init__(
       self,
-      parent: lazy_dataset.LazyDatasetIterator,
+      parent: lazy_dataset.DatasetIterator,
       length_struct: PyTree[Optional[int]],
   ):
     self._parent = parent
@@ -246,7 +244,7 @@ class SingleBinPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
     assert self._num_next_calls == state["num_next_calls"]
 
 
-class FirstFitPackLazyIterDataset(lazy_dataset.LazyIterDataset):
+class FirstFitPackIterDataset(lazy_dataset.IterDataset):
   """Implements first-fit packing of sequences.
 
   Packing sequences, compared to concat-and-split, avoids splitting sequences
@@ -264,7 +262,7 @@ class FirstFitPackLazyIterDataset(lazy_dataset.LazyIterDataset):
 
   def __init__(
       self,
-      parent: lazy_dataset.LazyIterDataset,
+      parent: lazy_dataset.IterDataset,
       *,
       length_struct: Any,
       num_packing_bins: int,
@@ -288,8 +286,8 @@ class FirstFitPackLazyIterDataset(lazy_dataset.LazyIterDataset):
     self._shuffle_bins = shuffle_bins
     self._meta_features = meta_features
 
-  def __iter__(self) -> lazy_dataset.LazyDatasetIterator:
-    return FirstFitPackLazyDatasetIterator(
+  def __iter__(self) -> lazy_dataset.DatasetIterator:
+    return FirstFitPackDatasetIterator(
         iter(self._parent),
         num_packing_bins=self._num_packing_bins,
         length_struct=self._length_struct,
@@ -298,12 +296,12 @@ class FirstFitPackLazyIterDataset(lazy_dataset.LazyIterDataset):
     )  # pytype: disable=wrong-arg-types
 
 
-class FirstFitPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
+class FirstFitPackDatasetIterator(lazy_dataset.DatasetIterator):
   """Iterator for the first-fit packing transformation."""
 
   def __init__(
       self,
-      parent: lazy_dataset.LazyDatasetIterator,
+      parent: lazy_dataset.DatasetIterator,
       *,
       num_packing_bins: int,
       length_struct: PyTree[Optional[int]],

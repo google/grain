@@ -54,7 +54,7 @@ class SelectionWithProportionsMap(DatasetSelectionMap):
 
   def __init__(
       self,
-      parents: Sequence[lazy_dataset.LazyMapDataset],
+      parents: Sequence[lazy_dataset.MapDataset],
       proportions: Sequence[float] | None = None,
   ):
     # Normalize proportions
@@ -87,12 +87,12 @@ class SelectionWithProportionsMap(DatasetSelectionMap):
 
 
 @dataclasses.dataclass
-class MixedLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
+class MixedMapDataset(lazy_dataset.MapDataset[T]):
   """LazyDataset for mixtures."""
 
   def __init__(
       self,
-      parents: Sequence[lazy_dataset.LazyMapDataset[T]],
+      parents: Sequence[lazy_dataset.MapDataset[T]],
       proportions: Sequence[float] | None = None,
       selection_map: DatasetSelectionMap | None = None,
   ):
@@ -130,7 +130,7 @@ class MixedLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
 
 
 @dataclasses.dataclass
-class _MixedLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
+class _MixedDatasetIterator(lazy_dataset.DatasetIterator[T]):
   """Iterator that mixes elements from iterators based on given proportions.
 
   Note: The current implementation stops sampling elements when any dataset is
@@ -141,7 +141,7 @@ class _MixedLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
 
   def __init__(
       self,
-      parents: Sequence[lazy_dataset.LazyDatasetIterator[T]],
+      parents: Sequence[lazy_dataset.DatasetIterator[T]],
       proportions: Sequence[int] | None = None,
   ):
     super().__init__()
@@ -182,17 +182,17 @@ class _MixedLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
 
   def __str__(self) -> str:
     return (
-        f"MixedLazyDatasetIterator(parents={self._parents},"
+        f"MixedDatasetIterator(parents={self._parents},"
         f" proportions={self._proportions})"
     )
 
 
-class MixedLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
-  """Mix transformation for LazyIterDatasets."""
+class MixedIterDataset(lazy_dataset.IterDataset[T]):
+  """Mix transformation for IterDatasets."""
 
   def __init__(
       self,
-      parents: Sequence[lazy_dataset.LazyIterDataset],
+      parents: Sequence[lazy_dataset.IterDataset],
       proportions: Sequence[float] | None = None,
   ):
     super().__init__(parents)
@@ -206,16 +206,16 @@ class MixedLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
     assert len(parents) == len(proportions)
     self._proportions = proportions
 
-  def __iter__(self) -> _MixedLazyDatasetIterator[T]:
+  def __iter__(self) -> _MixedDatasetIterator[T]:
     parent_iters = [parent.__iter__() for parent in self._parents]
-    return _MixedLazyDatasetIterator(
+    return _MixedDatasetIterator(
         parent_iters,
         proportions=self._proportions,
     )
 
   def __str__(self) -> str:
     return (
-        f"MixedLazyIterDataset(parents={self._parents},"
+        f"MixedIterDataset(parents={self._parents},"
         f" proportions={self._proportions})"
     )
 
@@ -311,7 +311,7 @@ class _ConcatSelectionMap(DatasetSelectionMap):
 
   def __init__(
       self,
-      parents: Sequence[lazy_dataset.LazyMapDataset],
+      parents: Sequence[lazy_dataset.MapDataset],
   ):
     dataset_sizes = [len(parent) for parent in parents]
     for i, dataset_size in enumerate(dataset_sizes):
@@ -335,12 +335,12 @@ class _ConcatSelectionMap(DatasetSelectionMap):
 
 
 @dataclasses.dataclass
-class ConcatenateLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
+class ConcatenateMapDataset(lazy_dataset.MapDataset[T]):
   """LazyDataset for concatenating the elements from a sequence of datasets."""
 
   def __init__(
       self,
-      parents: Sequence[lazy_dataset.LazyMapDataset[T]],
+      parents: Sequence[lazy_dataset.MapDataset[T]],
   ):
     """Initializes the concatenated dataset.
 
@@ -356,7 +356,7 @@ class ConcatenateLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     return self._length
 
   @overload
-  def __getitem__(self, index: slice) -> lazy_dataset.LazyMapDataset[T]:
+  def __getitem__(self, index: slice) -> lazy_dataset.MapDataset[T]:
     ...
 
   @overload

@@ -29,7 +29,7 @@ class RandomAccessDataSource(Protocol):
     ...
 
 
-class SourceLazyMapDataset(lazy_dataset.LazyMapDataset):
+class SourceMapDataset(lazy_dataset.MapDataset):
   """Simple wrapper for random access data sources."""
 
   _source: RandomAccessDataSource
@@ -51,7 +51,7 @@ class SourceLazyMapDataset(lazy_dataset.LazyMapDataset):
 
 
 def log_lineage_for_sources(
-    root: Union[lazy_dataset.LazyMapDataset, lazy_dataset.LazyIterDataset]
+    root: Union[lazy_dataset.MapDataset, lazy_dataset.IterDataset],
 ):
   """Traverses tree of transformations and logs lineage on source datasets."""
   pass

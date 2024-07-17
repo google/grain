@@ -49,12 +49,12 @@ def _make_batch(values: Sequence[T]) -> T:
     ) from e
 
 
-class _BatchLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
+class _BatchDatasetIterator(lazy_dataset.DatasetIterator[T]):
   """Iterator that batches elements."""
 
   def __init__(
       self,
-      parent: lazy_dataset.LazyDatasetIterator[S],
+      parent: lazy_dataset.DatasetIterator[S],
       batch_size: int,
       drop_remainder: bool,
       batch_fn: Callable[[Sequence[S]], T],
@@ -86,27 +86,27 @@ class _BatchLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
 
   def __str__(self) -> str:
     return (
-        f"BatchLazyDatasetIterator(parent={self._parent},"
+        f"BatchDatasetIterator(parent={self._parent},"
         f" batch_size={self._batch_size},"
         f" drop_remainder={self._drop_remainder})"
     )
 
 
 @lazy_dataset.lazy_map_dataset_function("batch")
-class BatchLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
-  """Batch transformation for non-sparse LazyMapDatasets."""
+class BatchMapDataset(lazy_dataset.MapDataset[T]):
+  """Batch transformation for non-sparse MapDatasets."""
 
   def __init__(
       self,
-      parent: lazy_dataset.LazyMapDataset[S],
+      parent: lazy_dataset.MapDataset[S],
       batch_size: int,
       drop_remainder: bool = False,
       batch_fn: Callable[[Sequence[S]], T] | None = None,
   ):
-    """A LazyMapDataset that batches elements.
+    """A MapDataset that batches elements.
 
     Args:
-      parent: The parent LazyMapDataset whose elements are batched.
+      parent: The parent MapDataset whose elements are batched.
       batch_size: The number of elements to batch together.
       drop_remainder: Whether to drop the last batch if it is smaller than
         batch_size.
@@ -151,20 +151,20 @@ class BatchLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
 
 
 @lazy_dataset.lazy_iter_dataset_function("batch")
-class BatchLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
-  """Batch transformation for LazyIterDatasets."""
+class BatchIterDataset(lazy_dataset.IterDataset[T]):
+  """Batch transformation for IterDatasets."""
 
   def __init__(
       self,
-      parent: lazy_dataset.LazyIterDataset[S],
+      parent: lazy_dataset.IterDataset[S],
       batch_size: int,
       drop_remainder: bool = False,
       batch_fn: Callable[[Sequence[S]], T] | None = None,
   ):
-    """A LazyIterDataset that batches elements.
+    """A IterDataset that batches elements.
 
     Args:
-      parent: The parent LazyIterDataset whose elements are batched.
+      parent: The parent IterDataset whose elements are batched.
       batch_size: The number of elements to batch together.
       drop_remainder: Whether to drop the last batch if it is smaller than
         batch_size.
@@ -176,9 +176,9 @@ class BatchLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
     self._drop_remainder = drop_remainder
     self._batch_fn = _make_batch if batch_fn is None else batch_fn
 
-  def __iter__(self) -> _BatchLazyDatasetIterator[T]:
+  def __iter__(self) -> _BatchDatasetIterator[T]:
     parent_iter = self._parent.__iter__()
-    return _BatchLazyDatasetIterator(
+    return _BatchDatasetIterator(
         parent_iter,
         self._batch_size,
         drop_remainder=self._drop_remainder,
