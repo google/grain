@@ -23,6 +23,7 @@ from grain._src.core import transforms
 import multiprocessing as mp
 from grain._src.python import options
 from grain._src.python.lazy_dataset import lazy_dataset
+import numpy as np
 from typing_extensions import override
 
 
@@ -34,6 +35,12 @@ class FilterKeepingOddElementsOnly(transforms.FilterTransform):
 
   def filter(self, element: int) -> bool:
     return bool(element % 2)
+
+
+class MapAddingRandomInt(transforms.RandomMapTransform):
+
+  def random_map(self, element: int, rng: np.random.Generator) -> int:
+    return element + rng.integers(0, 100)
 
 
 class RangeLazyMapDatasetTest(absltest.TestCase):
@@ -317,6 +324,36 @@ class LazyDatasetTest(parameterized.TestCase):
         .prefetch(options.MultiprocessingOptions(num_workers=4))
     )
     self.assertSequenceEqual(list(ds), list(range(15)))
+
+  def test_random_map_does_not_affect_len(self):
+    ds = Source15IntsFrom0LazyMapDataset().random_map(
+        lambda x, rng: True, seed=123
+    )
+    self.assertLen(ds, 15)
+
+  @parameterized.product(
+      seed=[0, 123, 893247023984],
+      initial_ds=[
+          Source15IntsFrom0LazyMapDataset(),
+          Source15IntsFrom0LazyIterDataset(),
+      ],
+  )
+  def test_random_map_is_deterministic(self, seed, initial_ds):
+    ds = initial_ds.random_map(MapAddingRandomInt(), seed=seed)
+    items_1 = list(ds)
+    items_2 = list(ds)
+    self.assertEqual(items_1, items_2)
+
+  @parameterized.parameters(
+      dict(initial_ds=Source15IntsFrom0LazyMapDataset()),
+      dict(initial_ds=Source15IntsFrom0LazyIterDataset()),
+  )
+  def test_random_map_returns_different_results_for_different_seeds(
+      self, initial_ds
+  ):
+    ds1 = initial_ds.random_map(MapAddingRandomInt(), seed=123)
+    ds2 = initial_ds.random_map(MapAddingRandomInt(), seed=456)
+    self.assertNotEqual(list(ds1), list(ds2))
 
 
 if __name__ == '__main__':

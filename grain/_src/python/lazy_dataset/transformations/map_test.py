@@ -25,17 +25,15 @@ import numpy as np
 
 class RngPoolTest(absltest.TestCase):
 
-  def test_rng_pool_reset(self):
+  def test_reset_rng_state(self):
     rng = np.random.Generator(np.random.Philox())
     old_state = rng.bit_generator.state
     rng.integers(10)
-    new_state = rng.bit_generator.state
-    ldmap._reset_rng_state(rng, 0, 0)
-    reset_state = rng.bit_generator.state
-
     with self.assertRaises(AssertionError):
-      np.testing.assert_equal(old_state, new_state)
-    np.testing.assert_equal(old_state, reset_state)
+      np.testing.assert_equal(rng.bit_generator.state, old_state)
+
+    ldmap._reset_rng_state(rng, 0, 0)
+    np.testing.assert_equal(rng.bit_generator.state, old_state)
 
 
 @dataclasses.dataclass(frozen=True)

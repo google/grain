@@ -8,6 +8,7 @@ filegroup(
     name = "core_transformations",
     srcs = [
         "filter.py",
+        "map.py",
         "prefetch.py",
         "repeat.py",
         "shuffle.py",
@@ -52,7 +53,6 @@ py_test(
     shard_count = 20,
     srcs_version = "PY3",
     deps = [
-        ":map",
         "//grain/_src/core:transforms",
         "//grain/_src/python:options",
         "//grain/_src/python/lazy_dataset",
@@ -80,22 +80,11 @@ py_test(
     ],
 )
 
-py_library(
-    name = "map",
-    srcs = ["map.py"],
-    srcs_version = "PY3",
-    deps = [
-        "//grain/_src/core:transforms",
-        "//grain/_src/python/lazy_dataset",
-    ],
-)
-
 py_test(
     name = "map_test",
     srcs = ["map_test.py"],
     srcs_version = "PY3",
     deps = [
-        ":map",
         "//grain/_src/core:transforms",
         "//grain/_src/python/lazy_dataset",
     ],
@@ -136,7 +125,6 @@ py_test(
     srcs = ["packing_test.py"],
     srcs_version = "PY3",
     deps = [
-        ":map",
         ":packing",
         "//grain/_src/python/lazy_dataset",
         "//grain/_src/python/lazy_dataset:data_sources",

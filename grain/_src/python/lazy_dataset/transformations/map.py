@@ -22,7 +22,6 @@ from grain._src.python.lazy_dataset import lazy_dataset
 import numpy as np
 
 
-Element = Any
 T = TypeVar("T")  # pylint: disable=invalid-name
 
 _MapTransformType = Union[
