@@ -19,5 +19,5 @@
 # pylint: disable=unused-import
 # pylint: disable=wildcard-import
 
-from ._src.python.proto.decode import parse_tf_example
+from ._src.python.proto.decode import parse_tf_example, convert_tf_example_to_dict
 from ._src.python.proto.encode import make_tf_example
