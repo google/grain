@@ -39,6 +39,16 @@ class Metadata:
     del args, kwargs
 
 
+class Bucketer:
+  """Grain metric no-op Bucketer."""
+
+  def __init__(self, *args, **kwargs):
+    del args, kwargs
+
+  def PowersOf(self, *args, **kwargs):
+    del args, kwargs
+
+
 Counter = Metric = EventMetric = NoOpMetric
 
 def get_monitoring_root() -> None:

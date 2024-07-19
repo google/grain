@@ -17,9 +17,12 @@ import threading
 from typing import Any, Callable, Optional, TypeVar, Union
 
 from absl import logging
+from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import transforms
 from grain._src.python.lazy_dataset import lazy_dataset
 import numpy as np
+
+from grain._src.core import monitoring
 
 
 T = TypeVar("T")  # pylint: disable=invalid-name
@@ -28,6 +31,16 @@ _MapTransformType = Union[
     transforms.MapTransform, transforms.RandomMapTransform, Callable[..., T]
 ]
 
+_map_wall_time_metric = monitoring.EventMetric(
+    "/grain/lazy_dataset/transformations/map/wall_time",
+    monitoring.Metadata(
+        description="Wall time of map transformation.",
+        units=monitoring.Units.NANOSECONDS,
+    ),
+    root=grain_monitoring.get_monitoring_root(),
+    fields=[("node_id", int)],
+    bucketer=monitoring.Bucketer.PowersOf(2),
+)
 
 # We need this little helper class to handle RNG generator for random map
 # transformations. It manages a pool of RNG objects that can be re-used.
@@ -111,6 +124,7 @@ def _get_map_fn_and_seed(
     return transform, seed
 
 
+@lazy_dataset.record_wall_time(_map_wall_time_metric)
 @lazy_dataset.lazy_map_dataset_function("map")
 class MapLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   """Map LazyMapDataset."""
@@ -129,6 +143,7 @@ class MapLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     return len(self._parent)
 
   def __getitem__(self, index):
+    # start_time = time.time_ns()
     if isinstance(index, slice):
       return self.slice(index)
     element = self._parent[index]
@@ -143,6 +158,7 @@ class MapLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     return element
 
 
+@lazy_dataset.record_wall_time(_map_wall_time_metric)
 @lazy_dataset.lazy_map_dataset_function("map_with_index")
 class MapWithIndexLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   """Map with index LazyMapDataset."""
@@ -173,6 +189,7 @@ class MapWithIndexLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     return self._map_fn(index, element)
 
 
+@lazy_dataset.record_wall_time(_map_wall_time_metric)
 class _MapLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
   """Iterator that applies map transformation to elements."""
 

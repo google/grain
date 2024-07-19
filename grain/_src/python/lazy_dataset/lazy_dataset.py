@@ -43,12 +43,14 @@ import abc
 import builtins
 from collections.abc import Callable, Iterable, Iterator, Sequence
 import functools
+import time
 from typing import Any, Optional, Protocol, TypeVar, Union, overload
 
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import sharding
 from grain._src.core import transforms
 from grain._src.core import usage_logging
+from grain._src.core.config import config
 from grain._src.python import options as grain_options
 import numpy as np
 
@@ -70,6 +72,37 @@ S = TypeVar("S")
 _MAX_PREFETCH_THREADS = 1000
 
 
+def record_wall_time(transformation_metric: monitoring.EventMetric):
+  """Decorator to record walltime of a transformation."""
+
+  def transformation_decorator(cls):
+    if hasattr(cls, "__getitem__"):
+      original_method = cls.__getitem__
+      method_name = "__getitem__"
+    elif hasattr(cls, "__next__"):
+      original_method = cls.__next__
+      method_name = "__next__"
+    else:
+      raise ValueError("Class must have either __getitem__ or __next__ method")
+
+    def new_method(self, *args, **kwargs):
+      start_time = time.perf_counter_ns()
+      result = original_method(self, *args, **kwargs)
+      if config.py_debug_mode:
+        transformation_metric.Record(
+            (time.perf_counter_ns() - start_time), self.id
+        )
+      return result
+
+    if method_name == "__getitem__":
+      cls.__getitem__ = new_method
+    elif method_name == "__next__":
+      cls.__next__ = new_method
+    return cls
+
+  return transformation_decorator
+
+
 class RegisterableLazyMapDatasetFn(Protocol):
   """Interface for functions registered on all LazyMapDatasets."""
 
@@ -88,11 +121,14 @@ class LazyMapDataset(Sequence[T], abc.ABC):
   """Abstract base class for all LazyMapDataset classes."""
 
   _functions: dict[str, RegisterableLazyMapDatasetFn] = {}
+  id_counter = 0
   """Functions registered on all LazyMapdatasets via a decoration."""
 
   def __init__(
       self, parents: Union[LazyMapDataset, Sequence[LazyMapDataset]] = ()
   ):
+    LazyMapDataset.id_counter += 1
+    self.id = LazyMapDataset.id_counter
     if isinstance(parents, LazyMapDataset):
       self._parents = (parents,)
     else:

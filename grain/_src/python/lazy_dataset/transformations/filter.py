@@ -15,14 +15,29 @@
 
 from typing import Any, Callable, TypeVar, Union
 
+from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import transforms
 from grain._src.python.lazy_dataset import lazy_dataset
+
+from grain._src.core import monitoring
 
 
 Element = Any
 T = TypeVar("T")  # pylint: disable=invalid-name
 
+_filter_wall_time_metric = monitoring.EventMetric(
+    "/grain/lazy_dataset/transformations/filter/wall_time",
+    monitoring.Metadata(
+        description="Wall time of filter transformation.",
+        units=monitoring.Units.NANOSECONDS,
+    ),
+    root=grain_monitoring.get_monitoring_root(),
+    fields=[("node_id", int)],
+    bucketer=monitoring.Bucketer.PowersOf(2),
+)
 
+
+@lazy_dataset.record_wall_time(_filter_wall_time_metric)
 class FilterLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   """Filter LazyMapDataset."""
 
@@ -54,6 +69,7 @@ class FilterLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     return f"FilterLazyMapDataset(parent={self._parent})"
 
 
+@lazy_dataset.record_wall_time(_filter_wall_time_metric)
 class _FilterLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
   """Iterator that filters elements."""
 
