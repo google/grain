@@ -160,6 +160,76 @@ class LazyMapDataset(Sequence[T], abc.ABC):
     # pylint: enable=g-import-not-at-top
     return filter_dataset.FilterLazyMapDataset(parent=self, transform=transform)
 
+  def map(
+      self,
+      transform: (
+          transforms.MapTransform
+          | Callable[[T], S]
+          | transforms.RandomMapTransform
+          | Callable[[T, np.random.Generator], S]
+      ),
+      seed: Optional[int] = None,
+  ) -> "LazyMapDataset[S]":
+    """Returns a dataset containing the elements transformed by `transform`.
+
+    The following expressions are equivalent:
+
+    - `ds = ds.map(lambda x: x + 1)`
+    - `ds = MapLazyMapDataset(ds, lambda x: x + 1)`
+
+    The `ds.map(...)` version allows chaining multiple transformations,
+    e.g., `ds = ds.map(...).filter(...)`.
+
+    Args:
+      transform: Either a `MapTransform` containing the `map` method or a
+        callable that takes an element and returns a new element. The
+        `RandomMapTransform` and `Callable[[T, np.random.Generator], S]` types
+        are deprecated (use `random_map` instead).
+      seed: Deprecated. Use `random_map` instead.
+
+    Returns:
+      A dataset containing the elements of the original dataset transformed by
+      `transform`.
+    """
+    # Loaded lazily due to a circular dependency (lazy_dataset <-> map).
+    # pylint: disable=g-import-not-at-top
+    from grain._src.python.lazy_dataset.transformations import map as map_dataset
+    # pylint: enable=g-import-not-at-top
+    return map_dataset.MapLazyMapDataset(
+        parent=self, transform=transform, seed=seed
+    )
+
+  def map_with_index(
+      self,
+      transform: transforms.MapWithIndexTransform | Callable[[int, T], S],
+  ) -> "LazyMapDataset[S]":
+    """Returns a dataset containing the elements transformed by `transform`.
+
+    The following expressions are equivalent:
+
+    - `ds = ds.map_with_index(lambda i, x: i + 2 * x)`
+    - `ds = MapWithIndexLazyMapDataset(ds, lambda i, x: i + 2 * x)`
+
+    The `ds.map_with_index(...)` version allows chaining multiple
+    transformations, e.g., `ds = ds.map_with_index(...).filter(...)`.
+
+    Args:
+      transform: Either a `MapWithIndexTransform` containing the
+        `map_with_index` method or a callable that takes an index and an element
+        and returns a new element.
+
+    Returns:
+      A dataset containing the elements of the original dataset transformed by
+      `transform`.
+    """
+    # Loaded lazily due to a circular dependency (lazy_dataset <-> map).
+    # pylint: disable=g-import-not-at-top
+    from grain._src.python.lazy_dataset.transformations import map as map_dataset
+    # pylint: enable=g-import-not-at-top
+    return map_dataset.MapWithIndexLazyMapDataset(
+        parent=self, transform=transform
+    )
+
   def shuffle(self, *, seed: int) -> "LazyMapDataset[T]":
     """Returns a dataset containing the same elements but in a shuffled order.
 
@@ -373,6 +443,45 @@ class LazyIterDataset(Iterable[T], abc.ABC):
     # pylint: enable=g-import-not-at-top
     return filter_dataset.FilterLazyIterDataset(
         parent=self, transform=transform
+    )
+
+  def map(
+      self,
+      transform: (
+          transforms.MapTransform
+          | Callable[[T], S]
+          | transforms.RandomMapTransform
+          | Callable[[T, np.random.Generator], S]
+      ),
+      seed: Optional[int] = None,
+  ) -> "LazyIterDataset[S]":
+    """Returns a dataset containing the elements transformed by `transform`.
+
+    The following expressions are equivalent:
+
+    - `ds = ds.map(lambda x: x + 1)`
+    - `ds = MapLazyIterDataset(ds, lambda x: x + 1)`
+
+    The `ds.map(...)` version allows chaining multiple transformations,
+    e.g., `ds = ds.map(...).filter(...)`.
+
+    Args:
+      transform: Either a `MapTransform` containing the `map` method or a
+        callable that takes an element and returns a new element. The
+        `RandomMapTransform` and `Callable[[T, np.random.Generator], S]` types
+        are deprecated (use `random_map` instead).
+      seed: Deprecated. Use `random_map` instead.
+
+    Returns:
+      A dataset containing the elements of the original dataset transformed by
+      `transform`.
+    """
+    # Loaded lazily due to a circular dependency (lazy_dataset <-> map).
+    # pylint: disable=g-import-not-at-top
+    from grain._src.python.lazy_dataset.transformations import map as map_dataset
+    # pylint: enable=g-import-not-at-top
+    return map_dataset.MapLazyIterDataset(
+        parent=self, transform=transform, seed=seed
     )
 
   def random_map(

@@ -15,7 +15,7 @@
 
 import dataclasses
 import sys
-from typing import TypeVar
+from typing import TypeVar, overload
 
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -37,10 +37,32 @@ class FilterKeepingOddElementsOnly(transforms.FilterTransform):
     return bool(element % 2)
 
 
-class MapAddingRandomInt(transforms.RandomMapTransform):
+@dataclasses.dataclass(frozen=True)
+class RandomMapAddingRandomInt(transforms.RandomMapTransform):
 
   def random_map(self, element: int, rng: np.random.Generator) -> int:
     return element + rng.integers(0, 100)
+
+
+@dataclasses.dataclass(frozen=True)
+class RandomMapAlwaysAddingOne(transforms.RandomMapTransform):
+
+  def random_map(self, element: int, rng: np.random.Generator) -> int:
+    return element + 1
+
+
+@dataclasses.dataclass(frozen=True)
+class MapTransformAddingOne(transforms.MapTransform):
+
+  def map(self, element: int) -> int:
+    return element + 1
+
+
+@dataclasses.dataclass(frozen=True)
+class MapWithIndexProducingIndexElementTuple(transforms.MapWithIndexTransform):
+
+  def map_with_index(self, index: int, element: int) -> tuple[int, int]:
+    return (index, element)
 
 
 class RangeLazyMapDatasetTest(absltest.TestCase):
@@ -92,6 +114,14 @@ class Source15IntsFrom0LazyMapDataset(lazy_dataset.LazyMapDataset[int]):
   @override
   def __len__(self) -> int:
     return 15
+
+  @overload
+  def __getitem__(self, index: slice) -> lazy_dataset.LazyMapDataset[int]:
+    ...
+
+  @overload
+  def __getitem__(self, index: int) -> int:
+    ...
 
   @override
   def __getitem__(self, index):
@@ -325,11 +355,32 @@ class LazyDatasetTest(parameterized.TestCase):
     )
     self.assertSequenceEqual(list(ds), list(range(15)))
 
+  @parameterized.parameters(
+      dict(initial_ds=Source15IntsFrom0LazyMapDataset()),
+      dict(initial_ds=Source15IntsFrom0LazyIterDataset()),
+  )
+  def test_random_map_has_one_parent(self, initial_ds):
+    ds = initial_ds.random_map(lambda x, rng: 2 * x, seed=123)
+    self.assertLen(ds.parents, 1)
+
   def test_random_map_does_not_affect_len(self):
     ds = Source15IntsFrom0LazyMapDataset().random_map(
         lambda x, rng: True, seed=123
     )
     self.assertLen(ds, 15)
+
+  @parameterized.product(
+      initial_ds=[
+          Source15IntsFrom0LazyMapDataset(),
+          Source15IntsFrom0LazyIterDataset(),
+      ],
+      transform=[RandomMapAlwaysAddingOne(), lambda x, rng: x + 1],
+  )
+  def test_random_map_produces_correct_elements(self, initial_ds, transform):
+    ds = initial_ds.random_map(transform, seed=123)
+    self.assertSequenceEqual(
+        list(ds), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    )
 
   @parameterized.product(
       seed=[0, 123, 893247023984],
@@ -339,7 +390,7 @@ class LazyDatasetTest(parameterized.TestCase):
       ],
   )
   def test_random_map_is_deterministic(self, seed, initial_ds):
-    ds = initial_ds.random_map(MapAddingRandomInt(), seed=seed)
+    ds = initial_ds.random_map(RandomMapAddingRandomInt(), seed=seed)
     items_1 = list(ds)
     items_2 = list(ds)
     self.assertEqual(items_1, items_2)
@@ -351,9 +402,72 @@ class LazyDatasetTest(parameterized.TestCase):
   def test_random_map_returns_different_results_for_different_seeds(
       self, initial_ds
   ):
-    ds1 = initial_ds.random_map(MapAddingRandomInt(), seed=123)
-    ds2 = initial_ds.random_map(MapAddingRandomInt(), seed=456)
+    ds1 = initial_ds.random_map(RandomMapAddingRandomInt(), seed=123)
+    ds2 = initial_ds.random_map(RandomMapAddingRandomInt(), seed=456)
     self.assertNotEqual(list(ds1), list(ds2))
+
+  def test_map_does_not_affect_len(self):
+    ds = Source15IntsFrom0LazyMapDataset().map(lambda x: x + 1)
+    self.assertLen(ds, 15)
+
+  @parameterized.parameters(
+      dict(initial_ds=Source15IntsFrom0LazyMapDataset()),
+      dict(initial_ds=Source15IntsFrom0LazyIterDataset()),
+  )
+  def test_map_has_one_parent(self, initial_ds):
+    ds = initial_ds.map(lambda x: x)
+    self.assertLen(ds.parents, 1)
+
+  @parameterized.product(
+      initial_ds=[
+          Source15IntsFrom0LazyMapDataset(),
+          Source15IntsFrom0LazyIterDataset(),
+      ],
+      transform=[MapTransformAddingOne(), lambda x: x + 1],
+  )
+  def test_map_produces_correct_elements(self, initial_ds, transform):
+    ds = initial_ds.map(transform)
+    self.assertSequenceEqual(
+        list(ds), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    )
+
+  def test_map_with_index_does_not_affect_len(self):
+    ds = Source15IntsFrom0LazyMapDataset().map_with_index(lambda i, x: x + i)
+    self.assertLen(ds, 15)
+
+  def test_map_with_index_has_one_parent(self):
+    ds = Source15IntsFrom0LazyMapDataset().map_with_index(lambda i, x: x)
+    self.assertLen(ds.parents, 1)
+
+  @parameterized.parameters(
+      (MapWithIndexProducingIndexElementTuple(),), ((lambda i, x: (i, x)),)
+  )
+  def test_map_with_index_produces_correct_elements(self, transform):
+    ds = Source15IntsFrom0LazyMapDataset()[:5]  # [0, 1, 2, 3, 4]
+    ds = ds.map(lambda x: 2 * x)  # [0, 2, 4, 6, 8]
+    ds = ds.map_with_index(transform)
+    self.assertSequenceEqual(list(ds), [(0, 0), (1, 2), (2, 4), (3, 6), (4, 8)])
+
+  def test_many_operations_chained_together_produce_correct_elements(self):
+    # We don't use lambdas for these to keep the information about the type.
+    def add_one(x: int) -> int:
+      return x + 1
+
+    def add(x: int, y: int) -> int:
+      return x + y
+
+    ds = Source15IntsFrom0LazyMapDataset()
+    ds = ds[:5]  # [0, 1, 2, 3, 4]
+    ds = ds.filter(lambda x: x % 2 == 0)  # [0, None, 2, None, 4]
+    ds = ds.map(add_one)  # [1, None, 3, None, 5]
+    ds = ds.slice(slice(2, 5))  # [3, None, 5]
+    ds = ds.repeat(3)  # [3, None, 5, 3, None, 5, 3, None, 5]
+    ds = ds.map_with_index(add)  # [3, None, 7, 6, None, 10, 9, None, 13]
+    ds = ds.to_iter_dataset()  # [3, 7, 6, 10, 9, 13]
+    ds = ds.filter(lambda x: x % 3 != 0)  # [7, 10, 13]
+    ds = ds.map(add_one)  # [8, 11, 14]
+    # Note that the final dataset still has the correct type ineferred.
+    self.assertSequenceEqual(list(ds), [8, 11, 14])
 
 
 if __name__ == '__main__':

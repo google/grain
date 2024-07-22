@@ -111,7 +111,6 @@ def _get_map_fn_and_seed(
     return transform, seed
 
 
-@lazy_dataset.lazy_map_dataset_function("map")
 class MapLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   """Map LazyMapDataset."""
 
@@ -143,7 +142,6 @@ class MapLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     return element
 
 
-@lazy_dataset.lazy_map_dataset_function("map_with_index")
 class MapWithIndexLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   """Map with index LazyMapDataset."""
 
@@ -219,7 +217,6 @@ class _MapLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
     return f"MapLazyDatasetIterator(parent={self._parent}"
 
 
-@lazy_dataset.lazy_iter_dataset_function("map")
 class MapLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
   """Map transformation for LazyIterDatasets."""
 
