@@ -7,6 +7,7 @@ licenses(["notice"])
 filegroup(
     name = "core_transformations",
     srcs = [
+        "batch.py",
         "filter.py",
         "map.py",
         "mix.py",
@@ -18,24 +19,11 @@ filegroup(
     ],
 )
 
-py_library(
-    name = "batch",
-    srcs = ["batch.py"],
-    srcs_version = "PY3",
-    deps = [
-        "//grain/_src/core:tree",
-        "//grain/_src/python/lazy_dataset",
-    ],
-)
-
 py_test(
     name = "batch_test",
     srcs = ["batch_test.py"],
     srcs_version = "PY3",
-    deps = [
-        ":batch",
-        "//grain/_src/python/lazy_dataset",
-    ],
+    deps = ["//grain/_src/python/lazy_dataset"],
 )
 
 py_test(

@@ -76,7 +76,7 @@ class LazyDatasetDataLoaderTest(parameterized.TestCase):
       self, multiprocessing_options
   ):
     batched_lazy_iter_ds = lazy_dataset.BatchLazyIterDataset(
-        parent=self.lazy_ds,
+        parent=self.lazy_ds.to_iter_dataset(),
         batch_size=2,
     )
     data_loader = lazy_dataset_data_loader.DataLoader(

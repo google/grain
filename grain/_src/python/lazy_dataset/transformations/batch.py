@@ -92,7 +92,6 @@ class _BatchLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
     )
 
 
-@lazy_dataset.lazy_map_dataset_function("batch")
 class BatchLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   """Batch transformation for non-sparse LazyMapDatasets."""
 
@@ -150,7 +149,6 @@ class BatchLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     )
 
 
-@lazy_dataset.lazy_iter_dataset_function("batch")
 class BatchLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
   """Batch transformation for LazyIterDatasets."""
 

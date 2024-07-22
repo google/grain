@@ -65,7 +65,6 @@ py_library(
     deps = [
         "//grain/_src/python/lazy_dataset",  # build_cleaner: keep
         "//grain/_src/python/lazy_dataset:data_loader",  # build_cleaner: keep
-        "//grain/_src/python/lazy_dataset/transformations:batch",  # build_cleaner: keep
         "//grain/_src/python/lazy_dataset/transformations:flatmap",  # build_cleaner: keep
         "//grain/_src/python/lazy_dataset/transformations:packing",  # build_cleaner: keep
         "//grain/_src/python/lazy_dataset/transformations:zip",  # build_cleaner: keep

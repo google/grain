@@ -233,6 +233,62 @@ class LazyDatasetTest(parameterized.TestCase):
       dict(initial_ds=Source15IntsFrom0LazyMapDataset()),
       dict(initial_ds=Source15IntsFrom0LazyIterDataset()),
   )
+  def test_batch(self, initial_ds):
+    ds = initial_ds.batch(batch_size=3)
+    if isinstance(ds, lazy_dataset.LazyMapDataset):
+      self.assertLen(ds, 5)
+    np.testing.assert_equal(
+        list(ds),
+        [
+            np.array([0, 1, 2]),
+            np.array([3, 4, 5]),
+            np.array([6, 7, 8]),
+            np.array([9, 10, 11]),
+            np.array([12, 13, 14]),
+        ],
+    )
+
+  @parameterized.parameters(
+      dict(initial_ds=Source15IntsFrom0LazyMapDataset()),
+      dict(initial_ds=Source15IntsFrom0LazyIterDataset()),
+  )
+  def test_batch_with_drop_remainder(self, initial_ds):
+    ds = initial_ds.batch(batch_size=6, drop_remainder=True)
+    if isinstance(ds, lazy_dataset.LazyMapDataset):
+      self.assertLen(ds, 2)
+    np.testing.assert_equal(
+        list(ds),
+        [
+            np.array([0, 1, 2, 3, 4, 5]),
+            np.array([6, 7, 8, 9, 10, 11]),
+        ],
+    )
+
+  @parameterized.parameters(
+      dict(initial_ds=Source15IntsFrom0LazyMapDataset()),
+      dict(initial_ds=Source15IntsFrom0LazyIterDataset()),
+  )
+  def test_batch_with_batch_fn(self, initial_ds):
+    ds = initial_ds.batch(
+        batch_size=4,
+        batch_fn=lambda xs: np.expand_dims(np.array(xs), axis=0),
+    )
+    if isinstance(ds, lazy_dataset.LazyMapDataset):
+      self.assertLen(ds, 4)
+    np.testing.assert_equal(
+        list(ds),
+        [
+            np.array([[0, 1, 2, 3]]),
+            np.array([[4, 5, 6, 7]]),
+            np.array([[8, 9, 10, 11]]),
+            np.array([[12, 13, 14]]),
+        ],
+    )
+
+  @parameterized.parameters(
+      dict(initial_ds=Source15IntsFrom0LazyMapDataset()),
+      dict(initial_ds=Source15IntsFrom0LazyIterDataset()),
+  )
   def test_filter_with_callable(self, initial_ds):
     ds = initial_ds.filter(lambda x: x % 2 == 0)
     self.assertSequenceEqual(list(iter(ds)), [0, 2, 4, 6, 8, 10, 12, 14])

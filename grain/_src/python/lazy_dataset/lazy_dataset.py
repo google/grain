@@ -204,6 +204,38 @@ class LazyMapDataset(Sequence[T], metaclass=_MapDatasetMeta):
   def __getitem__(self, index):
     """Returns the element for the index or None if missing."""
 
+  def batch(
+      self,
+      batch_size: int,
+      drop_remainder: bool = False,
+      batch_fn: Callable[[Sequence[T]], S] | None = None,
+  ) -> "LazyMapDataset[S]":
+    """Returns a dataset of elements batched along a new first dimension.
+
+    Dataset elements are expected to be PyTrees.
+
+    Args:
+      batch_size: The number of elements to batch together.
+      drop_remainder: Whether to drop the last batch if it is smaller than
+        batch_size.
+      batch_fn: A function that takes a list of elements and returns a batch.
+        Defaults to stacking the elements along a new first batch dimension.
+
+    Returns:
+      A dataset of elements with the same PyTree structure with leaves
+      concatenated along the first dimension.
+    """
+    # Loaded lazily due to a circular dependency (lazy_dataset <-> batch).
+    # pylint: disable=g-import-not-at-top
+    from grain._src.python.lazy_dataset.transformations import batch
+    # pylint: enable=g-import-not-at-top
+    return batch.BatchLazyMapDataset(
+        parent=self,
+        batch_size=batch_size,
+        drop_remainder=drop_remainder,
+        batch_fn=batch_fn,
+    )
+
   def filter(
       self, transform: transforms.FilterTransform | Callable[[T], bool]
   ) -> "LazyMapDataset[T]":
@@ -498,6 +530,38 @@ class LazyIterDataset(Iterable[T], abc.ABC):
   def _parent(self) -> Union[LazyMapDataset, LazyIterDataset]:
     assert len(self._parents) == 1, self._parents
     return self._parents[0]
+
+  def batch(
+      self,
+      batch_size: int,
+      drop_remainder: bool = False,
+      batch_fn: Callable[[Sequence[T]], S] | None = None,
+  ) -> "LazyIterDataset[S]":
+    """Returns a dataset of elements batched along a new first dimension.
+
+    Dataset elements are expected to be PyTrees.
+
+    Args:
+      batch_size: The number of elements to batch together.
+      drop_remainder: Whether to drop the last batch if it is smaller than
+        batch_size.
+      batch_fn: A function that takes a list of elements and returns a batch.
+        Defaults to stacking the elements along a new first batch dimension.
+
+    Returns:
+      A dataset of elements with the same PyTree structure with leaves
+      concatenated along the first dimension.
+    """
+    # Loaded lazily due to a circular dependency (lazy_dataset <-> batch).
+    # pylint: disable=g-import-not-at-top
+    from grain._src.python.lazy_dataset.transformations import batch
+    # pylint: enable=g-import-not-at-top
+    return batch.BatchLazyIterDataset(
+        parent=self,
+        batch_size=batch_size,
+        drop_remainder=drop_remainder,
+        batch_fn=batch_fn,
+    )
 
   def filter(
       self, transform: transforms.FilterTransform | Callable[[T], bool]
