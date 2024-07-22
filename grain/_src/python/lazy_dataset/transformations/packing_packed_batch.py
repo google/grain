@@ -75,6 +75,10 @@ def _extract_and_rekey_packed_batch(
   return data
 
 
+def zeros(*args, **kwargs):
+  return np.zeros(*args, **kwargs)
+
+
 class PackedBatch(Generic[_T]):
   """Class to represent a batch of packed examples."""
 
@@ -99,7 +103,7 @@ class PackedBatch(Generic[_T]):
         assert isinstance(x, np.ndarray)
         shape = x.shape[1:]
         dtype = x.dtype
-      return np.zeros(
+      return zeros(
           shape=(num_packing_bins, length, *shape),  # (B, T, ...)
           dtype=dtype,
       )
@@ -109,7 +113,7 @@ class PackedBatch(Generic[_T]):
     )
 
     def make_packed_aux_info(length: int):
-      return np.zeros(shape=(num_packing_bins, length), dtype=np.int32)
+      return zeros(shape=(num_packing_bins, length), dtype=np.int32)
 
     self._segment_ids = jax.tree.map(make_packed_aux_info, length_struct)
     self._positions = jax.tree.map(make_packed_aux_info, length_struct)
@@ -117,7 +121,7 @@ class PackedBatch(Generic[_T]):
     # Tracks the next empty position to insert an example for each row
     # in the batch, for each feature in features_to_pack.
     self._first_free_cell_per_row = jax.tree.map(
-        lambda _: np.zeros(num_packing_bins, dtype=np.int64), length_struct
+        lambda _: zeros(num_packing_bins, dtype=np.int64), length_struct
     )
 
     # Tracks the number of examples already packed into row of the batch. Used
@@ -199,12 +203,17 @@ class PackedBatch(Generic[_T]):
     # Disabling the singleton comparison pylint because numpy does not work
     # without it.
     sorted_failing_components = sorted(
-        [(component, np.count_nonzero(value == False))  # pylint: disable=singleton-comparison
-         for component, value in is_row_free_struct],
-        key=lambda x: x[1], reverse=True)
+        [
+            (component, np.count_nonzero(value == False))  # pylint: disable=singleton-comparison
+            for component, value in is_row_free_struct
+        ],
+        key=lambda x: x[1],
+        reverse=True,
+    )
     failing_components = [e[0] for e in sorted_failing_components if e[1] > 0]
     return _SuccessfulRowOrFailingComponents(
-        row=None, failing_components=failing_components)
+        row=None, failing_components=failing_components
+    )
 
   def add_element_to_batch(
       self, element: jt.PyTree[np.ndarray], row: int

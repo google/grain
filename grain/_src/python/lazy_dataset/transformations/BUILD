@@ -135,6 +135,8 @@ py_library(
     name = "packing_packed_batch",
     srcs = ["packing_packed_batch.py"],
     srcs_version = "PY3",
+    deps = [
+    ],
 )
 
 py_test(
