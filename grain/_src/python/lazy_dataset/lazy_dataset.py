@@ -50,6 +50,7 @@ from grain._src.core import sharding
 from grain._src.core import transforms
 from grain._src.core import usage_logging
 from grain._src.python import options as grain_options
+from grain._src.python.lazy_dataset import base
 import numpy as np
 
 from grain._src.core import monitoring
@@ -84,7 +85,85 @@ class RegisterableLazyIterDatasetFn(Protocol):
     ...
 
 
-class LazyMapDataset(Sequence[T], abc.ABC):
+class _MapDatasetMeta(abc.ABCMeta):
+  """Metaclass for MapDataset containing factory transfromations."""
+
+  def source(cls, source: base.RandomAccessDataSource[T]) -> LazyMapDataset[T]:
+    """Returns a dataset that wraps a data source supporting random access.
+
+    Example usage: `ds = LazyMapDataset.source(ArrayRecordDataSource(paths))`.
+
+    Args:
+      source: Data source supporting efficient random access.
+
+    Returns:
+      A LazyMapDataset that wraps the data source and allows to chain other
+      LazyMapDataset transformations.
+    """
+    # Loaded lazily due to a circular dependency (lazy_dataset <-> source).
+    # pylint: disable=g-import-not-at-top
+    from grain._src.python.lazy_dataset.transformations import source as source_dataset
+    # pylint: enable=g-import-not-at-top
+    return source_dataset.SourceLazyMapDataset(source)
+
+  def mix(
+      cls,
+      datasets: Sequence[LazyMapDataset[T]],
+      weights: Sequence[float] | None = None,
+  ) -> LazyMapDataset[T]:
+    """Returns a dataset that mixes input datasets with the given weights.
+
+    Length of the mixed dataset will be determined by the length of the shortest
+    input dataset. If you need an infinite dateset consider repeating the
+    input datasets before mixing.
+
+    If you need to shuffle the mixed dataset while preserving the correct
+    proportions, you should shuffle the input datasets before mixing.
+
+    Args:
+      datasets: The datasets to mix.
+      weights: The weights to use for mixing. Defaults to uniform weights if not
+        specified.
+
+    Returns:
+      A LazyMapDataset that represents a mixture of the input datasets according
+      to the given weights.
+    """
+    # Loaded lazily due to a circular dependency (lazy_dataset <-> mix).
+    # pylint: disable=g-import-not-at-top
+    from grain._src.python.lazy_dataset.transformations import mix
+    # pylint: enable=g-import-not-at-top
+    return mix.MixedLazyMapDataset(parents=datasets, proportions=weights)
+
+  def select_from_datasets(
+      cls,
+      datasets: Sequence[LazyMapDataset[T]],
+      selection_map: base.DatasetSelectionMap,
+  ) -> LazyMapDataset[T]:
+    """Returns a dataset selected from the inputs accoridng to the given map.
+
+    Allows more general types of dataset mixing than `mix`.
+
+    Args:
+      datasets: The datasets to select from.
+      selection_map: Mapping from index within the mixed dataset to a selected
+        dataset index and index within that dataset. Length of the resulting
+        dataset will be determined by the length of the `selection_map`.
+
+    Returns:
+      A LazyMapDataset that represents a mixture of the input datasets according
+      to the given selection map.
+    """
+    # Loaded lazily due to a circular dependency (lazy_dataset <-> mix).
+    # pylint: disable=g-import-not-at-top
+    from grain._src.python.lazy_dataset.transformations import mix
+    # pylint: enable=g-import-not-at-top
+    return mix.MixedLazyMapDataset(
+        parents=datasets, selection_map=selection_map
+    )
+
+
+class LazyMapDataset(Sequence[T], metaclass=_MapDatasetMeta):
   """Abstract base class for all LazyMapDataset classes."""
 
   _functions: dict[str, RegisterableLazyMapDatasetFn] = {}

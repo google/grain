@@ -15,7 +15,6 @@
 
 from __future__ import annotations
 
-import abc
 import bisect
 from collections.abc import Sequence
 import dataclasses
@@ -23,6 +22,7 @@ import sys
 from typing import Any, TypeVar, overload
 
 from grain._src.core import exceptions
+from grain._src.python.lazy_dataset import base
 from grain._src.python.lazy_dataset import lazy_dataset
 from typing_extensions import override
 
@@ -31,25 +31,7 @@ T = TypeVar("T")  # pylint: disable=invalid-name
 
 
 @dataclasses.dataclass
-class DatasetSelectionMap(abc.ABC):
-  """Abstract base class for mapping from index to dataset and dataset index.
-
-  Note, this must be stateless, picklable and should avoid randomness to
-  support determinism since it may be created and called concurrently in
-  multiple processes.
-  """
-
-  @abc.abstractmethod
-  def __len__(self) -> int:
-    """Returns the length of this dataset."""
-
-  @abc.abstractmethod
-  def __getitem__(self, index: int) -> tuple[int, int]:
-    """Returns the dataset and the index within the dataset of global index."""
-
-
-@dataclasses.dataclass
-class SelectionWithProportionsMap(DatasetSelectionMap):
+class SelectionWithProportionsMap(base.DatasetSelectionMap):
   """A lazy map mixing datasets acording to their proportions."""
 
   def __init__(
@@ -94,7 +76,7 @@ class MixedLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
       self,
       parents: Sequence[lazy_dataset.LazyMapDataset[T]],
       proportions: Sequence[float] | None = None,
-      selection_map: DatasetSelectionMap | None = None,
+      selection_map: base.DatasetSelectionMap | None = None,
   ):
     """Initializes the mixed dataset.
 
@@ -300,7 +282,7 @@ def _dataset_and_key_of_next_element(
 
 
 @dataclasses.dataclass
-class _ConcatSelectionMap(DatasetSelectionMap):
+class _ConcatSelectionMap(base.DatasetSelectionMap):
   """Concatenated datasets selection map.
 
   Selection map that concatenates the elements from a sequence of finite parent

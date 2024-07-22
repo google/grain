@@ -3,6 +3,24 @@ package(default_visibility = ["//grain:__subpackages__"])
 licenses(["notice"])
 
 py_library(
+    name = "base",
+    srcs = [
+        "base.py",
+    ],
+    srcs_version = "PY3",
+)
+
+py_test(
+    name = "base_test",
+    srcs = ["base_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":base",
+        "//grain/_src/python:data_sources",
+    ],
+)
+
+py_library(
     name = "lazy_dataset",
     srcs = [
         "lazy_dataset.py",
@@ -11,6 +29,8 @@ py_library(
     data = ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
     srcs_version = "PY3",
     deps = [
+        ":base",
+        "//grain/_src/core:exceptions",
         "//grain/_src/core:monitoring",
         "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
@@ -27,28 +47,10 @@ py_test(
     srcs = ["lazy_dataset_test.py"],
     srcs_version = "PY3",
     deps = [
+        ":base",
         ":lazy_dataset",
         "//grain/_src/core:transforms",
         "//grain/_src/python:options",
-    ],
-)
-
-py_library(
-    name = "data_sources",
-    srcs = ["data_sources.py"],
-    srcs_version = "PY3",
-    deps = [
-        ":lazy_dataset",
-    ],
-)
-
-py_test(
-    name = "data_sources_test",
-    srcs = ["data_sources_test.py"],
-    srcs_version = "PY3",
-    deps = [
-        ":data_sources",
-        ":lazy_dataset",
     ],
 )
 

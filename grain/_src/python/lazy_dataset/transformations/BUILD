@@ -9,10 +9,12 @@ filegroup(
     srcs = [
         "filter.py",
         "map.py",
+        "mix.py",
         "prefetch.py",
         "repeat.py",
         "shuffle.py",
         "slice.py",
+        "source.py",
     ],
 )
 
@@ -33,7 +35,6 @@ py_test(
     deps = [
         ":batch",
         "//grain/_src/python/lazy_dataset",
-        "//grain/_src/python/lazy_dataset:data_sources",
     ],
 )
 
@@ -57,6 +58,13 @@ py_test(
         "//grain/_src/python:options",
         "//grain/_src/python/lazy_dataset",
     ],
+)
+
+py_test(
+    name = "source_test",
+    srcs = ["source_test.py"],
+    srcs_version = "PY3",
+    deps = ["//grain/_src/python/lazy_dataset"],
 )
 
 py_library(
@@ -90,23 +98,13 @@ py_test(
     ],
 )
 
-py_library(
-    name = "mix",
-    srcs = ["mix.py"],
-    srcs_version = "PY3",
-    deps = [
-        "//grain/_src/core:exceptions",
-        "//grain/_src/python/lazy_dataset",
-    ],
-)
-
 py_test(
     name = "mix_test",
     srcs = ["mix_test.py"],
     srcs_version = "PY3",
     deps = [
-        ":mix",
         "//grain/_src/python/lazy_dataset",
+        "//grain/_src/python/lazy_dataset:base",
     ],
 )
 
@@ -127,7 +125,6 @@ py_test(
     deps = [
         ":packing",
         "//grain/_src/python/lazy_dataset",
-        "//grain/_src/python/lazy_dataset:data_sources",
     ],
 )
 

@@ -22,6 +22,7 @@ from absl.testing import parameterized
 from grain._src.core import transforms
 import multiprocessing as mp
 from grain._src.python import options
+from grain._src.python.lazy_dataset import base
 from grain._src.python.lazy_dataset import lazy_dataset
 import numpy as np
 from typing_extensions import override
@@ -106,6 +107,27 @@ class RangeLazyMapDatasetTest(absltest.TestCase):
     self.assertEqual(elements, [2, 4, 6, 8])
 
 
+class Source15IntsFrom0:
+
+  def __init__(self):
+    pass
+
+  def __len__(self) -> int:
+    return 15
+
+  def __getitem__(self, index):
+    return index
+
+
+class InverseUniformSelectionMap(base.DatasetSelectionMap):
+
+  def __len__(self):
+    return 10
+
+  def __getitem__(self, index):
+    return (index + 1) % 2, index // 2
+
+
 class Source15IntsFrom0LazyMapDataset(lazy_dataset.LazyMapDataset[int]):
 
   def __init__(self):
@@ -165,6 +187,47 @@ class LazyDatasetTest(parameterized.TestCase):
     ds = IdentityLazyMapDataset(source_ds)
     self.assertLen(ds.parents, 1)
     self.assertEqual(ds.parents[0], source_ds)
+
+  def test_source(self):
+    ds = lazy_dataset.LazyMapDataset.source(Source15IntsFrom0())
+    self.assertIsInstance(ds, lazy_dataset.LazyMapDataset)
+    self.assertLen(ds, 15)
+    self.assertEqual(list(ds), list(range(15)))
+
+  @parameterized.parameters(
+      # pyformat: disable
+      dict(proportions=None,
+           expected=[
+               0, 100, 1, 101, 2, 102, 3, 103, 4, 104, 5, 105, 6, 106, 7, 107,
+               8, 108, 9, 109, 10, 110, 11, 111, 12, 112, 13, 113, 14, 114]),
+      dict(proportions=[1, 2],
+           expected=[
+               0, 100, 101, 1, 102, 103, 2, 104, 105, 3, 106, 107, 4, 108, 109,
+               5, 110, 111, 6, 112, 113, 7]),
+      # pyformat: enable
+  )
+  def test_mix(self, proportions, expected):
+    datasets = [
+        Source15IntsFrom0LazyMapDataset(),
+        Source15IntsFrom0LazyMapDataset().map(lambda x: x + 100),
+    ]
+    ds = lazy_dataset.LazyMapDataset.mix(datasets, proportions)
+    self.assertIsInstance(ds, lazy_dataset.LazyMapDataset)
+    self.assertLen(ds, len(expected))
+    self.assertEqual(list(ds), expected)
+
+  def test_select_from_datasets(self):
+    datasets = [
+        Source15IntsFrom0LazyMapDataset(),
+        Source15IntsFrom0LazyMapDataset().map(lambda x: x + 100),
+    ]
+    selection_map = InverseUniformSelectionMap()
+    ds = lazy_dataset.LazyMapDataset.select_from_datasets(
+        datasets, selection_map
+    )
+    self.assertIsInstance(ds, lazy_dataset.LazyMapDataset)
+    self.assertLen(ds, 10)
+    self.assertEqual(list(ds), [100, 0, 101, 1, 102, 2, 103, 3, 104, 4])
 
   @parameterized.parameters(
       dict(initial_ds=Source15IntsFrom0LazyMapDataset()),

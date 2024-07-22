@@ -15,10 +15,10 @@
 
 from absl.testing import absltest
 from absl.testing import parameterized
-from grain._src.python.lazy_dataset import data_sources
 from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import batch
 from grain._src.python.lazy_dataset.transformations import repeat
+from grain._src.python.lazy_dataset.transformations import source
 import numpy as np
 import tree
 
@@ -78,9 +78,7 @@ class BatchLazyMapDatasetTest(parameterized.TestCase):
     np.testing.assert_allclose(actual, expected)
 
   def test_custom_batch_fn(self):
-    ds = data_sources.SourceLazyMapDataset(
-        [{"a": f"element_{i}"} for i in range(10)]
-    )
+    ds = source.SourceLazyMapDataset([{"a": f"element_{i}"} for i in range(10)])
 
     def _batch_fn(xs):
       return tree.map_structure(lambda *x: tuple(x), *xs)
@@ -207,7 +205,7 @@ class BatchLazyIterDatasetTest(absltest.TestCase):
     np.testing.assert_allclose(actual, expected)
 
   def test_custom_batch_fn(self):
-    iter_ds = data_sources.SourceLazyMapDataset(
+    iter_ds = source.SourceLazyMapDataset(
         [{"a": f"element_{i}"} for i in range(10)]
     ).to_iter_dataset()
 

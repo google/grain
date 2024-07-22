@@ -17,12 +17,8 @@
 # pylint: disable=g-multiple-import
 # pylint: disable=unused-import
 # pylint: disable=wildcard-import
-
+from ._src.python.lazy_dataset.base import DatasetSelectionMap
 from ._src.python.lazy_dataset.data_loader import DataLoader
-from ._src.python.lazy_dataset.data_sources import (
-    SourceLazyMapDataset,
-    log_lineage_for_sources,
-)
 from ._src.python.lazy_dataset.lazy_dataset import (
     LazyMapDataset,
     LazyIterDataset,
@@ -45,7 +41,6 @@ from ._src.python.lazy_dataset.transformations.map import (
 )
 from ._src.python.lazy_dataset.transformations.mix import (
     ConcatenateLazyMapDataset,
-    DatasetSelectionMap,
     MixedLazyMapDataset,
     MixedLazyIterDataset,
 )
@@ -60,4 +55,8 @@ from ._src.python.lazy_dataset.transformations.shuffle import (
     WindowShuffleLazyMapDataset,
 )
 from ._src.python.lazy_dataset.transformations.slice import SliceLazyMapDataset
+from ._src.python.lazy_dataset.transformations.source import (
+    SourceLazyMapDataset,
+    log_lineage_for_sources,
+)
 from ._src.python.lazy_dataset.transformations.zip import ZipLazyMapDataset

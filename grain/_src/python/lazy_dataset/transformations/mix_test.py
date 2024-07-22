@@ -17,12 +17,13 @@ import sys
 from typing import Callable, Tuple
 
 from absl.testing import absltest
+from grain._src.python.lazy_dataset import base
 from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import mix
 import numpy as np
 
 
-class ExplicitSelectionMap(mix.DatasetSelectionMap):
+class ExplicitSelectionMap(base.DatasetSelectionMap):
 
   def __init__(
       self, length: int, selection_map: Callable[[int], Tuple[int, int]]

@@ -16,8 +16,8 @@ import random
 from unittest import mock
 
 from absl.testing import absltest
-from grain._src.python.lazy_dataset import data_sources
 from grain._src.python.lazy_dataset import lazy_dataset
+from grain._src.python.lazy_dataset.transformations import source
 
 
 class _Interleave(lazy_dataset.LazyMapDataset):
@@ -35,7 +35,7 @@ class SourceLazyMapDatasetTest(absltest.TestCase):
   def setUp(self):
     super().setUp()
     self.sample_data_source = [1, 2, 3, 4, 5]
-    self.lazy_dataset_source = data_sources.SourceLazyMapDataset(  # pytype: disable=wrong-arg-types
+    self.lazy_dataset_source = source.SourceLazyMapDataset(  # pytype: disable=wrong-arg-types
         self.sample_data_source
     )
 

@@ -17,13 +17,9 @@ import sys
 
 from absl.testing import absltest
 from absl.testing import parameterized
-# pylint: enable=unused-import
-from grain._src.python.lazy_dataset import data_sources
 from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import packing
-# pylint: disable=unused-import
-import grain._src.python.lazy_dataset.transformations.map
-import grain._src.python.lazy_dataset.transformations.shuffle
+from grain._src.python.lazy_dataset.transformations import source
 import numpy as np
 import tree
 
@@ -50,7 +46,7 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
   def test_pack_single_feature(self):
     # 5 elements of variable sequence length.
     input_elements = [[1, 2, 3, 4], [5, 6], [11, 12, 13, 14], [7], [8]]
-    ds = data_sources.SourceLazyMapDataset(input_elements)
+    ds = source.SourceLazyMapDataset(input_elements)
     ds = ds.map(np.asarray)
     ds = ds.to_iter_dataset()
     ds = packing.SingleBinPackLazyIterDataset(ds, length_struct=4)
@@ -76,7 +72,7 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
   def test_pack_single_feature_remainder_is_padded(self):
     # 4 elements of variable sequence length.
     input_elements = [[1, 2, 3, 4], [5, 6], [11, 12, 13, 14], [7]]
-    ds = data_sources.SourceLazyMapDataset(input_elements)
+    ds = source.SourceLazyMapDataset(input_elements)
     ds = ds.map(np.asarray)
     ds = ds.to_iter_dataset()
     ds = packing.SingleBinPackLazyIterDataset(ds, length_struct=4)
@@ -124,7 +120,7 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
             "inputs": [8],
         },
     ]
-    ds = data_sources.SourceLazyMapDataset(input_elements)
+    ds = source.SourceLazyMapDataset(input_elements)
     ds = ds.map(lambda d: {k: np.asarray(v) for k, v in d.items()})
     ds = ds.to_iter_dataset()
     ds = packing.SingleBinPackLazyIterDataset(ds, length_struct={"inputs": 4})
@@ -186,7 +182,7 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
             "targets": [60],
         },
     ]
-    ds = data_sources.SourceLazyMapDataset(input_elements)
+    ds = source.SourceLazyMapDataset(input_elements)
     ds = ds.map(lambda d: {k: np.asarray(v) for k, v in d.items()})
     ds = ds.to_iter_dataset()
     ds = packing.SingleBinPackLazyIterDataset(
@@ -260,7 +256,7 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
             "targets": [60],
         },
     ]
-    ds = data_sources.SourceLazyMapDataset(input_elements)
+    ds = source.SourceLazyMapDataset(input_elements)
     ds = ds.map(lambda d: {k: np.asarray(v) for k, v in d.items()})
     ds = ds.to_iter_dataset()
     ds = packing.SingleBinPackLazyIterDataset(
@@ -314,7 +310,7 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
             "input_vectors": [[5, 6, 7]],
         },
     ]
-    ds = data_sources.SourceLazyMapDataset(input_elements)
+    ds = source.SourceLazyMapDataset(input_elements)
     ds = ds.map(lambda d: {k: np.asarray(v) for k, v in d.items()})
     ds = ds.to_iter_dataset()
     ds = packing.SingleBinPackLazyIterDataset(
@@ -386,7 +382,7 @@ def _common_test_body(
       {k: np.asarray(v) for k, v in d.items()} for d in expected_elements
   ]
   ld = packing.FirstFitPackLazyIterDataset(
-      data_sources.SourceLazyMapDataset(input_elements).to_iter_dataset(),
+      source.SourceLazyMapDataset(input_elements).to_iter_dataset(),
       num_packing_bins=num_packing_bins,
       length_struct=length_struct,
       shuffle_bins=shuffle_bins,
@@ -788,7 +784,7 @@ class FirstFitPackLazyIterDatasetTest(parameterized.TestCase):
     ]
     length_struct = {"inputs": 3, "targets": 3}
     ld = packing.FirstFitPackLazyIterDataset(
-        data_sources.SourceLazyMapDataset(input_elements).to_iter_dataset(),
+        source.SourceLazyMapDataset(input_elements).to_iter_dataset(),
         num_packing_bins=2,
         length_struct=length_struct,
         shuffle_bins=True,
@@ -854,7 +850,7 @@ class FirstFitPackLazyIterDatasetTest(parameterized.TestCase):
         for _ in range(100)
     ]
     ld = packing.FirstFitPackLazyIterDataset(
-        data_sources.SourceLazyMapDataset(elements).repeat().to_iter_dataset(),
+        source.SourceLazyMapDataset(elements).repeat().to_iter_dataset(),
         num_packing_bins=4,
         length_struct=dict(row=100),
         shuffle_bins=shuffle_bins,
