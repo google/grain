@@ -601,7 +601,7 @@ class LazyIterDataset(Iterable[T], abc.ABC):
         parent=self, transform=transform, seed=seed
     )
 
-  def set_parent_maps_slice(self, sl: slice) -> None:
+  def _set_parent_maps_slice(self, sl: slice) -> None:
     """Replaces LazyMapDataset-type parents with their sliced versions.
 
     Applies recursively for LazyIterDataset-type parents.
@@ -614,7 +614,7 @@ class LazyIterDataset(Iterable[T], abc.ABC):
       if isinstance(parent, LazyMapDataset):
         sliced_parents.append(parent.slice(sl))
       else:
-        parent.set_parent_maps_slice(sl)
+        parent._set_parent_maps_slice(sl)  # pylint: disable=protected-access
         sliced_parents.append(parent)
     self._parents = tuple(sliced_parents)
 
