@@ -106,6 +106,28 @@ class _MapDatasetMeta(abc.ABCMeta):
     # pylint: enable=g-import-not-at-top
     return source_dataset.SourceLazyMapDataset(source)
 
+  def range(
+      cls, start: int, stop: int | None = None, step: int = 1
+  ) -> LazyMapDataset[int]:
+    """Returns a dataset with a range of integers.
+
+    Input arguments are interpreted the same way as in Python built-in `range`:
+      - `range(n)` => start=0, stop=n, step=1
+      - `range(m, n)` => start=m, stop=n, step=1
+      - `range(m, n, p)` => start=m, stop=n, step=p
+
+    `list(MapDataset.range(...)) == list(range(...))`.
+
+    Args:
+      start: The start of the range.
+      stop: The stop of the range.
+      step: The step of the range.
+
+    Returns:
+      A MapDataset with a range of integers.
+    """
+    return RangeLazyMapDataset(start, stop, step)
+
   def mix(
       cls,
       datasets: Sequence[LazyMapDataset[T]],
@@ -502,7 +524,37 @@ class LazyMapDataset(Sequence[T], metaclass=_MapDatasetMeta):
     )
 
 
-class LazyIterDataset(Iterable[T], abc.ABC):
+class _IterDatasetMeta(abc.ABCMeta):
+  """Metaclass for IterDataset containing factory transformations."""
+
+  def mix(
+      cls,
+      datasets: Sequence[LazyIterDataset[T]],
+      weights: Sequence[float] | None = None,
+  ) -> LazyIterDataset[T]:
+    """Returns a dataset that mixes input datasets with the given weights.
+
+    Length of the mixed dataset will be determined by the length of the shortest
+    input dataset. If you need an infinite mixed dateset consider repeating the
+    input datasets before mixing.
+
+    Args:
+      datasets: The datasets to mix.
+      weights: The weights to use for mixing. Defaults to uniform weights if not
+        specified.
+
+    Returns:
+      A dataset that represents a mixture of the input datasets according to the
+      given weights.
+    """
+    # Loaded lazily due to a circular dependency (lazy_dataset <-> mix).
+    # pylint: disable=g-import-not-at-top
+    from grain._src.python.lazy_dataset.transformations import mix
+    # pylint: enable=g-import-not-at-top
+    return mix.MixedLazyIterDataset(parents=datasets, proportions=weights)
+
+
+class LazyIterDataset(Iterable[T], metaclass=_IterDatasetMeta):
   """Abstract base class for all LazyIterDataset classes."""
 
   _functions: dict[str, RegisterableLazyIterDatasetFn] = {}

@@ -194,6 +194,27 @@ class LazyDatasetTest(parameterized.TestCase):
     self.assertLen(ds, 15)
     self.assertEqual(list(ds), list(range(15)))
 
+  def test_range_with_stop(self):
+    n = 34
+    ds = lazy_dataset.LazyMapDataset.range(n)
+    self.assertLen(ds, n)
+    self.assertEqual(list(ds), list(range(n)))
+
+  def test_range_with_start_and_stop(self):
+    start = 3
+    stop = 10
+    ds = lazy_dataset.LazyMapDataset.range(start, stop)
+    self.assertLen(ds, stop - start)
+    self.assertEqual(list(ds), list(range(start, stop)))
+
+  def test_range_with_start_and_stop_and_step(self):
+    start = 3
+    stop = 10
+    step = 3
+    ds = lazy_dataset.LazyMapDataset.range(start, stop, step)
+    self.assertLen(ds, len(range(start, stop, step)))
+    self.assertEqual(list(ds), list(range(start, stop, step)))
+
   @parameterized.parameters(
       # pyformat: disable
       dict(proportions=None,
@@ -206,7 +227,7 @@ class LazyDatasetTest(parameterized.TestCase):
                5, 110, 111, 6, 112, 113, 7]),
       # pyformat: enable
   )
-  def test_mix(self, proportions, expected):
+  def test_mix_map(self, proportions, expected):
     datasets = [
         Source15IntsFrom0LazyMapDataset(),
         Source15IntsFrom0LazyMapDataset().map(lambda x: x + 100),
@@ -214,6 +235,27 @@ class LazyDatasetTest(parameterized.TestCase):
     ds = lazy_dataset.LazyMapDataset.mix(datasets, proportions)
     self.assertIsInstance(ds, lazy_dataset.LazyMapDataset)
     self.assertLen(ds, len(expected))
+    self.assertEqual(list(ds), expected)
+
+  @parameterized.parameters(
+      # pyformat: disable
+      dict(proportions=None,
+           expected=[
+               0, 100, 1, 101, 2, 102, 3, 103, 4, 104, 5, 105, 6, 106, 7, 107,
+               8, 108, 9, 109, 10, 110, 11, 111, 12, 112, 13, 113, 14, 114]),
+      dict(proportions=[1, 2],
+           expected=[
+               0, 100, 101, 1, 102, 103, 2, 104, 105, 3, 106, 107, 4, 108, 109,
+               5, 110, 111, 6, 112, 113, 7, 114]),
+      # pyformat: enable
+  )
+  def test_mix_iter(self, proportions, expected):
+    datasets = [
+        Source15IntsFrom0LazyIterDataset(),
+        Source15IntsFrom0LazyIterDataset().map(lambda x: x + 100),
+    ]
+    ds = lazy_dataset.LazyIterDataset.mix(datasets, proportions)
+    self.assertIsInstance(ds, lazy_dataset.LazyIterDataset)
     self.assertEqual(list(ds), expected)
 
   def test_select_from_datasets(self):
