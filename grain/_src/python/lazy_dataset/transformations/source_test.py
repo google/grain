@@ -20,7 +20,7 @@ from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import source
 
 
-class _Interleave(lazy_dataset.LazyMapDataset):
+class _Interleave(lazy_dataset.MapDataset):
 
   def __len__(self):
     return sum((len(p) for p in self.parents))
@@ -30,12 +30,12 @@ class _Interleave(lazy_dataset.LazyMapDataset):
     return self.parents[parent_index][index]
 
 
-class SourceLazyMapDatasetTest(absltest.TestCase):
+class SourceMapDatasetTest(absltest.TestCase):
 
   def setUp(self):
     super().setUp()
     self.sample_data_source = [1, 2, 3, 4, 5]
-    self.lazy_dataset_source = source.SourceLazyMapDataset(  # pytype: disable=wrong-arg-types
+    self.lazy_dataset_source = source.SourceMapDataset(  # pytype: disable=wrong-arg-types
         self.sample_data_source
     )
 

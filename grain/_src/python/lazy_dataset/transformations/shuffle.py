@@ -22,12 +22,12 @@ from grain._src.python.lazy_dataset import lazy_dataset
 T = TypeVar("T")
 
 
-class ShuffleLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
+class ShuffleMapDataset(lazy_dataset.MapDataset[T]):
   """Shuffles the parent dataset."""
 
   def __init__(
       self,
-      parent: lazy_dataset.LazyMapDataset[T],
+      parent: lazy_dataset.MapDataset[T],
       *,
       seed: int,
   ):
@@ -58,7 +58,7 @@ class ShuffleLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     return self._parent[shuffled_index]
 
 
-class WindowShuffleLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
+class WindowShuffleMapDataset(lazy_dataset.MapDataset[T]):
   """Shuffles the parent dataset within a given window.
 
   Shuffles the retrieval index within a range, given by window_size. Each unique
@@ -68,7 +68,7 @@ class WindowShuffleLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
   """
 
   def __init__(
-      self, parent: lazy_dataset.LazyMapDataset, *, window_size: int, seed: int
+      self, parent: lazy_dataset.MapDataset, *, window_size: int, seed: int
   ):
     super().__init__(parent)
     self._window_size = window_size

@@ -41,15 +41,15 @@ def _assert_trees_equal(actual, expected):
   tree.map_structure_with_path(_check_equivalence, actual, expected)
 
 
-class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
+class SingleBinPackIterDatasetTest(parameterized.TestCase):
 
   def test_pack_single_feature(self):
     # 5 elements of variable sequence length.
     input_elements = [[1, 2, 3, 4], [5, 6], [11, 12, 13, 14], [7], [8]]
-    ds = source.SourceLazyMapDataset(input_elements)
+    ds = source.SourceMapDataset(input_elements)
     ds = ds.map(np.asarray)
     ds = ds.to_iter_dataset()
-    ds = packing.SingleBinPackLazyIterDataset(ds, length_struct=4)
+    ds = packing.SingleBinPackIterDataset(ds, length_struct=4)
     ds_iter = iter(ds)
 
     # Elements are tuples with (inputs, inputs_segment_ids, inputs_positions).
@@ -72,10 +72,10 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
   def test_pack_single_feature_remainder_is_padded(self):
     # 4 elements of variable sequence length.
     input_elements = [[1, 2, 3, 4], [5, 6], [11, 12, 13, 14], [7]]
-    ds = source.SourceLazyMapDataset(input_elements)
+    ds = source.SourceMapDataset(input_elements)
     ds = ds.map(np.asarray)
     ds = ds.to_iter_dataset()
-    ds = packing.SingleBinPackLazyIterDataset(ds, length_struct=4)
+    ds = packing.SingleBinPackIterDataset(ds, length_struct=4)
     ds_iter = iter(ds)
 
     # Elements are tuples with (inputs, inputs_segment_ids, inputs_positions).
@@ -120,10 +120,10 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
             "inputs": [8],
         },
     ]
-    ds = source.SourceLazyMapDataset(input_elements)
+    ds = source.SourceMapDataset(input_elements)
     ds = ds.map(lambda d: {k: np.asarray(v) for k, v in d.items()})
     ds = ds.to_iter_dataset()
-    ds = packing.SingleBinPackLazyIterDataset(ds, length_struct={"inputs": 4})
+    ds = packing.SingleBinPackIterDataset(ds, length_struct={"inputs": 4})
     ds_iter = iter(ds)
 
     expected_elements = [
@@ -182,10 +182,10 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
             "targets": [60],
         },
     ]
-    ds = source.SourceLazyMapDataset(input_elements)
+    ds = source.SourceMapDataset(input_elements)
     ds = ds.map(lambda d: {k: np.asarray(v) for k, v in d.items()})
     ds = ds.to_iter_dataset()
-    ds = packing.SingleBinPackLazyIterDataset(
+    ds = packing.SingleBinPackIterDataset(
         ds, length_struct={"inputs": 4, "targets": 4}
     )
     ds_iter = iter(ds)
@@ -256,10 +256,10 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
             "targets": [60],
         },
     ]
-    ds = source.SourceLazyMapDataset(input_elements)
+    ds = source.SourceMapDataset(input_elements)
     ds = ds.map(lambda d: {k: np.asarray(v) for k, v in d.items()})
     ds = ds.to_iter_dataset()
-    ds = packing.SingleBinPackLazyIterDataset(
+    ds = packing.SingleBinPackIterDataset(
         ds, length_struct={"inputs": 6, "targets": 4}
     )
     ds_iter = iter(ds)
@@ -310,10 +310,10 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
             "input_vectors": [[5, 6, 7]],
         },
     ]
-    ds = source.SourceLazyMapDataset(input_elements)
+    ds = source.SourceMapDataset(input_elements)
     ds = ds.map(lambda d: {k: np.asarray(v) for k, v in d.items()})
     ds = ds.to_iter_dataset()
-    ds = packing.SingleBinPackLazyIterDataset(
+    ds = packing.SingleBinPackIterDataset(
         ds, length_struct={"input_tokens": 3, "input_vectors": 3}
     )
     ds_iter = iter(ds)
@@ -342,12 +342,12 @@ class SingleBinPackLazyIterDatasetTest(parameterized.TestCase):
       np.testing.assert_array_equal(actual[feature], expected[feature])
 
   def test_checkpointing(self):
-    ds = lazy_dataset.RangeLazyMapDataset(1, 12).map(
+    ds = lazy_dataset.RangeMapDataset(1, 12).map(
         lambda x: {"x": 2**x + np.arange(x)}
     )
     ds = ds.shuffle(seed=3)
     ds = ds.repeat(None).to_iter_dataset()
-    ds = packing.SingleBinPackLazyIterDataset(ds, length_struct={"x": 8})
+    ds = packing.SingleBinPackIterDataset(ds, length_struct={"x": 8})
     ds_iter = iter(ds)
 
     max_steps = 10
@@ -381,8 +381,8 @@ def _common_test_body(
   expected_elements = [
       {k: np.asarray(v) for k, v in d.items()} for d in expected_elements
   ]
-  ld = packing.FirstFitPackLazyIterDataset(
-      source.SourceLazyMapDataset(input_elements).to_iter_dataset(),
+  ld = packing.FirstFitPackIterDataset(
+      source.SourceMapDataset(input_elements).to_iter_dataset(),
       num_packing_bins=num_packing_bins,
       length_struct=length_struct,
       shuffle_bins=shuffle_bins,
@@ -404,8 +404,8 @@ def _common_test_body(
     tree.map_structure_with_path(_check_equivalence, actual, expected)
 
 
-class FirstFitPackLazyIterDatasetTest(parameterized.TestCase):
-  """Tests for FirstFitPackLazyIterDataset."""
+class FirstFitPackIterDatasetTest(parameterized.TestCase):
+  """Tests for FirstFitPackIterDataset."""
 
   @parameterized.parameters(
       {"num_packing_bins": 1},
@@ -783,8 +783,8 @@ class FirstFitPackLazyIterDatasetTest(parameterized.TestCase):
         {k: np.asarray(v) for k, v in d.items()} for d in input_elements
     ]
     length_struct = {"inputs": 3, "targets": 3}
-    ld = packing.FirstFitPackLazyIterDataset(
-        source.SourceLazyMapDataset(input_elements).to_iter_dataset(),
+    ld = packing.FirstFitPackIterDataset(
+        source.SourceMapDataset(input_elements).to_iter_dataset(),
         num_packing_bins=2,
         length_struct=length_struct,
         shuffle_bins=True,
@@ -849,8 +849,8 @@ class FirstFitPackLazyIterDatasetTest(parameterized.TestCase):
         dict(row=rng.integers(0, 10, size=rng.integers(5, 30)))
         for _ in range(100)
     ]
-    ld = packing.FirstFitPackLazyIterDataset(
-        source.SourceLazyMapDataset(elements).repeat().to_iter_dataset(),
+    ld = packing.FirstFitPackIterDataset(
+        source.SourceMapDataset(elements).repeat().to_iter_dataset(),
         num_packing_bins=4,
         length_struct=dict(row=100),
         shuffle_bins=shuffle_bins,

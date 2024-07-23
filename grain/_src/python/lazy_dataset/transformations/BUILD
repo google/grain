@@ -3,7 +3,7 @@ package(default_visibility = ["//grain:__subpackages__"])
 licenses(["notice"])
 
 # Transformations that are considered core and are supported by the convenient API in
-# LazyMapDataset or LazyIterDataset.
+# MapDataset or IterDataset.
 filegroup(
     name = "core_transformations",
     srcs = [

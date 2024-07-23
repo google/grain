@@ -20,7 +20,7 @@ from grain._src.python.lazy_dataset.transformations import repeat
 from typing_extensions import override
 
 
-class EmptyLazyMapDataset(lazy_dataset.LazyMapDataset[int]):
+class EmptyMapDataset(lazy_dataset.MapDataset[int]):
 
   def __init__(self):
     super().__init__(parents=[])
@@ -34,43 +34,43 @@ class EmptyLazyMapDataset(lazy_dataset.LazyMapDataset[int]):
     raise IndexError("Index out of range")
 
 
-class RepeatLazyMapDatasetTest(absltest.TestCase):
+class RepeatMapDatasetTest(absltest.TestCase):
 
   def test_finite_num_epochs_changes_length(self):
-    ds = lazy_dataset.RangeLazyMapDataset(6)
+    ds = lazy_dataset.RangeMapDataset(6)
     self.assertLen(ds, 6)
-    ds = repeat.RepeatLazyMapDataset(ds, num_epochs=3)
+    ds = repeat.RepeatMapDataset(ds, num_epochs=3)
     self.assertLen(ds, 18)
 
   def test_finite_num_epochs_produces_expected_elements_when_iterated(self):
-    ds = lazy_dataset.RangeLazyMapDataset(4)
-    ds = repeat.RepeatLazyMapDataset(ds, num_epochs=3)
+    ds = lazy_dataset.RangeMapDataset(4)
+    ds = repeat.RepeatMapDataset(ds, num_epochs=3)
     self.assertSequenceEqual(list(ds), [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3])
 
   def test_infinite_epochs_sets_length_to_maxsize(self):
-    ds = lazy_dataset.RangeLazyMapDataset(6)
-    ds = repeat.RepeatLazyMapDataset(ds, num_epochs=None)
+    ds = lazy_dataset.RangeMapDataset(6)
+    ds = repeat.RepeatMapDataset(ds, num_epochs=None)
     self.assertLen(ds, sys.maxsize)
 
   def test_repeat_after_setting_infinite_epochs_raises_value_error(self):
-    ds = lazy_dataset.RangeLazyMapDataset(6)
-    ds = repeat.RepeatLazyMapDataset(ds, num_epochs=None)
+    ds = lazy_dataset.RangeMapDataset(6)
+    ds = repeat.RepeatMapDataset(ds, num_epochs=None)
     with self.assertRaises(ValueError):
-      repeat.RepeatLazyMapDataset(ds, num_epochs=2)
+      repeat.RepeatMapDataset(ds, num_epochs=2)
 
   def test_setting_zero_epochs_raises_value_error(self):
-    ds = lazy_dataset.RangeLazyMapDataset(6)
+    ds = lazy_dataset.RangeMapDataset(6)
     with self.assertRaises(ValueError):
-      repeat.RepeatLazyMapDataset(ds, num_epochs=0)
+      repeat.RepeatMapDataset(ds, num_epochs=0)
 
   def test_setting_negative_epochs_raises_value_error(self):
-    ds = lazy_dataset.RangeLazyMapDataset(6)
+    ds = lazy_dataset.RangeMapDataset(6)
     with self.assertRaises(ValueError):
-      repeat.RepeatLazyMapDataset(ds, num_epochs=-1)
+      repeat.RepeatMapDataset(ds, num_epochs=-1)
 
   def test_infinite_epochs_of_empty_dataset_keeps_length_zero(self):
-    ds = EmptyLazyMapDataset()
-    ds = repeat.RepeatLazyMapDataset(ds, num_epochs=None)
+    ds = EmptyMapDataset()
+    ds = repeat.RepeatMapDataset(ds, num_epochs=None)
     self.assertEmpty(ds)
 
 

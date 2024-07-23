@@ -23,12 +23,12 @@ Element = Any
 T = TypeVar("T")  # pylint: disable=invalid-name
 
 
-class FilterLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
-  """Filter LazyMapDataset."""
+class FilterMapDataset(lazy_dataset.MapDataset[T]):
+  """Filter MapDataset."""
 
   def __init__(
       self,
-      parent: lazy_dataset.LazyMapDataset[T],
+      parent: lazy_dataset.MapDataset[T],
       transform: Union[transforms.FilterTransform, Callable[[T], bool]],
   ):
     super().__init__(parent)
@@ -51,15 +51,15 @@ class FilterLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     return None
 
   def __str__(self) -> str:
-    return f"FilterLazyMapDataset(parent={self._parent})"
+    return f"FilterMapDataset(parent={self._parent})"
 
 
-class _FilterLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
+class _FilterDatasetIterator(lazy_dataset.DatasetIterator[T]):
   """Iterator that filters elements."""
 
   def __init__(
       self,
-      parent: lazy_dataset.LazyDatasetIterator,
+      parent: lazy_dataset.DatasetIterator,
       filter_fn: Callable[[T], bool],
   ):
     super().__init__()
@@ -86,15 +86,15 @@ class _FilterLazyDatasetIterator(lazy_dataset.LazyDatasetIterator[T]):
     self._parent.set_state(state)
 
   def __str__(self) -> str:
-    return f"FilterLazyDatasetIterator(parent={self._parent}"
+    return f"FilterDatasetIterator(parent={self._parent}"
 
 
-class FilterLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
-  """Filter transformation for LazyIterDatasets."""
+class FilterIterDataset(lazy_dataset.IterDataset[T]):
+  """Filter transformation for IterDatasets."""
 
   def __init__(
       self,
-      parent: lazy_dataset.LazyIterDataset,
+      parent: lazy_dataset.IterDataset,
       transform: Union[transforms.FilterTransform, Callable[[T], bool]],
   ):
     super().__init__(parent)
@@ -103,12 +103,12 @@ class FilterLazyIterDataset(lazy_dataset.LazyIterDataset[T]):
     else:
       self._filter_fn = transform
 
-  def __iter__(self) -> _FilterLazyDatasetIterator[T]:
+  def __iter__(self) -> _FilterDatasetIterator[T]:
     parent_iter = self._parent.__iter__()
-    return _FilterLazyDatasetIterator(
+    return _FilterDatasetIterator(
         parent_iter,
         filter_fn=self._filter_fn,
     )
 
   def __str__(self) -> str:
-    return f"FilterLazyIterDataset(parent={self._parent}"
+    return f"FilterIterDataset(parent={self._parent}"

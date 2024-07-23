@@ -14,27 +14,27 @@
 """LazyDataset base classes.
 
 There are 3 main classes:
-- `LazyMapDataset` define a dataset that supports efficient random access. It
+- `MapDataset` define a dataset that supports efficient random access. It
   has 3 important properties:
   - `__len__()` returns the length of a single epoch over the dataset.
   - `__getitem__()` will return the element at any given (positive) index. The
-    "true" length of a `LazyMapDataset` is infinite. Many implementations will
-    simply loop but exceptions exists (e.g. `ShuffleLazyMapDataset` will loop
+    "true" length of a `MapDataset` is infinite. Many implementations will
+    simply loop but exceptions exists (e.g. `ShuffleMapDataset` will loop
     with a different order).
   - The dataset is lazy and individual elements are only created when calling
-    `__getitem__()`. Most `LazyMapDatasets`s are statements and will not hold
+    `__getitem__()`. Most `MapDatasets`s are statements and will not hold
     elements.
-- `LazyIterDataset` defines a dataset that does not support efficient random
-  access. It can still be iterated over. A `LazyMapDataset` can be turned into
-  a `LazyIterDataset` but going from `LazyIterDataset` to `LazyMapDataset` might
+- `IterDataset` defines a dataset that does not support efficient random
+  access. It can still be iterated over. A `MapDataset` can be turned into
+  a `IterDataset` but going from `IterDataset` to `MapDataset` might
   be as expensive as materializing the whole dataset.
-  A `LazyIterDataset` can have known, unknown or infinite length.
-- `LazyDatasetIterator` defines a stateful iterator over `LazyIterDataset`. The
+  A `IterDataset` can have known, unknown or infinite length.
+- `DatasetIterator` defines a stateful iterator over `IterDataset`. The
   state of the iterator can be saved and restored.
 
 Using the interfaces defined in `collections.abc` you can think of
-LazyMapDataset as (infinite) Sequence, LazyIterDataset as Iterable and
-LazyDatasetIterator as Iterator.
+MapDataset as (infinite) Sequence, IterDataset as Iterable and
+DatasetIterator as Iterator.
 """
 
 from __future__ import annotations
@@ -71,44 +71,44 @@ S = TypeVar("S")
 _MAX_PREFETCH_THREADS = 1000
 
 
-class RegisterableLazyMapDatasetFn(Protocol):
-  """Interface for functions registered on all LazyMapDatasets."""
+class RegisterableMapDatasetFn(Protocol):
+  """Interface for functions registered on all MapDatasets."""
 
-  def __call__(self, dataset: LazyMapDataset, *args, **kwargs) -> Any:
+  def __call__(self, dataset: MapDataset, *args, **kwargs) -> Any:
     ...
 
 
-class RegisterableLazyIterDatasetFn(Protocol):
-  """Interface for functions registered on all LazyIterDatasets."""
+class RegisterableIterDatasetFn(Protocol):
+  """Interface for functions registered on all IterDatasets."""
 
-  def __call__(self, dataset: LazyIterDataset, *args, **kwargs) -> Any:
+  def __call__(self, dataset: IterDataset, *args, **kwargs) -> Any:
     ...
 
 
 class _MapDatasetMeta(abc.ABCMeta):
   """Metaclass for MapDataset containing factory transfromations."""
 
-  def source(cls, source: base.RandomAccessDataSource[T]) -> LazyMapDataset[T]:
+  def source(cls, source: base.RandomAccessDataSource[T]) -> MapDataset[T]:
     """Returns a dataset that wraps a data source supporting random access.
 
-    Example usage: `ds = LazyMapDataset.source(ArrayRecordDataSource(paths))`.
+    Example usage: `ds = MapDataset.source(ArrayRecordDataSource(paths))`.
 
     Args:
       source: Data source supporting efficient random access.
 
     Returns:
-      A LazyMapDataset that wraps the data source and allows to chain other
-      LazyMapDataset transformations.
+      A MapDataset that wraps the data source and allows to chain other
+      MapDataset transformations.
     """
     # Loaded lazily due to a circular dependency (lazy_dataset <-> source).
     # pylint: disable=g-import-not-at-top
     from grain._src.python.lazy_dataset.transformations import source as source_dataset
     # pylint: enable=g-import-not-at-top
-    return source_dataset.SourceLazyMapDataset(source)
+    return source_dataset.SourceMapDataset(source)
 
   def range(
       cls, start: int, stop: int | None = None, step: int = 1
-  ) -> LazyMapDataset[int]:
+  ) -> MapDataset[int]:
     """Returns a dataset with a range of integers.
 
     Input arguments are interpreted the same way as in Python built-in `range`:
@@ -126,13 +126,13 @@ class _MapDatasetMeta(abc.ABCMeta):
     Returns:
       A MapDataset with a range of integers.
     """
-    return RangeLazyMapDataset(start, stop, step)
+    return RangeMapDataset(start, stop, step)
 
   def mix(
       cls,
-      datasets: Sequence[LazyMapDataset[T]],
+      datasets: Sequence[MapDataset[T]],
       weights: Sequence[float] | None = None,
-  ) -> LazyMapDataset[T]:
+  ) -> MapDataset[T]:
     """Returns a dataset that mixes input datasets with the given weights.
 
     Length of the mixed dataset will be determined by the length of the shortest
@@ -148,20 +148,20 @@ class _MapDatasetMeta(abc.ABCMeta):
         specified.
 
     Returns:
-      A LazyMapDataset that represents a mixture of the input datasets according
+      A MapDataset that represents a mixture of the input datasets according
       to the given weights.
     """
     # Loaded lazily due to a circular dependency (lazy_dataset <-> mix).
     # pylint: disable=g-import-not-at-top
     from grain._src.python.lazy_dataset.transformations import mix
     # pylint: enable=g-import-not-at-top
-    return mix.MixedLazyMapDataset(parents=datasets, proportions=weights)
+    return mix.MixedMapDataset(parents=datasets, proportions=weights)
 
   def select_from_datasets(
       cls,
-      datasets: Sequence[LazyMapDataset[T]],
+      datasets: Sequence[MapDataset[T]],
       selection_map: base.DatasetSelectionMap,
-  ) -> LazyMapDataset[T]:
+  ) -> MapDataset[T]:
     """Returns a dataset selected from the inputs accoridng to the given map.
 
     Allows more general types of dataset mixing than `mix`.
@@ -173,40 +173,36 @@ class _MapDatasetMeta(abc.ABCMeta):
         dataset will be determined by the length of the `selection_map`.
 
     Returns:
-      A LazyMapDataset that represents a mixture of the input datasets according
+      A MapDataset that represents a mixture of the input datasets according
       to the given selection map.
     """
     # Loaded lazily due to a circular dependency (lazy_dataset <-> mix).
     # pylint: disable=g-import-not-at-top
     from grain._src.python.lazy_dataset.transformations import mix
     # pylint: enable=g-import-not-at-top
-    return mix.MixedLazyMapDataset(
-        parents=datasets, selection_map=selection_map
-    )
+    return mix.MixedMapDataset(parents=datasets, selection_map=selection_map)
 
 
-class LazyMapDataset(Sequence[T], metaclass=_MapDatasetMeta):
-  """Abstract base class for all LazyMapDataset classes."""
+class MapDataset(Sequence[T], metaclass=_MapDatasetMeta):
+  """Abstract base class for all MapDataset classes."""
 
-  _functions: dict[str, RegisterableLazyMapDatasetFn] = {}
-  """Functions registered on all LazyMapdatasets via a decoration."""
+  _functions: dict[str, RegisterableMapDatasetFn] = {}
+  """Functions registered on all MapDatasets via a decoration."""
 
-  def __init__(
-      self, parents: Union[LazyMapDataset, Sequence[LazyMapDataset]] = ()
-  ):
-    if isinstance(parents, LazyMapDataset):
+  def __init__(self, parents: Union[MapDataset, Sequence[MapDataset]] = ()):
+    if isinstance(parents, MapDataset):
       self._parents = (parents,)
     else:
       self._parents = tuple(parents)
-    usage_logging.log_event("LazyMapDataset", tag_3="PyGrain")
-    _api_usage_counter.Increment("LazyMapDataset")
+    usage_logging.log_event("MapDataset", tag_3="PyGrain")
+    _api_usage_counter.Increment("MapDataset")
 
   @property
-  def parents(self) -> Sequence[LazyMapDataset]:
+  def parents(self) -> Sequence[MapDataset]:
     return self._parents
 
   @property
-  def _parent(self) -> LazyMapDataset:
+  def _parent(self) -> MapDataset:
     assert len(self._parents) == 1
     return self._parents[0]
 
@@ -215,7 +211,7 @@ class LazyMapDataset(Sequence[T], metaclass=_MapDatasetMeta):
     """Returns the length of this dataset."""
 
   @overload
-  def __getitem__(self, index: builtins.slice) -> LazyMapDataset:
+  def __getitem__(self, index: builtins.slice) -> MapDataset:
     ...
 
   @overload
@@ -231,7 +227,7 @@ class LazyMapDataset(Sequence[T], metaclass=_MapDatasetMeta):
       batch_size: int,
       drop_remainder: bool = False,
       batch_fn: Callable[[Sequence[T]], S] | None = None,
-  ) -> "LazyMapDataset[S]":
+  ) -> "MapDataset[S]":
     """Returns a dataset of elements batched along a new first dimension.
 
     Dataset elements are expected to be PyTrees.
@@ -251,7 +247,7 @@ class LazyMapDataset(Sequence[T], metaclass=_MapDatasetMeta):
     # pylint: disable=g-import-not-at-top
     from grain._src.python.lazy_dataset.transformations import batch
     # pylint: enable=g-import-not-at-top
-    return batch.BatchLazyMapDataset(
+    return batch.BatchMapDataset(
         parent=self,
         batch_size=batch_size,
         drop_remainder=drop_remainder,
@@ -260,7 +256,7 @@ class LazyMapDataset(Sequence[T], metaclass=_MapDatasetMeta):
 
   def filter(
       self, transform: transforms.FilterTransform | Callable[[T], bool]
-  ) -> "LazyMapDataset[T]":
+  ) -> "MapDataset[T]":
     """Returns a dataset containing only the elements that match the filter.
 
     Accessing an element of the returned dataset using subscription (`ds[i]`)
@@ -274,7 +270,7 @@ class LazyMapDataset(Sequence[T], metaclass=_MapDatasetMeta):
     The following expressions are equivalent:
 
     - `ds = ds.filter(lambda x: x > 5)`
-    - `ds = FilterLazyMapDataset(ds, lambda x: x > 5)`
+    - `ds = FilterMapDataset(ds, lambda x: x > 5)`
 
     The `ds.filter(...)` version allows chaining multiple transformations, e.g.,
     `ds = ds.filter(...).map(...).filter(...)`
@@ -291,7 +287,7 @@ class LazyMapDataset(Sequence[T], metaclass=_MapDatasetMeta):
     # pylint: disable=g-import-not-at-top
     from grain._src.python.lazy_dataset.transformations import filter as filter_dataset
     # pylint: enable=g-import-not-at-top
-    return filter_dataset.FilterLazyMapDataset(parent=self, transform=transform)
+    return filter_dataset.FilterMapDataset(parent=self, transform=transform)
 
   def map(
       self,
@@ -302,13 +298,13 @@ class LazyMapDataset(Sequence[T], metaclass=_MapDatasetMeta):
           | Callable[[T, np.random.Generator], S]
       ),
       seed: Optional[int] = None,
-  ) -> "LazyMapDataset[S]":
+  ) -> "MapDataset[S]":
     """Returns a dataset containing the elements transformed by `transform`.
 
     The following expressions are equivalent:
 
     - `ds = ds.map(lambda x: x + 1)`
-    - `ds = MapLazyMapDataset(ds, lambda x: x + 1)`
+    - `ds = MapMapDataset(ds, lambda x: x + 1)`
 
     The `ds.map(...)` version allows chaining multiple transformations,
     e.g., `ds = ds.map(...).filter(...)`.
@@ -328,20 +324,20 @@ class LazyMapDataset(Sequence[T], metaclass=_MapDatasetMeta):
     # pylint: disable=g-import-not-at-top
     from grain._src.python.lazy_dataset.transformations import map as map_dataset
     # pylint: enable=g-import-not-at-top
-    return map_dataset.MapLazyMapDataset(
+    return map_dataset.MapMapDataset(
         parent=self, transform=transform, seed=seed
     )
 
   def map_with_index(
       self,
       transform: transforms.MapWithIndexTransform | Callable[[int, T], S],
-  ) -> "LazyMapDataset[S]":
+  ) -> "MapDataset[S]":
     """Returns a dataset containing the elements transformed by `transform`.
 
     The following expressions are equivalent:
 
     - `ds = ds.map_with_index(lambda i, x: i + 2 * x)`
-    - `ds = MapWithIndexLazyMapDataset(ds, lambda i, x: i + 2 * x)`
+    - `ds = MapWithIndexMapDataset(ds, lambda i, x: i + 2 * x)`
 
     The `ds.map_with_index(...)` version allows chaining multiple
     transformations, e.g., `ds = ds.map_with_index(...).filter(...)`.
@@ -359,17 +355,15 @@ class LazyMapDataset(Sequence[T], metaclass=_MapDatasetMeta):
     # pylint: disable=g-import-not-at-top
     from grain._src.python.lazy_dataset.transformations import map as map_dataset
     # pylint: enable=g-import-not-at-top
-    return map_dataset.MapWithIndexLazyMapDataset(
-        parent=self, transform=transform
-    )
+    return map_dataset.MapWithIndexMapDataset(parent=self, transform=transform)
 
-  def shuffle(self, *, seed: int) -> "LazyMapDataset[T]":
+  def shuffle(self, *, seed: int) -> "MapDataset[T]":
     """Returns a dataset containing the same elements but in a shuffled order.
 
     The following expressions are equivalent:
 
     - `ds = ds.shuffle(seed=42)`
-    - `ds = ShuffleLazyMapDataset(ds, seed=42)`
+    - `ds = ShuffleMapDataset(ds, seed=42)`
 
     The `ds.shuffle(...)` version allows chaining multiple transformations,
     e.g.,
@@ -386,16 +380,16 @@ class LazyMapDataset(Sequence[T], metaclass=_MapDatasetMeta):
     # pylint: disable=g-import-not-at-top
     from grain._src.python.lazy_dataset.transformations import shuffle
     # pylint: enable=g-import-not-at-top
-    return shuffle.ShuffleLazyMapDataset(parent=self, seed=seed)
+    return shuffle.ShuffleMapDataset(parent=self, seed=seed)
 
-  def slice(self, sl: builtins.slice) -> "LazyMapDataset[T]":
+  def slice(self, sl: builtins.slice) -> "MapDataset[T]":
     """Returns a dataset containing only the elements with indices in `sl`.
 
     The following expressions are equivalent:
 
     - `ds = ds.slice(slice(1, 10, 2))`
-    - `ds = SliceLazyMapDataset(ds, slice(1, 10, 2))`
-    - `ds = ds[1:10:2]` (for `LazyMapDataset`s supporting `slice` objects in
+    - `ds = SliceMapDataset(ds, slice(1, 10, 2))`
+    - `ds = ds[1:10:2]` (for `MapDataset`s supporting `slice` objects in
       subscriptions)
 
     The `ds.slice(...)` and `ds[...]` versions allow chaining multiple
@@ -414,7 +408,7 @@ class LazyMapDataset(Sequence[T], metaclass=_MapDatasetMeta):
     # pylint: disable=g-import-not-at-top
     from grain._src.python.lazy_dataset.transformations import slice as slice_dataset
     # pylint: enable=g-import-not-at-top
-    return slice_dataset.SliceLazyMapDataset(parent=self, sl=sl)
+    return slice_dataset.SliceMapDataset(parent=self, sl=sl)
 
   def random_map(
       self,
@@ -423,13 +417,13 @@ class LazyMapDataset(Sequence[T], metaclass=_MapDatasetMeta):
       ),
       *,
       seed: int,
-  ) -> "LazyMapDataset[S]":
+  ) -> "MapDataset[S]":
     """Returns a dataset containing the elements transformed by `transform`.
 
     The following expressions are equivalent:
 
     - `ds = ds.random_map(lambda x, rng: x + rng.integers(0, 100), seed=42)`
-    - `ds = MapLazyMapDataset(ds, lambda x, rng: x + rng.integers(0, 100),
+    - `ds = MapMapDataset(ds, lambda x, rng: x + rng.integers(0, 100),
         seed=42)`
 
     The `ds.random_map(...)` version allows chaining multiple transformations,
@@ -450,17 +444,17 @@ class LazyMapDataset(Sequence[T], metaclass=_MapDatasetMeta):
     # pylint: disable=g-import-not-at-top
     from grain._src.python.lazy_dataset.transformations import map as map_dataset
     # pylint: enable=g-import-not-at-top
-    return map_dataset.MapLazyMapDataset(
+    return map_dataset.MapMapDataset(
         parent=self, transform=transform, seed=seed
     )
 
-  def repeat(self, num_epochs: int | None = None) -> "LazyMapDataset[T]":
+  def repeat(self, num_epochs: int | None = None) -> "MapDataset[T]":
     """Returns a dataset repeating the elements of this dataset multiple times.
 
     Specifying `None` for `num_epochs` will repeat the dataset infinitely, and
     causes `len(ds)` to return `sys.maxsize`.
 
-    Since `LazyMapDataset`s allow accessing elements past `len(ds) - 1` anyway
+    Since `MapDataset`s allow accessing elements past `len(ds) - 1` anyway
     (and use the index modulo `len(ds)`), this transformation effectively only
     changes the length of the dataset.
 
@@ -469,7 +463,7 @@ class LazyMapDataset(Sequence[T], metaclass=_MapDatasetMeta):
     The following expressions are equivalent:
 
     - `ds = ds.repeat(42)`
-    - `ds = RepeatLazyMapDataset(ds, 42)`
+    - `ds = RepeatMapDataset(ds, 42)`
 
     The `ds.repeat(...)` version allows chaining multiple transformations, e.g.,
     `ds = ds.filter(...).map(...).repeat(...)`.
@@ -485,10 +479,10 @@ class LazyMapDataset(Sequence[T], metaclass=_MapDatasetMeta):
     # pylint: disable=g-import-not-at-top
     from grain._src.python.lazy_dataset.transformations import repeat
     # pylint: enable=g-import-not-at-top
-    return repeat.RepeatLazyMapDataset(parent=self, num_epochs=num_epochs)
+    return repeat.RepeatMapDataset(parent=self, num_epochs=num_epochs)
 
   @classmethod
-  def register_function(cls, name: str, function: RegisterableLazyMapDatasetFn):
+  def register_function(cls, name: str, function: RegisterableMapDatasetFn):
     if name in cls._functions:
       raise ValueError(
           f"Cannot register {function} as dataset function '{name}' since it's"
@@ -497,27 +491,27 @@ class LazyMapDataset(Sequence[T], metaclass=_MapDatasetMeta):
     cls._functions[name] = function
 
   def __getattr__(self, attribute_name: str):
-    if attribute_name in LazyMapDataset._functions:
-      return functools.partial(LazyMapDataset._functions[attribute_name], self)
+    if attribute_name in MapDataset._functions:
+      return functools.partial(MapDataset._functions[attribute_name], self)
     raise AttributeError(
         f"'{self.__class__.__name__}' object has no attribute"
         f" '{attribute_name}' :("
     )
 
-  def __iter__(self) -> LazyDatasetIterator[T]:
+  def __iter__(self) -> DatasetIterator[T]:
     return self.to_iter_dataset().__iter__()
 
   def to_iter_dataset(
       self,
       read_options: Optional[grain_options.ReadOptions] = None,
       allow_nones: bool = False,
-  ) -> LazyIterDataset[T]:
-    """Syntactic sugar to construct a LazyIterDataset."""
+  ) -> IterDataset[T]:
+    """Syntactic sugar to construct a IterDataset."""
     # Loaded lazily due to a circular dependency (lazy_dataset <-> prefetch).
     # pylint: disable=g-import-not-at-top
     from grain._src.python.lazy_dataset.transformations import prefetch
     # pylint: enable=g-import-not-at-top
-    return prefetch.PrefetchLazyIterDataset(
+    return prefetch.PrefetchIterDataset(
         self,
         read_options=read_options or grain_options.ReadOptions(),
         allow_nones=allow_nones,
@@ -529,9 +523,9 @@ class _IterDatasetMeta(abc.ABCMeta):
 
   def mix(
       cls,
-      datasets: Sequence[LazyIterDataset[T]],
+      datasets: Sequence[IterDataset[T]],
       weights: Sequence[float] | None = None,
-  ) -> LazyIterDataset[T]:
+  ) -> IterDataset[T]:
     """Returns a dataset that mixes input datasets with the given weights.
 
     Length of the mixed dataset will be determined by the length of the shortest
@@ -551,35 +545,35 @@ class _IterDatasetMeta(abc.ABCMeta):
     # pylint: disable=g-import-not-at-top
     from grain._src.python.lazy_dataset.transformations import mix
     # pylint: enable=g-import-not-at-top
-    return mix.MixedLazyIterDataset(parents=datasets, proportions=weights)
+    return mix.MixedIterDataset(parents=datasets, proportions=weights)
 
 
-class LazyIterDataset(Iterable[T], metaclass=_IterDatasetMeta):
-  """Abstract base class for all LazyIterDataset classes."""
+class IterDataset(Iterable[T], metaclass=_IterDatasetMeta):
+  """Abstract base class for all IterDataset classes."""
 
-  _functions: dict[str, RegisterableLazyIterDatasetFn] = {}
+  _functions: dict[str, RegisterableIterDatasetFn] = {}
 
   def __init__(
       self,
       parents: Union[
-          LazyMapDataset,
-          LazyIterDataset,
-          Sequence[Union[LazyMapDataset, LazyIterDataset]],
+          MapDataset,
+          IterDataset,
+          Sequence[Union[MapDataset, IterDataset]],
       ] = (),
   ):
-    if isinstance(parents, (LazyMapDataset, LazyIterDataset)):
+    if isinstance(parents, (MapDataset, IterDataset)):
       self._parents = (parents,)
     else:
       self._parents = tuple(parents)
-    usage_logging.log_event("LazyIterDataset", tag_3="PyGrain")
-    _api_usage_counter.Increment("LazyIterDataset")
+    usage_logging.log_event("IterDataset", tag_3="PyGrain")
+    _api_usage_counter.Increment("IterDataset")
 
   @property
-  def parents(self) -> Sequence[Union[LazyMapDataset, LazyIterDataset]]:
+  def parents(self) -> Sequence[Union[MapDataset, IterDataset]]:
     return self._parents
 
   @property
-  def _parent(self) -> Union[LazyMapDataset, LazyIterDataset]:
+  def _parent(self) -> Union[MapDataset, IterDataset]:
     assert len(self._parents) == 1, self._parents
     return self._parents[0]
 
@@ -588,7 +582,7 @@ class LazyIterDataset(Iterable[T], metaclass=_IterDatasetMeta):
       batch_size: int,
       drop_remainder: bool = False,
       batch_fn: Callable[[Sequence[T]], S] | None = None,
-  ) -> "LazyIterDataset[S]":
+  ) -> "IterDataset[S]":
     """Returns a dataset of elements batched along a new first dimension.
 
     Dataset elements are expected to be PyTrees.
@@ -608,7 +602,7 @@ class LazyIterDataset(Iterable[T], metaclass=_IterDatasetMeta):
     # pylint: disable=g-import-not-at-top
     from grain._src.python.lazy_dataset.transformations import batch
     # pylint: enable=g-import-not-at-top
-    return batch.BatchLazyIterDataset(
+    return batch.BatchIterDataset(
         parent=self,
         batch_size=batch_size,
         drop_remainder=drop_remainder,
@@ -617,12 +611,12 @@ class LazyIterDataset(Iterable[T], metaclass=_IterDatasetMeta):
 
   def filter(
       self, transform: transforms.FilterTransform | Callable[[T], bool]
-  ) -> "LazyIterDataset[T]":
+  ) -> "IterDataset[T]":
     """Returns a dataset containing only the elements that match the filter.
 
     `ds = ds.filter(lambda x: x > 5)`
     is equivalent to
-    `ds = FilterLazyIterDataset(ds, lambda x: x > 5)`
+    `ds = FilterIterDataset(ds, lambda x: x > 5)`
 
     Args:
       transform: Either a `FilterTransform` containing the `filter` method or a
@@ -636,9 +630,7 @@ class LazyIterDataset(Iterable[T], metaclass=_IterDatasetMeta):
     # pylint: disable=g-import-not-at-top
     from grain._src.python.lazy_dataset.transformations import filter as filter_dataset
     # pylint: enable=g-import-not-at-top
-    return filter_dataset.FilterLazyIterDataset(
-        parent=self, transform=transform
-    )
+    return filter_dataset.FilterIterDataset(parent=self, transform=transform)
 
   def map(
       self,
@@ -649,13 +641,13 @@ class LazyIterDataset(Iterable[T], metaclass=_IterDatasetMeta):
           | Callable[[T, np.random.Generator], S]
       ),
       seed: Optional[int] = None,
-  ) -> "LazyIterDataset[S]":
+  ) -> "IterDataset[S]":
     """Returns a dataset containing the elements transformed by `transform`.
 
     The following expressions are equivalent:
 
     - `ds = ds.map(lambda x: x + 1)`
-    - `ds = MapLazyIterDataset(ds, lambda x: x + 1)`
+    - `ds = MapIterDataset(ds, lambda x: x + 1)`
 
     The `ds.map(...)` version allows chaining multiple transformations,
     e.g., `ds = ds.map(...).filter(...)`.
@@ -675,7 +667,7 @@ class LazyIterDataset(Iterable[T], metaclass=_IterDatasetMeta):
     # pylint: disable=g-import-not-at-top
     from grain._src.python.lazy_dataset.transformations import map as map_dataset
     # pylint: enable=g-import-not-at-top
-    return map_dataset.MapLazyIterDataset(
+    return map_dataset.MapIterDataset(
         parent=self, transform=transform, seed=seed
     )
 
@@ -686,13 +678,13 @@ class LazyIterDataset(Iterable[T], metaclass=_IterDatasetMeta):
       ),
       *,
       seed: int,
-  ) -> "LazyIterDataset[S]":
+  ) -> "IterDataset[S]":
     """Returns a dataset containing the elements transformed by `transform`.
 
     The following expressions are equivalent:
 
     - `ds = ds.random_map(lambda x, rng: x + rng.integers(0, 100), seed=42)`
-    - `ds = MapLazyIterDataset(ds, lambda x, rng: x + rng.integers(0, 100),
+    - `ds = MapIterDataset(ds, lambda x, rng: x + rng.integers(0, 100),
         seed=42)`
 
     The `ds.random_map(...)` version allows chaining multiple transformations,
@@ -713,21 +705,21 @@ class LazyIterDataset(Iterable[T], metaclass=_IterDatasetMeta):
     # pylint: disable=g-import-not-at-top
     from grain._src.python.lazy_dataset.transformations import map as map_dataset
     # pylint: enable=g-import-not-at-top
-    return map_dataset.MapLazyIterDataset(
+    return map_dataset.MapIterDataset(
         parent=self, transform=transform, seed=seed
     )
 
   def _set_parent_maps_slice(self, sl: slice) -> None:
-    """Replaces LazyMapDataset-type parents with their sliced versions.
+    """Replaces MapDataset-type parents with their sliced versions.
 
-    Applies recursively for LazyIterDataset-type parents.
+    Applies recursively for IterDataset-type parents.
 
     Args:
      sl: slice to apply.
     """
     sliced_parents = []
     for parent in self._parents:
-      if isinstance(parent, LazyMapDataset):
+      if isinstance(parent, MapDataset):
         sliced_parents.append(parent.slice(sl))
       else:
         parent._set_parent_maps_slice(sl)  # pylint: disable=protected-access
@@ -736,7 +728,7 @@ class LazyIterDataset(Iterable[T], metaclass=_IterDatasetMeta):
 
   def prefetch(
       self, multiprocessing_options: grain_options.MultiprocessingOptions
-  ) -> "LazyIterDataset[T]":
+  ) -> "IterDataset[T]":
     """Returns a dataset prefetching the elements in multiple processes.
 
     Each of the processes will process a slice of the dataset after all
@@ -757,16 +749,16 @@ class LazyIterDataset(Iterable[T], metaclass=_IterDatasetMeta):
     # pylint: disable=g-import-not-at-top
     from grain._src.python.lazy_dataset.transformations import prefetch
     # pylint: enable=g-import-not-at-top
-    return prefetch.MultiprocessPrefetchLazyIterDataset(
+    return prefetch.MultiprocessPrefetchIterDataset(
         self, multiprocessing_options=multiprocessing_options
     )
 
   @abc.abstractmethod
-  def __iter__(self) -> LazyDatasetIterator[T]:
+  def __iter__(self) -> DatasetIterator[T]:
     """Returns an iterator for this dataset."""
 
   @classmethod
-  def register_function(cls, name: str, function: RegisterableLazyMapDatasetFn):
+  def register_function(cls, name: str, function: RegisterableMapDatasetFn):
     if name in cls._functions:
       raise ValueError(
           f"Cannot register {function} as dataset function '{name}' since it's"
@@ -775,8 +767,8 @@ class LazyIterDataset(Iterable[T], metaclass=_IterDatasetMeta):
     cls._functions[name] = function
 
   def __getattr__(self, attribute_name: str):
-    if attribute_name in LazyIterDataset._functions:
-      return functools.partial(LazyIterDataset._functions[attribute_name], self)
+    if attribute_name in IterDataset._functions:
+      return functools.partial(IterDataset._functions[attribute_name], self)
     raise AttributeError(
         f"'{self.__class__.__name__}' object has no attribute"
         f" '{attribute_name}' :("
@@ -784,29 +776,29 @@ class LazyIterDataset(Iterable[T], metaclass=_IterDatasetMeta):
 
 
 def lazy_map_dataset_function(name: str):
-  """Registers a function as a LazyMapDataset function."""
+  """Registers a function as a MapDataset function."""
 
   def _fn(cls):
-    LazyMapDataset.register_function(name=name, function=cls)
+    MapDataset.register_function(name=name, function=cls)
     return cls
 
   return _fn
 
 
 def lazy_iter_dataset_function(name: str):
-  """Registers a function as a LazyIterDataset function."""
+  """Registers a function as a IterDataset function."""
 
   def _fn(cls):
-    LazyIterDataset.register_function(name=name, function=cls)
+    IterDataset.register_function(name=name, function=cls)
     return cls
 
   return _fn
 
 
-class LazyDatasetIterator(Iterator[T], abc.ABC):
-  """Abstract base class for all LazyIterDataset iterator classes."""
+class DatasetIterator(Iterator[T], abc.ABC):
+  """Abstract base class for all IterDataset iterator classes."""
 
-  def __iter__(self) -> LazyDatasetIterator[T]:
+  def __iter__(self) -> DatasetIterator[T]:
     return self
 
   # __next__ abstract method since we inherit from Iterator[T].
@@ -820,7 +812,7 @@ class LazyDatasetIterator(Iterator[T], abc.ABC):
     """Sets the current state of the iterator."""
 
 
-class RangeLazyMapDataset(LazyMapDataset[int]):
+class RangeMapDataset(MapDataset[int]):
   """Range data source, similar to python range() function."""
 
   def __init__(self, start: int, stop: Optional[int] = None, step: int = 1):
@@ -845,8 +837,8 @@ class RangeLazyMapDataset(LazyMapDataset[int]):
       self,
       read_options: Optional[grain_options.ReadOptions] = None,
       allow_nones: bool = False,
-  ) -> LazyIterDataset[int]:
-    """Syntactic sugar to construct a LazyIterDataset."""
+  ) -> IterDataset[int]:
+    """Syntactic sugar to construct a IterDataset."""
     return super().to_iter_dataset(
         read_options=(
             read_options or grain_options.ReadOptions(prefetch_buffer_size=0)
@@ -857,12 +849,12 @@ class RangeLazyMapDataset(LazyMapDataset[int]):
 
 # Deprecated: This class should not be used for new code. It's used to
 # implement the stateless Sampler.
-# For new code the PrefetchLazyMapDataset should be used to implement sharding.
-class ShardLazyDataset(LazyMapDataset[T]):
+# For new code the PrefetchMapDataset should be used to implement sharding.
+class ShardLazyDataset(MapDataset[T]):
   """Shards the parent into consecutive pieces."""
 
   def __init__(
-      self, parent: LazyMapDataset[T], shard_options: sharding.ShardOptions
+      self, parent: MapDataset[T], shard_options: sharding.ShardOptions
   ):
     super().__init__(parent)
     self._start, self._end = sharding.even_split(

@@ -20,10 +20,10 @@ from grain._src.python.lazy_dataset import lazy_dataset
 T = TypeVar("T")
 
 
-class ZipLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
-  """Combines LazyMapDatasets of the same length to return a tuple of items."""
+class ZipMapDataset(lazy_dataset.MapDataset[T]):
+  """Combines MapDatasets of the same length to return a tuple of items."""
 
-  def __init__(self, parents: Iterable[lazy_dataset.LazyMapDataset[T]]):
+  def __init__(self, parents: Iterable[lazy_dataset.MapDataset[T]]):
     super().__init__([p for p in parents])
     lengths = [len(p) for p in self._parents]
     if not lengths:
@@ -41,4 +41,4 @@ class ZipLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
     return tuple(p[index] for p in self._parents)
 
   def __str__(self) -> str:
-    return f"ZipLazyMapDataset(parents={self._parents}"
+    return f"ZipMapDataset(parents={self._parents}"

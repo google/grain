@@ -20,43 +20,53 @@
 from ._src.python.lazy_dataset.base import DatasetSelectionMap
 from ._src.python.lazy_dataset.data_loader import DataLoader
 from ._src.python.lazy_dataset.lazy_dataset import (
-    LazyMapDataset,
-    LazyIterDataset,
-    LazyDatasetIterator,
-    RangeLazyMapDataset,
+    MapDataset as LazyMapDataset,
+    IterDataset as LazyIterDataset,
+    DatasetIterator as LazyDatasetIterator,
+    RangeMapDataset as RangeLazyMapDataset,
 )
 from ._src.python.lazy_dataset.transformations.batch import (
-    BatchLazyMapDataset,
-    BatchLazyIterDataset,
+    BatchMapDataset as BatchLazyMapDataset,
+    BatchIterDataset as BatchLazyIterDataset,
 )
 from ._src.python.lazy_dataset.transformations.filter import (
-    FilterLazyMapDataset,
-    FilterLazyIterDataset,
+    FilterMapDataset as FilterLazyMapDataset,
+    FilterIterDataset as FilterLazyIterDataset,
 )
-from ._src.python.lazy_dataset.transformations.flatmap import FlatMapLazyMapDataset
+from ._src.python.lazy_dataset.transformations.flatmap import (
+    FlatMapMapDataset as FlatMapLazyMapDataset,
+)
 from ._src.python.lazy_dataset.transformations.map import (
-    MapLazyMapDataset,
-    MapLazyIterDataset,
+    MapMapDataset as MapLazyMapDataset,
+    MapIterDataset as MapLazyIterDataset,
     RngPool,
 )
 from ._src.python.lazy_dataset.transformations.mix import (
-    ConcatenateLazyMapDataset,
-    MixedLazyMapDataset,
-    MixedLazyIterDataset,
+    ConcatenateMapDataset as ConcatenateLazyMapDataset,
+    MixedMapDataset as MixedLazyMapDataset,
+    MixedIterDataset as MixedLazyIterDataset,
 )
 from ._src.python.lazy_dataset.transformations.packing import (
-    FirstFitPackLazyIterDataset,
-    SingleBinPackLazyIterDataset,
+    FirstFitPackIterDataset as FirstFitPackLazyIterDataset,
+    SingleBinPackIterDataset as SingleBinPackLazyIterDataset,
 )
-from ._src.python.lazy_dataset.transformations.prefetch import ThreadPrefetchLazyIterDataset
-from ._src.python.lazy_dataset.transformations.repeat import RepeatLazyMapDataset
+from ._src.python.lazy_dataset.transformations.prefetch import (
+    ThreadPrefetchIterDataset as ThreadPrefetchLazyIterDataset,
+)
+from ._src.python.lazy_dataset.transformations.repeat import (
+    RepeatMapDataset as RepeatLazyMapDataset,
+)
 from ._src.python.lazy_dataset.transformations.shuffle import (
-    ShuffleLazyMapDataset,
-    WindowShuffleLazyMapDataset,
+    ShuffleMapDataset as ShuffleLazyMapDataset,
+    WindowShuffleMapDataset as WindowShuffleLazyMapDataset,
 )
-from ._src.python.lazy_dataset.transformations.slice import SliceLazyMapDataset
+from ._src.python.lazy_dataset.transformations.slice import (
+    SliceMapDataset as SliceLazyMapDataset,
+)
 from ._src.python.lazy_dataset.transformations.source import (
-    SourceLazyMapDataset,
+    SourceMapDataset as SourceLazyMapDataset,
     log_lineage_for_sources,
 )
-from ._src.python.lazy_dataset.transformations.zip import ZipLazyMapDataset
+from ._src.python.lazy_dataset.transformations.zip import (
+    ZipMapDataset as ZipLazyMapDataset,
+)

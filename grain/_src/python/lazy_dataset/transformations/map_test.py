@@ -72,20 +72,20 @@ class AddIndexTransform(transforms.MapWithIndexTransform):
     return (index, element)
 
 
-class MapLazyMapDatasetTest(parameterized.TestCase):
+class MapMapDatasetTest(parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.range_ds = lazy_dataset.RangeLazyMapDataset(0, 10)
+    self.range_ds = lazy_dataset.RangeMapDataset(0, 10)
 
   def test_map_size(self):
-    map_ds_no_transform = ldmap.MapLazyMapDataset(
+    map_ds_no_transform = ldmap.MapMapDataset(
         self.range_ds, MapWithNoTransform()
     )
-    map_ds_with_transform = ldmap.MapLazyMapDataset(
+    map_ds_with_transform = ldmap.MapMapDataset(
         self.range_ds, MapWithTransform()
     )
-    map_ds_with_random_transform = ldmap.MapLazyMapDataset(
+    map_ds_with_random_transform = ldmap.MapMapDataset(
         self.range_ds, RandomMapWithTransform(), seed=0
     )
     self.assertLen(map_ds_no_transform, len(self.range_ds))
@@ -98,12 +98,12 @@ class MapLazyMapDatasetTest(parameterized.TestCase):
       RandomMapWithTransform,
   )
   def test_map_picklable(self, map_cls):
-    ds = ldmap.MapLazyMapDataset(self.range_ds, map_cls(), seed=0)
+    ds = ldmap.MapMapDataset(self.range_ds, map_cls(), seed=0)
     ds = cloudpickle.loads(cloudpickle.dumps(ds))
     self.assertLen(ds, len(self.range_ds))
 
   def test_map_data_no_transform(self):
-    map_ds_no_transform = ldmap.MapLazyMapDataset(
+    map_ds_no_transform = ldmap.MapMapDataset(
         self.range_ds, MapWithNoTransform()
     )
     expected_data = [i for i in range(10)]
@@ -113,7 +113,7 @@ class MapLazyMapDatasetTest(parameterized.TestCase):
     self.assertEqual(expected_data, actual_data)
 
   def test_map_data_with_transform(self):
-    map_ds_with_transform = ldmap.MapLazyMapDataset(
+    map_ds_with_transform = ldmap.MapMapDataset(
         self.range_ds, MapWithTransform()
     )
     expected_data = [i + 1 for i in range(10)]
@@ -123,7 +123,7 @@ class MapLazyMapDatasetTest(parameterized.TestCase):
     self.assertEqual(expected_data, actual_data)
 
   def test_random_map_data_with_transform(self):
-    map_ds_with_random_transform = ldmap.MapLazyMapDataset(
+    map_ds_with_random_transform = ldmap.MapMapDataset(
         self.range_ds, RandomMapWithTransform(), seed=0
     )
     expected_data = [_ for _ in range(10)]
@@ -134,17 +134,15 @@ class MapLazyMapDatasetTest(parameterized.TestCase):
     np.testing.assert_almost_equal(expected_data, actual_data, decimal=1)
 
 
-class MapLazyIterDatasetTest(absltest.TestCase):
+class MapIterDatasetTest(absltest.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.range_iter_ds = lazy_dataset.RangeLazyMapDataset(
-        0, 10
-    ).to_iter_dataset()
+    self.range_iter_ds = lazy_dataset.RangeMapDataset(0, 10).to_iter_dataset()
 
   def test_map_data_no_transform(self):
     map_no_transform_iter_ds = iter(
-        ldmap.MapLazyIterDataset(self.range_iter_ds, MapWithNoTransform())
+        ldmap.MapIterDataset(self.range_iter_ds, MapWithNoTransform())
     )
     expected_data = [_ for _ in range(10)]
     actual_data = [next(map_no_transform_iter_ds) for _ in range(10)]
@@ -152,7 +150,7 @@ class MapLazyIterDatasetTest(absltest.TestCase):
 
   def test_map_data_with_transform(self):
     map_with_transform_iter_ds = iter(
-        ldmap.MapLazyIterDataset(self.range_iter_ds, MapWithTransform())
+        ldmap.MapIterDataset(self.range_iter_ds, MapWithTransform())
     )
     expected_data = [i + 1 for i in range(10)]
     actual_data = [next(map_with_transform_iter_ds) for _ in range(10)]
@@ -160,7 +158,7 @@ class MapLazyIterDatasetTest(absltest.TestCase):
 
   def test_random_map_data_with_transform(self):
     map_with_random_transform_iter_ds = iter(
-        ldmap.MapLazyIterDataset(
+        ldmap.MapIterDataset(
             self.range_iter_ds, RandomMapWithTransform(), seed=0
         )
     )
@@ -173,7 +171,7 @@ class MapLazyIterDatasetTest(absltest.TestCase):
     # check if elements are reproducible for multiple runs
     for _ in range(10):
       map_with_random_transform_iter_ds = iter(
-          ldmap.MapLazyIterDataset(
+          ldmap.MapIterDataset(
               self.range_iter_ds, RandomMapWithDeterminismTransform(), seed=42
           )
       )
@@ -182,29 +180,25 @@ class MapLazyIterDatasetTest(absltest.TestCase):
 
   def test_map_past_one_epoch_raises_exception(self):
     map_no_transform_iter_ds = iter(
-        ldmap.MapLazyIterDataset(self.range_iter_ds, MapWithNoTransform())
+        ldmap.MapIterDataset(self.range_iter_ds, MapWithNoTransform())
     )
     with self.assertRaises(StopIteration):
       next(map_no_transform_iter_ds)
       _ = [next(map_no_transform_iter_ds) for _ in range(20)]
 
 
-class MapWithIndexLazyMapDatasetTest(absltest.TestCase):
+class MapWithIndexMapDatasetTest(absltest.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.range_ds = lazy_dataset.RangeLazyMapDataset(3, 6)
+    self.range_ds = lazy_dataset.RangeMapDataset(3, 6)
 
   def test_length(self):
-    map_ds = ldmap.MapWithIndexLazyMapDataset(
-        self.range_ds, AddIndexTransform()
-    )
+    map_ds = ldmap.MapWithIndexMapDataset(self.range_ds, AddIndexTransform())
     self.assertLen(map_ds, len(self.range_ds))
 
   def test_getitem(self):
-    map_ds = ldmap.MapWithIndexLazyMapDataset(
-        self.range_ds, AddIndexTransform()
-    )
+    map_ds = ldmap.MapWithIndexMapDataset(self.range_ds, AddIndexTransform())
     self.assertEqual(map_ds[0], (0, 3))
     self.assertEqual(map_ds[1], (1, 4))
     self.assertEqual(map_ds[2], (2, 5))

@@ -18,9 +18,9 @@ import itertools
 
 from absl.testing import absltest
 from grain._src.core.transforms import FilterTransform
-from grain._src.python.lazy_dataset.lazy_dataset import RangeLazyMapDataset
-from grain._src.python.lazy_dataset.transformations.filter import FilterLazyIterDataset
-from grain._src.python.lazy_dataset.transformations.filter import FilterLazyMapDataset
+from grain._src.python.lazy_dataset.lazy_dataset import RangeMapDataset
+from grain._src.python.lazy_dataset.transformations.filter import FilterIterDataset
+from grain._src.python.lazy_dataset.transformations.filter import FilterMapDataset
 
 
 @dataclasses.dataclass(frozen=True)
@@ -44,18 +44,16 @@ class FilterEvenElementsOnly(FilterTransform):
     return element % 2
 
 
-class FilterLazyMapDatasetTest(absltest.TestCase):
+class FilterMapDatasetTest(absltest.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.range_ds = RangeLazyMapDataset(0, 10)
+    self.range_ds = RangeMapDataset(0, 10)
 
   def test_filter_size(self):
-    filter_no_elts_ds = FilterLazyMapDataset(self.range_ds, FilterNoElements())
-    filter_all_elts_ds = FilterLazyMapDataset(
-        self.range_ds, FilterAllElements()
-    )
-    filter_even_elts_ds = FilterLazyMapDataset(
+    filter_no_elts_ds = FilterMapDataset(self.range_ds, FilterNoElements())
+    filter_all_elts_ds = FilterMapDataset(self.range_ds, FilterAllElements())
+    filter_even_elts_ds = FilterMapDataset(
         self.range_ds, FilterEvenElementsOnly()
     )
     self.assertLen(filter_no_elts_ds, len(self.range_ds))
@@ -63,15 +61,13 @@ class FilterLazyMapDatasetTest(absltest.TestCase):
     self.assertLen(filter_even_elts_ds, len(self.range_ds))
 
   def test_filter_no_elements(self):
-    filter_no_elts_ds = FilterLazyMapDataset(self.range_ds, FilterNoElements())
+    filter_no_elts_ds = FilterMapDataset(self.range_ds, FilterNoElements())
     expected_data = [_ for _ in range(10)]
     actual_data = [filter_no_elts_ds[i] for i in range(len(filter_no_elts_ds))]
     self.assertEqual(expected_data, actual_data)
 
   def test_filter_all_elements(self):
-    filter_all_elts_ds = FilterLazyMapDataset(
-        self.range_ds, FilterAllElements()
-    )
+    filter_all_elts_ds = FilterMapDataset(self.range_ds, FilterAllElements())
     expected_data = [None for _ in range(10)]
     actual_data = [
         filter_all_elts_ds[i] for i in range(len(filter_all_elts_ds))
@@ -79,7 +75,7 @@ class FilterLazyMapDatasetTest(absltest.TestCase):
     self.assertEqual(expected_data, actual_data)
 
   def test_filter_even_elements_only(self):
-    filter_even_elts_ds = FilterLazyMapDataset(
+    filter_even_elts_ds = FilterMapDataset(
         self.range_ds, FilterEvenElementsOnly()
     )
     expected_data = list(
@@ -91,15 +87,15 @@ class FilterLazyMapDatasetTest(absltest.TestCase):
     self.assertEqual(expected_data, actual_data)
 
 
-class FilterLazyIterDatasetTest(absltest.TestCase):
+class FilterIterDatasetTest(absltest.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.range_iter_ds = RangeLazyMapDataset(0, 10).to_iter_dataset()
+    self.range_iter_ds = RangeMapDataset(0, 10).to_iter_dataset()
 
   def test_filter_no_elements(self):
     filter_no_elts_iter_ds = iter(
-        FilterLazyIterDataset(self.range_iter_ds, FilterNoElements())
+        FilterIterDataset(self.range_iter_ds, FilterNoElements())
     )
     expected_data = [_ for _ in range(10)]
     actual_data = [next(filter_no_elts_iter_ds) for _ in range(10)]
@@ -107,14 +103,14 @@ class FilterLazyIterDatasetTest(absltest.TestCase):
 
   def test_filter_all_elements(self):
     filter_all_elts_iter_ds = iter(
-        FilterLazyIterDataset(self.range_iter_ds, FilterAllElements())
+        FilterIterDataset(self.range_iter_ds, FilterAllElements())
     )
     with self.assertRaises(StopIteration):
       next(filter_all_elts_iter_ds)
 
   def test_filter_even_elements_only(self):
     filter_even_elts_iter_ds = iter(
-        FilterLazyIterDataset(self.range_iter_ds, FilterEvenElementsOnly())
+        FilterIterDataset(self.range_iter_ds, FilterEvenElementsOnly())
     )
     expected_data = [_ for _ in range(1, 10, 2)]
     actual_data = [next(filter_even_elts_iter_ds) for _ in range(5)]

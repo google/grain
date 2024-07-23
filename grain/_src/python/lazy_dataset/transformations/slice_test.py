@@ -22,7 +22,7 @@ import grain._src.python.lazy_dataset.transformations.slice as slice_ds
 from typing_extensions import override
 
 
-class EmptyLazyMapDataset(lazy_dataset.LazyMapDataset[int]):
+class EmptyMapDataset(lazy_dataset.MapDataset[int]):
 
   def __init__(self):
     super().__init__(parents=[])
@@ -36,7 +36,7 @@ class EmptyLazyMapDataset(lazy_dataset.LazyMapDataset[int]):
     raise IndexError("Index out of range")
 
 
-class SliceLazyMapDatasetTest(parameterized.TestCase):
+class SliceMapDatasetTest(parameterized.TestCase):
 
   @parameterized.parameters(
       (0, 1, 20),
@@ -48,17 +48,17 @@ class SliceLazyMapDatasetTest(parameterized.TestCase):
       (30, 100, 0),
   )
   def test_len(self, start: int, step: int, expected_len: int):
-    ds = lazy_dataset.RangeLazyMapDataset(20)
+    ds = lazy_dataset.RangeMapDataset(20)
     sl = slice(start, 20, step)
-    range_ds_for_process = slice_ds.SliceLazyMapDataset(ds, sl)
+    range_ds_for_process = slice_ds.SliceMapDataset(ds, sl)
     self.assertLen(range_ds_for_process, expected_len)
 
   @parameterized.parameters(
       itertools.product(range(-8, 8), range(-9, 8), [-2, -1, 1, 2])
   )
   def test_getitem(self, start: int, stop: int, step: int):
-    ds = lazy_dataset.RangeLazyMapDataset(20)
-    ds = slice_ds.SliceLazyMapDataset(ds, slice(start, stop, step))
+    ds = lazy_dataset.RangeMapDataset(20)
+    ds = slice_ds.SliceMapDataset(ds, slice(start, stop, step))
     ds_items = [ds[i] for i in range(len(ds))]
     self.assertSequenceEqual(ds_items, list(range(20))[start:stop:step])
 
@@ -66,7 +66,7 @@ class SliceLazyMapDatasetTest(parameterized.TestCase):
       itertools.product(range(-8, 8), range(-9, 8), [-2, -1, 1, 2])
   )
   def test_getitem_slice(self, start: int, stop: int, step: int):
-    ds = lazy_dataset.RangeLazyMapDataset(20)
+    ds = lazy_dataset.RangeMapDataset(20)
     ds = ds[start:stop:step]
     ds_items = [ds[i] for i in range(len(ds))]
     self.assertSequenceEqual(ds_items, list(range(20))[start:stop:step])
@@ -75,29 +75,29 @@ class SliceLazyMapDatasetTest(parameterized.TestCase):
       itertools.product(range(-8, 8), range(-9, 8), [-2, -1, 1, 2])
   )
   def test_iter(self, start: int, stop: int, step: int):
-    ds = lazy_dataset.RangeLazyMapDataset(20)
-    ds = slice_ds.SliceLazyMapDataset(ds, slice(start, stop, step))
+    ds = lazy_dataset.RangeMapDataset(20)
+    ds = slice_ds.SliceMapDataset(ds, slice(start, stop, step))
     ds_iter = iter(ds)
     ds_items = list(ds_iter)
     self.assertSequenceEqual(ds_items, list(range(20))[start:stop:step])
 
   def test_slice_of_empty_dataset_is_empty(self):
-    ds = EmptyLazyMapDataset()
-    ds = slice_ds.SliceLazyMapDataset(ds, slice(0, 10))
+    ds = EmptyMapDataset()
+    ds = slice_ds.SliceMapDataset(ds, slice(0, 10))
     self.assertEmpty(ds)
 
   def test_accessing_items_beyond_len_minus_one_succeeds(self):
-    ds = lazy_dataset.RangeLazyMapDataset(20)
-    ds = slice_ds.SliceLazyMapDataset(ds, slice(5))  # 0, 1, 2, 3, 4
+    ds = lazy_dataset.RangeMapDataset(20)
+    ds = slice_ds.SliceMapDataset(ds, slice(5))  # 0, 1, 2, 3, 4
     self.assertLen(ds, 5)
     self.assertEqual(ds[5], 0)
     self.assertEqual(ds[13], 3)
     self.assertEqual(ds[42], 2)
 
   def test_composing_slices_contains_correct_elements(self):
-    ds = lazy_dataset.RangeLazyMapDataset(20)
-    ds = slice_ds.SliceLazyMapDataset(ds, slice(0, 15, 3))  # 0, 3, 6, 9, 12
-    ds = slice_ds.SliceLazyMapDataset(ds, slice(0, 20, 2))  # 0, 6, 12
+    ds = lazy_dataset.RangeMapDataset(20)
+    ds = slice_ds.SliceMapDataset(ds, slice(0, 15, 3))  # 0, 3, 6, 9, 12
+    ds = slice_ds.SliceMapDataset(ds, slice(0, 20, 2))  # 0, 6, 12
     self.assertSequenceEqual(list(ds), [0, 6, 12])
 
 

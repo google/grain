@@ -20,7 +20,7 @@ from grain._src.python.lazy_dataset import lazy_dataset
 T = TypeVar("T")
 
 
-class RepeatLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
+class RepeatMapDataset(lazy_dataset.MapDataset[T]):
   """Repeats the underlying dataset for num_epochs.
 
   This effectively just changes the length, which indicates the size of a single
@@ -30,7 +30,7 @@ class RepeatLazyMapDataset(lazy_dataset.LazyMapDataset[T]):
 
   def __init__(
       self,
-      parent: lazy_dataset.LazyMapDataset[T],
+      parent: lazy_dataset.MapDataset[T],
       num_epochs: Optional[int] = None,
   ):
     super().__init__(parent)
