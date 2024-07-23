@@ -575,9 +575,9 @@ class LazyDatasetTest(parameterized.TestCase):
   def test_seed_is_different_with_chained_transforms(self):
     seed = 129
     ds = Source15IntsFrom0IterDataset().seed(seed).map(AddRandomInteger())
-    map_seed1 = ds._seed
+    map_seed1 = ds._seed  # pytype: disable=attribute-error
     ds = ds.map(AddRandomInteger())
-    map_seed2 = ds._seed
+    map_seed2 = ds._seed  # pytype: disable=attribute-error
     self.assertNotEqual(map_seed1, map_seed2)
 
   def test_seed_with_shuffle_and_map(self):

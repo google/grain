@@ -43,7 +43,7 @@ import abc
 import builtins
 from collections.abc import Callable, Iterable, Iterator, Sequence
 import functools
-from typing import Any, Optional, Protocol, TypeVar, Union, overload
+from typing import Any, Optional, TypeVar, Union, overload
 
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import sharding
@@ -67,22 +67,6 @@ _api_usage_counter = monitoring.Counter(
 
 T = TypeVar("T")
 S = TypeVar("S")
-
-_MAX_PREFETCH_THREADS = 1000
-
-
-class RegisterableMapDatasetFn(Protocol):
-  """Interface for functions registered on all MapDatasets."""
-
-  def __call__(self, dataset: MapDataset, *args, **kwargs) -> Any:
-    ...
-
-
-class RegisterableIterDatasetFn(Protocol):
-  """Interface for functions registered on all IterDatasets."""
-
-  def __call__(self, dataset: IterDataset, *args, **kwargs) -> Any:
-    ...
 
 
 class _SeededDataset(abc.ABC):
@@ -217,9 +201,6 @@ class _MapDatasetMeta(abc.ABCMeta):
 
 class MapDataset(_SeededDataset, Sequence[T], metaclass=_MapDatasetMeta):
   """Abstract base class for all MapDataset classes."""
-
-  _functions: dict[str, RegisterableMapDatasetFn] = {}
-  """Functions registered on all MapDatasets via a decoration."""
 
   def __init__(self, parents: Union[MapDataset, Sequence[MapDataset]] = ()):
     super().__init__()
@@ -574,23 +555,6 @@ class MapDataset(_SeededDataset, Sequence[T], metaclass=_MapDatasetMeta):
     # pylint: enable=g-import-not-at-top
     return repeat.RepeatMapDataset(parent=self, num_epochs=num_epochs)
 
-  @classmethod
-  def register_function(cls, name: str, function: RegisterableMapDatasetFn):
-    if name in cls._functions:
-      raise ValueError(
-          f"Cannot register {function} as dataset function '{name}' since it's"
-          f" already taken by {cls._functions[name]}."
-      )
-    cls._functions[name] = function
-
-  def __getattr__(self, attribute_name: str):
-    if attribute_name in MapDataset._functions:
-      return functools.partial(MapDataset._functions[attribute_name], self)
-    raise AttributeError(
-        f"'{self.__class__.__name__}' object has no attribute"
-        f" '{attribute_name}' :("
-    )
-
   def __iter__(self) -> DatasetIterator[T]:
     return self.to_iter_dataset().__iter__()
 
@@ -643,8 +607,6 @@ class _IterDatasetMeta(abc.ABCMeta):
 
 class IterDataset(_SeededDataset, Iterable[T], metaclass=_IterDatasetMeta):
   """Abstract base class for all IterDataset classes."""
-
-  _functions: dict[str, RegisterableIterDatasetFn] = {}
 
   def __init__(
       self,
@@ -908,43 +870,6 @@ class IterDataset(_SeededDataset, Iterable[T], metaclass=_IterDatasetMeta):
   @abc.abstractmethod
   def __iter__(self) -> DatasetIterator[T]:
     """Returns an iterator for this dataset."""
-
-  @classmethod
-  def register_function(cls, name: str, function: RegisterableMapDatasetFn):
-    if name in cls._functions:
-      raise ValueError(
-          f"Cannot register {function} as dataset function '{name}' since it's"
-          f" already taken by {cls._functions[name]}."
-      )
-    cls._functions[name] = function
-
-  def __getattr__(self, attribute_name: str):
-    if attribute_name in IterDataset._functions:
-      return functools.partial(IterDataset._functions[attribute_name], self)
-    raise AttributeError(
-        f"'{self.__class__.__name__}' object has no attribute"
-        f" '{attribute_name}' :("
-    )
-
-
-def lazy_map_dataset_function(name: str):
-  """Registers a function as a MapDataset function."""
-
-  def _fn(cls):
-    MapDataset.register_function(name=name, function=cls)
-    return cls
-
-  return _fn
-
-
-def lazy_iter_dataset_function(name: str):
-  """Registers a function as a IterDataset function."""
-
-  def _fn(cls):
-    IterDataset.register_function(name=name, function=cls)
-    return cls
-
-  return _fn
 
 
 class DatasetIterator(Iterator[T], abc.ABC):
