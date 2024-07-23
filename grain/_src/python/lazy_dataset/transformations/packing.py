@@ -249,17 +249,22 @@ class SingleBinPackLazyDatasetIterator(lazy_dataset.LazyDatasetIterator):
 class FirstFitPackLazyIterDataset(lazy_dataset.LazyIterDataset):
   """Implements first-fit packing of sequences.
 
-  Packing sequences, compared to concat-and-split, avoids splitting sequences
-  but adds padding. Larger number of packing bins reduce the amount of padding.
+  Packing, compared to concat-and-split, avoids splitting sequences by padding
+  instead. Larger number of packing bins reduce the amount of padding. If the
+  number of bins is large, this can cause epoch leakage (data points from
+  multiple epochs getting packed together).
 
-  This uses a simple first-fit packing algorithm that creates N bins and add
-  elements (in the order coming from the parent) to the first bin that has
-  enough. Once an element doesn't fit all bins are emited as elements and N new
-  empty bins are created.
-  This is easy to make deterministic but has the downside that some bins
-  (usually the botton bins) have a lot of padding. To avoid this pattern we add
-  an option to shuffle the bins before emitting. If the number of bins is large
-  and multiple epochs are seen, this can cause epoch leakage.
+  This uses a simple first-fit packing algorithm that:
+  1. Creates N bins.
+  2. Adds elements (in the order coming from the parent) to the first bin that
+  has enough space.
+  3. Once an element doesn't fit, emits all N bins as elements.
+  4. (optional) Shuffles bins.
+  5. Loops back to 1 and starts with the element that didn't fit.
+
+  This iterator is easy to make deterministic, but it has the downside that some
+  bins (usually the bottom bins) have a lot of padding. To avoid this pattern,
+  we add an option to shuffle the bins before emitting.
   """
 
   def __init__(
