@@ -40,6 +40,18 @@ class ShuffleMapDatasetTest(parameterized.TestCase):
     elements = [next(ds_iter) for _ in range(400)]
     self.assertLen(elements, 400)
 
+  def test_default_seed(self):
+    seed = 42
+    ds1 = lazy_dataset.RangeMapDataset(400).seed(seed)
+    ds1 = shuffle.ShuffleMapDataset(ds1)
+    ds2 = lazy_dataset.RangeMapDataset(400).seed(seed)
+    ds2 = shuffle.ShuffleMapDataset(ds2)
+    self.assertEqual(list(ds1), list(ds2))
+
+  def test_raises_with_no_seed(self):
+    with self.assertRaises(ValueError):
+      shuffle.ShuffleMapDataset(lazy_dataset.RangeMapDataset(400))
+
   @parameterized.parameters(-1000, -1, 2**32, 2**32 + 1, 2**64 + 1)
   def test_init_with_invalid_seed_returns_value_error(self, seed):
     with self.assertRaises(ValueError):

@@ -13,6 +13,8 @@
 # limitations under the License.
 """Implements global shuffle transformation."""
 
+from __future__ import annotations
+
 from typing import TypeVar
 
 from grain._src.python.experimental.index_shuffle.python import index_shuffle_module as index_shuffle
@@ -29,9 +31,14 @@ class ShuffleMapDataset(lazy_dataset.MapDataset[T]):
       self,
       parent: lazy_dataset.MapDataset[T],
       *,
-      seed: int,
+      seed: int | None = None,
   ):
     super().__init__(parent)
+    seed = self._default_seed if seed is None else seed
+    if seed is None:
+      raise ValueError(
+          "`shuffle` requires a seed. Please provide it with `ds.seed(seed)`"
+      )
     if seed < 0 or seed >= 2**32:
       raise ValueError(
           f"Seed must be an integer between 0 and 2**32-1 (got {seed=})."

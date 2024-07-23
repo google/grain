@@ -85,6 +85,38 @@ class RegisterableIterDatasetFn(Protocol):
     ...
 
 
+class _SeededDataset(abc.ABC):
+  """Node of a dataset tree structure that supports generating default seed."""
+
+  def __init__(self):
+    # Seeds a `SeedSequence` used to generate default seeds for all
+    # downstream transformations. Set by `_WithOptions{Map|Iter}Dataset`.
+    self._seed_rng_seed = None
+
+  @property
+  @abc.abstractmethod
+  def parents(self) -> Sequence[Any]:
+    """Returns the parent nodes of this dataset."""
+    ...
+
+  @functools.cached_property
+  def _default_seed(self) -> int | None:
+    """Should be used as a seed if no seed is provided."""
+    aggregated_seed = []
+    # Note that the traversal order must be determisitic.
+    to_visit = [(self, 0)]
+    while to_visit:
+      node, depth = to_visit.pop(0)
+      if (node_seed := node._seed_rng_seed) is not None:  # pylint: disable=protected-access
+        aggregated_seed.extend((node_seed, depth))
+      else:
+        to_visit.extend((n, depth + 1) for n in node.parents)
+    if not aggregated_seed:
+      return None
+    seed_sequence = np.random.SeedSequence(aggregated_seed)
+    return seed_sequence.generate_state(1, dtype=np.uint32)[0]
+
+
 class _MapDatasetMeta(abc.ABCMeta):
   """Metaclass for MapDataset containing factory transfromations."""
 
@@ -183,13 +215,14 @@ class _MapDatasetMeta(abc.ABCMeta):
     return mix.MixedMapDataset(parents=datasets, selection_map=selection_map)
 
 
-class MapDataset(Sequence[T], metaclass=_MapDatasetMeta):
+class MapDataset(_SeededDataset, Sequence[T], metaclass=_MapDatasetMeta):
   """Abstract base class for all MapDataset classes."""
 
   _functions: dict[str, RegisterableMapDatasetFn] = {}
   """Functions registered on all MapDatasets via a decoration."""
 
   def __init__(self, parents: Union[MapDataset, Sequence[MapDataset]] = ()):
+    super().__init__()
     if isinstance(parents, MapDataset):
       self._parents = (parents,)
     else:
@@ -357,7 +390,63 @@ class MapDataset(Sequence[T], metaclass=_MapDatasetMeta):
     # pylint: enable=g-import-not-at-top
     return map_dataset.MapWithIndexMapDataset(parent=self, transform=transform)
 
-  def shuffle(self, *, seed: int) -> "MapDataset[T]":
+  def seed(self, seed: int) -> MapDataset[T]:
+    """Returns a dataset that uses the seed for default seed generation.
+
+    When default seed generation is enabled by calling `ds.seed`, every
+    downstream random transformation will be automatically seeded with a unique
+    seed by default. This simplifies seed management, making it easier to avoid:
+     - Having to provide a seed in multiple transformations.
+     - Accidentally reusing the same seed across transformations.
+
+    It is recommended to call this right after the source. `ds.seed` has to be
+    called before any random transformations (such as `shuffle` or `random_map`
+    that rely on default seed generation to control their seeding). Given the
+    same seed, the pipeline is guaranteed to always use the same seeds for each
+    transformation.
+
+    Note about custom dataset implementations: the default seed generation is
+    available through `_default_seed`, but the private API is not guaranteed to
+    be stable.
+
+    Example usage:
+    `ds = ds.seed(seed).shuffle()`.
+    `shuffle` will automatically derive its own seed (different from `seed`).
+
+    `ds = ds.seed(seed).shuffle().random_map(...)`.
+    `shuffle` and `random_map` will each derive their own seed and the seeds are
+    going to be different.
+
+    `ds = ds.seed(seed).random_map(transform, seed=seed1)`.
+    `random_map` will use `seed1` and will not be affected by `seed`. This
+    can be used to control individual transformation seeding independently from
+    the rest of the pipeline.
+
+    `ds = ds.seed(seed1).shuffle().seed(seed2).random_map(...)`.
+    `ds.seed` only affects the downstream transformations and can be overridden
+    by a subsequent `seed` call.
+    `shuffle` will derive its seed from `seed1`, `random_map` - from `seed2` and
+    will not be affected by `seed1`. This can be used to control your
+    transformation seeding even if you don't own the first part of the pipeline.
+
+    ```
+    ds1 = ds.source(...).seed(seed1).shuffle()
+    ds2 = ds.source(...).seed(seed2).shuffle()
+    ds = MapDataset.mix([ds1, ds2], ...).random_map(...)
+    ```
+    Each `shuffle` will derive its own seed from `seed1` or `seed2`
+    respectively. `random_map` will derive its seed from both `seed1` and
+    `seed2`.
+
+    Args:
+      seed: Seed to use.
+
+    Returns:
+      A dataset with elements unchanged.
+    """
+    return _WithOptionsMapDataset(parent=self, seed=seed)
+
+  def shuffle(self, *, seed: int | None = None) -> "MapDataset[T]":
     """Returns a dataset containing the same elements but in a shuffled order.
 
     The following expressions are equivalent:
@@ -370,8 +459,10 @@ class MapDataset(Sequence[T], metaclass=_MapDatasetMeta):
     `ds = ds.filter(...).map(...).shuffle(...)`.
 
     Args:
-      seed: An integer between 0 and 2**32-1 representing the seed used by the
-        shuffling algorithm.
+      seed: An optional integer between 0 and 2**32-1 representing the seed used
+        by the shuffling algorithm. If you don't need to control the shuffle
+        seed individually, prefer setting the pipeline-level seed with
+        `ds.seed(seed)` instead.
 
     Returns:
       A dataset containing the same elements but in a shuffled order.
@@ -416,7 +507,7 @@ class MapDataset(Sequence[T], metaclass=_MapDatasetMeta):
           transforms.RandomMapTransform | Callable[[T, np.random.Generator], S]
       ),
       *,
-      seed: int,
+      seed: int | None = None,
   ) -> "MapDataset[S]":
     """Returns a dataset containing the elements transformed by `transform`.
 
@@ -433,8 +524,10 @@ class MapDataset(Sequence[T], metaclass=_MapDatasetMeta):
       transform: Either a `RandomMapTransform` containing the `random_map`
         method or a callable that takes an element and a np.random.Generator and
         returns a new element.
-      seed: An integer between 0 and 2**32-1 representing the seed used to
-        initialize the random number generator used by `transform`.
+      seed: An optional integer between 0 and 2**32-1 representing the seed used
+        to initialize the random number generator used by `transform`. If you
+        don't need to control the shuffle seed individually, prefer setting the
+        pipeline-level seed with`ds.seed(seed)` instead.
 
     Returns:
       A dataset containing the elements of the original dataset transformed by
@@ -548,7 +641,7 @@ class _IterDatasetMeta(abc.ABCMeta):
     return mix.MixedIterDataset(parents=datasets, proportions=weights)
 
 
-class IterDataset(Iterable[T], metaclass=_IterDatasetMeta):
+class IterDataset(_SeededDataset, Iterable[T], metaclass=_IterDatasetMeta):
   """Abstract base class for all IterDataset classes."""
 
   _functions: dict[str, RegisterableIterDatasetFn] = {}
@@ -561,6 +654,7 @@ class IterDataset(Iterable[T], metaclass=_IterDatasetMeta):
           Sequence[Union[MapDataset, IterDataset]],
       ] = (),
   ):
+    super().__init__()
     if isinstance(parents, (MapDataset, IterDataset)):
       self._parents = (parents,)
     else:
@@ -608,6 +702,62 @@ class IterDataset(Iterable[T], metaclass=_IterDatasetMeta):
         drop_remainder=drop_remainder,
         batch_fn=batch_fn,
     )
+
+  def seed(self, seed: int) -> IterDataset[T]:
+    """Returns a dataset that uses the seed for default seed generation.
+
+    When default seed generation is enabled by calling `ds.seed`, every
+    downstream random transformation will be automatically seeded with a unique
+    seed by default. This simplifies seed management, making it easier to avoid:
+     - Having to provide a seed in multiple transformations.
+     - Accidentally reusing the same seed across transformations.
+
+    It is recommended to call this right after the source. `ds.seed` has to be
+    called before any random transformations (such as `random_map` that rely on
+    default seed generation to control their seeding). Given the same seed, the
+    pipeline is guaranteed to always use the same seeds for each transformation.
+
+    Note about custom dataset implementations: the default seed generation is
+    available through `_default_seed`, but the private API is not guaranteed to
+    be stable.
+
+    Example usage:
+    `ds = ds.seed(seed).random_map(...)`.
+    `random_map` will automatically derive its own seed (different from `seed`).
+
+    `ds = ds.seed(seed).random_map().random_map(...)`.
+    The first and second `random_map`s will each derive their own seed and the
+    seeds are going to be different.
+
+    `ds = ds.seed(seed).random_map(transform, seed=seed1)`.
+    `random_map` will use `seed1` and will not be affected by `seed`. This
+    can be used to control individual transformation seeding independently from
+    the rest of the pipeline.
+
+    `ds = ds.seed(seed1).random_map(...).seed(seed2).random_map(...)`.
+    `ds.seed` only affects the downstream transformations and can be overridden
+    by a subsequent `seed` call.
+    The first `random_map` will derive its seed from `seed1`, the second - from
+    `seed2` and will not be affected by `seed1`. This can be used to control
+    your
+    transformation seeding even if you don't own the first part of the pipeline.
+
+    ```
+    ds1 = ds.source(...).seed(seed2).shuffle().to_iter_dataset()
+    ds2 = ds.source(...).seed(seed2).shuffle().to_iter_dataset()
+    ds = IterDataset.mix([ds1, ds2], ...).random_map(...)
+    ```
+    Each `shuffle` will derive its own seed from `seed1` or `seed2`
+    respectively. `random_map` will derive its seed from both `seed1` and
+    `seed2`.
+
+    Args:
+      seed: Seed to use.
+
+    Returns:
+      A dataset with elements unchanged.
+    """
+    return _WithOptionsIterDataset(parent=self, seed=seed)
 
   def filter(
       self, transform: transforms.FilterTransform | Callable[[T], bool]
@@ -677,7 +827,7 @@ class IterDataset(Iterable[T], metaclass=_IterDatasetMeta):
           transforms.RandomMapTransform | Callable[[T, np.random.Generator], S]
       ),
       *,
-      seed: int,
+      seed: int | None = None,
   ) -> "IterDataset[S]":
     """Returns a dataset containing the elements transformed by `transform`.
 
@@ -695,7 +845,9 @@ class IterDataset(Iterable[T], metaclass=_IterDatasetMeta):
         method or a callable that takes an element and a np.random.Generator and
         returns a new element.
       seed: An integer between 0 and 2**32-1 representing the seed used to
-        initialize the random number generator used by `transform`.
+        initialize the random number generator used by `transform`. If you don't
+        need to control the transformation seed individually, prefer setting the
+        pipeline-level seed with`ds.seed(seed)` instead.
 
     Returns:
       A dataset containing the elements of the original dataset transformed by
@@ -810,6 +962,31 @@ class DatasetIterator(Iterator[T], abc.ABC):
   @abc.abstractmethod
   def set_state(self, state: dict[str, Any]):
     """Sets the current state of the iterator."""
+
+
+class _WithOptionsMapDataset(MapDataset[T]):
+  """Holds options used by downstream transformations."""
+
+  def __init__(self, parent: MapDataset[T], *, seed: int):
+    super().__init__(parent)
+    self._seed_rng_seed = seed
+
+  def __len__(self) -> int:
+    return self._parent.__len__()
+
+  def __getitem__(self, index) -> T:
+    return self._parent[index]
+
+
+class _WithOptionsIterDataset(IterDataset[T]):
+  """Holds options used by downstream transformations."""
+
+  def __init__(self, parent: IterDataset[T], *, seed: int):
+    super().__init__(parent)
+    self._seed_rng_seed = seed
+
+  def __iter__(self) -> DatasetIterator[T]:
+    return self._parent.__iter__()
 
 
 class RangeMapDataset(MapDataset[int]):

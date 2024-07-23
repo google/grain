@@ -19,6 +19,7 @@ from typing import TypeVar, overload
 
 from absl.testing import absltest
 from absl.testing import parameterized
+import cloudpickle
 from grain._src.core import transforms
 import multiprocessing as mp
 from grain._src.python import options
@@ -160,6 +161,12 @@ class Source15IntsFrom0IterDataset(lazy_dataset.IterDataset[int]):
   @override
   def __iter__(self):
     return iter(range(15))
+
+
+class AddRandomInteger(transforms.RandomMapTransform):
+
+  def random_map(self, element, rng):
+    return element + rng.integers(low=0, high=100)
 
 
 class IdentityMapDataset(lazy_dataset.MapDataset[_T]):
@@ -521,6 +528,131 @@ class LazyDatasetTest(parameterized.TestCase):
   def test_random_map_has_one_parent(self, initial_ds):
     ds = initial_ds.random_map(lambda x, rng: 2 * x, seed=123)
     self.assertLen(ds.parents, 1)
+
+  @parameterized.parameters(
+      dict(initial_ds=Source15IntsFrom0MapDataset()),
+      dict(initial_ds=Source15IntsFrom0IterDataset()),
+  )
+  def test_seed_results_in_the_same_default_seed(self, initial_ds):
+    seed = 123
+    ds1 = initial_ds.seed(seed)
+    ds2 = initial_ds.seed(seed)
+    self.assertEqual(ds1._default_seed, ds2._default_seed)
+
+  def test_seed_with_shuffle(self):
+    seed = 125
+    ds1 = Source15IntsFrom0MapDataset().seed(seed).shuffle()
+    ds2 = Source15IntsFrom0MapDataset().seed(seed).shuffle()
+    self.assertEqual(list(ds1), list(ds2))
+    self.assertNotEqual(list(ds1), list(range(15)))
+    ds3 = Source15IntsFrom0MapDataset().seed(seed + 1).shuffle()
+    self.assertNotEqual(list(ds1), list(ds3))
+
+  @parameterized.parameters(
+      dict(initial_ds=Source15IntsFrom0MapDataset()),
+      dict(initial_ds=Source15IntsFrom0IterDataset()),
+  )
+  def test_seed_with_map(self, initial_ds):
+    seed = 126
+    ds1 = initial_ds.seed(seed).map(AddRandomInteger())
+    ds2 = initial_ds.seed(seed).map(AddRandomInteger())
+    self.assertEqual(list(ds1), list(ds2))
+    ds3 = initial_ds.seed(seed + 1).map(AddRandomInteger())
+    self.assertNotEqual(list(ds1), list(ds3))
+
+  @parameterized.parameters(
+      dict(initial_ds=Source15IntsFrom0MapDataset()),
+      dict(initial_ds=Source15IntsFrom0IterDataset()),
+  )
+  def test_seed_with_random_map(self, initial_ds):
+    seed = 126
+    ds1 = initial_ds.seed(seed).random_map(AddRandomInteger())
+    ds2 = initial_ds.seed(seed).random_map(AddRandomInteger())
+    self.assertEqual(list(ds1), list(ds2))
+    ds3 = initial_ds.seed(seed + 1).random_map(AddRandomInteger())
+    self.assertNotEqual(list(ds1), list(ds3))
+
+  def test_seed_is_different_with_chained_transforms(self):
+    seed = 129
+    ds = Source15IntsFrom0IterDataset().seed(seed).map(AddRandomInteger())
+    map_seed1 = ds._seed
+    ds = ds.map(AddRandomInteger())
+    map_seed2 = ds._seed
+    self.assertNotEqual(map_seed1, map_seed2)
+
+  def test_seed_with_shuffle_and_map(self):
+    seed = 127
+    ds1 = (
+        Source15IntsFrom0MapDataset()
+        .seed(seed)
+        .shuffle()
+        .map(AddRandomInteger())
+    )
+    ds2 = (
+        Source15IntsFrom0MapDataset()
+        .seed(seed)
+        .shuffle()
+        .map(AddRandomInteger())
+    )
+    self.assertEqual(list(ds1), list(ds2))
+
+  def test_seed_with_non_random_transform(self):
+    seed = 126
+    ds1 = (
+        Source15IntsFrom0MapDataset().seed(seed).map(lambda x: x + 1).shuffle()
+    )
+    ds2 = (
+        Source15IntsFrom0MapDataset().seed(seed).map(lambda x: x + 1).shuffle()
+    )
+    self.assertEqual(list(ds1), list(ds2))
+    ds3 = (
+        Source15IntsFrom0MapDataset()
+        .seed(seed + 1)
+        .map(lambda x: x + 1)
+        .shuffle()
+    )
+    self.assertNotEqual(list(ds1), list(ds3))
+
+  def test_seed_with_multiple_parents(self):
+    seed = 128
+    ds1 = lazy_dataset.MapDataset.mix(
+        [Source15IntsFrom0MapDataset().seed(seed) for _ in range(6)]
+    )
+    ds2 = lazy_dataset.MapDataset.mix(
+        [Source15IntsFrom0MapDataset().seed(seed) for _ in range(6)]
+    )
+    self.assertEqual(
+        list(ds1.map(AddRandomInteger())), list(ds2.map(AddRandomInteger()))
+    )
+
+  def test_seed_with_multiple_parents_set_on_single_parent(self):
+    seed = 128
+    ds1 = lazy_dataset.MapDataset.mix(
+        [Source15IntsFrom0MapDataset().seed(seed)]
+        + [Source15IntsFrom0MapDataset() for _ in range(6)]
+    )
+    ds2 = lazy_dataset.MapDataset.mix(
+        [Source15IntsFrom0MapDataset().seed(seed)]
+        + [Source15IntsFrom0MapDataset() for _ in range(6)]
+    )
+    self.assertEqual(
+        list(ds1.map(AddRandomInteger())), list(ds2.map(AddRandomInteger()))
+    )
+    # Make sure that all parent seeds are used.
+    # Though note that users would normally set different seeds for mixture
+    # components.
+    ds3 = lazy_dataset.MapDataset.mix(
+        [Source15IntsFrom0MapDataset().seed(seed) for _ in range(7)]
+    )
+    self.assertNotEqual(
+        list(ds1.map(AddRandomInteger())), list(ds3.map(AddRandomInteger()))
+    )
+
+  def test_seed_picklable(self):
+    seed = 128
+    ds1 = Source15IntsFrom0MapDataset().seed(seed).shuffle()
+    ds2 = cloudpickle.loads(cloudpickle.dumps(ds1))
+    self.assertEqual(list(ds1), list(ds2))
 
   def test_random_map_does_not_affect_len(self):
     ds = Source15IntsFrom0MapDataset().random_map(lambda x, rng: True, seed=123)

@@ -100,11 +100,17 @@ def _get_map_fn_and_seed(
     return transform.map, None
   elif isinstance(transform, transforms.RandomMapTransform):
     if seed is None:
-      raise ValueError("RandomMapTransform requires random seed.")
+      raise ValueError(
+          "RandomMapTransform requires random seed. Please provide it with"
+          " `ds.seed(seed)`"
+      )
     return transform.random_map, seed
   elif isinstance(transform, transforms.TfRandomMapTransform):
     if seed is None:
-      raise ValueError("RandomMapTransform requires random seed.")
+      raise ValueError(
+          "RandomMapTransform requires random seed. Please provide it with"
+          " `ds.seed(seed)`"
+      )
     return transform.np_random_map, seed
   else:
     # If a `seed` is provided we treat the Callable as RandomMapTransform
@@ -121,6 +127,11 @@ class MapMapDataset(lazy_dataset.MapDataset[T]):
       seed: Optional[int] = None,
   ):
     super().__init__(parent)
+    if isinstance(
+        transform,
+        (transforms.RandomMapTransform, transforms.TfRandomMapTransform),
+    ):
+      seed = self._default_seed if seed is None else seed
     self._map_fn, seed = _get_map_fn_and_seed(transform, seed)
     self._rng_pool = None if seed is None else RngPool(seed)
 
@@ -227,6 +238,11 @@ class MapIterDataset(lazy_dataset.IterDataset[T]):
       seed: Optional[int] = None,
   ):
     super().__init__(parent)
+    if isinstance(
+        transform,
+        (transforms.RandomMapTransform, transforms.TfRandomMapTransform),
+    ):
+      seed = self._default_seed if seed is None else seed
     self._map_fn, self._seed = _get_map_fn_and_seed(transform, seed)
 
   def __iter__(self) -> _MapDatasetIterator[T]:

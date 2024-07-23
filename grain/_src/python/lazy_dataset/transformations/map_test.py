@@ -14,6 +14,7 @@
 """Tests for map transformation."""
 
 import dataclasses
+import operator
 from absl.testing import absltest
 from absl.testing import parameterized
 import cloudpickle
@@ -133,6 +134,26 @@ class MapMapDatasetTest(parameterized.TestCase):
     ]
     np.testing.assert_almost_equal(expected_data, actual_data, decimal=1)
 
+  def test_random_map_with_default_seed(self):
+    seed = 42
+    ds1 = self.range_ds.seed(seed)
+    ds1 = ldmap.MapMapDataset(ds1, RandomMapWithTransform())
+    ds2 = self.range_ds.seed(seed)
+    ds2 = ldmap.MapMapDataset(ds2, RandomMapWithTransform())
+    np.testing.assert_almost_equal(list(ds1), list(ds2), decimal=1)
+
+  def test_random_map_overrides_default_seed(self):
+    seed = 42
+    ds1 = self.range_ds.seed(seed)
+    ds1 = ldmap.MapMapDataset(ds1, RandomMapWithTransform())
+    ds2 = self.range_ds.seed(seed)
+    ds2 = ldmap.MapMapDataset(ds2, RandomMapWithTransform(), seed=seed + 1)
+    np.testing.assert_array_compare(operator.__ne__, list(ds1), list(ds2))
+
+  def test_random_map_raises_with_no_seed(self):
+    with self.assertRaises(ValueError):
+      ldmap.MapMapDataset(self.range_ds, RandomMapWithTransform())
+
 
 class MapIterDatasetTest(absltest.TestCase):
 
@@ -185,6 +206,26 @@ class MapIterDatasetTest(absltest.TestCase):
     with self.assertRaises(StopIteration):
       next(map_no_transform_iter_ds)
       _ = [next(map_no_transform_iter_ds) for _ in range(20)]
+
+  def test_random_map_with_default_seed(self):
+    seed = 42
+    ds1 = self.range_iter_ds.seed(seed)
+    ds1 = ldmap.MapIterDataset(ds1, RandomMapWithTransform())
+    ds2 = self.range_iter_ds.seed(seed)
+    ds2 = ldmap.MapIterDataset(ds2, RandomMapWithTransform())
+    np.testing.assert_almost_equal(list(ds1), list(ds2), decimal=1)
+
+  def test_random_map_overrides_default_seed(self):
+    seed = 42
+    ds1 = self.range_iter_ds.seed(seed)
+    ds1 = ldmap.MapIterDataset(ds1, RandomMapWithTransform())
+    ds2 = self.range_iter_ds.seed(seed)
+    ds2 = ldmap.MapIterDataset(ds2, RandomMapWithTransform(), seed=seed + 1)
+    np.testing.assert_array_compare(operator.__ne__, list(ds1), list(ds2))
+
+  def test_random_map_raises_with_no_seed(self):
+    with self.assertRaises(ValueError):
+      ldmap.MapIterDataset(self.range_iter_ds, RandomMapWithTransform())
 
 
 class MapWithIndexMapDatasetTest(absltest.TestCase):
