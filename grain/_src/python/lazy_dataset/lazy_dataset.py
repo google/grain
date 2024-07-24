@@ -43,7 +43,7 @@ import abc
 import builtins
 from collections.abc import Callable, Iterable, Iterator, Sequence
 import functools
-from typing import Any, Optional, TypeVar, Union, overload
+from typing import Any, Generic, Optional, TypeVar, Union, overload
 
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import sharding
@@ -199,7 +199,7 @@ class _MapDatasetMeta(abc.ABCMeta):
     return mix.MixedMapDataset(parents=datasets, selection_map=selection_map)
 
 
-class MapDataset(_SeededDataset, Sequence[T], metaclass=_MapDatasetMeta):
+class MapDataset(_SeededDataset, Generic[T], metaclass=_MapDatasetMeta):
   """Abstract base class for all MapDataset classes."""
 
   def __init__(self, parents: Union[MapDataset, Sequence[MapDataset]] = ()):
