@@ -1,7 +1,7 @@
 """This module provides an implementation for example packing in pure python.
 
 If using LazyDataset, please use APIs in
-_src/python/lazy_dataset/transformations/packing.py.
+_src/python/dataset/transformations/packing.py.
 
 Example packing is a step in many input pipelines for sequence to sequence
 models where multiple examples are packed together as a single example in order

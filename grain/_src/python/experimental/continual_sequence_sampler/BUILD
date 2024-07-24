@@ -9,7 +9,7 @@ py_library(
     deps = [
         "//grain/_src/core:sharding",
         "//grain/_src/python:record",
-        "//grain/_src/python/lazy_dataset",
+        "//grain/_src/python/dataset",
     ],
 )
 
@@ -20,6 +20,6 @@ py_test(
     deps = [
         ":continual_sequence_sampler",
         "//grain/_src/core:sharding",
-        "//grain/_src/python/lazy_dataset",
+        "//grain/_src/python/dataset",
     ],
 )

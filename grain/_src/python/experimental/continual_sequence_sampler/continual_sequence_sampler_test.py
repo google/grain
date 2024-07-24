@@ -22,9 +22,9 @@ from unittest import mock
 
 from absl.testing import absltest
 from grain._src.core import sharding
+from grain._src.python.dataset import dataset
+from grain._src.python.dataset.transformations import shuffle
 from grain._src.python.experimental.continual_sequence_sampler import continual_sequence_sampler
-from grain._src.python.lazy_dataset import lazy_dataset
-from grain._src.python.lazy_dataset.transformations import shuffle
 
 
 @dataclasses.dataclass(frozen=True)
@@ -71,7 +71,7 @@ def _get_all_metadata(
   return metadata
 
 
-class FakeShuffledDataset(lazy_dataset.MapDataset[int]):
+class FakeShuffledDataset(dataset.MapDataset[int]):
 
   def __init__(self, values: Sequence[int], length: int) -> None:
     self._values = values

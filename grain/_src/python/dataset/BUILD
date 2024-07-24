@@ -1,0 +1,78 @@
+package(default_visibility = ["//grain:__subpackages__"])
+
+licenses(["notice"])
+
+py_library(
+    name = "base",
+    srcs = [
+        "base.py",
+    ],
+    srcs_version = "PY3",
+)
+
+py_test(
+    name = "base_test",
+    srcs = ["base_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":base",
+        "//grain/_src/python:data_sources",
+    ],
+)
+
+py_library(
+    name = "dataset",
+    srcs = [
+        "dataset.py",
+        "//grain/_src/python/dataset/transformations:core_transformations",
+    ],
+    data = ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
+    srcs_version = "PY3",
+    deps = [
+        ":base",
+        "//grain/_src/core:exceptions",
+        "//grain/_src/core:monitoring",
+        "//grain/_src/core:sharding",
+        "//grain/_src/core:transforms",
+        "//grain/_src/core:tree",
+        "//grain/_src/core:usage_logging",
+        "//grain/_src/python:grain_pool",
+        "//grain/_src/python:options",
+        "//grain/_src/python:shared_memory_array",
+    ],
+)
+
+py_test(
+    name = "dataset_test",
+    srcs = ["dataset_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":base",
+        ":dataset",
+        "//grain/_src/core:transforms",
+        "//grain/_src/python:options",
+    ],
+)
+
+py_library(
+    name = "data_loader",
+    srcs = ["data_loader.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":dataset",
+        "//grain/_src/python:options",
+    ],
+)
+
+py_test(
+    name = "data_loader_test",
+    srcs = ["data_loader_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":data_loader",
+        ":dataset",
+        "//grain:python_experimental",
+        "//grain/_src/core:transforms",
+        "//grain/_src/python:options",
+    ],
+)
