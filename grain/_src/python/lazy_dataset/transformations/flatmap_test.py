@@ -15,11 +15,13 @@
 
 import dataclasses
 import itertools
+from typing import Any, Sequence
 
 from absl.testing import absltest
 from grain._src.core import transforms
 from grain._src.python.lazy_dataset import lazy_dataset
 from grain._src.python.lazy_dataset.transformations import flatmap
+from grain._src.python.lazy_dataset.transformations import source
 
 
 @dataclasses.dataclass(frozen=True)
@@ -128,6 +130,60 @@ class FlatMapMapDatasetTest(absltest.TestCase):
           VariableSizeUncappedSplitWithNoTransform(max_fan_out=self.fan_out),
       )
       _ = [flatmap_ds[i] for i in range(len(flatmap_ds))]
+
+
+class Unbatch(transforms.FlatMapTransform):
+
+  def flat_map(self, elements: Any) -> Sequence[Any]:
+    return [e for e in elements]
+
+
+class MyDataSource:
+
+  def __init__(self, data: Sequence[Any]):
+    self._data = data
+
+  def __len__(self):
+    return len(self._data)
+
+  def __getitem__(self, index):
+    return self._data[index]
+
+
+class FlatMapIterDatasetTest(absltest.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    self._data = [[0, 1, 2, 3], [], [4, 5], [6, 7, 8, 9], [], [], [10, 11, 12]]
+    self._data_source = MyDataSource(self._data)
+    self._expected = list(range(0, 13))
+    self._unbatch = Unbatch()
+
+  def test_iter_dataset(self):
+    ld = source.SourceMapDataset(self._data_source)
+    iter_ds = ld.to_iter_dataset()
+    iter_ds = flatmap.FlatMapIterDataset(iter_ds, self._unbatch)
+    got = [e for e in iter_ds]
+    self.assertSequenceEqual(got, self._expected)
+
+  def test_checkpointing(self):
+    ld = source.SourceMapDataset(self._data_source)
+    iter_ds = ld.to_iter_dataset()
+    iter_ds = flatmap.FlatMapIterDataset(iter_ds, self._unbatch)
+    ds_iter = iter_ds.__iter__()
+
+    max_steps = len(self._expected)
+    values_without_interruption = []
+    checkpoints = []
+
+    for _ in range(max_steps):
+      checkpoints.append(ds_iter.get_state())
+      values_without_interruption.append(next(ds_iter))
+
+    for starting_step in [0, 1, 5, 8, 9, 11, 12]:
+      ds_iter.set_state(checkpoints[starting_step])
+      for i in range(starting_step, max_steps):
+        self.assertEqual(next(ds_iter), values_without_interruption[i])
 
 
 if __name__ == "__main__":

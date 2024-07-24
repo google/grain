@@ -13,14 +13,15 @@
 # limitations under the License.
 """Flatmap transformation for MapDataset."""
 
-from typing import Any, TypeVar
+from typing import Any, Callable, Sequence, TypeVar
 
 from grain._src.core import transforms
 from grain._src.python.lazy_dataset import lazy_dataset
 
 
 Element = Any
-T = TypeVar("T")  # pylint: disable=invalid-name
+T = TypeVar("T")
+S = TypeVar("S")
 
 
 class FlatMapMapDataset(lazy_dataset.MapDataset[T]):
@@ -57,3 +58,73 @@ class FlatMapMapDataset(lazy_dataset.MapDataset[T]):
       if i == split_index:
         return sub_element
     return None
+
+
+class _FlatMapDatasetIterator(lazy_dataset.DatasetIterator[T]):
+  """Iterator for flattening and mapping each element into many elements."""
+
+  def __init__(
+      self,
+      parent: lazy_dataset.DatasetIterator[S],
+      flat_map: Callable[[S], Sequence[T]],
+  ):
+    self._parent = parent
+    self._flat_map = flat_map
+    self._next_index_in_buffer = 0
+    self._buffer = []
+    self._last_parent_state = self._parent.get_state()
+
+  def _has_consumed_all_buffer_elements(self):
+    return self._next_index_in_buffer >= len(self._buffer)
+
+  def __next__(self):
+    while self._has_consumed_all_buffer_elements():
+      # Stores the previous state so that we can checkpoint this iterator
+      # without storing `self._buffer` elements
+      self._last_parent_state = self._parent.get_state()
+
+      element = next(self._parent)  # Raises `StopIteration` when done.
+
+      self._next_index_in_buffer = 0
+      self._buffer = self._flat_map(element)
+
+    mapped_element = self._buffer[self._next_index_in_buffer]
+    self._next_index_in_buffer += 1
+    return mapped_element
+
+  def get_state(self):
+    return {
+        "parent": self._last_parent_state,
+        "next_index_in_buffer": self._next_index_in_buffer,
+    }
+
+  def set_state(self, state: dict[str, Any]):
+    self._last_parent_state = state["parent"]
+    self._parent.set_state(state["parent"])
+    self._next_index_in_buffer = state["next_index_in_buffer"]
+    try:
+      element = next(self._parent)
+      # Recovers the buffer
+      self._buffer = self._flat_map(element)
+    except StopIteration:
+      # Edge case: The iterator has run out of elements.
+      # We keep this EOF state.
+
+      self._next_index_in_buffer = 0
+      pass
+
+
+class FlatMapIterDataset(lazy_dataset.IterDataset[T]):
+  """Flat map for one-to-many split."""
+
+  def __init__(
+      self,
+      parent: lazy_dataset.IterDataset,
+      transform: transforms.FlatMapTransform,
+  ):
+    super().__init__(parent)
+    self._transform = transform
+
+  def __iter__(self):
+    parent_iter = self._parent.__iter__()
+    return _FlatMapDatasetIterator(parent_iter, self._transform.flat_map)

@@ -35,6 +35,7 @@ from ._src.python.lazy_dataset.transformations.filter import (
 )
 from ._src.python.lazy_dataset.transformations.flatmap import (
     FlatMapMapDataset as FlatMapLazyMapDataset,
+    FlatMapIterDataset,
 )
 from ._src.python.lazy_dataset.transformations.map import (
     MapMapDataset as MapLazyMapDataset,
