@@ -189,7 +189,7 @@ class ContinualSequenceSampler:
 
     self._clip_map = clip_map
 
-    self._element_index = dataset.RangeMapDataset(len(clip_map))
+    self._element_index = dataset.MapDataset.range(len(clip_map))
     self._shuffle_dataset = shuffle_dataset
     if shuffle_dataset:
       self._element_index = shuffle.ShuffleMapDataset(

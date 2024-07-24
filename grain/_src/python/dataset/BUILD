@@ -32,7 +32,6 @@ py_library(
         ":base",
         "//grain/_src/core:exceptions",
         "//grain/_src/core:monitoring",
-        "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
         "//grain/_src/core:tree",
         "//grain/_src/core:usage_logging",
@@ -71,7 +70,6 @@ py_test(
     deps = [
         ":data_loader",
         ":dataset",
-        "//grain:python_experimental",
         "//grain/_src/core:transforms",
         "//grain/_src/python:options",
     ],

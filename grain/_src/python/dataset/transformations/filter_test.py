@@ -47,7 +47,7 @@ class FilterMapDatasetTest(absltest.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.range_ds = dataset.RangeMapDataset(0, 10)
+    self.range_ds = dataset.MapDataset.range(0, 10)
 
   def test_filter_size(self):
     filter_no_elts_ds = filter_dataset.FilterMapDataset(
@@ -98,7 +98,7 @@ class FilterIterDatasetTest(absltest.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.range_iter_ds = dataset.RangeMapDataset(0, 10).to_iter_dataset()
+    self.range_iter_ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
 
   def test_filter_no_elements(self):
     filter_no_elts_iter_ds = iter(

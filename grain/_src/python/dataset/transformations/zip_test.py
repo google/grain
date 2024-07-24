@@ -26,9 +26,9 @@ class ZipMapDatasetTest(parameterized.TestCase):
   def setUp(self):
     super().setUp()
     self.ds_list = [
-        dataset.RangeMapDataset(0, 20),
-        dataset.RangeMapDataset(1, 21),
-        dataset.RangeMapDataset(2, 22),
+        dataset.MapDataset.range(0, 20),
+        dataset.MapDataset.range(1, 21),
+        dataset.MapDataset.range(2, 22),
     ]
 
   @parameterized.parameters(

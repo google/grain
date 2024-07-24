@@ -56,7 +56,7 @@ class LazyDatasetDataLoaderTest(parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.ds_src = dataset.RangeMapDataset(start=0, stop=10, step=1)
+    self.ds_src = dataset.MapDataset.range(start=0, stop=10, step=1)
     self.lazy_ds = map_dataset.MapMapDataset(
         parent=self.ds_src, transform=SimpleMapTransform()
     )
@@ -88,7 +88,7 @@ class LazyDatasetDataLoaderTest(parameterized.TestCase):
     output_elements = list(iter(data_loader))
     expected_elements = [
         np.array([i, i + 1])
-        for i in range(self.ds_src.start, self.ds_src.stop, 2)
+        for i in range(self.ds_src.start, self.ds_src.stop, 2)  # pytype: disable=attribute-error
     ]
     np.testing.assert_array_equal(expected_elements, output_elements)
 

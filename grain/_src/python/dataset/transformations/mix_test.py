@@ -158,14 +158,14 @@ class MixedMapDatasetTest(absltest.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.even_ds = dataset.RangeMapDataset(0, 10, 2)
-    self.odd_ds = dataset.RangeMapDataset(1, 10, 2)
+    self.even_ds = dataset.MapDataset.range(0, 10, 2)
+    self.odd_ds = dataset.MapDataset.range(1, 10, 2)
 
   def test_len(self):
     # Mix dataset has length to see any element at most once.
-    ds1 = dataset.RangeMapDataset(10)
-    ds2 = dataset.RangeMapDataset(20)
-    ds3 = dataset.RangeMapDataset(5)
+    ds1 = dataset.MapDataset.range(10)
+    ds2 = dataset.MapDataset.range(20)
+    ds3 = dataset.MapDataset.range(5)
     # Equal proportions.
     ds = mix.MixedMapDataset([ds1, ds2, ds3])
     self.assertLen(ds, 15)
@@ -244,8 +244,8 @@ class MixedMapDatasetTest(absltest.TestCase):
       )
 
   def test_mix_infinite_datasets(self):
-    zeros = dataset.RangeMapDataset(0, 1).repeat()
-    ones = dataset.RangeMapDataset(1, 2).repeat()
+    zeros = dataset.MapDataset.range(0, 1).repeat()
+    ones = dataset.MapDataset.range(1, 2).repeat()
     self.assertLen(zeros, sys.maxsize)
     self.assertLen(ones, sys.maxsize)
     ld = mix.MixedMapDataset([zeros, ones], proportions=[4, 1])
@@ -329,16 +329,16 @@ class MixedIterDatasetTest(absltest.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.even_map_ds = dataset.RangeMapDataset(0, 10, 2)
-    self.odd_map_ds = dataset.RangeMapDataset(1, 10, 2)
+    self.even_map_ds = dataset.MapDataset.range(0, 10, 2)
+    self.odd_map_ds = dataset.MapDataset.range(1, 10, 2)
     self.even_ds = self.even_map_ds.to_iter_dataset()
     self.odd_ds = self.odd_map_ds.to_iter_dataset()
 
   def test_len(self):
     # Mixed dataset sees any element at most once.
-    ds1 = dataset.RangeMapDataset(10).to_iter_dataset()
-    ds2 = dataset.RangeMapDataset(20).to_iter_dataset()
-    ds3 = dataset.RangeMapDataset(5).to_iter_dataset()
+    ds1 = dataset.MapDataset.range(10).to_iter_dataset()
+    ds2 = dataset.MapDataset.range(20).to_iter_dataset()
+    ds3 = dataset.MapDataset.range(5).to_iter_dataset()
     # Equal proportions.
     ds = mix.MixedIterDataset([ds1, ds2, ds3])
     # While ds3 is empty after sampling 15 elements, a StopIteration is raised
@@ -418,8 +418,8 @@ class MixedIterDatasetTest(absltest.TestCase):
       )
 
   def test_mix_infinite_datasets(self):
-    zeros = dataset.RangeMapDataset(0, 1).repeat()
-    ones = dataset.RangeMapDataset(1, 2).repeat()
+    zeros = dataset.MapDataset.range(0, 1).repeat()
+    ones = dataset.MapDataset.range(1, 2).repeat()
     self.assertLen(zeros, sys.maxsize)
     self.assertLen(ones, sys.maxsize)
     ld = mix.MixedIterDataset(
@@ -435,8 +435,8 @@ class MixedIterDatasetTest(absltest.TestCase):
     self.assertEqual(value_counts, [400, 600])
 
   def test_stop_sampling_after_end_of_any_dataset(self):
-    smaller_ds = dataset.RangeMapDataset(5).to_iter_dataset()
-    larger_ds = dataset.RangeMapDataset(10).to_iter_dataset()
+    smaller_ds = dataset.MapDataset.range(5).to_iter_dataset()
+    larger_ds = dataset.MapDataset.range(10).to_iter_dataset()
     mixed_ds = mix.MixedIterDataset([smaller_ds, larger_ds], [1.0, 1.0])
     ds_iter = iter(mixed_ds)
     for _ in range(10):  # Exhaust the iterator.
@@ -470,9 +470,9 @@ class MixedIterDatasetTest(absltest.TestCase):
 class ConcatenateLazyMapTest(absltest.TestCase):
 
   def test_concat_selection_map(self):
-    evens = dataset.RangeMapDataset(0, 4, 2)
-    odds = dataset.RangeMapDataset(1, 6, 2)
-    consecutive = dataset.RangeMapDataset(7, 9)
+    evens = dataset.MapDataset.range(0, 4, 2)
+    odds = dataset.MapDataset.range(1, 6, 2)
+    consecutive = dataset.MapDataset.range(7, 9)
     selection_map = mix._ConcatSelectionMap([evens, odds, consecutive])
     self.assertLen(selection_map, len(evens) + len(odds) + len(consecutive))
 
@@ -481,8 +481,8 @@ class ConcatenateLazyMapTest(absltest.TestCase):
     self.assertListEqual(actual_indices, expected_indices)
 
   def test_concatenate_finite_datasets(self):
-    evens = dataset.RangeMapDataset(0, 10, 2)
-    odds = dataset.RangeMapDataset(1, 10, 2)
+    evens = dataset.MapDataset.range(0, 10, 2)
+    odds = dataset.MapDataset.range(1, 10, 2)
     ds = mix.ConcatenateMapDataset([evens, odds])
     self.assertLen(evens, 5)
     self.assertLen(odds, 5)
@@ -494,8 +494,8 @@ class ConcatenateLazyMapTest(absltest.TestCase):
     self.assertListEqual(actual_values, expected_values)
 
   def test_slice_concatenated_finite_datasets(self):
-    evens = dataset.RangeMapDataset(0, 10, 2)
-    odds = dataset.RangeMapDataset(1, 10, 2)
+    evens = dataset.MapDataset.range(0, 10, 2)
+    odds = dataset.MapDataset.range(1, 10, 2)
     ds = mix.ConcatenateMapDataset([evens, odds])[4:7]
     self.assertLen(ds, 3)
 
@@ -506,8 +506,8 @@ class ConcatenateLazyMapTest(absltest.TestCase):
     self.assertListEqual(actual_values, expected_values)
 
   def test_cannot_concatenate_infinite_datasets(self):
-    zeros = dataset.RangeMapDataset(0, 1).repeat()
-    ones = dataset.RangeMapDataset(1, 2).repeat()
+    zeros = dataset.MapDataset.range(0, 1).repeat()
+    ones = dataset.MapDataset.range(1, 2).repeat()
     with self.assertRaisesRegex(
         ValueError, "Cannot concatenate infinite datasets"
     ):

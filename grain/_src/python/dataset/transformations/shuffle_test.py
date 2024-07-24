@@ -22,11 +22,11 @@ from grain._src.python.dataset.transformations import shuffle
 class ShuffleMapDatasetTest(parameterized.TestCase):
 
   def test_len(self):
-    ds = shuffle.ShuffleMapDataset(dataset.RangeMapDataset(400), seed=42)
+    ds = shuffle.ShuffleMapDataset(dataset.MapDataset.range(400), seed=42)
     self.assertLen(ds, 400)
 
   def test_getitem(self):
-    ds = shuffle.ShuffleMapDataset(dataset.RangeMapDataset(400), seed=42)
+    ds = shuffle.ShuffleMapDataset(dataset.MapDataset.range(400), seed=42)
     shuffled_indices = [ds[i] for i in range(400)]
     self.assertLen(set(shuffled_indices), 400)
     for x in shuffled_indices:
@@ -35,41 +35,41 @@ class ShuffleMapDatasetTest(parameterized.TestCase):
     self.assertNotEqual(shuffled_indices, shuffled_indices_epoch2)
 
   def test_iter(self):
-    ds = shuffle.ShuffleMapDataset(dataset.RangeMapDataset(400), seed=42)
+    ds = shuffle.ShuffleMapDataset(dataset.MapDataset.range(400), seed=42)
     ds_iter = iter(ds)
     elements = [next(ds_iter) for _ in range(400)]
     self.assertLen(elements, 400)
 
   def test_default_seed(self):
     seed = 42
-    ds1 = dataset.RangeMapDataset(400).seed(seed)
+    ds1 = dataset.MapDataset.range(400).seed(seed)
     ds1 = shuffle.ShuffleMapDataset(ds1)
-    ds2 = dataset.RangeMapDataset(400).seed(seed)
+    ds2 = dataset.MapDataset.range(400).seed(seed)
     ds2 = shuffle.ShuffleMapDataset(ds2)
     self.assertEqual(list(ds1), list(ds2))
 
   def test_raises_with_no_seed(self):
     with self.assertRaises(ValueError):
-      shuffle.ShuffleMapDataset(dataset.RangeMapDataset(400))
+      shuffle.ShuffleMapDataset(dataset.MapDataset.range(400))
 
   @parameterized.parameters(-1000, -1, 2**32, 2**32 + 1, 2**64 + 1)
   def test_init_with_invalid_seed_returns_value_error(self, seed):
     with self.assertRaises(ValueError):
-      shuffle.ShuffleMapDataset(dataset.RangeMapDataset(400), seed=seed)
+      shuffle.ShuffleMapDataset(dataset.MapDataset.range(400), seed=seed)
 
 
 class WindowShuffleMapDatasetTest(absltest.TestCase):
 
   def test_len(self):
     ds = shuffle.WindowShuffleMapDataset(
-        dataset.RangeMapDataset(400), window_size=10, seed=42
+        dataset.MapDataset.range(400), window_size=10, seed=42
     )
     self.assertLen(ds, 400)
 
   def test_getitem(self):
     window_size = 10
     ds = shuffle.WindowShuffleMapDataset(
-        dataset.RangeMapDataset(400),
+        dataset.MapDataset.range(400),
         window_size=window_size,
         seed=42,
     )
@@ -81,7 +81,7 @@ class WindowShuffleMapDatasetTest(absltest.TestCase):
   def test_getitem_multi_epochs(self):
     # Multiple epochs shouldn't affect window shuffling.
     ds = shuffle.WindowShuffleMapDataset(
-        dataset.RangeMapDataset(400),
+        dataset.MapDataset.range(400),
         window_size=10,
         seed=42,
     )
@@ -94,7 +94,7 @@ class WindowShuffleMapDatasetTest(absltest.TestCase):
   def test_iter(self):
     window_size = 10
     ds = shuffle.WindowShuffleMapDataset(
-        dataset.RangeMapDataset(400), window_size=window_size, seed=42
+        dataset.MapDataset.range(400), window_size=window_size, seed=42
     )
     ds_iter = iter(ds)
     elements = [next(ds_iter) for _ in range(400)]

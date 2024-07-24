@@ -44,7 +44,7 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.range_ds = dataset.RangeMapDataset(20)
+    self.range_ds = dataset.MapDataset.range(20)
     self.filtered_range_ds = filter_lazy_dataset.FilterMapDataset(
         self.range_ds, FilterKeepingOddElementsOnly()
     )
@@ -147,7 +147,7 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
-    ds = dataset.RangeMapDataset(20)
+    ds = dataset.MapDataset.range(20)
     ds = prefetch.PrefetchIterDataset(ds, read_options=options.ReadOptions())
     self.iter_ds = filter_lazy_dataset.FilterIterDataset(
         ds, FilterKeepingOddElementsOnly()
@@ -264,7 +264,7 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
         time.sleep(1)
         return features
 
-    ds = dataset.RangeMapDataset(10)
+    ds = dataset.MapDataset.range(10)
     ds = map_lazy_dataset.MapMapDataset(parent=ds, transform=_SleepTransform())
     ds = prefetch.PrefetchIterDataset(ds, read_options=options.ReadOptions())
     ds = prefetch.MultiprocessPrefetchIterDataset(
@@ -300,7 +300,7 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
         time.sleep(1)
         return features
 
-    ds = dataset.RangeMapDataset(10)
+    ds = dataset.MapDataset.range(10)
     ds = map_lazy_dataset.MapMapDataset(parent=ds, transform=_SleepTransform())
     ds = prefetch.PrefetchIterDataset(ds, read_options=options.ReadOptions())
     ds = prefetch.MultiprocessPrefetchIterDataset(
@@ -324,9 +324,8 @@ class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.ds = dataset.RangeMapDataset(20)
     self.ds = filter_lazy_dataset.FilterIterDataset(
-        dataset.RangeMapDataset(20).to_iter_dataset(),
+        dataset.MapDataset.range(20).to_iter_dataset(),
         FilterKeepingOddElementsOnly(),
     )
 

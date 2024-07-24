@@ -12,10 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """LazyDataset data sources."""
+from __future__ import annotations
 
+import functools
 from typing import Union
 
 from absl import logging
+from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 
@@ -44,3 +47,39 @@ def log_lineage_for_sources(
 ):
   """Traverses tree of transformations and logs lineage on source datasets."""
   pass
+
+
+class RangeMapDataset(dataset.MapDataset[int]):
+  """Range data source, similar to python range() function."""
+
+  def __init__(self, start: int, stop: int | None = None, step: int = 1):
+    super().__init__()
+    self.start = 0 if stop is None else start
+    self.stop = start if stop is None else stop
+    self.step = step
+
+  @functools.cached_property
+  def _length(self) -> int:
+    return len(range(self.start, self.stop, self.step))
+
+  def __len__(self) -> int:
+    return self._length
+
+  def __getitem__(self, index):
+    if isinstance(index, slice):
+      return self.slice(index)
+    return self.start + (index % self._length) * self.step
+
+  def to_iter_dataset(
+      self,
+      read_options: options.ReadOptions | None = None,
+      allow_nones: bool = False,
+  ) -> dataset.IterDataset[int]:
+    # Override the default multithreaded execution to avoid wasting memory.
+    # The prefetch is not necessary since there's no IO.
+    return super().to_iter_dataset(
+        read_options=(
+            read_options or options.ReadOptions(prefetch_buffer_size=0)
+        ),
+        allow_nones=allow_nones,
+    )

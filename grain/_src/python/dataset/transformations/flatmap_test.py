@@ -64,7 +64,7 @@ class FlatMapMapDatasetTest(absltest.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.range_ds = dataset.RangeMapDataset(0, 10)
+    self.range_ds = dataset.MapDataset.range(0, 10)
     self.fan_out = 10
 
   def test_fixed_fan_out_size(self):
@@ -117,14 +117,14 @@ class FlatMapMapDatasetTest(absltest.TestCase):
 
   def test_empty_dataset(self):
     flatmap_ds = flatmap.FlatMapMapDataset(
-        dataset.RangeMapDataset(0, 0),
+        dataset.MapDataset.range(0, 0),
         VariableSizeCappedSplitWithNoTransform(max_fan_out=self.fan_out),
     )
     self.assertEmpty(flatmap_ds)
 
   def test_fan_out_exceeds_max_size_raises_error(self):
     with self.assertRaises(ValueError):
-      longer_range_ds = dataset.RangeMapDataset(0, 20)
+      longer_range_ds = dataset.MapDataset.range(0, 20)
       flatmap_ds = flatmap.FlatMapMapDataset(
           longer_range_ds,
           VariableSizeUncappedSplitWithNoTransform(max_fan_out=self.fan_out),

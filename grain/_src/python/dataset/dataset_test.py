@@ -67,47 +67,6 @@ class MapWithIndexProducingIndexElementTuple(transforms.MapWithIndexTransform):
     return (index, element)
 
 
-class RangeMapDatasetTest(absltest.TestCase):
-
-  def test_len(self):
-    ds = dataset.RangeMapDataset(12)
-    self.assertLen(ds, 12)
-    ds = dataset.RangeMapDataset(0, 12)
-    self.assertLen(ds, 12)
-    ds = dataset.RangeMapDataset(2, 12)
-    self.assertLen(ds, 10)
-    ds = dataset.RangeMapDataset(2, 12, 1)
-    self.assertLen(ds, 10)
-    ds = dataset.RangeMapDataset(2, 12, 2)
-    self.assertLen(ds, 5)
-    ds = dataset.RangeMapDataset(2, 13, 2)
-    self.assertLen(ds, 6)
-
-  def test_getitem(self):
-    ds = dataset.RangeMapDataset(12)
-    for i in range(12):
-      self.assertEqual(ds[i], i)
-    for i in range(12):
-      self.assertEqual(ds[i + 12], i)
-    ds = dataset.RangeMapDataset(2, 9, 2)
-    self.assertEqual(ds[0], 2)
-    self.assertEqual(ds[1], 4)
-    self.assertEqual(ds[2], 6)
-    self.assertEqual(ds[3], 8)
-    self.assertEqual(ds[4], 2)
-    self.assertEqual(ds[5], 4)
-
-  def test_iter(self):
-    ds = dataset.RangeMapDataset(12)
-    ds_iter = iter(ds)
-    elements = [next(ds_iter) for _ in range(12)]
-    self.assertEqual(elements, list(range(12)))
-    ds = dataset.RangeMapDataset(2, 9, 2)
-    ds_iter = iter(ds)
-    elements = [next(ds_iter) for _ in range(4)]
-    self.assertEqual(elements, [2, 4, 6, 8])
-
-
 class Source15IntsFrom0:
 
   def __init__(self):
@@ -382,7 +341,7 @@ class LazyDatasetTest(parameterized.TestCase):
       (30),
   )
   def test_filter_does_not_affect_len(self, ds_length):
-    ds = dataset.RangeMapDataset(ds_length)
+    ds = dataset.MapDataset.range(ds_length)
     self.assertLen(ds, ds_length)
     ds = ds.filter(lambda x: x % 2 == 0)
     self.assertLen(ds, ds_length)

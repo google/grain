@@ -342,7 +342,7 @@ class SingleBinPackIterDatasetTest(parameterized.TestCase):
       np.testing.assert_array_equal(actual[feature], expected[feature])
 
   def test_checkpointing(self):
-    ds = dataset.RangeMapDataset(1, 12).map(
+    ds = dataset.MapDataset.range(1, 12).map(
         lambda x: {"x": 2**x + np.arange(x)}
     )
     ds = ds.shuffle(seed=3)

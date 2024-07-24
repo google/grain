@@ -70,7 +70,7 @@ class MakeBatchTest(absltest.TestCase):
 class BatchMapDatasetTest(parameterized.TestCase):
 
   def test_batch_size_2(self):
-    ds = dataset.RangeMapDataset(0, 10)
+    ds = dataset.MapDataset.range(0, 10)
     ds = batch.BatchMapDataset(ds, batch_size=2)
     self.assertLen(ds, 5)  # 10 // 2 = 5.
     actual = [ds[i] for i in range(5)]
@@ -100,7 +100,7 @@ class BatchMapDatasetTest(parameterized.TestCase):
       dict(testcase_name="", drop_remainder=False),
   )
   def test_batch_size_3(self, drop_remainder: bool):
-    ds = dataset.RangeMapDataset(0, 10)
+    ds = dataset.MapDataset.range(0, 10)
     ds = batch.BatchMapDataset(ds, batch_size=3, drop_remainder=drop_remainder)
     if drop_remainder:
       self.assertLen(ds, 3)  # 10 // 3.
@@ -118,7 +118,7 @@ class BatchMapDatasetTest(parameterized.TestCase):
   )
   def test_epoch_boundaries(self, drop_remainder: bool):
     num_epochs = 4
-    ds = dataset.RangeMapDataset(0, 10)
+    ds = dataset.MapDataset.range(0, 10)
     ds = batch.BatchMapDataset(ds, batch_size=3, drop_remainder=drop_remainder)
     if drop_remainder:
       self.assertLen(ds, 3)
@@ -136,7 +136,7 @@ class BatchMapDatasetTest(parameterized.TestCase):
   )
   def test_epoch_boundaries_repeat_after_batch(self, drop_remainder: bool):
     num_epochs = 2
-    ds = dataset.RangeMapDataset(0, 10)
+    ds = dataset.MapDataset.range(0, 10)
     ds = batch.BatchMapDataset(ds, batch_size=3, drop_remainder=drop_remainder)
     ds = repeat.RepeatMapDataset(ds, num_epochs=num_epochs)
     if drop_remainder:
@@ -156,7 +156,7 @@ class BatchMapDatasetTest(parameterized.TestCase):
   )
   def test_epoch_boundaries_repeat_before_batch(self, drop_remainder: bool):
     num_epochs = 2
-    ds = dataset.RangeMapDataset(0, 10)
+    ds = dataset.MapDataset.range(0, 10)
     ds = repeat.RepeatMapDataset(ds, num_epochs=num_epochs)
     ds = batch.BatchMapDataset(ds, batch_size=3, drop_remainder=drop_remainder)
     if drop_remainder:
@@ -189,7 +189,7 @@ class BatchMapDatasetTest(parameterized.TestCase):
 class BatchIterDatasetTest(absltest.TestCase):
 
   def test_batch_size_2(self):
-    ds = dataset.RangeMapDataset(0, 10).to_iter_dataset()
+    ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
     ds = batch.BatchIterDataset(ds, batch_size=2)
     ds_iter = iter(ds)
     actual = [next(ds_iter) for _ in range(5)]
@@ -217,7 +217,7 @@ class BatchIterDatasetTest(absltest.TestCase):
     self.assertEqual(actual, expected)
 
   def test_batch_size_3(self):
-    ds = dataset.RangeMapDataset(0, 10).to_iter_dataset()
+    ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
     # drop_remainder defaults to False
     ds = batch.BatchIterDataset(ds, batch_size=3)
     actual = list(ds)
@@ -227,7 +227,7 @@ class BatchIterDatasetTest(absltest.TestCase):
       np.testing.assert_allclose(actual[i], expected[i])
 
   def test_batch_size_3_drop_remainder(self):
-    ds = dataset.RangeMapDataset(0, 10).to_iter_dataset()
+    ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
     ds = batch.BatchIterDataset(ds, batch_size=3, drop_remainder=True)
     actual = list(ds)
     self.assertLen(actual, 3)

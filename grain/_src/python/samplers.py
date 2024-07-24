@@ -19,7 +19,6 @@ from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import sharding
 from grain._src.python import record
 from grain._src.python.dataset import dataset
-from grain._src.python.dataset.transformations.shuffle import ShuffleMapDataset
 import numpy as np
 
 from grain._src.core import monitoring
@@ -85,6 +84,29 @@ class SequentialSampler:
     return record.RecordMetadata(index=index, record_key=index, rng=rng)
 
 
+class _ShardMapDataset(dataset.MapDataset):
+  """Shards the parent into consecutive pieces."""
+
+  def __init__(
+      self, parent: dataset.MapDataset, shard_options: sharding.ShardOptions
+  ):
+    super().__init__(parent)
+    self._start, self._end = sharding.even_split(
+        len(self._parent), shard_options
+    )
+
+  def __len__(self) -> int:
+    return self._end - self._start
+
+  def __getitem__(self, index):
+    if isinstance(index, slice):
+      return self.slice(index)
+    epoch = index // len(self)
+    index_in_epoch = index % len(self)
+    index = epoch * len(self._parent) + index_in_epoch + self._start
+    return self._parent[index]
+
+
 class IndexSampler:
   """Base index sampler for training on a single datasource.
 
@@ -132,18 +154,16 @@ class IndexSampler:
     self._seed = seed
     self._max_index = None if num_epochs is None else num_epochs * num_records
 
-    self._record_keys = dataset.RangeMapDataset(num_records)
+    self._record_keys = dataset.MapDataset.range(num_records)
     if not isinstance(shard_options, sharding.NoSharding):
-      self._record_keys = dataset.ShardLazyDataset(
-          self._record_keys, shard_options
-      )
+      self._record_keys = _ShardMapDataset(self._record_keys, shard_options)
       if self._max_index is not None and shard_options.drop_remainder:
         self._max_index = min(  # Account for no remainder
             self._max_index,
             len(self._record_keys) * shard_options.shard_count * num_epochs,
         )
     if shuffle:
-      self._record_keys = ShuffleMapDataset(self._record_keys, seed=seed)
+      self._record_keys = self._record_keys.shuffle(seed=seed)
     _api_usage_counter.Increment("IndexSampler")
 
   def __repr__(self) -> str:

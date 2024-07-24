@@ -23,7 +23,6 @@ from ._src.python.dataset.dataset import (
     MapDataset as LazyMapDataset,
     IterDataset as LazyIterDataset,
     DatasetIterator as LazyDatasetIterator,
-    RangeMapDataset as RangeLazyMapDataset,
 )
 from ._src.python.dataset.transformations.batch import (
     BatchMapDataset as BatchLazyMapDataset,
@@ -65,6 +64,7 @@ from ._src.python.dataset.transformations.slice import (
     SliceMapDataset as SliceLazyMapDataset,
 )
 from ._src.python.dataset.transformations.source import (
+    RangeMapDataset as RangeLazyMapDataset,
     SourceMapDataset as SourceLazyMapDataset,
     log_lineage_for_sources,
 )

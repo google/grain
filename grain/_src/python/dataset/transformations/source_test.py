@@ -73,5 +73,46 @@ class SourceMapDatasetTest(absltest.TestCase):
     self.assertEqual(expected_data, actual_data)
 
 
+class RangeMapDatasetTest(absltest.TestCase):
+
+  def test_len(self):
+    ds = source.RangeMapDataset(12)
+    self.assertLen(ds, 12)
+    ds = source.RangeMapDataset(0, 12)
+    self.assertLen(ds, 12)
+    ds = source.RangeMapDataset(2, 12)
+    self.assertLen(ds, 10)
+    ds = source.RangeMapDataset(2, 12, 1)
+    self.assertLen(ds, 10)
+    ds = source.RangeMapDataset(2, 12, 2)
+    self.assertLen(ds, 5)
+    ds = source.RangeMapDataset(2, 13, 2)
+    self.assertLen(ds, 6)
+
+  def test_getitem(self):
+    ds = source.RangeMapDataset(12)
+    for i in range(12):
+      self.assertEqual(ds[i], i)
+    for i in range(12):
+      self.assertEqual(ds[i + 12], i)
+    ds = source.RangeMapDataset(2, 9, 2)
+    self.assertEqual(ds[0], 2)
+    self.assertEqual(ds[1], 4)
+    self.assertEqual(ds[2], 6)
+    self.assertEqual(ds[3], 8)
+    self.assertEqual(ds[4], 2)
+    self.assertEqual(ds[5], 4)
+
+  def test_iter(self):
+    ds = source.RangeMapDataset(12)
+    ds_iter = iter(ds)
+    elements = [next(ds_iter) for _ in range(12)]
+    self.assertEqual(elements, list(range(12)))
+    ds = source.RangeMapDataset(2, 9, 2)
+    ds_iter = iter(ds)
+    elements = [next(ds_iter) for _ in range(4)]
+    self.assertEqual(elements, [2, 4, 6, 8])
+
+
 if __name__ == "__main__":
   absltest.main()

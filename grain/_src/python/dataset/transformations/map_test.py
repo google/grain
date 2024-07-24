@@ -77,7 +77,7 @@ class MapMapDatasetTest(parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.range_ds = dataset.RangeMapDataset(0, 10)
+    self.range_ds = dataset.MapDataset.range(0, 10)
 
   def test_map_size(self):
     map_ds_no_transform = ldmap.MapMapDataset(
@@ -159,7 +159,7 @@ class MapIterDatasetTest(absltest.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.range_iter_ds = dataset.RangeMapDataset(0, 10).to_iter_dataset()
+    self.range_iter_ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
 
   def test_map_data_no_transform(self):
     map_no_transform_iter_ds = iter(
@@ -232,7 +232,7 @@ class MapWithIndexMapDatasetTest(absltest.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.range_ds = dataset.RangeMapDataset(3, 6)
+    self.range_ds = dataset.MapDataset.range(3, 6)
 
   def test_length(self):
     map_ds = ldmap.MapWithIndexMapDataset(self.range_ds, AddIndexTransform())

@@ -44,7 +44,6 @@ import functools
 from typing import Any, Callable, Generic, Iterable, Iterator, Sequence, TypeVar, overload
 
 from grain._src.core import monitoring as grain_monitoring
-from grain._src.core import sharding
 from grain._src.core import transforms
 from grain._src.core import usage_logging
 from grain._src.python import options as grain_options
@@ -145,7 +144,13 @@ class _MapDatasetMeta(abc.ABCMeta):
     Returns:
       A MapDataset with a range of integers.
     """
-    return RangeMapDataset(start, stop, step)
+    # Loaded lazily due to a circular dependency (dataset <-> source).
+    # pylint: disable=g-import-not-at-top
+    from grain._src.python.dataset.transformations import (
+        source as source_dataset,
+    )
+    # pylint: enable=g-import-not-at-top
+    return source_dataset.RangeMapDataset(start, stop, step)
 
   def mix(
       cls,
@@ -1008,65 +1013,3 @@ class _WithOptionsIterDataset(IterDataset[T]):
 
   def __iter__(self) -> DatasetIterator[T]:
     return self._parent.__iter__()
-
-
-class RangeMapDataset(MapDataset[int]):
-  """Range data source, similar to python range() function."""
-
-  def __init__(self, start: int, stop: int | None = None, step: int = 1):
-    super().__init__()
-    self.start = 0 if stop is None else start
-    self.stop = start if stop is None else stop
-    self.step = step
-
-  @functools.cached_property
-  def _length(self) -> int:
-    return len(range(self.start, self.stop, self.step))
-
-  def __len__(self) -> int:
-    return self._length
-
-  def __getitem__(self, index):
-    if isinstance(index, slice):
-      return self.slice(index)
-    return self.start + (index % self._length) * self.step
-
-  def to_iter_dataset(
-      self,
-      read_options: grain_options.ReadOptions | None = None,
-      allow_nones: bool = False,
-  ) -> IterDataset[int]:
-    # Override the default multithreaded execution to avoid wasting memory.
-    # The prefetch is not necessary since there's no IO.
-    return super().to_iter_dataset(
-        read_options=(
-            read_options or grain_options.ReadOptions(prefetch_buffer_size=0)
-        ),
-        allow_nones=allow_nones,
-    )
-
-
-# Deprecated: This class should not be used for new code. It's used to
-# implement the stateless Sampler.
-# For new code the PrefetchMapDataset should be used to implement sharding.
-class ShardLazyDataset(MapDataset[T]):
-  """Shards the parent into consecutive pieces."""
-
-  def __init__(
-      self, parent: MapDataset[T], shard_options: sharding.ShardOptions
-  ):
-    super().__init__(parent)
-    self._start, self._end = sharding.even_split(
-        len(self._parent), shard_options
-    )
-
-  def __len__(self) -> int:
-    return self._end - self._start
-
-  def __getitem__(self, index: int | slice) -> T | None:
-    if isinstance(index, slice):
-      return self.slice(index)
-    epoch = index // len(self)
-    index_in_epoch = index % len(self)
-    index = epoch * len(self._parent) + index_in_epoch + self._start
-    return self._parent[index]
