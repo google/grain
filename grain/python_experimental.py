@@ -20,6 +20,19 @@
 # pylint: disable=wildcard-import
 
 from . import python_lazy_dataset as lazy_dataset
+from ._src.python.dataset.transformations.flatmap import (
+    FlatMapMapDataset,
+    FlatMapIterDataset,
+)
+from ._src.python.dataset.transformations.map import RngPool
+from ._src.python.dataset.transformations.mix import ConcatenateMapDataset
+from ._src.python.dataset.transformations.packing import FirstFitPackIterDataset
+from ._src.python.dataset.transformations.prefetch import (
+    MultiprocessPrefetchIterDataset,
+    ThreadPrefetchIterDataset,
+)
+from ._src.python.dataset.transformations.shuffle import WindowShuffleMapDataset
+from ._src.python.dataset.transformations.zip import ZipMapDataset
 from ._src.core.transforms import (
     FlatMapTransform,
     MapWithIndexTransform,

@@ -41,6 +41,13 @@ from ._src.python.data_sources import (
     RandomAccessDataSource,
     RangeDataSource,
 )
+from ._src.python.dataset.base import DatasetSelectionMap
+from ._src.python.dataset.dataset import (
+    MapDataset,
+    IterDataset,
+    DatasetIterator,
+)
+
 from ._src.python.grain_pool import (GrainPool, GrainPoolElement)
 from ._src.python.load import load
 from ._src.python.operations import (
