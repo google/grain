@@ -82,7 +82,7 @@ class ArrayRecordDataSource(array_record.ArrayRecordDataSource):
 
   def __getitem__(self, record_key: SupportsIndex) -> bytes:
     data = super().__getitem__(record_key)
-    _bytes_read_counter.IncrementBy(len(data), self.__class__.__name__)
+    _bytes_read_counter.IncrementBy(len(data), "ArrayRecordDataSource")
     return data
 
 
