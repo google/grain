@@ -2,7 +2,7 @@
 
 
 
-https://github.com/google/grain/tree/main/docs/behind_the_scenes.md
+https://github.com/google/grain/blob/main/docs/behind_the_scenes.md
 
 In this section, we explore the design of PyGrain. The following diagram
 illustrates the data flow within PyGrain. Parent process (where user creates the
