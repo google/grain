@@ -1,10 +1,6 @@
 # PyGrain
 
-
-
 https://github.com/google/grain/tree/main/docs
-
-
 
 PyGrain is the pure Python backend for Grain, primarily targeted at JAX users.
 PyGrain is designed to be:
@@ -18,7 +14,7 @@ output.
 checkpoints have minimal size. After pre-emption, PyGrain can resume from where
 it left off and produce the same output as if it was never preempted.
 * **Performant.** We took care while designing PyGrain to ensure that it's
-performant (refer to [Behind the Scenes](http://https://github.com/google/grain/tree/main/docs/behind_the_scenes).md
+performant (refer to [Behind the Scenes](https://github.com/google/grain/blob/main/docs/behind_the_scenes.md).md
 section.) We also tested it against multiple data modalities (e.g.
 Text/Audio/Images/Videos).
 * **With minimal dependencies.** PyGrain should minimize its set
@@ -58,8 +54,8 @@ Steps in the pipeline:
 *PyGrain* has no opinion on how you write your training loop. Instead PyGrain
 will return an iterator that implements:
 
--   `next(ds_iter)` returns the element as NumPy arrays.
--   `get_state()` and `set_state()` allow you to checkpoint the state of the
+*   `next(ds_iter)` returns the element as NumPy arrays.
+*   `get_state()` and `set_state()` allow you to checkpoint the state of the
     input pipelines. We aim to keep checkpoints small and strongly recommend
     users to checkpoint input pipelines together with the model.
 
@@ -79,7 +75,7 @@ of the indices in the beginning of each epoch and then reads the elements
 according to the random order. We have found this to be generally fast enough,
 even when using hard drives and distributed file systems.
 
-The index shuffle code can be found [here](https://github.com/google/grain/tree/main/grain/_src/python/experimental/index_shuffle).
+The index shuffle code can be found [here](https://github.com/google/grain/blob/main/grain/_src/python/experimental/index_shuffle).
 
 ## Reproducibility
 
@@ -99,4 +95,3 @@ order defined by the user. The first of these transformations needs to be able
 to process the raw records as read by the data source. The second transformation
 needs to be able to process the elements produced by the first transformation
 and so on.
-
