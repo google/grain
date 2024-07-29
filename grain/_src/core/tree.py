@@ -22,6 +22,7 @@ direct dependency on JAX, we check if it's already present and resort to the
 
 We should be able to remove this module once b/257971667 is resolved.
 """
+import numpy as np
 
 try:
   from jax import tree_util  # pytype: disable=import-error # pylint: disable=g-import-not-at-top
@@ -45,6 +46,40 @@ try:
         tree_util.tree_structure(structure), flat_sequence
     )
 
+  def spec_like(structure):
+    """Infers specification of a tree structure.
+
+    Args:
+      structure: The structure to get the spec of.
+
+    Returns:
+      Same structure but with the leaves replaced with their stringified spec.
+      Homogeneous lists and tuples are represented as `container<inner_type>`.
+    """
+
+    def _is_leaf(element):
+      return isinstance(element, (list, tuple)) and all(
+          isinstance(item, type(element[0])) for item in element
+      )
+
+    def _type(obj):
+      if isinstance(obj, np.ndarray):
+        return np.asarray(obj).dtype
+      elif isinstance(obj, (list, tuple)) and all(
+          isinstance(item, type(obj[0])) for item in obj
+      ):
+        container_type = type(obj).__name__
+        inner_type = f"{type(obj[0]).__module__}.{type(obj[0]).__name__}"
+        return f"{container_type}<{inner_type}>"
+      return type(obj)
+
+    return tree_util.tree_map(
+        lambda x: f"{_type(x)}{list(np.asarray(x).shape)}",
+        structure,
+        is_leaf=_is_leaf,
+    )
+
+
 except ImportError:
   import tree  # pylint: disable=g-import-not-at-top
 
@@ -53,3 +88,23 @@ except ImportError:
   assert_same_structure = tree.assert_same_structure
   flatten = tree.flatten
   unflatten_as = tree.unflatten_as
+
+  def spec_like(structure):
+    """Infers specification of a tree structure.
+
+    Args:
+      structure: The structure to get the spec of.
+
+    Returns:
+      Same structure but with the leaves replaced with their stringified spec.
+    """
+
+    def _type(obj):
+      if isinstance(obj, np.ndarray):
+        return np.asarray(obj).dtype
+      return type(obj)
+
+    return tree.map_structure(
+        lambda x: f"{_type(x)}{list(np.asarray(x).shape)}",
+        structure,
+    )

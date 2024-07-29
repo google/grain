@@ -16,11 +16,13 @@
 Since the tree.py only re-directs the actual implementations this test does not
 try to cover the actual functionality, but rather the re-direction correctness.
 """
-
+import dataclasses
 from typing import Protocol, runtime_checkable
 
 from absl.testing import absltest
+from absl.testing import parameterized
 from grain._src.core import tree
+import numpy as np
 
 
 @runtime_checkable
@@ -41,12 +43,21 @@ class TreeImpl(Protocol):
   def unflatten_as(self, structure, flat_sequence):
     ...
 
+  def spec_like(self, structure):
+    ...
+
 
 # Static check that the module implements the necessary functions.
 tree: TreeImpl = tree
 
 
-class TreeTest(absltest.TestCase):
+@dataclasses.dataclass
+class TestClass:
+  a: int
+  b: str
+
+
+class TreeTest(parameterized.TestCase):
 
   def test_implements_tree_protocol(self):
     # Run time check that the module implements the necessary functions.
@@ -78,6 +89,36 @@ class TreeTest(absltest.TestCase):
     self.assertEqual(
         tree.unflatten_as({"A": "v2", "B": "v1"}, [1, 2]), {"A": 1, "B": 2}
     )
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name="simple",
+          structure={"A": "v2", "B": 1232.4, "C": np.ndarray([1, 2, 3])},
+          expected_output={
+              "A": "<class 'str'>[]",
+              "B": "<class 'float'>[]",
+              "C": "float64[1, 2, 3]",
+          },
+      ),
+      dict(
+          testcase_name="nested",
+          structure={"A": "v2", "B": {"C": np.ndarray([1, 2, 3])}},
+          expected_output={
+              "A": "<class 'str'>[]",
+              "B": {"C": "float64[1, 2, 3]"},
+          },
+      ),
+      dict(
+          testcase_name="leaf",
+          structure=np.ndarray([1, 2, 3]),
+          expected_output="float64[1, 2, 3]",
+      ),
+  )
+  def test_spec_like(self, structure, expected_output):
+    self.assertEqual(tree.spec_like(structure), expected_output)
+
+  # The two tests below exercise behavior only without a Jax dependency present.
+  # The OSS testing runs with Jax always present so we skip them.
 
 
 if __name__ == "__main__":

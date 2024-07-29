@@ -40,12 +40,9 @@ def _make_batch(values: Sequence[T]) -> T:
   except ValueError as e:
     # NumPy error message doesn't include actual shapes and dtypes. Provide a
     # more helpful error message.
-    element_specs = tree.map_structure(
-        lambda x: f"{np.asarray(x).dtype}{list(np.asarray(x).shape)}", values
-    )
     raise ValueError(
         "Expected all input elements to have the same structure but got:\n"
-        f"{pprint.pformat(element_specs)}"
+        f"{pprint.pformat(tree.spec_like(values))}"
     ) from e
 
 

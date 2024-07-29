@@ -39,6 +39,30 @@ class TreeJaxTest(tree_test.TreeTest):
         tree.map_structure(lambda x: x + 1, MyTree(1, 2)), MyTree(2, 3)
     )
 
+  def test_spec_like_with_class(self):
+    self.assertEqual(
+        tree.spec_like({"B": 1232.4, "C": tree_test.TestClass(a=1, b="v2")}),
+        {
+            "B": "<class 'float'>[]",
+            "C": "<class 'grain._src.core.tree_test.TestClass'>[]",
+        },
+    )
+
+  def test_spec_like_with_list(self):
+    self.assertEqual(
+        tree.spec_like({
+            "B": 1232.4,
+            "C": [
+                tree_test.TestClass(a=1, b="v2"),
+                tree_test.TestClass(a=2, b="v2"),
+            ],
+        }),
+        {
+            "B": "<class 'float'>[]",
+            "C": "list<grain._src.core.tree_test.TestClass>[2]",
+        },
+    )
+
 
 if __name__ == "__main__":
   absltest.main()
