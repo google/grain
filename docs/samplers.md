@@ -2,7 +2,7 @@
 
 
 
-https://github.com/google/grain/blob/main/docs/samplers.md
+https://github.com/google/grain/tree/main/docs/samplers.md
 
 Samplers in PyGrain are responsible for determining the order in which records
 are processed. This allows PyGrain to implement global transformations (e.g.

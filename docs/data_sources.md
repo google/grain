@@ -2,7 +2,7 @@
 
 
 
-https://github.com/google/grain/blob/main/docs/data_sources.md
+https://github.com/google/grain/tree/main/docs/data_sources.md
 
 
 
