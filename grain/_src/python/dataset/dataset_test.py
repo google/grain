@@ -480,6 +480,16 @@ class LazyDatasetTest(parameterized.TestCase):
     )
     self.assertSequenceEqual(list(ds), list(range(15)))
 
+  def test_start_prefetch(self):
+    ds = (
+        Source15IntsFrom0MapDataset()
+        .to_iter_dataset()
+        .prefetch(options.MultiprocessingOptions(num_workers=4))
+    )
+    it = ds.__iter__()
+    it.start_prefetch()
+    self.assertSequenceEqual(list(it), list(range(15)))
+
   @parameterized.parameters(
       dict(initial_ds=Source15IntsFrom0MapDataset()),
       dict(initial_ds=Source15IntsFrom0IterDataset()),

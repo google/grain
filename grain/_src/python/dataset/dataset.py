@@ -989,6 +989,20 @@ class DatasetIterator(Iterator[T], abc.ABC):
   def set_state(self, state: dict[str, Any]):
     """Sets the current state of the iterator."""
 
+  def start_prefetch(self) -> None:
+    """Asynchronously starts processing and buffering elements.
+
+    NOTE: Only available on iterators of asynchrnous transformations.
+
+    Can be useful when the iterator can be created in advance but the elements
+    are not needed immediately. For instance, when recovering iterator and model
+    from a checkpoint, recover the iterator first, call `start_prefech` and then
+    recover the model. This way the time to get the first batch from the
+    iterator will be partially or fully hidden behind the time it takes to
+    recover the model.
+    """
+    raise NotImplementedError
+
 
 class _WithOptionsMapDataset(MapDataset[T]):
   """Holds options used by downstream transformations."""
