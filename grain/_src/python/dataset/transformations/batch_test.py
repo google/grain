@@ -13,6 +13,10 @@
 # limitations under the License.
 """Tests for batch transformation."""
 
+from concurrent import futures
+import functools
+from unittest import mock
+
 from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.python.dataset import dataset
@@ -22,22 +26,24 @@ from grain._src.python.dataset.transformations import source
 import numpy as np
 import tree
 
+make_batch = functools.partial(batch._make_batch, futures.ThreadPoolExecutor)
+
 
 class MakeBatchTest(absltest.TestCase):
 
   def test_zero_values(self):
     values = []
     with self.assertRaises(ValueError):
-      batch._make_batch(values)
+      make_batch(values)
 
   def test_single_value(self):
     values = [np.asarray([1, 2, 3])]
-    batched_values = batch._make_batch(values)
+    batched_values = make_batch(values)
     self.assertEqual(batched_values.shape, (1, 3))
 
   def test_two_values(self):
     values = [np.asarray([1, 2, 3]), np.asarray([4, 5, 6])]
-    batched_values = batch._make_batch(values)
+    batched_values = make_batch(values)
     self.assertEqual(batched_values.shape, (2, 3))
 
   def test_different_shape(self):
@@ -46,7 +52,21 @@ class MakeBatchTest(absltest.TestCase):
         ValueError,
         "Expected all input elements to have the same structure but got:",
     ):
-      batch._make_batch(values)
+      make_batch(values)
+
+  def test_uses_parallel_concatenate_for_large_arrays(self):
+    n = batch._LARGE_CONCAT_THRESHOLD // 10
+    values = [np.zeros([n], dtype=np.int8) + i for i in range(11)]
+
+    with mock.patch.object(batch, "_parallel_concatenate") as mock_concat:
+      # First check that we use the multi-threaded implementation.
+      make_batch(values)
+      mock_concat.assert_called_once()
+
+    # Next check that the implementation is correct.
+    result = make_batch(values)
+    for i, value in enumerate(values):
+      np.testing.assert_array_equal(result[i], value)
 
   def test_different_structure(self):
     values = [{"a": np.asarray([1, 2, 3])}, {"b": np.asarray(0.5)}]
@@ -54,7 +74,7 @@ class MakeBatchTest(absltest.TestCase):
         ValueError,
         "Expected all input elements to have the same structure but got:",
     ):
-      batch._make_batch(values)
+      make_batch(values)
     values = [
         {"a": np.asarray([1, 2, 3])},
         {"b": np.asarray(0.5)},
@@ -64,7 +84,7 @@ class MakeBatchTest(absltest.TestCase):
         ValueError,
         "Expected all input elements to have the same structure but got:",
     ):
-      batch._make_batch(values)
+      make_batch(values)
 
 
 class BatchMapDatasetTest(parameterized.TestCase):
