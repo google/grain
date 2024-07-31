@@ -74,3 +74,26 @@ py_test(
         "//grain/_src/python:options",
     ],
 )
+
+py_library(
+    name = "visualize",
+    srcs = ["visualize.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":dataset",
+        "//grain/_src/core:tree",
+        "//grain/_src/python:options",
+    ],
+)
+
+py_test(
+    name = "visualize_test",
+    srcs = ["visualize_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":dataset",
+        ":visualize",
+        "//grain/_src/core:transforms",
+        "//grain/_src/python:options",
+    ],
+)
