@@ -288,9 +288,9 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
 
     time_to_fetch = time.time() - start_time
     logging.info('Reading dataset took %.2f seconds.', time_to_fetch)
-    if start_prefetch_calls:
-      self.assertLess(time_to_fetch, 5)
-    else:
+    # Note that we can't reliably assert the upper bound on the time it takes
+    # read the dataset elements since worker startup time can vary a lot.
+    if not start_prefetch_calls:
       self.assertGreater(time_to_fetch, 1)
 
   def test_prefetch_but_no_read(self):
