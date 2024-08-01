@@ -20,6 +20,7 @@
 # pylint: disable=wildcard-import
 
 from . import python_lazy_dataset as lazy_dataset
+from ._src.python.dataset.dataset import apply_transformations
 from ._src.python.dataset.transformations.flatmap import (
     FlatMapMapDataset,
     FlatMapIterDataset,

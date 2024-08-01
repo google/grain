@@ -142,7 +142,7 @@ class IdentityMapDataset(dataset.MapDataset[_T]):
     return self._parent[index]
 
 
-class LazyDatasetTest(parameterized.TestCase):
+class DatasetTest(parameterized.TestCase):
 
   def test_parents_source_dataset_has_no_parents(self):
     ds = Source15IntsFrom0MapDataset()
@@ -726,6 +726,53 @@ class LazyDatasetTest(parameterized.TestCase):
     ds = ds.map(add_one)  # [8, 11, 14]
     # Note that the final dataset still has the correct type ineferred.
     self.assertSequenceEqual(list(ds), [8, 11, 14])
+
+
+class TfRandomMapAlwaysAddingOne(transforms.TfRandomMapTransform):
+
+  def np_random_map(self, x, rng):
+    return x + 1
+
+
+class FilterArraysWithLargeSum(transforms.FilterTransform):
+
+  def filter(self, x):
+    return np.sum(x) < 20
+
+
+@parameterized.parameters(
+    (Source15IntsFrom0MapDataset(),), (Source15IntsFrom0IterDataset(),)
+)
+class ApplyTransformationsTest(parameterized.TestCase):
+
+  def test_single_transform(self, ds):
+    ds = dataset.apply_transformations(ds, MapTransformAddingOne())
+    self.assertSequenceEqual(list(ds), list(range(1, 16)))
+
+  def test_multiple_transforms(self, ds):
+    ds = ds.seed(42)  # `random_map` requires seed.
+    ds = dataset.apply_transformations(
+        ds,
+        [
+            MapTransformAddingOne(),
+            RandomMapAlwaysAddingOne(),
+            transforms.BatchTransform(batch_size=2, drop_remainder=True),
+            FilterArraysWithLargeSum(),
+        ],
+    )
+    np.testing.assert_equal(
+        list(ds),
+        [
+            np.array([2, 3]),
+            np.array([4, 5]),
+            np.array([6, 7]),
+            np.array([8, 9]),
+        ],
+    )
+
+  def test_unsupported_transform(self, ds):
+    with self.assertRaises(NotImplementedError):
+      _ = dataset.apply_transformations(ds, TfRandomMapAlwaysAddingOne())
 
 
 if __name__ == '__main__':

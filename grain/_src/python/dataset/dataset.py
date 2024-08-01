@@ -1027,3 +1027,44 @@ class _WithOptionsIterDataset(IterDataset[T]):
 
   def __iter__(self) -> DatasetIterator[T]:
     return self._parent.__iter__()
+
+
+_ConsistentDatasetType = TypeVar(
+    "_ConsistentDatasetType", MapDataset, IterDataset
+)
+
+
+def apply_transformations(
+    ds: _ConsistentDatasetType,
+    transformations: transforms.Transformation | transforms.Transformations,
+) -> _ConsistentDatasetType:
+  """Applies transformations to a dataset.
+
+  Args:
+    ds: `MapDataset` or `IterDataset` to apply the transformations to.
+    transformations: one or more transfromations to apply.
+
+  Returns:
+    Dataset of the same type with transformations applied.
+  """
+  if not isinstance(transformations, Sequence):
+    transformations = (transformations,)
+  # NOTE: match case syntax was introduced in Python 3.10. We should switch to
+  # it once we drop support for Python 3.9 in OSS.
+  for transformation in transformations:
+    if isinstance(transformation, transforms.BatchTransform):
+      ds = ds.batch(
+          transformation.batch_size,
+          drop_remainder=transformation.drop_remainder,
+      )
+    elif isinstance(transformation, transforms.MapTransform):
+      ds = ds.map(transformation)
+    elif isinstance(transformation, transforms.RandomMapTransform):
+      ds = ds.random_map(transformation)
+    elif isinstance(transformation, transforms.FilterTransform):
+      ds = ds.filter(transformation)
+    else:
+      raise NotImplementedError(
+          f"Transformation type: {transformation} is not supported."
+      )
+  return ds
