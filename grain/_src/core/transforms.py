@@ -71,7 +71,7 @@ class FilterTransform(abc.ABC):
 
   @abc.abstractmethod
   def filter(self, element) -> bool:
-    """Filters a single element."""
+    """Filters a single element; returns True if the element should be kept."""
 
 
 class FlatMapTransform(abc.ABC):
