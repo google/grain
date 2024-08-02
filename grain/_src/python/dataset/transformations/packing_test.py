@@ -69,7 +69,7 @@ class SingleBinPackIterDatasetTest(parameterized.TestCase):
       self.assertLen(actual, 3)
       np.testing.assert_array_equal(actual, expected)
 
-  def test_pack_single_feature_remainder_is_padded(self):
+  def test_pack_single_feature_last_example_is_padded(self):
     # 4 elements of variable sequence length.
     input_elements = [[1, 2, 3, 4], [5, 6], [11, 12, 13, 14], [7]]
     ds = source.SourceMapDataset(input_elements)
@@ -87,6 +87,36 @@ class SingleBinPackIterDatasetTest(parameterized.TestCase):
         ([11, 12, 13, 14], [1, 1, 1, 1], [0, 1, 2, 3]),
         # Second and fourth element packed together (plus padding).
         ([5, 6, 7, 0], [1, 1, 2, 0], [0, 1, 0, 0]),
+    ]
+
+    for actual, expected in zip(
+        ds_iter, expected_elements, **({"strict": True} if _IS_PY310 else {})
+    ):
+      # Elements are tuples with (inputs, inputs_segment_ids, inputs_positions).
+      self.assertLen(actual, 3)
+      np.testing.assert_array_equal(actual, expected)
+
+  def test_pack_single_feature_no_drop_remainder(self):
+    # 4 elements of variable sequence length. Examples are never dropped.
+    input_elements = [[1, 2, 3, 4], [5], [11, 12, 13], [6, 7]]
+    ds = source.SourceMapDataset(input_elements)
+    ds = ds.map(np.asarray)
+    ds = ds.to_iter_dataset()
+    ds = packing.SingleBinPackIterDataset(
+        ds, length_struct=3, drop_remainder=False
+    )
+    ds_iter = iter(ds)
+
+    # Elements are tuples with (inputs, inputs_segment_ids, inputs_positions).
+    expected_elements = [
+        # First element was already fully packed, yield it first.
+        ([1, 2, 3], [1, 1, 1], [0, 1, 2]),
+        # the remainder and the second element are buffered
+        # yield the third element first since it's fully packed
+        ([11, 12, 13], [1, 1, 1], [0, 1, 2]),
+        # yield from the buffer
+        ([4, 5, 6], [1, 2, 3], [0, 0, 0]),
+        ([7, 0, 0], [1, 0, 0], [0, 0, 0]),
     ]
 
     for actual, expected in zip(
@@ -280,6 +310,76 @@ class SingleBinPackIterDatasetTest(parameterized.TestCase):
             "targets": [31, 41, 51, 60],
             "targets_segment_ids": [1, 1, 1, 2],
             "targets_positions": [0, 1, 2, 0],
+        },
+    ]
+    for actual, expected in zip(
+        ds_iter, expected_elements, **({"strict": True} if _IS_PY310 else {})
+    ):
+      np.testing.assert_array_equal(actual[feature], expected[feature])
+
+  @parameterized.parameters(
+      "inputs",
+      "inputs_segment_ids",
+      "inputs_positions",
+      "targets",
+      "targets_segment_ids",
+      "targets_positions",
+  )
+  def test_pack_multiple_features_different_sequences_length_no_drop_remainder(
+      self, feature: str
+  ):
+    input_elements = [
+        {
+            "inputs": [1, 2, 3, 4],
+            "targets": [10, 20],
+        },
+        {
+            "inputs": [5, 6, 7],
+            "targets": [30, 40, 50],
+        },
+        {
+            "inputs": [11, 12, 13, 14],
+            "targets": [31, 41, 51],
+        },
+        {
+            "inputs": [8],
+            "targets": [60],
+        },
+    ]
+    ds = source.SourceMapDataset(input_elements)
+    ds = ds.map(lambda d: {k: np.asarray(v) for k, v in d.items()})
+    ds = ds.to_iter_dataset()
+    ds = packing.SingleBinPackIterDataset(
+        ds,
+        length_struct={"inputs": 6, "targets": 4},
+        drop_remainder=False,
+    )
+    ds_iter = iter(ds)
+
+    expected_elements = [
+        {
+            "inputs": [1, 2, 3, 4, 5, 6],
+            "inputs_segment_ids": [1, 1, 1, 1, 2, 2],
+            "inputs_positions": [0, 1, 2, 3, 0, 1],
+            "targets": [10, 20, 30, 40],  # 50 gets added to the next element.
+            "targets_segment_ids": [1, 1, 2, 2],
+            "targets_positions": [0, 1, 0, 1],
+        },
+        {
+            "inputs": [7, 11, 12, 13, 14, 0],
+            "inputs_segment_ids": [1, 2, 2, 2, 2, 0],
+            "inputs_positions": [0, 0, 1, 2, 3, 0],
+            "targets": [50, 31, 41, 51],
+            "targets_segment_ids": [1, 2, 2, 2],
+            "targets_positions": [0, 0, 1, 2],
+        },
+        {
+            "inputs": [8, 0, 0, 0, 0, 0],
+            "inputs_segment_ids": [1, 0, 0, 0, 0, 0],
+            "inputs_positions": [0, 0, 0, 0, 0, 0],
+            "targets": [60, 0, 0, 0],
+            "targets_segment_ids": [1, 0, 0, 0],
+            "targets_positions": [0, 0, 0, 0],
         },
     ]
     for actual, expected in zip(
