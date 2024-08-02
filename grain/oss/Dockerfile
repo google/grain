@@ -11,13 +11,7 @@ ARG BAZEL_VERSION
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Enable both PowerTools and EPEL otherwise some packages like hdf5-devel fail
-# to install.
-RUN yum clean all && \
-    yum update -y && \
-    yum install -y epel-release
-
-RUN yum install -y rsync hdf5-devel
+RUN yum install -y rsync
 
 ENV PYTHON_BIN=/opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin
 ENV PATH="${PYTHON_BIN}:${PATH}"
@@ -52,6 +46,9 @@ RUN --mount=type=cache,target=/root/.cache \
 # Install dependencies needed for grain tests
 RUN --mount=type=cache,target=/root/.cache \
   ${PYTHON_BIN}/python -m pip install -U \
+    # h5py is a tensorflow dependency. 3.11 release no longer has aarch64 wheels
+    # for some reason so we manually install the one that has.
+    h5py==3.10 \
     auditwheel \
     dill \
     jax \
