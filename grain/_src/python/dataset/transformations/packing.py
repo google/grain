@@ -46,10 +46,10 @@ class SingleBinPackIterDataset(dataset.IterDataset):
   # Properties of SingleBinPack:
   SingleBinPack packs a single example at a time and passes through any examples
   that seem already packed.
-  When only single features is packed this produces 0 padding. However some
-  examples will be truncated. And when the parent iterator is exhausted the
-  remaining examples in the buffer will be packed together and padded to form
-  a full packed example.
+  When only single features is packed this produces 0 padding. drop_remainder
+  controls whether the remainder from the last example is dropped. And when the
+  parent iterator is exhausted the remaining examples in the buffer will be
+  packed together and padded to form a full packed example.
 
   # Details
   The `length_struct` should have the same structure as examples from the
@@ -66,8 +66,8 @@ class SingleBinPackIterDataset(dataset.IterDataset):
   combining multiple examples. If there is only a single packed feature it is
   guarantee to not contain padding.
   Warning: When combining examples that add up to a sequence longer than the
-  target sequence length the remainder of the last example will be dropped!
-  (This could be changed by improving the implementation.)
+  target sequence length the remainder of the last example will be dropped by
+  default. This can be changed by setting `drop_remainder=False`.
 
   As common each packed feature there will have 3 outputs:
   - The concatenated values.
@@ -83,12 +83,16 @@ class SingleBinPackIterDataset(dataset.IterDataset):
       self,
       parent: dataset.IterDataset,
       length_struct: PyTree[Optional[int]],
+      drop_remainder: bool = True,
   ):
     super().__init__(parent)
     self._length_struct = length_struct
+    self._drop_remainder = drop_remainder
 
   def __iter__(self) -> dataset.DatasetIterator:
-    return SingleBinPackDatasetIterator(iter(self._parent), self._length_struct)  # pytype: disable=wrong-arg-types
+    return SingleBinPackDatasetIterator(
+        iter(self._parent), self._length_struct, self._drop_remainder
+    )  # pytype: disable=wrong-arg-types
 
 
 class SingleBinPackDatasetIterator(dataset.DatasetIterator):
@@ -101,9 +105,11 @@ class SingleBinPackDatasetIterator(dataset.DatasetIterator):
       self,
       parent: dataset.DatasetIterator,
       length_struct: PyTree[Optional[int]],
+      drop_remainder: bool = True,
   ):
     self._parent = parent
     self._length_struct = length_struct
+    self._drop_remainder = drop_remainder
     # Same as above but flattened. Some operations are easier using the
     # flattened representation.
     self._flat_lengths: list[Optional[int]] = tree.flatten(length_struct)
@@ -145,7 +151,7 @@ class SingleBinPackDatasetIterator(dataset.DatasetIterator):
         # Parent iterator exhausted. Yield whatever is in the buffer as last
         # (potentially heavily padded) element.
         if self._element_buffer:
-          packed_element = self._pack_elements(self._element_buffer)
+          packed_element, _ = self._pack_elements(self._element_buffer)
           self._element_buffer = []
           self._element_buffer_space = copy.copy(self._flat_lengths)
           return packed_element
@@ -157,15 +163,22 @@ class SingleBinPackDatasetIterator(dataset.DatasetIterator):
         # is allowed and handled correctly by our checkpointing.
         # This behaviour is especially important when examples are splits of
         # larger examples that already have the desired length.
-        self._packed_elements.append(self._pack_elements([flat_element]))
-        continue
+        packed_element, remainders = self._pack_elements([flat_element])
+        self._packed_elements.append(packed_element)
+        if self._drop_remainder or not remainders:
+          continue
+        flat_element = remainders[0]
 
       # Concat element to incomplete_element.
-      is_fully_packed = self._append_to_next_element(flat_element)
-      if is_fully_packed:
-        self._packed_elements.append(self._pack_elements(self._element_buffer))
-        self._element_buffer = []
+      is_fully_packed = self._append_to_next_element([flat_element])
+      while is_fully_packed:
+        packed_element, remainders = self._pack_elements(self._element_buffer)
+        self._packed_elements.append(packed_element)
         self._element_buffer_space = copy.copy(self._flat_lengths)
+        self._element_buffer = []
+        if self._drop_remainder or not remainders:
+          break
+        is_fully_packed = self._append_to_next_element(remainders)
 
   def _is_fully_packed(self, flat_element):
     return any(
@@ -173,17 +186,16 @@ class SingleBinPackDatasetIterator(dataset.DatasetIterator):
         for target_length, y in zip(self._flat_lengths, flat_element)
     )
 
-  def _append_to_next_element(self, flat_element) -> bool:
-    self._element_buffer.append(flat_element)
+  def _append_to_next_element(self, flat_elements: list[Any]) -> bool:
     is_fully_packed = False
-    for i in range(len(self._flat_lengths)):
-      if self._flat_lengths[i] is None:
-        continue
-      if len(flat_element[i]) >= self._element_buffer_space[i]:
-        self._element_buffer_space[i] = 0
-        is_fully_packed = True
-      else:
+    for flat_element in flat_elements:
+      self._element_buffer.append(flat_element)
+      for i in range(len(self._element_buffer_space)):
+        if self._flat_lengths[i] is None:
+          continue
         self._element_buffer_space[i] -= len(flat_element[i])
+        if self._element_buffer_space[i] <= 0:
+          is_fully_packed = True
     return is_fully_packed
 
   def _pack_elements(self, flat_elements: list[Any]):
@@ -211,6 +223,7 @@ class SingleBinPackDatasetIterator(dataset.DatasetIterator):
         segmentations[start:end] = i + 1
         positions[start:end] = np.arange(length)
         start += length
+        flat_elements[i][feature] = flat_elements[i][feature][length:]
       flat_packed_element.append((values, segmentations, positions))
     packed_element = tree.unflatten_as(self._length_struct, flat_packed_element)
     # Special treatment for dictionaries.
@@ -221,7 +234,16 @@ class SingleBinPackDatasetIterator(dataset.DatasetIterator):
           packed_element[key] = value[0]
           packed_element[f"{key}_segment_ids"] = value[1]
           packed_element[f"{key}_positions"] = value[2]
-    return packed_element
+    remaining_flat_elements = []
+    for i in range(len(flat_elements)):
+      is_empty = True
+      for feature in range(len(self._flat_lengths)):
+        if flat_elements[i][feature].size:
+          is_empty = False
+          break
+      if not is_empty:
+        remaining_flat_elements.append(flat_elements[i])
+    return packed_element, remaining_flat_elements
 
   def get_state(self) -> dict[str, Any]:
     return {
