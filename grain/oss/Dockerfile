@@ -11,6 +11,12 @@ ARG BAZEL_VERSION
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Enable both PowerTools and EPEL otherwise some packages like hdf5-devel fail
+# to install.
+RUN yum clean all && \
+    yum update -y && \
+    yum install -y epel-release
+
 RUN yum install -y rsync hdf5-devel
 
 ENV PYTHON_BIN=/opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin
