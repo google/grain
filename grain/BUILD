@@ -53,7 +53,6 @@ py_library(
         ":python_lazy_dataset",  # build_cleaner: keep
         "//grain/_src/core:transforms",  # build_cleaner: keep
         "//grain/_src/python/dataset:visualize",  # build_cleaner: keep
-        "//grain/_src/python/experimental/continual_sequence_sampler",  # build_cleaner: keep
         "//grain/_src/python/experimental/example_packing:packing",  # build_cleaner: keep
     ],
 )
