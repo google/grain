@@ -28,6 +28,9 @@ from ._src.python.dataset.transformations.batch import (
     BatchMapDataset as BatchLazyMapDataset,
     BatchIterDataset as BatchLazyIterDataset,
 )
+from ._src.python.dataset.transformations.concat_then_split import (
+    ConcatThenSplitIterDataset,
+)
 from ._src.python.dataset.transformations.filter import (
     FilterMapDataset as FilterLazyMapDataset,
     FilterIterDataset as FilterLazyIterDataset,
