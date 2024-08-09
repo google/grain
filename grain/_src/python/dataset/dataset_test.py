@@ -523,8 +523,8 @@ class DatasetTest(parameterized.TestCase):
   )
   def test_seed_with_map(self, initial_ds):
     seed = 126
-    ds1 = initial_ds.seed(seed).map(AddRandomInteger())
-    ds2 = initial_ds.seed(seed).map(AddRandomInteger())
+    ds1 = initial_ds.seed(seed).random_map(AddRandomInteger())
+    ds2 = initial_ds.seed(seed).random_map(AddRandomInteger())
     self.assertEqual(list(ds1), list(ds2))
     ds3 = initial_ds.seed(seed + 1).map(AddRandomInteger())
     self.assertNotEqual(list(ds1), list(ds3))
@@ -543,9 +543,11 @@ class DatasetTest(parameterized.TestCase):
 
   def test_seed_is_different_with_chained_transforms(self):
     seed = 129
-    ds = Source15IntsFrom0IterDataset().seed(seed).map(AddRandomInteger())
+    ds = (
+        Source15IntsFrom0IterDataset().seed(seed).random_map(AddRandomInteger())
+    )
     map_seed1 = ds._seed  # pytype: disable=attribute-error
-    ds = ds.map(AddRandomInteger())
+    ds = ds.random_map(AddRandomInteger())
     map_seed2 = ds._seed  # pytype: disable=attribute-error
     self.assertNotEqual(map_seed1, map_seed2)
 
@@ -555,13 +557,13 @@ class DatasetTest(parameterized.TestCase):
         Source15IntsFrom0MapDataset()
         .seed(seed)
         .shuffle()
-        .map(AddRandomInteger())
+        .random_map(AddRandomInteger())
     )
     ds2 = (
         Source15IntsFrom0MapDataset()
         .seed(seed)
         .shuffle()
-        .map(AddRandomInteger())
+        .random_map(AddRandomInteger())
     )
     self.assertEqual(list(ds1), list(ds2))
 
@@ -591,7 +593,8 @@ class DatasetTest(parameterized.TestCase):
         [Source15IntsFrom0MapDataset().seed(seed) for _ in range(6)]
     )
     self.assertEqual(
-        list(ds1.map(AddRandomInteger())), list(ds2.map(AddRandomInteger()))
+        list(ds1.random_map(AddRandomInteger())),
+        list(ds2.random_map(AddRandomInteger())),
     )
 
   def test_seed_with_multiple_parents_set_on_single_parent(self):
@@ -605,7 +608,8 @@ class DatasetTest(parameterized.TestCase):
         + [Source15IntsFrom0MapDataset() for _ in range(6)]
     )
     self.assertEqual(
-        list(ds1.map(AddRandomInteger())), list(ds2.map(AddRandomInteger()))
+        list(ds1.random_map(AddRandomInteger())),
+        list(ds2.random_map(AddRandomInteger())),
     )
     # Make sure that all parent seeds are used.
     # Though note that users would normally set different seeds for mixture
@@ -614,7 +618,8 @@ class DatasetTest(parameterized.TestCase):
         [Source15IntsFrom0MapDataset().seed(seed) for _ in range(7)]
     )
     self.assertNotEqual(
-        list(ds1.map(AddRandomInteger())), list(ds3.map(AddRandomInteger()))
+        list(ds1.random_map(AddRandomInteger())),
+        list(ds3.random_map(AddRandomInteger())),
     )
 
   def test_seed_picklable(self):
