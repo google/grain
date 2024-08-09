@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Experimental PyGrain APIs."""
+import warnings
 
 # pylint: disable=g-importing-member
 # pylint: disable=g-multiple-import
@@ -70,4 +71,12 @@ from ._src.python.dataset.transformations.source import (
 )
 from ._src.python.dataset.transformations.zip import (
     ZipMapDataset as ZipLazyMapDataset,
+)
+
+warnings.warn(
+    "`grain.python.experimental.lazy_dataset` is deprecated and will be "
+    "removed Nov 1, 2024. Use the graduated APIs in "
+    "`grain.python.{Map|Iter}Dataset` or experimental APIs in "
+    "`grain.python.experimental`",
+    DeprecationWarning,
 )

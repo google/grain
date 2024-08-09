@@ -15,7 +15,7 @@ dependencies = [
     'array-record',
     'cloudpickle',
     'dm-tree',
-    'etils[epath]',
+    'etils[epath,epy]',
     'jaxtyping',
     'more-itertools>=9.1.0',
     'numpy',

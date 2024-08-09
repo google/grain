@@ -42,6 +42,7 @@ import abc
 import builtins
 import functools
 from typing import Any, Callable, Generic, Iterable, Iterator, Sequence, TypeVar, overload
+import warnings
 
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import transforms
@@ -364,6 +365,12 @@ class MapDataset(_SeededDataset, Generic[T], metaclass=_MapDatasetMeta):
       A dataset containing the elements of the original dataset transformed by
       `transform`.
     """
+    if isinstance(transform, transforms.RandomMapTransform) or seed is not None:
+      warnings.warn(
+          "`MapDataset.map` with `RandomMapTransform` is deprecated. Use "
+          "`MapDataset.random_map` instead.",
+          DeprecationWarning,
+      )
     # Loaded lazily due to a circular dependency (dataset <-> map).
     # pylint: disable=g-import-not-at-top
     from grain._src.python.dataset.transformations import (
@@ -863,6 +870,12 @@ class IterDataset(_SeededDataset, Iterable[T], metaclass=_IterDatasetMeta):
       A dataset containing the elements of the original dataset transformed by
       `transform`.
     """
+    if isinstance(transform, transforms.RandomMapTransform) or seed is not None:
+      warnings.warn(
+          "`IterDataset.map` with `RandomMapTransform` is deprecated. Use "
+          "`IterDataset.random_map` instead.",
+          DeprecationWarning,
+      )
     # Loaded lazily due to a circular dependency (dataset <-> map).
     # pylint: disable=g-import-not-at-top
     from grain._src.python.dataset.transformations import (

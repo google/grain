@@ -38,7 +38,7 @@ RUN --mount=type=cache,target=/root/.cache \
     build \
     cloudpickle \
     dm-tree \
-    etils[epath] \
+    etils[epath,epy] \
     jaxtyping \
     more-itertools>=9.1.0 \
     numpy;
