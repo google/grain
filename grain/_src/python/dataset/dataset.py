@@ -483,7 +483,7 @@ class MapDataset(_SeededDataset, Generic[T], metaclass=_MapDatasetMeta):
     ```
     ds = MapDataset.range(5).shuffle()
     set(ds) == {0, 1, 2, 3, 4}
-    list(ds) != [0, 1, 2, 3, 4]  # With probablity (1 - 1/5!).
+    list(ds) != [0, 1, 2, 3, 4]  # With probability (1 - 1/5!).
     ```
 
     Args:
@@ -504,7 +504,7 @@ class MapDataset(_SeededDataset, Generic[T], metaclass=_MapDatasetMeta):
   def slice(self, sl: builtins.slice) -> MapDataset[T]:
     """Returns a dataset containing only the elements with indices in `sl`.
 
-    For most implementations of `MapDataset` slicing is also avilable through
+    For most implementations of `MapDataset` slicing is also available through
     subscript operator: `list(ds.slice(slice(1, 10, 2))) == ds[1:10:2]`.
 
     Example usage:
@@ -1005,7 +1005,7 @@ class DatasetIterator(Iterator[T], abc.ABC):
   def start_prefetch(self) -> None:
     """Asynchronously starts processing and buffering elements.
 
-    NOTE: Only available on iterators of asynchrnous transformations.
+    NOTE: Only available on iterators of asynchronous transformations.
 
     Can be useful when the iterator can be created in advance but the elements
     are not needed immediately. For instance, when recovering iterator and model
