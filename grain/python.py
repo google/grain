@@ -50,7 +50,6 @@ from ._src.python.dataset.dataset import (
     DatasetIterator,
 )
 
-from ._src.python.grain_pool import (GrainPool, GrainPoolElement)
 from ._src.python.load import load
 from ._src.python.operations import (
     BatchOperation,
