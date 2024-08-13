@@ -43,7 +43,7 @@ class ShuffleMapDataset(dataset.MapDataset[T]):
       raise ValueError(
           f"Seed must be an integer between 0 and 2**32-1 (got {seed=})."
       )
-    self._seed = seed
+    self._seed = int(seed)
 
   def __len__(self) -> int:
     return len(self._parent)
