@@ -479,6 +479,10 @@ class MapDataset(_SeededDataset, Generic[T], metaclass=_MapDatasetMeta):
     seed individually. It allows to pass a single seed to derive seeds for all
     downstream random transformations in the pipeline.
 
+    In multi-epoch training each epoch will be shuffled differently (i.e. the
+    seed is combined with epoch number). In such case it is recommended to
+    `shuffle` before `repeat` to avoid mixing elements from different epochs.
+
     Example usage:
     ```
     ds = MapDataset.range(5).shuffle()
