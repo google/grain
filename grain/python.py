@@ -30,6 +30,7 @@ from ._src.core.transforms import (
     RandomMapTransform,
     Transformations,
     Transformation,
+    MapWithIndexTransform,
 )
 
 from ._src.python.checkpoint_handlers import PyGrainCheckpointHandler
