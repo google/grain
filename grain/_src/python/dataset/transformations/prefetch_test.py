@@ -14,6 +14,7 @@
 """Tests for prefetch.py."""
 
 import dataclasses
+import sys
 import time
 from typing import TypeVar, cast
 from unittest import mock
@@ -246,6 +247,51 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
           ds,
           options.MultiprocessingOptions(num_workers=1),
       )
+
+  def test_propagates_transform_error(self):
+    error_msg = 'I shall fail!'
+
+    def failing_transform(element):
+      del element
+      raise ValueError(error_msg)
+
+    ds = prefetch.MultiprocessPrefetchIterDataset(
+        self.iter_ds.map(failing_transform),
+        options.MultiprocessingOptions(num_workers=1),
+    )
+    with self.assertRaisesRegex(Exception, error_msg):
+      list(ds)
+
+  def test_reports_worker_crash(self):
+    def failing_transform(element):
+      del element
+      sys.exit(123)
+
+    ds = prefetch.MultiprocessPrefetchIterDataset(
+        self.iter_ds.map(failing_transform),
+        options.MultiprocessingOptions(num_workers=1),
+    )
+    with self.assertRaisesRegex(
+        RuntimeError, 'was terminated unexpectedly with exit code 123'
+    ):
+      list(ds)
+
+  def test_reports_unpicklable_transform(self):
+    error_msg = 'UnpicklableObject is not picklable'
+
+    class UnpicklableObject:
+
+      def __getstate__(self):
+        raise ValueError(error_msg)
+
+    local_state = UnpicklableObject()
+
+    ds = prefetch.MultiprocessPrefetchIterDataset(
+        self.iter_ds.map(lambda _: 1 if local_state is None else 2),
+        options.MultiprocessingOptions(num_workers=1),
+    )
+    with self.assertRaisesRegex(ValueError, error_msg):
+      list(ds)
 
   @parameterized.product(
       start_prefetch_calls=[0, 1, 10],

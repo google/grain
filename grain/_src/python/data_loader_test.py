@@ -15,6 +15,7 @@
 
 from collections.abc import Sequence
 import pathlib
+import sys
 from typing import Union
 from unittest import mock
 
@@ -25,7 +26,6 @@ from grain._src.core import sharding
 from grain._src.core import transforms
 import multiprocessing as mp
 from grain._src.python import data_loader as data_loader_lib
-from grain._src.python import grain_pool
 from grain._src.python import samplers
 from grain._src.python import shared_memory_array
 from grain._src.python.data_sources import ArrayRecordDataSource
@@ -80,6 +80,18 @@ class NonPickableTransform(transforms.MapTransform):
 
   def map(self, x):
     return x
+
+
+class RaisingTransform(transforms.MapTransform):
+
+  def map(self, x):
+    raise AttributeError("I shall raise")
+
+
+class ExitingTransform(transforms.MapTransform):
+
+  def map(self, x):
+    raise sys.exit(123)
 
 
 class RandomTripletSource:
@@ -170,7 +182,26 @@ class DataLoaderTest(parameterized.TestCase):
     data_loader = self._create_data_loader_for_short_sequence(
         transformations, worker_count=2
     )
-    with self.assertRaises(grain_pool.GrainPoolProcessingError):
+    with self.assertRaisesRegex(ValueError, "I shall not be pickled"):
+      list(data_loader)
+
+  def test_propagates_transform_error_with_multiprocessing(self):
+    transformations = [RaisingTransform()]
+    data_loader = self._create_data_loader_for_short_sequence(
+        transformations, worker_count=2
+    )
+    with self.assertRaisesRegex(Exception, "I shall raise"):
+      list(data_loader)
+
+  def test_reports_multiprocessing_worker_crash(self):
+    transformations = [ExitingTransform()]
+    data_loader = self._create_data_loader_for_short_sequence(
+        transformations, worker_count=2
+    )
+    with self.assertRaisesRegex(
+        RuntimeError,
+        "was terminated unexpectedly with exit code 123",
+    ):
       list(data_loader)
 
   def test_data_loader_single_process(self):

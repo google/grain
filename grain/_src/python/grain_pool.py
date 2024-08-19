@@ -98,33 +98,22 @@ class GrainPoolElement:
   worker_index: Any
 
 
-# Hack to embed stringification of remote traceback in local traceback.
-class RemoteTracebackError(Exception):
+class RemoteWorkerError(Exception):
+  """Grain worker exception that can be pickled and sent over a queue."""
 
-  def __init__(self, tb: traceback.TracebackType):
-    self.tb = tb
-
-  def __str__(self):
-    return self.tb
-
-
-class ExceptionWithTraceback:
-  """Exception that can be pickled and sent over the queue."""
-
-  def __init__(self, exception: Exception, tb: traceback.TracebackType):
-    tb = traceback.format_exception(type(exception), exception, tb)
-    tb = "".join(tb)
-    self.exception = exception
-    self.tb = '\n"""\n%s"""' % tb
+  def __init__(self, error: str, worker_index: int):
+    super().__init__(
+        f"Grain worker {worker_index} failed with the following"
+        f" error:\n\n{error}"
+    )
+    self._error = error
+    self._worker_index = worker_index
 
   def __reduce__(self):
-    return rebuild_exception, (self.exception, self.tb)
-
-
-def rebuild_exception(exception: Exception, tb: traceback.TracebackType):
-  """Rebuilds the exception at the received side."""
-  exception.__cause__ = RemoteTracebackError(tb)
-  return exception
+    # Note that during pickling the RemoteWorkerError loses __traceback__ and
+    # __cause__ attributes because they are irrelevant. Only the original error
+    # attributes are preserved in the string form.
+    return RemoteWorkerError, (self._error, self._worker_index)
 
 
 def _print_profile(preamble: str, profile: cProfile.Profile):
@@ -205,7 +194,12 @@ def _worker_loop(
     logging.exception(
         "Error occurred in child process with worker_index: %i", worker_index
     )
-    remote_error = ExceptionWithTraceback(e, e.__traceback__)
+    remote_error = RemoteWorkerError(
+        error="".join(
+            traceback.format_exception(e.__class__, e, e.__traceback__)
+        ),
+        worker_index=worker_index,
+    )
     try:
       errors_queue.put(remote_error, timeout=_QUEUE_WAIT_TIMEOUT)
     except queue.Full:
@@ -280,12 +274,14 @@ class GrainPool(Iterator[T]):
     try:
       get_element_producer_fn = cloudpickle.dumps(get_element_producer_fn)
     except Exception as e:
-      raise ValueError(
-          "Could not serialize transformation_function passed to GrainPool."
-          " This likely means that your DataSource, Sampler or one of your"
-          " transformations cannot be serialized. Please make sure that the"
-          " objects work with cloudpickle.dumps()."
-      ) from e
+      if sys.version_info >= (3, 11):
+        e.add_note(
+            "\nCould not serialize transformation function passed to Grain "
+            "workers. This likely means that your data source, sampler or one "
+            "of your transformations cannot be serialized. Please make sure "
+            "that the objects work with cloudpickle.dumps()."
+        )
+      raise e
 
     for worker_index in range(self.num_processes):
       worker_args_queue = ctx.Queue(1)
@@ -375,14 +371,20 @@ class GrainPool(Iterator[T]):
       logging.error("Processing Failed. Shutting down.")
       self._shutdown()
 
-      exception_to_raise = Exception("Processing Failed. Shutting down.")
       try:
-        remote_error = self.worker_error_queue.get(timeout=_QUEUE_WAIT_TIMEOUT)
-        logging.error("Got error %s", remote_error)
-        exception_to_raise.__cause__ = remote_error
+        raise self.worker_error_queue.get(timeout=_QUEUE_WAIT_TIMEOUT)
       except queue.Empty:
-        logging.error("Can't determine remote exception!")
-      raise exception_to_raise
+        # Worker did not report any error. This means that either an exception
+        # was raised outside of the worker loop (e.g. during flag parsing) or
+        # the worker process was forcefully terminated. Unfortunately, there is
+        # no debugging info available in the main process at this point apart
+        # from the exit code. The crash logs, however, should've been produced.
+        raise RuntimeError(
+            f"Grain worker process {self._next_worker_index} was terminated"
+            " unexpectedly with exit code "
+            f"{self.processes[self._next_worker_index].exitcode}. Search the "
+            "logs above for the source of the crash."
+        ) from None
 
     # Processing successfully completed.
     raise StopIteration
@@ -435,10 +437,6 @@ _GRAIN_POOL_PROCESSING_COMPLETE = _GrainPoolProcessingComplete()
 _QueueElement = Union[
     _ReaderQueueElement, _GrainPoolProcessingComplete, Exception
 ]
-
-
-class GrainPoolProcessingError(Exception):
-  """Raised when input processing in Grain Pool fails."""
 
 
 class MultiProcessIteratorInvalidStateError(Exception):
@@ -639,7 +637,7 @@ class MultiProcessIterator(Iterator[T]):
         self._reader_queue, self._termination_event.is_set  # pytype: disable=attribute-error
     )
     if isinstance(element, Exception):
-      raise GrainPoolProcessingError() from element
+      raise element
     if (
         element == _GRAIN_POOL_PROCESSING_COMPLETE
         or element == multiprocessing_common.SYSTEM_TERMINATED

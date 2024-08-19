@@ -514,8 +514,8 @@ def _apply_transform(
     try:
       output_record, filter_result = fn(input_record)
     except Exception as e:
-      raise ValueError(
-          f"PyGrain encountered an error when applying {transform}."
-      ) from e
+      if sys.version_info >= (3, 11):
+        e.add_note(f"\nThe error occurred in {transform}.")
+      raise e
     if filter_result:
       yield output_record

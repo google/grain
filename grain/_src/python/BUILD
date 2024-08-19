@@ -154,7 +154,6 @@ py_test(
     deps = [
         ":data_loader",
         ":data_sources",
-        ":grain_pool",
         ":operations",
         ":samplers",
         ":shared_memory_array",
@@ -181,7 +180,7 @@ py_library(
 py_test(
     name = "grain_pool_test",
     srcs = ["grain_pool_test.py"],
-    shard_count = 15,
+    shard_count = 20,
     srcs_version = "PY3",
     tags = ["not_run:arm"],
     deps = [

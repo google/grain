@@ -314,6 +314,65 @@ class MultiProcessIteratorTest(parameterized.TestCase):
       ) as iterator:
         list(iterator)
 
+  def test_propagates_error(self):
+    error_msg = "very unique error"
+
+    def failing_get_element_producer_fn(
+        worker_index: int, worker_count: int
+    ) -> Iterator[int]:
+      del worker_index, worker_count
+      raise ValueError(error_msg)
+
+    with gp.MultiProcessIterator(
+        failing_get_element_producer_fn,
+        MultiprocessingOptions(num_workers=2),
+        0,
+    ) as iterator:
+      with self.assertRaisesRegex(gp.RemoteWorkerError, error_msg):
+        list(iterator)
+
+  def test_reports_worker_crash(self):
+
+    def failing_get_element_producer_fn(
+        worker_index: int, worker_count: int
+    ) -> Iterator[int]:
+      del worker_index, worker_count
+      sys.exit(12)
+
+    with gp.MultiProcessIterator(
+        failing_get_element_producer_fn,
+        MultiprocessingOptions(num_workers=2),
+        0,
+    ) as iterator:
+      with self.assertRaisesRegex(
+          RuntimeError, "was terminated unexpectedly with exit code 12"
+      ):
+        list(iterator)
+
+  def test_reports_unpicklable_element_producer_fn(self):
+    error_msg = "UnpicklableObject is not picklable"
+
+    class UnpicklableObject:
+
+      def __getstate__(self):
+        raise ValueError(error_msg)
+
+    local_state = UnpicklableObject()
+
+    def get_element_producer_fn_with_unpicklable_closure(
+        worker_index: int, worker_count: int
+    ) -> Iterator[int]:
+      del worker_index, worker_count
+      yield 1 if local_state is None else 2
+
+    with gp.MultiProcessIterator(
+        get_element_producer_fn_with_unpicklable_closure,
+        MultiprocessingOptions(num_workers=2),
+        0,
+    ) as iterator:
+      with self.assertRaisesRegex(ValueError, error_msg):
+        list(iterator)
+
 
 if __name__ == "__main__":
   absltest.main()
