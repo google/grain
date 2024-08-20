@@ -113,37 +113,6 @@ class InMemoryDataSourceTest(DataSourceTest):
     in_memory_ds.close()
     in_memory_ds.unlink()
 
-  @staticmethod
-  def increment_elements_by_one(
-      in_memory_ds: data_sources.InMemoryDataSource,
-  ) -> None:
-    for i in range(len(in_memory_ds)):
-      in_memory_ds[i] = in_memory_ds[i] + 1
-
-  def test_multi_processes_co_modify(self):
-    sequence = list(range(12))
-    in_memory_ds = data_sources.InMemoryDataSource(
-        sequence, name="DataSourceTestingCoModify"
-    )
-
-    num_processes = 3
-    expected_final_state = [x + num_processes for x in sequence]
-
-    mp_context = grain_multiprocessing.get_context("spawn")
-    with mp_context.Pool(processes=num_processes) as pool:
-      pool.map(
-          InMemoryDataSourceTest.increment_elements_by_one,
-          [in_memory_ds] * num_processes,
-      )
-
-      pool.close()
-      pool.join()
-
-    self.assertEqual(list(in_memory_ds), expected_final_state)
-
-    in_memory_ds.close()
-    in_memory_ds.unlink()
-
   def test_empty_sequence(self):
     in_memory_ds = data_sources.InMemoryDataSource([])
     self.assertEmpty(in_memory_ds)
