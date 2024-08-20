@@ -16,8 +16,8 @@ import collections
 from collections.abc import Sequence
 import copy
 from typing import Any, Optional
-
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset import stats as dataset_stats
 from grain._src.python.dataset.transformations import packing_packed_batch
 from jaxtyping import PyTree  # pylint: disable=g-importing-member
 import numpy as np
@@ -88,7 +88,9 @@ class SingleBinPackIterDataset(dataset.IterDataset):
     self._length_struct = length_struct
 
   def __iter__(self) -> dataset.DatasetIterator:
-    return SingleBinPackDatasetIterator(iter(self._parent), self._length_struct)  # pytype: disable=wrong-arg-types
+    return SingleBinPackDatasetIterator(
+        self._parent.__iter__(), self._length_struct, self._stats
+    )
 
 
 class SingleBinPackDatasetIterator(dataset.DatasetIterator):
@@ -101,7 +103,9 @@ class SingleBinPackDatasetIterator(dataset.DatasetIterator):
       self,
       parent: dataset.DatasetIterator,
       length_struct: PyTree[Optional[int]],
+      stats: dataset_stats.Stats,
   ):
+    super().__init__(stats)
     self._parent = parent
     self._length_struct = length_struct
     # Same as above but flattened. Some operations are easier using the
@@ -293,12 +297,13 @@ class FirstFitPackIterDataset(dataset.IterDataset):
 
   def __iter__(self) -> dataset.DatasetIterator:
     return FirstFitPackDatasetIterator(
-        iter(self._parent),
+        self._parent.__iter__(),
         num_packing_bins=self._num_packing_bins,
         length_struct=self._length_struct,
         shuffle_bins=self._shuffle_bins,
         meta_features=self._meta_features,
-    )  # pytype: disable=wrong-arg-types
+        stats=self._stats,
+    )
 
 
 class FirstFitPackDatasetIterator(dataset.DatasetIterator):
@@ -312,7 +317,9 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
       length_struct: PyTree[Optional[int]],
       shuffle_bins: bool,
       meta_features: Sequence[str],
+      stats: dataset_stats.Stats,
   ):
+    super().__init__(stats)
     self._parent = parent
     self._num_packing_bins = num_packing_bins
     self._length_struct = length_struct

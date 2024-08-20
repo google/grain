@@ -17,6 +17,7 @@ from typing import Any, Callable, TypeVar, Union
 
 from grain._src.core import transforms
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset import stats as dataset_stats
 
 
 Element = Any
@@ -61,8 +62,9 @@ class _FilterDatasetIterator(dataset.DatasetIterator[T]):
       self,
       parent: dataset.DatasetIterator,
       filter_fn: Callable[[T], bool],
+      stats: dataset_stats.Stats,
   ):
-    super().__init__()
+    super().__init__(stats)
     self._parent = parent
     self._filter_fn = filter_fn
 
@@ -108,6 +110,7 @@ class FilterIterDataset(dataset.IterDataset[T]):
     return _FilterDatasetIterator(
         parent_iter,
         filter_fn=self._filter_fn,
+        stats=self._stats,
     )
 
   def __str__(self) -> str:

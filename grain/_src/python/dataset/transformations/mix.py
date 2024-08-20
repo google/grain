@@ -24,6 +24,7 @@ from typing import Any, TypeVar, overload
 from grain._src.core import exceptions
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset import stats as dataset_stats
 from typing_extensions import override
 
 Element = Any
@@ -124,9 +125,10 @@ class _MixedDatasetIterator(dataset.DatasetIterator[T]):
   def __init__(
       self,
       parents: Sequence[dataset.DatasetIterator[T]],
-      proportions: Sequence[int] | None = None,
+      proportions: Sequence[int] | None,
+      stats: dataset_stats.Stats,
   ):
-    super().__init__()
+    super().__init__(stats)
     self._parents = parents
     self._proportions = tuple(proportions)
     self._index = 0
@@ -189,10 +191,11 @@ class MixedIterDataset(dataset.IterDataset[T]):
     self._proportions = proportions
 
   def __iter__(self) -> _MixedDatasetIterator[T]:
-    parent_iters = [parent.__iter__() for parent in self._parents]
+    parent_iters = [parent.__iter__() for parent in self.parents]
     return _MixedDatasetIterator(
         parent_iters,
         proportions=self._proportions,
+        stats=self._stats,
     )
 
   def __str__(self) -> str:

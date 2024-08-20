@@ -17,6 +17,7 @@ from typing import Any, Callable, Sequence, TypeVar
 
 from grain._src.core import transforms
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset import stats as dataset_stats
 
 
 Element = Any
@@ -67,7 +68,9 @@ class _FlatMapDatasetIterator(dataset.DatasetIterator[T]):
       self,
       parent: dataset.DatasetIterator[S],
       flat_map: Callable[[S], Sequence[T]],
+      stats: dataset_stats.Stats,
   ):
+    super().__init__(stats)
     self._parent = parent
     self._flat_map = flat_map
     self._next_index_in_buffer = 0
@@ -127,4 +130,6 @@ class FlatMapIterDataset(dataset.IterDataset[T]):
 
   def __iter__(self):
     parent_iter = self._parent.__iter__()
-    return _FlatMapDatasetIterator(parent_iter, self._transform.flat_map)
+    return _FlatMapDatasetIterator(
+        parent_iter, self._transform.flat_map, self._stats
+    )

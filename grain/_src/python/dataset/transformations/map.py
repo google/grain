@@ -19,6 +19,7 @@ from typing import Any, Callable, Optional, TypeVar, Union
 from absl import logging
 from grain._src.core import transforms
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset import stats as dataset_stats
 import numpy as np
 
 
@@ -189,9 +190,10 @@ class _MapDatasetIterator(dataset.DatasetIterator[T]):
       self,
       parent: dataset.DatasetIterator,
       map_fn: Callable[..., T],
-      seed: Optional[int] = None,
+      seed: Optional[int],
+      stats: dataset_stats.Stats,
   ):
-    super().__init__()
+    super().__init__(stats)
     self._parent = parent
     self._map_fn = map_fn
     self._index_for_rng = 0
@@ -251,6 +253,7 @@ class MapIterDataset(dataset.IterDataset[T]):
         parent_iter,
         map_fn=self._map_fn,
         seed=self._seed,
+        stats=self._stats,
     )
 
   def __str__(self) -> str:

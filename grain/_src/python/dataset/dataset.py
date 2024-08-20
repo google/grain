@@ -41,7 +41,18 @@ from __future__ import annotations
 import abc
 import builtins
 import functools
-from typing import Any, Callable, Generic, Iterable, Iterator, Sequence, TypeVar, overload
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Iterable,
+    Iterator,
+    Sequence,
+    TypeVar,
+    Union,
+    cast,
+    overload,
+)
 import warnings
 
 from grain._src.core import monitoring as grain_monitoring
@@ -49,6 +60,7 @@ from grain._src.core import transforms
 from grain._src.core import usage_logging
 from grain._src.python import options as grain_options
 from grain._src.python.dataset import base
+from grain._src.python.dataset import stats as dataset_stats
 import numpy as np
 
 from grain._src.core import monitoring
@@ -67,32 +79,44 @@ T = TypeVar("T")
 S = TypeVar("S")
 
 
-class _SeededDataset(abc.ABC):
-  """Node of a dataset tree structure that supports generating default seed."""
+class _Dataset:
+  """Node of a dataset tree structure that represents data transfromation.
 
-  def __init__(self):
+  Supports recording statitstics and generating default seed for random
+  transformations.
+  """
+
+  def __init__(self, parents: Sequence[_Dataset]):
     # Seeds a `SeedSequence` used to generate default seeds for all
     # downstream transformations. Set by `_WithOptions{Map|Iter}Dataset`.
     self._seed_rng_seed = None
-
-  @property
-  @abc.abstractmethod
-  def parents(self) -> Sequence[Any]:
-    """Returns the parent nodes of this dataset."""
-    ...
+    self._parents = parents
+    parents_stats = []
+    for parent in parents:
+      # There may be parent `_Dataset` nodes introduced by users that did not
+      # call super init and thus don't have `_stats`.
+      if (parent_stats := getattr(parent, "_stats", None)) is not None:
+        parents_stats.append(parent_stats)
+    # TODO Add debug mode that actually records stats. Introduce
+    # better stat node naming through `repr`.
+    self._stats: dataset_stats.Stats = dataset_stats.NoopStats(
+        name=self.__class__.__name__, parents=parents_stats
+    )
 
   @functools.cached_property
   def _default_seed(self) -> int | None:
     """Should be used as a seed if no seed is provided."""
     aggregated_seed = []
     # Note that the traversal order must be determisitic.
+    # pylint:  disable=protected-access
     to_visit = [(self, 0)]
     while to_visit:
       node, depth = to_visit.pop(0)
-      if (node_seed := node._seed_rng_seed) is not None:  # pylint: disable=protected-access
+      if (node_seed := getattr(node, "_seed_rng_seed", None)) is not None:
         aggregated_seed.extend((node_seed, depth))
       else:
-        to_visit.extend((n, depth + 1) for n in node.parents)
+        to_visit.extend((n, depth + 1) for n in node._parents)
+    # pylint:  enable=protected-access
     if not aggregated_seed:
       return None
     seed_sequence = np.random.SeedSequence(aggregated_seed)
@@ -215,7 +239,7 @@ class _MapDatasetMeta(abc.ABCMeta):
     return mix.MixedMapDataset(parents=datasets, selection_map=selection_map)
 
 
-class MapDataset(_SeededDataset, Generic[T], metaclass=_MapDatasetMeta):
+class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
   """Represents a dataset with transformations that support random access.
 
   Transformations do not mutate the dataset object. Instead, they return a new
@@ -223,11 +247,12 @@ class MapDataset(_SeededDataset, Generic[T], metaclass=_MapDatasetMeta):
   """
 
   def __init__(self, parents: MapDataset | Sequence[MapDataset] = ()):
-    super().__init__()
     if isinstance(parents, MapDataset):
-      self._parents = (parents,)
+      parents = (parents,)
     else:
-      self._parents = tuple(parents)
+      parents = tuple(parents)
+    super().__init__(parents)
+    self._parents = cast(Sequence[MapDataset], self._parents)
     usage_logging.log_event("MapDataset", tag_3="PyGrain")
     _api_usage_counter.Increment("MapDataset")
 
@@ -693,7 +718,7 @@ class _IterDatasetMeta(abc.ABCMeta):
     return mix.MixedIterDataset(parents=datasets, proportions=weights)
 
 
-class IterDataset(_SeededDataset, Iterable[T], metaclass=_IterDatasetMeta):
+class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
   """Represents a dataset with transformations that support Iterable interface.
 
   Transformations do not mutate the dataset object. Instead, they return a new
@@ -706,11 +731,14 @@ class IterDataset(_SeededDataset, Iterable[T], metaclass=_IterDatasetMeta):
           MapDataset | IterDataset | Sequence[MapDataset | IterDataset]
       ) = (),
   ):
-    super().__init__()
     if isinstance(parents, (MapDataset, IterDataset)):
-      self._parents = (parents,)
+      parents = (parents,)
     else:
-      self._parents = tuple(parents)
+      parents = tuple(parents)
+    super().__init__(parents)
+    self._parents = cast(
+        Sequence[Union[MapDataset, IterDataset]], self._parents
+    )
     usage_logging.log_event("IterDataset", tag_3="PyGrain")
     _api_usage_counter.Increment("IterDataset")
 
@@ -992,6 +1020,11 @@ class IterDataset(_SeededDataset, Iterable[T], metaclass=_IterDatasetMeta):
 
 class DatasetIterator(Iterator[T], abc.ABC):
   """`IterDataset` iterator."""
+
+  def __init__(self, stats: dataset_stats.Stats | None = None):
+    # Implementations that do not call super constructor will lose the parent
+    # link and the stats recording.
+    self._stats = stats or dataset_stats.NoopStats(repr(self), tuple())
 
   def __iter__(self) -> DatasetIterator[T]:
     return self

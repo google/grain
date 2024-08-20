@@ -62,6 +62,7 @@ py_library(
     deps = [
         "//grain/_src/core:transforms",
         "//grain/_src/python/dataset",
+        "//grain/_src/python/dataset:stats",
     ],
 )
 
@@ -103,6 +104,7 @@ py_library(
     deps = [
         ":packing_packed_batch",
         "//grain/_src/python/dataset",
+        "//grain/_src/python/dataset:stats",
     ],
 )
 

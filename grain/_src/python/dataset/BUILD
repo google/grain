@@ -30,6 +30,7 @@ py_library(
     srcs_version = "PY3",
     deps = [
         ":base",
+        ":stats",
         "//grain/_src/core:exceptions",
         "//grain/_src/core:monitoring",
         "//grain/_src/core:transforms",
@@ -96,4 +97,17 @@ py_test(
         "//grain/_src/core:transforms",
         "//grain/_src/python:options",
     ],
+)
+
+py_library(
+    name = "stats",
+    srcs = ["stats.py"],
+    srcs_version = "PY3",
+)
+
+py_test(
+    name = "stats_test",
+    srcs = ["stats_test.py"],
+    srcs_version = "PY3",
+    deps = [":stats"],
 )

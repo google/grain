@@ -32,6 +32,7 @@ from grain._src.python import grain_pool
 from grain._src.python import options as grain_options
 from grain._src.python import shared_memory_array
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset import stats as dataset_stats
 import numpy as np
 
 T = TypeVar("T")
@@ -53,7 +54,7 @@ class PrefetchIterDataset(dataset.IterDataset[T]):
 
   def __iter__(self) -> dataset.DatasetIterator[T]:
     return PrefetchDatasetIterator(
-        self._parent, self._read_options, self._allow_nones
+        self._parent, self._read_options, self._allow_nones, self._stats
     )
 
 
@@ -65,8 +66,9 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
       parent: dataset.MapDataset[T],
       read_options: grain_options.ReadOptions,
       allow_nones: bool,
+      stats: dataset_stats.Stats,
   ):
-    super().__init__()
+    super().__init__(stats)
     self._parent = parent
     self._dataset_length = len(parent)
     self._next_index = 0
@@ -173,7 +175,7 @@ class MultiprocessPrefetchIterDataset(dataset.IterDataset[T]):
 
   def __iter__(self) -> MultiprocessPrefetchDatasetIterator[T]:
     return MultiprocessPrefetchDatasetIterator(
-        self._parent, self._multiprocessing_options
+        self._parent, self._multiprocessing_options, self._stats
     )
 
 
@@ -233,8 +235,9 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       self,
       parent: dataset.IterDataset[T],
       multiprocessing_options: grain_options.MultiprocessingOptions,
+      stats: dataset_stats.Stats,
   ):
-    super().__init__()
+    super().__init__(stats)
     self._parent = parent
     self._multiprocessing_options = multiprocessing_options
     # The underlying iterator producing elements and workers state.
@@ -351,7 +354,7 @@ class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
 
   def __iter__(self) -> ThreadPrefetchDatasetIterator[T]:
     return ThreadPrefetchDatasetIterator(
-        self._parent, self._prefetch_buffer_size
+        self._parent, self._prefetch_buffer_size, self._stats
     )
 
 
@@ -370,8 +373,9 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       self,
       parent: dataset.IterDataset[T],
       prefetch_buffer_size: int,
+      stats: dataset_stats.Stats,
   ):
-    super().__init__()
+    super().__init__(stats)
     self._parent: dataset.IterDataset[T] = parent
     self._iterator: dataset.DatasetIterator[T] = parent.__iter__()
     self._prefetch_buffer_size = prefetch_buffer_size
