@@ -27,9 +27,10 @@ from ._src.core.transforms import (
     BatchTransform as Batch,
     FilterTransform,
     MapTransform,
+    MapWithIndexTransform,
     RandomMapTransform,
-    Transformations,
     Transformation,
+    Transformations,
 )
 
 from ._src.python.checkpoint_handlers import PyGrainCheckpointHandler
