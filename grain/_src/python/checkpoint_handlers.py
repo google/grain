@@ -13,41 +13,49 @@
 # limitations under the License.
 """This module provides a PyGrain CheckpointHandler for integration with Orbax."""
 import dataclasses
-from typing import Any, Optional
+import json
+from typing import Any, Optional, TypeVar
 
 from etils import epath
 from grain._src.python import data_loader
+from grain._src.python.dataset import dataset
 import jax
 
-PyGrainDatasetIterator = data_loader.PyGrainDatasetIterator
+IteratorType = TypeVar(
+    "IteratorType", data_loader.PyGrainDatasetIterator, dataset.DatasetIterator
+)
 
 
 # Ipmlements orbax.checkpoint.CheckpointHandler.
 class PyGrainCheckpointHandler:
-  """Orbax CheckpointHandler for PyGrainDatasetIterator."""
+  """Orbax CheckpointHandler for PyGrain iterators."""
 
   def save(
       self,
       directory: epath.Path,
       # `item` is for backwards compatibility with older Orbax API, see
       # https://orbax.readthedocs.io/en/latest/api_refactor.html.
-      item: Optional[PyGrainDatasetIterator] = None,
+      item: Optional[IteratorType] = None,
       args: Any = None,
   ):
     """Saves the given iterator to the checkpoint in `directory`."""
     item = item or args.item  # pytype:disable=attribute-error
+    if isinstance(item, dataset.DatasetIterator):
+      state = json.dumps(item.get_state(), indent=4)
+    else:
+      state = item.get_state().decode()
     filename = (
         directory
         / f"process_{jax.process_index()}-of-{jax.process_count()}.json"
     )
-    filename.write_text(item.get_state().decode())
+    filename.write_text(state)
 
   def restore(
       self,
       directory: epath.Path,
-      item: Optional[PyGrainDatasetIterator] = None,
+      item: Optional[IteratorType] = None,
       args: Any = None,
-  ) -> PyGrainDatasetIterator:
+  ) -> IteratorType:
     """Restores the given iterator from the checkpoint in `directory`."""
     item = item or args.item  # pytype:disable=attribute-error
     filename = (
@@ -56,7 +64,11 @@ class PyGrainCheckpointHandler:
     )
     if not filename.exists():
       raise ValueError(f"File {filename} does not exist.")
-    state = filename.read_text().encode()
+    state = filename.read_text()
+    if isinstance(item, dataset.DatasetIterator):
+      state = json.loads(state)
+    else:
+      state = state.encode()
     item.set_state(state)
     return item
 
