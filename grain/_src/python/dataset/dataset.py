@@ -978,6 +978,8 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
      sl: slice to apply.
     """
     sliced_parents = []
+    if not self._parents:
+      raise ValueError("Cannot slice `IterDataset` source.")
     for parent in self._parents:
       if isinstance(parent, MapDataset):
         sliced_parents.append(parent.slice(sl))

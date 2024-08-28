@@ -41,6 +41,27 @@ class FilterKeepingOddElementsOnly(transforms.FilterTransform):
     return bool(element % 2)
 
 
+class RepeatedIntSourceIterDataset(dataset.IterDataset[int]):
+
+  def __iter__(self) -> dataset.DatasetIterator[int]:
+    return RepeatedIntSourceDatasetIterator()
+
+
+class RepeatedIntSourceDatasetIterator(dataset.DatasetIterator[int]):
+
+  def __iter__(self) -> dataset.DatasetIterator[int]:
+    return self
+
+  def __next__(self) -> int:
+    return 1
+
+  def set_state(self, state):
+    pass
+
+  def get_state(self):
+    return {}
+
+
 class PrefetchIterDatasetTest(parameterized.TestCase):
 
   def setUp(self):
@@ -247,6 +268,19 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
           ds,
           options.MultiprocessingOptions(num_workers=1),
       )
+
+  def test_fails_with_iter_source(self):
+    ds = prefetch.MultiprocessPrefetchIterDataset(
+        RepeatedIntSourceIterDataset().map(lambda x: x + 1),
+        options.MultiprocessingOptions(num_workers=2),
+    )
+    ds_iter = iter(ds)
+
+    with self.assertRaisesRegex(
+        Exception,
+        'Cannot slice `IterDataset` source.',
+    ):
+      next(ds_iter)
 
   def test_propagates_transform_error(self):
     error_msg = 'I shall fail!'
