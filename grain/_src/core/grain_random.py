@@ -84,10 +84,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-# As of 2022-09 JAX uses arrays of dtype uint32 and shape [2] for RNG keys.
-# However when custom RNGs are enabled by default keys are wrapped in a KeyArray
-# object and can have different internal state. This might become the default
-# in the future.
 RNGKey = jax.Array
 RNGKeyLike = Union[RNGKey, int, Sequence[int], np.ndarray]
 
@@ -106,16 +102,15 @@ def as_rng_key(seed: RNGKeyLike) -> RNGKey:
   ):
     return seed
   if isinstance(seed, (int, jnp.integer)):
-    return jax.random.PRNGKey(seed)
+    return jax.random.key(seed)
   if isinstance(seed, jnp.ndarray):
-    # Assume that this is already a KeyArray.
-    return seed
+    return jax.random.wrap_key_data(seed)
   if len(seed) != 2:
     raise ValueError(
         "Random seed must be a single integer or a "
         f"Tuple[int, int] but got {seed!r}"
     )
-  return jax.random.PRNGKey(sum(seed))
+  return jax.random.key(sum(seed))
 
 
 def make_rng_key(seed: Optional[RNGKeyLike]) -> RNGKey:
