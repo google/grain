@@ -24,6 +24,7 @@ from unittest import mock
 from absl import flags
 from absl.testing import absltest
 from absl.testing import parameterized
+from etils import epath
 import multiprocessing as grain_multiprocessing
 from grain._src.python import data_sources
 
