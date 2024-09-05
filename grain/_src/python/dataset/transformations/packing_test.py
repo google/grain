@@ -871,6 +871,40 @@ class FirstFitPackIterDatasetTest(parameterized.TestCase):
 
     _assert_trees_equal(first_elements, second_elements)
 
+  @parameterized.product(
+      mark_as_meta_feature=[True, False],
+  )
+  def test_nested_feature(self, mark_as_meta_feature: bool):
+    # Nested features must be marked as meta features since we don't support
+    # extracting their segment ids and positions.
+    rng = np.random.default_rng(42)
+    elements = [
+        dict(
+            row=rng.integers(0, 10, size=rng.integers(5, 30)),
+            nested_feature=dict(
+                inner_value=0,
+            ),
+        )
+        for _ in range(100)
+    ]
+    ld = packing.FirstFitPackIterDataset(
+        source.SourceMapDataset(elements).repeat().to_iter_dataset(),
+        num_packing_bins=4,
+        length_struct=dict(row=100, nested_feature=dict(inner_value=100)),
+        meta_features=["nested_feature"] if mark_as_meta_feature else [],
+    )
+    if mark_as_meta_feature:
+      # No error when nested feature is marked as a meta feature.
+      _ = next(iter(ld))
+    else:
+      with self.assertRaisesRegex(
+          ValueError,
+          "Failed to extract segment ids for 'nested_feature', which has type"
+          " <class 'dict'> rather than np.ndarray. Perhaps it should be marked"
+          " as a meta feature?",
+      ):
+        _ = next(iter(ld))
+
 
 if __name__ == "__main__":
   absltest.main()

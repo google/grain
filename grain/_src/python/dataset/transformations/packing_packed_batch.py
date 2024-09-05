@@ -70,6 +70,12 @@ def _extract_and_rekey_packed_batch(
   assert isinstance(values, dict)
   for k in list(values):
     if k not in meta_features:
+      if not isinstance(segment_ids[k], np.ndarray):
+        raise ValueError(
+            f"Failed to extract segment ids for '{k}', which has type"
+            f" {type(segment_ids[k])} rather than np.ndarray. Perhaps it should"
+            " be marked as a meta feature?"
+        )
       data[f"{k}_segment_ids"] = segment_ids[k].astype(np.int32)
       data[f"{k}_positions"] = positions[k].astype(np.int32)
   return data
