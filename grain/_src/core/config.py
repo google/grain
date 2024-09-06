@@ -103,7 +103,7 @@ _PREFETCH_BUFFER_SIZE = flags.DEFINE_integer(
 
 _DEBUG_MODE = flags.DEFINE_bool(
     "grain_py_debug_mode",
-    True,
+    False,
     (
         "If True, will enable debug mode for Grain. This will enable reporting"
         "extra streamz metrics."
