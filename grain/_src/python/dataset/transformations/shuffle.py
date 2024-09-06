@@ -51,17 +51,18 @@ class ShuffleMapDataset(dataset.MapDataset[T]):
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
-    length = len(self._parent)
-    epoch, index_in_epoch = divmod(index, length)
-    # Note:
-    #   - index_shuffle expects 32-bit integers
-    #   - we use different seeds for each epoch to ensure that the shuffle is
-    #     different for each epoch
-    per_epoch_seed = (self._seed + epoch) % 2**32
-    shuffled_index_in_epoch = index_shuffle.index_shuffle(
-        index_in_epoch, max_index=length - 1, seed=per_epoch_seed, rounds=4
-    )
-    shuffled_index = shuffled_index_in_epoch + epoch * length
+    with self._stats.record_self_time():
+      length = len(self._parent)
+      epoch, index_in_epoch = divmod(index, length)
+      # Note:
+      #   - index_shuffle expects 32-bit integers
+      #   - we use different seeds for each epoch to ensure that the shuffle is
+      #     different for each epoch
+      per_epoch_seed = (self._seed + epoch) % 2**32
+      shuffled_index_in_epoch = index_shuffle.index_shuffle(
+          index_in_epoch, max_index=length - 1, seed=per_epoch_seed, rounds=4
+      )
+      shuffled_index = shuffled_index_in_epoch + epoch * length
     return self._parent[shuffled_index]
 
 
@@ -87,13 +88,14 @@ class WindowShuffleMapDataset(dataset.MapDataset[T]):
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
-    window_index, index_in_window = divmod(index, self._window_size)
-    seed = self._seed + window_index
-    index_in_window = index_shuffle.index_shuffle(
-        index_in_window,
-        max_index=self._window_size - 1,
-        seed=seed,
-        rounds=4,
-    )
-    index = index_in_window + window_index * self._window_size
+    with self._stats.record_self_time():
+      window_index, index_in_window = divmod(index, self._window_size)
+      seed = self._seed + window_index
+      index_in_window = index_shuffle.index_shuffle(
+          index_in_window,
+          max_index=self._window_size - 1,
+          seed=seed,
+          rounds=4,
+      )
+      index = index_in_window + window_index * self._window_size
     return self._parent[index]

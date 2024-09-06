@@ -36,7 +36,8 @@ class SourceMapDataset(dataset.MapDataset):
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
-    return self._source[index % len(self)]
+    with self._stats.record_self_time():
+      return self._source[index % len(self)]
 
   def log_lineage(self):
     pass
@@ -68,7 +69,8 @@ class RangeMapDataset(dataset.MapDataset[int]):
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
-    return self.start + (index % self._length) * self.step
+    with self._stats.record_self_time():
+      return self.start + (index % self._length) * self.step
 
   def to_iter_dataset(
       self,

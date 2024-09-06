@@ -61,6 +61,7 @@ from absl import logging
 import cloudpickle
 from grain._src.core import parallel
 from grain._src.core import tree
+from grain._src.core.config import config
 import multiprocessing as mp
 from grain._src.python import grain_logging
 from grain._src.python import multiprocessing_common

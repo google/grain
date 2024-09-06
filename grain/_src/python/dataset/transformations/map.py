@@ -143,15 +143,16 @@ class MapMapDataset(dataset.MapDataset[T]):
     if isinstance(index, slice):
       return self.slice(index)
     element = self._parent[index]
-    if element is None:
-      return None
-    if self._rng_pool:
-      rng = self._rng_pool.acquire_rng(index)
-      element = self._map_fn(element, rng)
-      self._rng_pool.release_rng(rng)
-    else:
-      element = self._map_fn(element)
-    return element
+    with self._stats.record_self_time():
+      if element is None:
+        return None
+      if self._rng_pool:
+        rng = self._rng_pool.acquire_rng(index)
+        element = self._map_fn(element, rng)
+        self._rng_pool.release_rng(rng)
+      else:
+        element = self._map_fn(element)
+      return element
 
 
 class MapWithIndexMapDataset(dataset.MapDataset[T]):
@@ -206,15 +207,16 @@ class _MapDatasetIterator(dataset.DatasetIterator[T]):
     except StopIteration as e:
       raise e
 
-    if element is not None:
-      if self._seed is not None:
-        _reset_rng_state(self._rng, op_seed=0, index=self._index_for_rng)
-        element = self._map_fn(element, self._rng)
-      else:
-        element = self._map_fn(element)
+    with self._stats.record_self_time():
+      if element is not None:
+        if self._seed is not None:
+          _reset_rng_state(self._rng, op_seed=0, index=self._index_for_rng)
+          element = self._map_fn(element, self._rng)
+        else:
+          element = self._map_fn(element)
 
-    self._index_for_rng += 1
-    return element
+      self._index_for_rng += 1
+      return element
 
   def get_state(self):
     return {

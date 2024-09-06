@@ -82,10 +82,11 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
   def __next__(self) -> T:
     # We loop here to skip all None elements (in case the underlying dataset
     # is sparse), if self._allow_nones = False, else we return Nones too.
+    timer = dataset_stats.Timer()
     while True:
       if self._next_index == self._dataset_length:
         break
-      with self._lock:
+      with self._lock, timer:
         if self._prefetch_buffer_size > 0:
           if not self._buffer:
             indices = range(
@@ -115,8 +116,10 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
           element = self._parent[self._next_index]
         self._next_index += 1
       if self._allow_nones or element is not None:
-        return element
-    raise StopIteration
+        with self._stats.record_self_time(offset_sec=timer.value()):
+          return element
+    with self._stats.record_self_time(offset_sec=timer.value()):
+      raise StopIteration
 
   def get_state(self):
     return {"next_index": self._next_index}
@@ -266,14 +269,15 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   def __next__(self) -> T:
     self._ensure_iterator_initialized()
     result, state = next(self._iterator)
-    worker_index = self._raw_iterator.get_last_worker_index()  # pytype: disable=attribute-error
-    self._state[_LAST_WORKER_INDEX] = worker_index
-    worker_index_str = str(worker_index)
-    if state is None:
-      self._state[_ITERATIONS_TO_SKIP][worker_index_str] += 1
-    else:
-      self._state[_ITERATIONS_TO_SKIP][worker_index_str] = 0
-      self._state[_WORKERS_STATE][worker_index_str] = state
+    with self._stats.record_self_time():
+      worker_index = self._raw_iterator.get_last_worker_index()  # pytype: disable=attribute-error
+      self._state[_LAST_WORKER_INDEX] = worker_index
+      worker_index_str = str(worker_index)
+      if state is None:
+        self._state[_ITERATIONS_TO_SKIP][worker_index_str] += 1
+      else:
+        self._state[_ITERATIONS_TO_SKIP][worker_index_str] = 0
+        self._state[_WORKERS_STATE][worker_index_str] = state
     return _open_struct_from_shm(result)
 
   def start_prefetch(self) -> None:

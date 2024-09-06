@@ -58,6 +58,7 @@ import warnings
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import transforms
 from grain._src.core import usage_logging
+from grain._src.core.config import config
 from grain._src.python import options as grain_options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import stats as dataset_stats
@@ -91,15 +92,22 @@ class _Dataset:
     # downstream transformations. Set by `_WithOptions{Map|Iter}Dataset`.
     self._seed_rng_seed = None
     self._parents = parents
+
+  @functools.cached_property
+  def _stats(self) -> dataset_stats.Stats:
+    """Returns the Stats property of this dataset."""
+    # There may be parent `_Dataset` nodes introduced by users that did not
+    # call super init and thus don't have `_stats`.
+    # pylint: disable=protected-access
     parents_stats = []
-    for parent in parents:
-      # There may be parent `_Dataset` nodes introduced by users that did not
-      # call super init and thus don't have `_stats`.
-      if (parent_stats := getattr(parent, "_stats", None)) is not None:
-        parents_stats.append(parent_stats)
+    if hasattr(self, "_parents"):
+      for p in self._parents:
+        if hasattr(p, "_stats"):
+          parents_stats.append(p._stats)
     # TODO Add debug mode that actually records stats. Introduce
     # better stat node naming through `repr`.
-    self._stats: dataset_stats.Stats = dataset_stats.NoopStats(
+
+    return dataset_stats.NoopStats(
         name=self.__class__.__name__, parents=parents_stats
     )
 
@@ -1026,6 +1034,7 @@ class DatasetIterator(Iterator[T], abc.ABC):
   def __init__(self, stats: dataset_stats.Stats | None = None):
     # Implementations that do not call super constructor will lose the parent
     # link and the stats recording.
+
     self._stats = stats or dataset_stats.NoopStats(repr(self), tuple())
 
   def __iter__(self) -> DatasetIterator[T]:

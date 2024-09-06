@@ -75,7 +75,8 @@ class _BatchDatasetIterator(dataset.DatasetIterator[T]):
         break
     if not values:
       raise StopIteration
-    return self._batch_fn(values)
+    with self._stats.record_self_time():
+      return self._batch_fn(values)
 
   def get_state(self):
     return self._parent.get_state()
@@ -138,7 +139,8 @@ class BatchMapDataset(dataset.MapDataset[T]):
     start += epoch * len(self._parent)
     stop += epoch * len(self._parent)
     values = [self._parent[i] for i in range(start, stop)]
-    return self._batch_fn(values)
+    with self._stats.record_self_time():
+      return self._batch_fn(values)
 
   def __str__(self) -> str:
     return (

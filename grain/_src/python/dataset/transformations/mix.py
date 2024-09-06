@@ -108,7 +108,8 @@ class MixedMapDataset(dataset.MapDataset[T]):
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
-    dataset_index, index_in_dataset = self._selection_map[index]
+    with self._stats.record_self_time():
+      dataset_index, index_in_dataset = self._selection_map[index]
     return self._parents[dataset_index][index_in_dataset]
 
 
@@ -352,5 +353,6 @@ class ConcatenateMapDataset(dataset.MapDataset[T]):
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
-    dataset_index, index_in_dataset = self._selection_map[index]
+    with self._stats.record_self_time():
+      dataset_index, index_in_dataset = self._selection_map[index]
     return self._parents[dataset_index][index_in_dataset]

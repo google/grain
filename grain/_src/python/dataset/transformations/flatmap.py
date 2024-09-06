@@ -42,23 +42,27 @@ class FlatMapMapDataset(dataset.MapDataset[T]):
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
-    fan_out = self._transform.max_fan_out
-    split_index = index % fan_out
-    element_index = index // fan_out
+    timer = dataset_stats.Timer()
+    with timer:
+      fan_out = self._transform.max_fan_out
+      split_index = index % fan_out
+      element_index = index // fan_out
     element = self._parent[element_index]
-    splits = list(enumerate(self._transform.flat_map(element)))
-    if len(splits) > fan_out:
-      raise ValueError(
-          "The user-provided FlatMapTransform has a split that exceeds"
-          " specified max fan-out size. To address this, you can raise the max"
-          " fan-out size, but for a max fan-out size >100, performance may"
-          " suffer. Please consider preprocessing your data to keep the max"
-          " fan-out size reasonable."
-      )
-    for i, sub_element in splits:
-      if i == split_index:
-        return sub_element
-    return None
+    with timer:
+      splits = list(enumerate(self._transform.flat_map(element)))
+      if len(splits) > fan_out:
+        raise ValueError(
+            "The user-provided FlatMapTransform has a split that exceeds"
+            " specified max fan-out size. To address this, you can raise the"
+            " max fan-out size, but for a max fan-out size >100, performance"
+            " may suffer. Please consider preprocessing your data to keep the"
+            " max fan-out size reasonable."
+        )
+    with self._stats.record_self_time(offset_sec=timer.value()):
+      for i, sub_element in splits:
+        if i == split_index:
+          return sub_element
+      return None
 
 
 class _FlatMapDatasetIterator(dataset.DatasetIterator[T]):
@@ -81,6 +85,7 @@ class _FlatMapDatasetIterator(dataset.DatasetIterator[T]):
     return self._next_index_in_buffer >= len(self._buffer)
 
   def __next__(self):
+    timer = dataset_stats.Timer()
     while self._has_consumed_all_buffer_elements():
       # Stores the previous state so that we can checkpoint this iterator
       # without storing `self._buffer` elements
@@ -88,12 +93,14 @@ class _FlatMapDatasetIterator(dataset.DatasetIterator[T]):
 
       element = next(self._parent)  # Raises `StopIteration` when done.
 
-      self._next_index_in_buffer = 0
-      self._buffer = self._flat_map(element)
+      with timer:
+        self._next_index_in_buffer = 0
+        self._buffer = self._flat_map(element)
 
-    mapped_element = self._buffer[self._next_index_in_buffer]
-    self._next_index_in_buffer += 1
-    return mapped_element
+    with self._stats.record_self_time(offset_sec=timer.value()):
+      mapped_element = self._buffer[self._next_index_in_buffer]
+      self._next_index_in_buffer += 1
+      return mapped_element
 
   def get_state(self):
     return {

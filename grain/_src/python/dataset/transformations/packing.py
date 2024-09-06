@@ -138,10 +138,13 @@ class SingleBinPackDatasetIterator(dataset.DatasetIterator):
 
   def __next__(self):
     self._num_next_calls += 1
+    timer = dataset_stats.Timer()
     while True:
       # We got fully packed examples in the buffer.
       if self._packed_elements:
-        return self._packed_elements.popleft()
+        with self._stats.record_self_time(offset_sec=timer.value()):
+          result = self._packed_elements.popleft()
+        return result
 
       try:
         flat_element = self._get_next_from_parent()
@@ -149,27 +152,31 @@ class SingleBinPackDatasetIterator(dataset.DatasetIterator):
         # Parent iterator exhausted. Yield whatever is in the buffer as last
         # (potentially heavily padded) element.
         if self._element_buffer:
-          packed_element = self._pack_elements(self._element_buffer)
-          self._element_buffer = []
-          self._element_buffer_space = copy.copy(self._flat_lengths)
+          with self._stats.record_self_time(offset_sec=timer.value()):
+            packed_element = self._pack_elements(self._element_buffer)
+            self._element_buffer = []
+            self._element_buffer_space = copy.copy(self._flat_lengths)
           return packed_element
         else:
           raise e
-      if self._is_fully_packed(flat_element):
-        # To avoid uncessary splitting/truncation we pass through examples that
-        # seem to be fully packed. This does change the order of examples but
-        # is allowed and handled correctly by our checkpointing.
-        # This behaviour is especially important when examples are splits of
-        # larger examples that already have the desired length.
-        self._packed_elements.append(self._pack_elements([flat_element]))
-        continue
+      with timer:
+        if self._is_fully_packed(flat_element):
+          # To avoid uncessary splitting/truncation we pass through examples
+          # that seem to be fully packed. This does change the order of examples
+          # but is allowed and handled correctly by our checkpointing.
+          # This behaviour is especially important when examples are splits of
+          # larger examples that already have the desired length.
+          self._packed_elements.append(self._pack_elements([flat_element]))
+          continue
 
-      # Concat element to incomplete_element.
-      is_fully_packed = self._append_to_next_element(flat_element)
-      if is_fully_packed:
-        self._packed_elements.append(self._pack_elements(self._element_buffer))
-        self._element_buffer = []
-        self._element_buffer_space = copy.copy(self._flat_lengths)
+        # Concat element to incomplete_element.
+        is_fully_packed = self._append_to_next_element(flat_element)
+        if is_fully_packed:
+          self._packed_elements.append(
+              self._pack_elements(self._element_buffer)
+          )
+          self._element_buffer = []
+          self._element_buffer_space = copy.copy(self._flat_lengths)
 
   def _is_fully_packed(self, flat_element):
     return any(
@@ -391,20 +398,23 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
       )
 
   def __next__(self):
+    timer = dataset_stats.Timer()
     if self._packed_batch is not None:
-      if self._shuffle_bins:
-        next_row = self._shuffled_rows[self._next_row]
-      else:
-        next_row = self._next_row
-      element = tree.map_structure(lambda x: x[next_row], self._packed_batch)
-      self._next_row += 1
-      self._counter += 1
-      if self._next_row >= self._packed_batch_num_bins:
-        self._packed_batch = None
-        self._packed_batch_parent_state = None
-        self._next_row = 0
-        self._shuffled_rows = None
-      return element
+      element = None
+      with self._stats.record_self_time(offset_sec=timer.value()):
+        if self._shuffle_bins:
+          next_row = self._shuffled_rows[self._next_row]
+        else:
+          next_row = self._next_row
+        element = tree.map_structure(lambda x: x[next_row], self._packed_batch)
+        self._next_row += 1
+        self._counter += 1
+        if self._next_row >= self._packed_batch_num_bins:
+          self._packed_batch = None
+          self._packed_batch_parent_state = None
+          self._next_row = 0
+          self._shuffled_rows = None
+        return element
 
     while True:
       prior_iterator_state = self._parent.get_state()
@@ -413,48 +423,51 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
         element = next(self._parent)
       except StopIteration as e:
         if self._current_batch:
-          self._finalize_current_batch(None)
-          self._current_batch_parent_state = prior_iterator_state
+          with timer:
+            self._finalize_current_batch(None)
+            self._current_batch_parent_state = prior_iterator_state
           return next(self)
         else:
           # The inner iterator is exhausted and there is no current batch, so
           # the packed iterator is also exhausted.
           raise StopIteration() from e
 
-      # Remove elements not in packing struct.
-      element = tree.map_structure_up_to(
-          self._length_struct, lambda x: x, element
-      )
-
-      if self._current_batch is None:  # pytype: disable=attribute-error
-        # Use `element` to set dtypes + trailing dimensions.
-        # We are not adding the element to the batch, just initializing it.
-        self._current_batch = packing_packed_batch.PackedBatch(
-            element,
-            self._num_packing_bins,
-            self._length_struct,
-            meta_features=self._meta_features,
+      with timer:
+        # Remove elements not in packing struct.
+        element = tree.map_structure_up_to(
+            self._length_struct, lambda x: x, element
         )
-        self._current_batch_parent_state = prior_iterator_state
 
-      # Try adding element to the current packed batch.
-      failing_components = self._current_batch.try_add_to_batch(element)
+        if self._current_batch is None:  # pytype: disable=attribute-error
+          # Use `element` to set dtypes + trailing dimensions.
+          # We are not adding the element to the batch, just initializing it.
+          self._current_batch = packing_packed_batch.PackedBatch(
+              element,
+              self._num_packing_bins,
+              self._length_struct,
+              meta_features=self._meta_features,
+          )
+          self._current_batch_parent_state = prior_iterator_state
+
+        # Try adding element to the current packed batch.
+        failing_components = self._current_batch.try_add_to_batch(element)
 
       # When we have a full batch, yield the current packed data,
       # and then start a new batch with this element.
       if failing_components is not None:
-        self._finalize_current_batch(element)
-        self._current_batch_parent_state = prior_iterator_state
-        assert self._current_batch is not None
+        with timer:
+          self._finalize_current_batch(element)
+          self._current_batch_parent_state = prior_iterator_state
+          assert self._current_batch is not None
 
-        if self._current_batch.try_add_to_batch(element) is not None:
-          # If we can't pack a single example into an empty batch then we
-          # can't continue at all.
-          element_shape = tree.map_structure(lambda x: x.shape, element)
-          raise ValueError(
-              "Could not add element to empty packed batch! Packed batch has"
-              f" packing sequence_lengths: {self._length_struct} while"
-              f" element has shape: {element_shape}"
-          )
+          if self._current_batch.try_add_to_batch(element) is not None:
+            # If we can't pack a single example into an empty batch then we
+            # can't continue at all.
+            element_shape = tree.map_structure(lambda x: x.shape, element)
+            raise ValueError(
+                "Could not add element to empty packed batch! Packed batch has"
+                f" packing sequence_lengths: {self._length_struct} while"
+                f" element has shape: {element_shape}"
+            )
         # We now have packed batch.
         return next(self)

@@ -45,11 +45,10 @@ class FilterMapDataset(dataset.MapDataset[T]):
     if isinstance(index, slice):
       return self.slice(index)
     element = self._parent[index]
-    if element is None:
+    with self._stats.record_self_time():
+      if element is not None and self._filter_fn(element):
+        return element
       return None
-    if self._filter_fn(element):
-      return element
-    return None
 
   def __str__(self) -> str:
     return f"FilterMapDataset(parent={self._parent})"
@@ -70,16 +69,22 @@ class _FilterDatasetIterator(dataset.DatasetIterator[T]):
 
   def __next__(self):
     value = None
-    filtered_value = False
-    while not filtered_value:
+    passed_filter = False
+    timer = dataset_stats.Timer()
+    while not passed_filter:
       try:
         value = next(self._parent)
       except StopIteration:
         break
-      filtered_value = self._filter_fn(value)
-    if not filtered_value:
-      raise StopIteration
-    return value
+      with timer:
+        passed_filter = self._filter_fn(value)
+    if not passed_filter:
+      with self._stats.record_self_time(
+          offset_sec=timer.value(), num_produced_elements=0
+      ):
+        raise StopIteration
+    with self._stats.record_self_time(offset_sec=timer.value()):
+      return value
 
   def get_state(self):
     return self._parent.get_state()

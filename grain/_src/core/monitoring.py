@@ -8,6 +8,7 @@ class Units(enum.Enum):
   """Grain metric units."""
 
   NANOSECONDS = enum.auto()
+  MILLISECONDS = enum.auto()
 
 
 class NoOpMetric:
@@ -36,6 +37,16 @@ class Metadata:
   """Grain metric no-op metadata."""
 
   def __init__(self, *args, **kwargs):
+    del args, kwargs
+
+
+class Bucketer:
+  """Grain metric no-op bucketer."""
+
+  def __init__(self, *args, **kwargs):
+    del args, kwargs
+
+  def PowersOf(self, *args, **kwargs):
     del args, kwargs
 
 
