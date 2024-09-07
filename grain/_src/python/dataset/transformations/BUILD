@@ -26,6 +26,27 @@ py_test(
     deps = ["//grain/_src/python/dataset"],
 )
 
+py_library(
+    name = "concat_then_split",
+    srcs = ["concat_then_split.py"],
+    srcs_version = "PY3",
+    deps = [
+        "//grain/_src/core:tree",
+        "//grain/_src/python/dataset",
+    ],
+)
+
+py_test(
+    name = "concat_then_split_test",
+    srcs = ["concat_then_split_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":concat_then_split",
+        "//grain/_src/python/dataset",
+        "//third_party/py/chex",
+    ],
+)
+
 py_test(
     name = "filter_test",
     srcs = ["filter_test.py"],
