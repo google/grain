@@ -22,6 +22,7 @@ import time
 from typing import Callable, Sequence, TypeVar
 
 from absl import logging
+from grain._src.core import config
 from grain._src.core import monitoring as grain_monitoring
 
 from grain._src.core import monitoring
@@ -100,16 +101,6 @@ class Stats(abc.ABC):
     self._is_output = True
     for p in parents:
       p._is_output = False
-    self._lock = threading.Lock()
-
-  def __getstate__(self):
-    state = self.__dict__.copy()
-    del state["_lock"]
-    return state
-
-  def __setstate__(self, state):
-    self.__dict__.update(state)
-    self._lock = threading.Lock()
 
   @contextlib.contextmanager
   @abc.abstractmethod
@@ -190,7 +181,7 @@ class Stats(abc.ABC):
       p._for_each_parent(fn, visited)  # pylint: disable=protected-access
 
 
-class NoopStats(Stats):
+class _NoopStats(Stats):
   """Default implementation for statistics collection that does nothing."""
 
   @contextlib.contextmanager
@@ -204,26 +195,26 @@ class NoopStats(Stats):
     pass
 
 
-class ExecutionStats(Stats):
+class _ExecutionStats(Stats):
   """Execution time statistics for transformations."""
 
   def __init__(self, name: str, parents: Sequence[Stats]):
-    super(ExecutionStats, self).__init__(name, parents)
+    super().__init__(name, parents)
     self._thread = None
     self._monitoring_period_sec = _MONITORING_PERIOD_SEC
     self._lock_timeout_sec = _LOCK_ACQUISITION_TIMEOUT_SEC
     self._num_elements = 0
     self._self_time_sec = 0.0
+    self._lock = threading.Lock()
+
+  def __reduce__(self):
+    return _ExecutionStats, (self._name, self._parents)
 
   def _report_monitoring_thread(self):
-
-    def report_monitoring(stats: Stats) -> None:
-      stats.report()
-
     # Reports monitoring and goes to sleep for the requestion duration.
     while True:
       visited = set()
-      self._for_each_parent(report_monitoring, visited)
+      self._for_each_parent(lambda s: s.report(), visited)
       time.sleep(self._monitoring_period_sec)
 
   @contextlib.contextmanager
@@ -260,3 +251,8 @@ class ExecutionStats(Stats):
         self._num_elements = 0
     if self_time_ms is not None:
       _self_time_ms_histogram.Record(self_time_ms, self._name)
+
+
+def make_stats(name: str, parents: Sequence[Stats]) -> Stats:
+  """Produces statistics instance according to the current execution mode."""
+  return _NoopStats(name=name, parents=parents)

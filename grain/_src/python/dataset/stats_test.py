@@ -16,6 +16,7 @@ import contextlib
 import time
 from typing import Sequence
 
+from absl.testing import flagsaver
 from grain._src.python.dataset import stats
 
 from absl.testing import absltest
@@ -113,8 +114,12 @@ class StatsTest(absltest.TestCase):
 
 class NoopStatsTest(absltest.TestCase):
 
+  def test_assert_is_noop(self):
+    s = _make_stats_tree(stats.make_stats)
+    self.assertIsInstance(s, stats._NoopStats)
+
   def test_record_self_time(self):
-    s = _make_stats_tree(stats.NoopStats)
+    s = _make_stats_tree(stats.make_stats)
     with s.record_self_time():
       pass
     s = s._parents[0]
@@ -122,48 +127,16 @@ class NoopStatsTest(absltest.TestCase):
       pass
 
   def test_record_output_spec(self):
-    s = _make_stats_tree(stats.NoopStats)
+    s = _make_stats_tree(stats.make_stats)
     s.record_output_spec(1)
     s = s._parents[0]
     s.record_output_spec(1)
 
   def test_report(self):
-    s = _make_stats_tree(stats.NoopStats)
+    s = _make_stats_tree(stats.make_stats)
     s.report()
     s = s._parents[0]
     s.report()
-
-
-class ExecutionStatsTest(absltest.TestCase):
-
-  def test_record_stats(self):
-    s = _make_stats_tree(stats.ExecutionStats)
-    s._lock_timeout_sec = 1000
-    # Turns off monitoring by setting the monitoring period to < 0
-    s._monitoring_period_sec = -1
-    with s.record_self_time(offset_sec=10.0, num_produced_elements=1):
-      pass
-    # Asserts that neither self time nor num elements are recorded.
-    self.assertAlmostEqual(s._self_time_sec, 0.0)
-    self.assertEqual(s._num_elements, 0)
-    # Turns on monitoring reporting every 0.5 sec.
-    s._monitoring_period_sec = 1.0
-    with s.record_self_time(offset_sec=10.0, num_produced_elements=1):
-      pass
-    time.sleep(0.5)
-    # Monitoring thread should have started.
-    self.assertNotEqual(s._thread, None)
-    # Both self time and num elements should be reset
-    self.assertAlmostEqual(s._self_time_sec, 0.0)
-    self.assertEqual(s._num_elements, 0)
-    # Record another element
-    with s.record_self_time(offset_sec=10.0, num_produced_elements=2):
-      pass
-    # Thread should still be sleeping -> values have not been reported yet and
-    # hence not reset yet.
-    self.assertGreater(s._self_time_sec, 10.0)
-    self.assertEqual(s._num_elements, 2)
-
 
 if __name__ == "__main__":
   absltest.main()

@@ -58,7 +58,6 @@ import warnings
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import transforms
 from grain._src.core import usage_logging
-from grain._src.core.config import config
 from grain._src.python import options as grain_options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import stats as dataset_stats
@@ -104,12 +103,7 @@ class _Dataset:
       for p in self._parents:
         if hasattr(p, "_stats"):
           parents_stats.append(p._stats)
-    # TODO Add debug mode that actually records stats. Introduce
-    # better stat node naming through `repr`.
-
-    return dataset_stats.NoopStats(
-        name=self.__class__.__name__, parents=parents_stats
-    )
+    return dataset_stats.make_stats(self.__class__.__name__, parents_stats)
 
   @functools.cached_property
   def _default_seed(self) -> int | None:
@@ -992,6 +986,7 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
       if isinstance(parent, MapDataset):
         sliced_parents.append(parent.slice(sl))
       else:
+        assert isinstance(parent, IterDataset), parent
         parent._set_parent_maps_slice(sl)  # pylint: disable=protected-access
         sliced_parents.append(parent)
     self._parents = tuple(sliced_parents)
@@ -1034,8 +1029,9 @@ class DatasetIterator(Iterator[T], abc.ABC):
   def __init__(self, stats: dataset_stats.Stats | None = None):
     # Implementations that do not call super constructor will lose the parent
     # link and the stats recording.
-
-    self._stats = stats or dataset_stats.NoopStats(repr(self), tuple())
+    self._stats = stats or dataset_stats.make_stats(
+        self.__class__.__name__, tuple()
+    )
 
   def __iter__(self) -> DatasetIterator[T]:
     return self

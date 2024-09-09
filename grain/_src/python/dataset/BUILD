@@ -31,7 +31,6 @@ py_library(
     deps = [
         ":base",
         ":stats",
-        "//grain/_src/core:config",
         "//grain/_src/core:exceptions",
         "//grain/_src/core:monitoring",
         "//grain/_src/core:transforms",
@@ -105,8 +104,8 @@ py_library(
     srcs = ["stats.py"],
     srcs_version = "PY3",
     deps = [
+        "//grain/_src/core:config",
         "//grain/_src/core:monitoring",
-        "//grain/_src/core:transforms",
     ],
 )
 
