@@ -12,11 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Tests for stats.py."""
+import collections
 import contextlib
+import functools
+import threading
 import time
 from typing import Sequence
+from unittest import mock
 
 from absl.testing import flagsaver
+import cloudpickle
 from grain._src.python.dataset import stats
 
 from absl.testing import absltest

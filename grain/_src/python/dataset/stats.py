@@ -19,9 +19,8 @@ import abc
 import contextlib
 import threading
 import time
-from typing import Callable, Sequence, TypeVar
+from typing import Sequence, TypeVar
 
-from absl import logging
 from grain._src.core import config
 from grain._src.core import monitoring as grain_monitoring
 
@@ -43,11 +42,8 @@ _self_time_ms_histogram = monitoring.EventMetric(
 )
 
 T = TypeVar("T")
-# Timeout before a lock can be acquired to collect statistics for each stats
-# recording
-_LOCK_ACQUISITION_TIMEOUT_SEC = 0.001  # 1 msec
-# Time between two consecutive monitoring reporting.
-_MONITORING_PERIOD_SEC = 20
+# Time between two consecutive monitoring reports.
+_REPORTING_PERIOD_SEC = 10
 
 
 class Timer:
@@ -107,6 +103,8 @@ class Stats(abc.ABC):
   def record_self_time(self, offset_sec: float = 0.0, num_produced_elements=1):
     """Records time spent in this node's transfromation.
 
+    Thread-safe.
+
     Implemented as context manager for convenience. Expected to be used as
     follows:
     ```
@@ -139,6 +137,8 @@ class Stats(abc.ABC):
   def record_output_spec(self, element: T) -> T:
     """Records output spec of the elements produced by this node.
 
+    Thread-safe.
+
     Args:
       element: structure to record the spec of.
 
@@ -169,16 +169,10 @@ class Stats(abc.ABC):
 
     This should be expected to be called once the last element is processed as
     well as in the middle of execution.
+
+    Not thread-safe, expected to be called from a single thread.
     """
     ...
-
-  def _for_each_parent(self, fn: Callable[[Stats], None], visited: set[Stats]):
-    if self in visited:
-      return
-    fn(self)
-    visited.add(self)
-    for p in self._parents:
-      p._for_each_parent(fn, visited)  # pylint: disable=protected-access
 
 
 class _NoopStats(Stats):
@@ -200,22 +194,22 @@ class _ExecutionStats(Stats):
 
   def __init__(self, name: str, parents: Sequence[Stats]):
     super().__init__(name, parents)
-    self._thread = None
-    self._monitoring_period_sec = _MONITORING_PERIOD_SEC
-    self._lock_timeout_sec = _LOCK_ACQUISITION_TIMEOUT_SEC
-    self._num_elements = 0
-    self._self_time_sec = 0.0
-    self._lock = threading.Lock()
+    # Note that the buffer is intentionally not guarded by a lock to avoid lock
+    # contention. Thread-safe operations are expected to only do atomic actions
+    # on the buffer (such as `append`) making it safe due to GIL. See details in
+    # https://docs.python.org/3/faq/library.html#what-kinds-of-global-value-mutation-are-thread-safe
+    # The buffer is popped from a single(!) background reporting thread.
+    self._self_times_buffer = []
+    self._reporting_thread = None
+    self._reporting_thread_init_lock = threading.Lock()
 
   def __reduce__(self):
     return _ExecutionStats, (self._name, self._parents)
 
-  def _report_monitoring_thread(self):
-    # Reports monitoring and goes to sleep for the requestion duration.
+  def _reporting_loop(self):
     while True:
-      visited = set()
-      self._for_each_parent(lambda s: s.report(), visited)
-      time.sleep(self._monitoring_period_sec)
+      time.sleep(_REPORTING_PERIOD_SEC)
+      self.report()
 
   @contextlib.contextmanager
   def record_self_time(self, offset_sec: float = 0.0, num_produced_elements=1):
@@ -223,34 +217,29 @@ class _ExecutionStats(Stats):
     try:
       yield
     finally:
-      if self._monitoring_period_sec >= 0:
-        # Only record the self time if the lock can be acquired in a short time.
-        if self._lock.acquire(timeout=self._lock_timeout_sec):
-          self._self_time_sec += time.perf_counter() - start_time + offset_sec
-          self._num_elements += num_produced_elements
-          self._lock.release()
-          # A separate thread is used to monitor the execution time of the whole
-          # pipeline. This thread is only started for the outputs of the
-          # pipeline
-          if self._is_output and self._thread is None:
-            logging.info("Starting monitoring thread for %s.", self._name)
-            self._thread = threading.Thread(
-                target=self._report_monitoring_thread, daemon=True
+      self._self_times_buffer.append(
+          time.perf_counter() - start_time + offset_sec
+      )
+      # We avoid acquiring `_reporting_thread_init_lock` here to avoid lock
+      # contention.
+      if self._is_output and self._reporting_thread is None:
+        with self._reporting_thread_init_lock:
+          # Check above together with update would not be atomic -- another
+          # thread may have started the reporting thread.
+          if self._reporting_thread is None:
+            self._reporting_thread = threading.Thread(
+                target=self._reporting_loop, daemon=True
             )
-            self._thread.start()
+            self._reporting_thread.start()
 
   def record_output_spec(self, element: T) -> T:
     return element
 
   def report(self):
-    self_time_ms = None
-    with self._lock:
-      if self._num_elements > 0:
-        self_time_ms = int(self._self_time_sec / self._num_elements * 1000.0)
-        self._self_time_sec = 0.0
-        self._num_elements = 0
-    if self_time_ms is not None:
-      _self_time_ms_histogram.Record(self_time_ms, self._name)
+    while self._self_times_buffer:
+      _self_time_ms_histogram.Record(self._self_times_buffer.pop(), self._name)
+    for p in self._parents:
+      p.report()
 
 
 def make_stats(name: str, parents: Sequence[Stats]) -> Stats:
