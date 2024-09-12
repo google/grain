@@ -547,10 +547,3 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   def _work_loop(self):
     while not self._closed:
       self._work_queue.get()()
-
-  def _start_worker(self):
-    if self._work_thread is None:
-      self._work_thread = threading.Thread(
-          target=self._work_loop, daemon=True, name=f"Prefetch-{self._parent}"
-      )
-      self._work_thread.start()
