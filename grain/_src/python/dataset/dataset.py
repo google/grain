@@ -411,6 +411,7 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
   def map_with_index(
       self,
       transform: transforms.MapWithIndexTransform | Callable[[int, T], S],
+      **kwargs,
   ) -> MapDataset[S]:
     """Returns a dataset containing the elements transformed by `transform`.
 
@@ -428,6 +429,7 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
       transform: Either a `MapWithIndexTransform` containing the
         `map_with_index` method or a callable that takes an index and an element
         and returns a new element.
+      **kwargs: Optional kwargs to be applied.
 
     Returns:
       A dataset containing the elements of the original dataset transformed by
@@ -439,7 +441,9 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
         map as map_dataset,
     )
     # pylint: enable=g-import-not-at-top
-    return map_dataset.MapWithIndexMapDataset(parent=self, transform=transform)
+    return map_dataset.MapWithIndexMapDataset(
+        parent=self, transform=transform, **kwargs
+    )
 
   def seed(self, seed: int) -> MapDataset[T]:
     """Returns a dataset that uses the seed for default seed generation.

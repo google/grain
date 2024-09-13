@@ -177,6 +177,7 @@ class MapWithIndexMapDataset(dataset.MapDataset[T]):
       transform: Union[
           transforms.MapWithIndexTransform, Callable[[int, Any], T]
       ],
+      **kwargs,
   ):
     super().__init__(parent)
     if isinstance(transform, transforms.MapWithIndexTransform):
@@ -187,6 +188,7 @@ class MapWithIndexMapDataset(dataset.MapDataset[T]):
     else:
       # Expect Callable[[int, Any], T].
       self._map_fn = transform
+    self._kwargs = kwargs
 
   @functools.cached_property
   def _transform_name(self):
@@ -205,7 +207,9 @@ class MapWithIndexMapDataset(dataset.MapDataset[T]):
       element = self._parent[index]
       if element is None:
         return None
-      return self._stats.record_output_spec(self._map_fn(index, element))
+      return self._stats.record_output_spec(
+          self._map_fn(index, element, **self._kwargs)
+      )
 
 
 class _MapDatasetIterator(dataset.DatasetIterator[T]):
