@@ -313,7 +313,8 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     ) -> Iterator[tuple[T, Optional[dict[str, Any]]]]:
       # Recover from the last recorded state for the given worker.
       worker_state = state[_WORKERS_STATE][str(worker_index)]
-      parent._set_parent_maps_slice(slice(worker_index, None, worker_count))  # pylint: disable=protected-access
+      if worker_count > 1:
+        parent._set_parent_maps_slice(slice(worker_index, None, worker_count))  # pylint: disable=protected-access
       it = iter(parent)
       it.set_state(worker_state)  # pytype: disable=attribute-error
       # Skip the required number of iterations after the last recorded state.

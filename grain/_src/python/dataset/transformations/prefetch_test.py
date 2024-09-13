@@ -269,7 +269,18 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
           options.MultiprocessingOptions(num_workers=1),
       )
 
-  def test_fails_with_iter_source(self):
+  def test_works_with_iter_source_single_worker(self):
+    # Even though a pure IterDataset cannot be sliced, we should still be able
+    # to multiprocess-prefetch it with a single worker, since that doesn't
+    # require any slicing.
+    ds = prefetch.MultiprocessPrefetchIterDataset(
+        RepeatedIntSourceIterDataset().map(lambda x: x + 1),
+        options.MultiprocessingOptions(num_workers=1),
+    )
+    ds_iter = iter(ds)
+    self.assertEqual(next(ds_iter), 2)
+
+  def test_fails_with_iter_source_multiple_workers(self):
     ds = prefetch.MultiprocessPrefetchIterDataset(
         RepeatedIntSourceIterDataset().map(lambda x: x + 1),
         options.MultiprocessingOptions(num_workers=2),
