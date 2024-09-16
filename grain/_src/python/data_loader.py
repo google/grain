@@ -412,14 +412,16 @@ class PyGrainDatasetIterator(collections.abc.Iterator[_T]):
       self._iterator = self._raw_iterator
     else:
       state = self._state
-      data_loader = self._data_loader
+      # Custom DataLoader can avoid pickling the `self._data_loader` object here
+      # by e.g. making `_read_and_transform_data` a property.
+      read_and_transform_data = self._data_loader._read_and_transform_data  # pylint: disable=protected-access
 
       def get_element_producer_fn(
           worker_index: int, worker_count: int
       ) -> Iterator[record.Record]:
         del worker_count
         last_seen_index = state[_LAST_SEEN_INDICES].get(str(worker_index))
-        yield from data_loader._read_and_transform_data(last_seen_index)  # pylint: disable=protected-access
+        yield from read_and_transform_data(last_seen_index)
 
       worker_index_to_start_reading = (
           state[_LAST_WORKER_INDEX] + 1
