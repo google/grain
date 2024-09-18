@@ -263,7 +263,7 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     workers_state = {}
     iterations_to_skip = {}
     for i in range(multiprocessing_options.num_workers):
-      workers_state[str(i)] = iter(self._parent).get_state()  # pytype: disable=attribute-error
+      workers_state[str(i)] = None
       iterations_to_skip[str(i)] = 0
 
     self._state = {
@@ -324,8 +324,9 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       worker_state = state[_WORKERS_STATE][str(worker_index)]
       if worker_count > 1:
         parent._set_parent_maps_slice(slice(worker_index, None, worker_count))  # pylint: disable=protected-access
-      it = iter(parent)
-      it.set_state(worker_state)  # pytype: disable=attribute-error
+      it = parent.__iter__()
+      if worker_state is not None:
+        it.set_state(worker_state)
       # Skip the required number of iterations after the last recorded state.
       for _ in range(state[_ITERATIONS_TO_SKIP][str(worker_index)]):
         _ = next(it)
