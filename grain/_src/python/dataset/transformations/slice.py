@@ -38,7 +38,7 @@ class SliceMapDataset(dataset.MapDataset[T]):
     with self._stats.record_self_time():
       parent_index = self._start + (index % len(self)) * self._step
     element = self._parent[parent_index]
-    return element
+    return self._stats.record_output_spec(element)
 
   def __str__(self) -> str:
-    return f"{self._parent}[{self._start}:{self._stop}:{self._step}]"
+    return f"SliceMapDataset[{self._start}:{self._stop}:{self._step}]"

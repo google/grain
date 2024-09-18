@@ -52,6 +52,9 @@ class RepeatMapDataset(dataset.MapDataset[T]):
   def __len__(self) -> int:
     return self._length
 
+  def __str__(self) -> str:
+    return f"RepeatMapDataset(num_epochs={self._num_epochs})"
+
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)

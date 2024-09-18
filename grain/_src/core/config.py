@@ -110,6 +110,12 @@ _DEBUG_MODE = flags.DEFINE_bool(
     ),
 )
 
+_DATASET_VISUALIZATION_OUTPUT_DIR = flags.DEFINE_string(
+    "grain_py_dataset_visualization_output_dir",
+    None,
+    "If set, generates the pipeline visulization graph in the logs.",
+)
+
 _GRAIN_FLAGS = (
     _INTERLEAVED_SHUFFLE,
     _INTERLEAVED_SHUFFLE_BLOCK_SIZE,
@@ -120,6 +126,7 @@ _GRAIN_FLAGS = (
     _OPTIMIZED_SEQUENTIAL_READ,
     _PREFETCH_BUFFER_SIZE,
     _DEBUG_MODE,
+    _DATASET_VISUALIZATION_OUTPUT_DIR,
 )
 
 _grain_experiment_metric = monitoring.Metric(
@@ -141,7 +148,10 @@ class Config:
     flag_name = f"grain_{name}"
     if any(f.name == flag_name for f in _GRAIN_FLAGS):
       value = getattr(flags.FLAGS, flag_name)
-      _grain_experiment_metric.Set(int(value), flag_name)
+      enrolled = int(
+          bool(value) if value is None or isinstance(value, str) else value
+      )
+      _grain_experiment_metric.Set(enrolled, flag_name)
       return value
     raise ValueError(f"Unrecognized config option: {name}")
 

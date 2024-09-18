@@ -33,8 +33,10 @@ class FilterMapDataset(dataset.MapDataset[T]):
       transform: Union[transforms.FilterTransform, Callable[[T], bool]],
   ):
     super().__init__(parent)
+    self._transform_name = None
     if isinstance(transform, transforms.FilterTransform):
       self._filter_fn = transform.filter
+      self._transform_name = transform.__class__.__name__
     else:
       self._filter_fn = transform
 
@@ -47,11 +49,13 @@ class FilterMapDataset(dataset.MapDataset[T]):
     element = self._parent[index]
     with self._stats.record_self_time():
       if element is not None and self._filter_fn(element):
-        return element
+        return self._stats.record_output_spec(element)
       return None
 
   def __str__(self) -> str:
-    return f"FilterMapDataset(parent={self._parent})"
+    if self._transform_name:
+      return f"FilterMapDataset(transform={self._transform_name})"
+    return f"FilterMapDataset(transform={self._filter_fn.__name__})"
 
 
 class _FilterDatasetIterator(dataset.DatasetIterator[T]):
@@ -84,7 +88,7 @@ class _FilterDatasetIterator(dataset.DatasetIterator[T]):
       ):
         raise StopIteration
     with self._stats.record_self_time(offset_sec=timer.value()):
-      return value
+      return self._stats.record_output_spec(value)
 
   def get_state(self):
     return self._parent.get_state()
@@ -105,8 +109,10 @@ class FilterIterDataset(dataset.IterDataset[T]):
       transform: Union[transforms.FilterTransform, Callable[[T], bool]],
   ):
     super().__init__(parent)
+    self._transform_name = None
     if isinstance(transform, transforms.FilterTransform):
       self._filter_fn = transform.filter
+      self._transform_name = transform.__class__.__name__
     else:
       self._filter_fn = transform
 
@@ -119,4 +125,6 @@ class FilterIterDataset(dataset.IterDataset[T]):
     )
 
   def __str__(self) -> str:
-    return f"FilterIterDataset(parent={self._parent}"
+    if self._transform_name:
+      return f"FilterIterDataset(transform={self._transform_name})"
+    return f"FilterIterDataset(transform={self._filter_fn.__name__})"

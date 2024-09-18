@@ -17,12 +17,15 @@ from __future__ import annotations
 
 import abc
 import contextlib
+import pprint
 import threading
 import time
 from typing import Sequence, TypeVar
 
+from absl import logging
 from grain._src.core import config
 from grain._src.core import monitoring as grain_monitoring
+from grain._src.core import tree
 
 from grain._src.core import monitoring
 
@@ -44,6 +47,14 @@ _self_time_ms_histogram = monitoring.EventMetric(
 T = TypeVar("T")
 # Time between two consecutive monitoring reports.
 _REPORTING_PERIOD_SEC = 10
+
+_EDGE_TEMPLATE = r"""{input_spec}
+  ││
+  ││  {transform}
+  ││
+  ╲╱
+{output_spec}
+"""
 
 
 class Timer:
@@ -91,6 +102,7 @@ class Stats(abc.ABC):
 
   def __init__(self, name: str, parents: Sequence[Stats]):
     self._name = name
+    self._output_spec = None
     self._parents = parents
     # Mark parent nodes as non-outputs. Nodes that are not updated are the
     # output nodes.
@@ -174,6 +186,46 @@ class Stats(abc.ABC):
     """
     ...
 
+  def _log_dataset_graph(self):
+    logging.info(
+        "Generated dataset graph is:\n \n%s", self._visualize_dataset_graph()
+    )
+
+  def _visualize_dataset_graph(self):
+    """Generates Dataset visualization graph."""
+    # TODO:Save the graph to a dot file for advanced visualization.
+    has_multiple_parents, dataset_graph = self._build_visualization_str()
+    if has_multiple_parents:
+      dataset_graph = (
+          "WARNING: Detected multi-parent datasets. Only displaying the first"
+          " parent.\n\n"
+          + dataset_graph
+      )
+    return dataset_graph
+
+  def _build_visualization_str(self, has_multiple_parents: bool = False):
+    """Builds Dataset visualization graph."""
+    if self._parents:
+      if len(self._parents) > 1:
+        has_multiple_parents = True
+      # pylint: disable=protected-access
+      has_multiple_parents, parent_vis = self._parents[
+          0
+      ]._build_visualization_str(has_multiple_parents)
+      # pylint: enable=protected-access
+      transform_repr = self._name
+    else:
+      parent_vis = self._name
+      transform_repr = ""
+    return (
+        has_multiple_parents,
+        _EDGE_TEMPLATE.format(
+            input_spec=parent_vis,
+            transform=transform_repr,
+            output_spec=pprint.pformat(self._output_spec),
+        ),
+    )
+
 
 class _NoopStats(Stats):
   """Default implementation for statistics collection that does nothing."""
@@ -189,7 +241,42 @@ class _NoopStats(Stats):
     pass
 
 
-class _ExecutionStats(Stats):
+class _VisualizationStats(Stats):
+  """Produces Dataset Visualization Graph."""
+
+  def __init__(self, name: str, parents: Sequence[Stats]):
+    super().__init__(name, parents)
+    self._graph_vis_thread = None
+    self._graph_vis_thread_init_lock = threading.Lock()
+
+  def __reduce__(self):
+    return _VisualizationStats, (self._name, self._parents)
+
+  @contextlib.contextmanager
+  def record_self_time(self, offset_sec: float = 0.0, num_produced_elements=1):
+    yield
+
+  def record_output_spec(self, element: T) -> T:
+    # Visualize the dataset graph once last node had seen a non-None element
+    if self._output_spec and self._is_output:
+      if self._graph_vis_thread is None:
+        with self._graph_vis_thread_init_lock:
+          # The check above with update without a lock is not atomic,
+          # need to check again under a lock.
+          if self._graph_vis_thread is None:
+            self._graph_vis_thread = threading.Thread(
+                target=self._log_dataset_graph, daemon=True
+            )
+            self._graph_vis_thread.start()
+    else:
+      self._output_spec = tree.spec_like(element)
+    return element
+
+  def report(self):
+    pass
+
+
+class _ExecutionStats(_VisualizationStats):
   """Execution time statistics for transformations."""
 
   def __init__(self, name: str, parents: Sequence[Stats]):
@@ -231,9 +318,6 @@ class _ExecutionStats(Stats):
                 target=self._reporting_loop, daemon=True
             )
             self._reporting_thread.start()
-
-  def record_output_spec(self, element: T) -> T:
-    return element
 
   def report(self):
     while self._self_times_buffer:

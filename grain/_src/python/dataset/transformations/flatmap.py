@@ -39,6 +39,9 @@ class FlatMapMapDataset(dataset.MapDataset[T]):
   def __len__(self) -> int:
     return self._transform.max_fan_out * len(self._parent)
 
+  def __str__(self) -> str:
+    return f"FlatMapMapDataset(transform={self._transform.__class__.__name__})"
+
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
@@ -61,7 +64,7 @@ class FlatMapMapDataset(dataset.MapDataset[T]):
     with self._stats.record_self_time(offset_sec=timer.value()):
       for i, sub_element in splits:
         if i == split_index:
-          return sub_element
+          return self._stats.record_output_spec(sub_element)
       return None
 
 
@@ -100,7 +103,7 @@ class _FlatMapDatasetIterator(dataset.DatasetIterator[T]):
     with self._stats.record_self_time(offset_sec=timer.value()):
       mapped_element = self._buffer[self._next_index_in_buffer]
       self._next_index_in_buffer += 1
-      return mapped_element
+      return self._stats.record_output_spec(mapped_element)
 
   def get_state(self):
     return {
@@ -134,6 +137,9 @@ class FlatMapIterDataset(dataset.IterDataset[T]):
   ):
     super().__init__(parent)
     self._transform = transform
+
+  def __str__(self) -> str:
+    return f"FlatMapIterDataset(transform={self._transform.__class__.__name__})"
 
   def __iter__(self):
     parent_iter = self._parent.__iter__()

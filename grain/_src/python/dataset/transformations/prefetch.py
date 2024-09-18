@@ -52,6 +52,12 @@ class PrefetchIterDataset(dataset.IterDataset[T]):
     self._read_options = read_options
     self._allow_nones = allow_nones
 
+  def __str__(self) -> str:
+    return (
+        f"PrefetchIterDataset(read_options={self._read_options},"
+        f" allow_nones={self._allow_nones})"
+    )
+
   def __iter__(self) -> dataset.DatasetIterator[T]:
     return PrefetchDatasetIterator(
         self._parent, self._read_options, self._allow_nones, self._stats
@@ -117,7 +123,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
         self._next_index += 1
       if self._allow_nones or element is not None:
         with self._stats.record_self_time(offset_sec=timer.value()):
-          return element
+          return self._stats.record_output_spec(element)
     with self._stats.record_self_time(offset_sec=timer.value()):
       raise StopIteration
 
@@ -163,6 +169,9 @@ class MultiprocessPrefetchIterDataset(dataset.IterDataset[T]):
     super().__init__(parent)
     self._validate_parent_dataset()
     self._multiprocessing_options = multiprocessing_options
+
+  def __str__(self) -> str:
+    return f"MultiprocessPrefetchIterDataset(multiprocessing_options={self._multiprocessing_options})"
 
   def _validate_parent_dataset(self):
     """Checks that there's a single level of parallelization."""
@@ -278,7 +287,7 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       else:
         self._state[_ITERATIONS_TO_SKIP][worker_index_str] = 0
         self._state[_WORKERS_STATE][worker_index_str] = state
-    return _open_struct_from_shm(result)
+    return _open_struct_from_shm(self._stats.record_output_spec(result))
 
   def start_prefetch(self) -> None:
     """Prefetches elements from the iterator.
@@ -356,6 +365,9 @@ class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
   ):
     super().__init__(parent)
     self._prefetch_buffer_size = prefetch_buffer_size
+
+  def __str__(self) -> str:
+    return f"ThreadPrefetchIterDataset(prefetch_buffer_size={self._prefetch_buffer_size})"
 
   def __iter__(self) -> ThreadPrefetchDatasetIterator[T]:
     return ThreadPrefetchDatasetIterator(

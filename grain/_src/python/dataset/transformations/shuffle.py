@@ -48,6 +48,9 @@ class ShuffleMapDataset(dataset.MapDataset[T]):
   def __len__(self) -> int:
     return len(self._parent)
 
+  def __str__(self) -> str:
+    return "ShuffleMapDataset"
+
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
@@ -63,7 +66,7 @@ class ShuffleMapDataset(dataset.MapDataset[T]):
           index_in_epoch, max_index=length - 1, seed=per_epoch_seed, rounds=4
       )
       shuffled_index = shuffled_index_in_epoch + epoch * length
-    return self._parent[shuffled_index]
+    return self._stats.record_output_spec(self._parent[shuffled_index])
 
 
 class WindowShuffleMapDataset(dataset.MapDataset[T]):
@@ -85,6 +88,9 @@ class WindowShuffleMapDataset(dataset.MapDataset[T]):
   def __len__(self) -> int:
     return len(self._parent)
 
+  def __str__(self) -> str:
+    return "WindowShuffleMapDataset"
+
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
@@ -98,4 +104,4 @@ class WindowShuffleMapDataset(dataset.MapDataset[T]):
           rounds=4,
       )
       index = index_in_window + window_index * self._window_size
-    return self._parent[index]
+    return self._stats.record_output_spec(self._parent[index])

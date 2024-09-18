@@ -22,9 +22,124 @@ from unittest import mock
 
 from absl.testing import flagsaver
 import cloudpickle
+from grain._src.core import transforms
+from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
 
 from absl.testing import absltest
+
+
+_MAP_DATASET_REPR = r"""RangeMapDataset
+  ││
+  ││  
+  ││
+  ╲╱
+"<class 'int'>[]"
+
+  ││
+  ││  ShuffleMapDataset
+  ││
+  ╲╱
+"<class 'int'>[]"
+
+  ││
+  ││  MapWithIndexMapDataset
+  ││
+  ╲╱
+{'data': "<class 'int'>[]",
+ 'dataset_index': "<class 'int'>[]",
+ 'epoch': "<class 'int'>[]",
+ 'index': "<class 'int'>[]"}
+
+  ││
+  ││  MapMapDataset
+  ││
+  ╲╱
+{'data': "<class 'int'>[]",
+ 'dataset_index': "<class 'int'>[]",
+ 'epoch': "<class 'int'>[]",
+ 'index': "<class 'int'>[]"}
+"""
+
+_ITER_DATASET_REPR = r"""RangeMapDataset
+  ││
+  ││  
+  ││
+  ╲╱
+"<class 'int'>[]"
+
+  ││
+  ││  ShuffleMapDataset
+  ││
+  ╲╱
+"<class 'int'>[]"
+
+  ││
+  ││  PrefetchIterDataset
+  ││
+  ╲╱
+"<class 'int'>[]"
+
+  ││
+  ││  MapIterDataset
+  ││
+  ╲╱
+{'data': "<class 'int'>[]",
+ 'dataset_index': "<class 'int'>[]",
+ 'epoch': "<class 'int'>[]",
+ 'index': "<class 'int'>[]"}
+
+  ││
+  ││  BatchIterDataset
+  ││
+  ╲╱
+{'data': 'int64[2]',
+ 'dataset_index': 'int64[2]',
+ 'epoch': 'int64[2]',
+ 'index': 'int64[2]'}
+"""
+
+_MIX_DATASET_REPR = r"""WARNING: Detected multi-parent datasets. Only displaying the first parent.
+
+RangeMapDataset
+  ││
+  ││  
+  ││
+  ╲╱
+"<class 'int'>[]"
+
+  ││
+  ││  ShuffleMapDataset
+  ││
+  ╲╱
+"<class 'int'>[]"
+
+  ││
+  ││  MixedMapDataset
+  ││
+  ╲╱
+"<class 'int'>[]"
+
+  ││
+  ││  MapMapDataset
+  ││
+  ╲╱
+"<class 'int'>[]"
+"""
+
+
+def _add_dummy_metadata(i, x):
+  return {"data": x, "index": i, "epoch": 4, "dataset_index": 1}
+
+
+def _identity(x):
+  return x
+
+
+class _AddOne(transforms.MapTransform):
+
+  def map(self, x):
+    return x + 1
 
 
 class TestStats(stats.Stats):

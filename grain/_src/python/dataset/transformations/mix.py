@@ -105,12 +105,17 @@ class MixedMapDataset(dataset.MapDataset[T]):
   def __len__(self) -> int:
     return self._length
 
+  def __str__(self):
+    return f"MixedMapDataset[{len(self._parents)} parents]"
+
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
     with self._stats.record_self_time():
       dataset_index, index_in_dataset = self._selection_map[index]
-    return self._parents[dataset_index][index_in_dataset]
+    return self._stats.record_output_spec(
+        self._parents[dataset_index][index_in_dataset]
+    )
 
 
 @dataclasses.dataclass
@@ -201,7 +206,7 @@ class MixedIterDataset(dataset.IterDataset[T]):
 
   def __str__(self) -> str:
     return (
-        f"MixedIterDataset(parents={self._parents},"
+        f"MixedIterDataset([{len(self._parents)} parents],"
         f" proportions={self._proportions})"
     )
 
@@ -355,4 +360,6 @@ class ConcatenateMapDataset(dataset.MapDataset[T]):
       return self.slice(index)
     with self._stats.record_self_time():
       dataset_index, index_in_dataset = self._selection_map[index]
-    return self._parents[dataset_index][index_in_dataset]
+    return self._stats.record_output_spec(
+        self._parents[dataset_index][index_in_dataset]
+    )

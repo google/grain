@@ -106,6 +106,7 @@ py_library(
     deps = [
         "//grain/_src/core:config",
         "//grain/_src/core:monitoring",
+        "//grain/_src/core:tree",
     ],
 )
 
@@ -113,5 +114,10 @@ py_test(
     name = "stats_test",
     srcs = ["stats_test.py"],
     srcs_version = "PY3",
-    deps = [":stats"],
+    deps = [
+        ":dataset",
+        ":stats",
+        "//grain/_src/core:transforms",
+        "//grain/_src/python:options",
+    ],
 )

@@ -87,6 +87,9 @@ class SingleBinPackIterDataset(dataset.IterDataset):
     super().__init__(parent)
     self._length_struct = length_struct
 
+  def __str__(self) -> str:
+    return "SingleBinPackIterDataset"
+
   def __iter__(self) -> dataset.DatasetIterator:
     return SingleBinPackDatasetIterator(
         self._parent.__iter__(), self._length_struct, self._stats
@@ -144,7 +147,7 @@ class SingleBinPackDatasetIterator(dataset.DatasetIterator):
       if self._packed_elements:
         with self._stats.record_self_time(offset_sec=timer.value()):
           result = self._packed_elements.popleft()
-        return result
+        return self._stats.record_output_spec(result)
 
       try:
         flat_element = self._get_next_from_parent()
@@ -156,7 +159,7 @@ class SingleBinPackDatasetIterator(dataset.DatasetIterator):
             packed_element = self._pack_elements(self._element_buffer)
             self._element_buffer = []
             self._element_buffer_space = copy.copy(self._flat_lengths)
-          return packed_element
+          return self._stats.record_output_spec(packed_element)
         else:
           raise e
       with timer:
@@ -302,6 +305,9 @@ class FirstFitPackIterDataset(dataset.IterDataset):
     self._shuffle_bins = shuffle_bins
     self._meta_features = meta_features
 
+  def __str__(self) -> str:
+    return "FirstFitPackIterDataset"
+
   def __iter__(self) -> dataset.DatasetIterator:
     return FirstFitPackDatasetIterator(
         self._parent.__iter__(),
@@ -400,7 +406,6 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
   def __next__(self):
     timer = dataset_stats.Timer()
     if self._packed_batch is not None:
-      element = None
       with self._stats.record_self_time(offset_sec=timer.value()):
         if self._shuffle_bins:
           next_row = self._shuffled_rows[self._next_row]
@@ -414,7 +419,7 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
           self._packed_batch_parent_state = None
           self._next_row = 0
           self._shuffled_rows = None
-        return element
+        return self._stats.record_output_spec(element)
 
     while True:
       prior_iterator_state = self._parent.get_state()

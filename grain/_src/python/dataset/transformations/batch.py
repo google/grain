@@ -76,7 +76,7 @@ class _BatchDatasetIterator(dataset.DatasetIterator[T]):
     if not values:
       raise StopIteration
     with self._stats.record_self_time():
-      return self._batch_fn(values)
+      return self._stats.record_output_spec(self._batch_fn(values))
 
   def get_state(self):
     return self._parent.get_state()
@@ -140,12 +140,11 @@ class BatchMapDataset(dataset.MapDataset[T]):
     stop += epoch * len(self._parent)
     values = [self._parent[i] for i in range(start, stop)]
     with self._stats.record_self_time():
-      return self._batch_fn(values)
+      return self._stats.record_output_spec(self._batch_fn(values))
 
   def __str__(self) -> str:
     return (
-        f"BatchMapLazyDataset(parent={self._parent},"
-        f" batch_size={self._batch_size},"
+        f"BatchMapDataset(batch_size={self._batch_size},"
         f" drop_remainder={self._drop_remainder})"
     )
 
@@ -187,7 +186,6 @@ class BatchIterDataset(dataset.IterDataset[T]):
 
   def __str__(self) -> str:
     return (
-        f"BatchIterLazyDataset(parent={self._parent},"
-        f" batch_size={self._batch_size},"
+        f"BatchIterDataset(batch_size={self._batch_size},"
         f" drop_remainder={self._drop_remainder})"
     )

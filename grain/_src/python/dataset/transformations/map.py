@@ -128,16 +128,29 @@ class MapMapDataset(dataset.MapDataset[T]):
       seed: Optional[int] = None,
   ):
     super().__init__(parent)
+    self._transform_name = None
     if isinstance(
         transform,
         (transforms.RandomMapTransform, transforms.TfRandomMapTransform),
     ):
       seed = self._default_seed if seed is None else seed
+      self._transform_name = transform.__class__.__name__
+    if isinstance(transform, transforms.MapTransform):
+      self._transform_name = transform.__class__.__name__
     self._map_fn, seed = _get_map_fn_and_seed(transform, seed)
     self._rng_pool = None if seed is None else RngPool(seed)
 
   def __len__(self) -> int:
     return len(self._parent)
+
+  def __str__(self) -> str:
+    if self._transform_name:
+      return f"MapMapDataset(transform={self._transform_name})"
+    else:
+      if hasattr(self._map_fn, "__name__"):
+        return f"MapMapDataset(transform={self._map_fn.__name__})"
+      else:
+        return "MapMapDataset"
 
   def __getitem__(self, index):
     if isinstance(index, slice):
@@ -152,7 +165,7 @@ class MapMapDataset(dataset.MapDataset[T]):
         self._rng_pool.release_rng(rng)
       else:
         element = self._map_fn(element)
-      return element
+    return self._stats.record_output_spec(element)
 
 
 class MapWithIndexMapDataset(dataset.MapDataset[T]):
@@ -166,8 +179,10 @@ class MapWithIndexMapDataset(dataset.MapDataset[T]):
       ],
   ):
     super().__init__(parent)
+    self._transform_name = None
     if isinstance(transform, transforms.MapWithIndexTransform):
       self._map_fn = transform.map_with_index
+      self._transform_name = transform.__class__.__name__
     else:
       # Expect Callable[[int, Any], T].
       self._map_fn = transform
@@ -175,13 +190,19 @@ class MapWithIndexMapDataset(dataset.MapDataset[T]):
   def __len__(self) -> int:
     return len(self._parent)
 
+  def __str__(self) -> str:
+    if self._transform_name:
+      return f"MapWithIndexMapDataset(transform={self._transform_name})"
+    return f"MapWithIndexMapDataset(transform={self._map_fn.__name__})"
+
   def __getitem__(self, index):
-    if isinstance(index, slice):
-      return self.slice(index)
-    element = self._parent[index]
-    if element is None:
-      return None
-    return self._map_fn(index, element)
+    with self._stats.record_self_time():
+      if isinstance(index, slice):
+        return self.slice(index)
+      element = self._parent[index]
+      if element is None:
+        return None
+      return self._stats.record_output_spec(self._map_fn(index, element))
 
 
 class _MapDatasetIterator(dataset.DatasetIterator[T]):
@@ -216,7 +237,7 @@ class _MapDatasetIterator(dataset.DatasetIterator[T]):
           element = self._map_fn(element)
 
       self._index_for_rng += 1
-      return element
+      return self._stats.record_output_spec(element)
 
   def get_state(self):
     return {
@@ -242,11 +263,15 @@ class MapIterDataset(dataset.IterDataset[T]):
       seed: Optional[int] = None,
   ):
     super().__init__(parent)
+    self._transform_name = None
     if isinstance(
         transform,
         (transforms.RandomMapTransform, transforms.TfRandomMapTransform),
     ):
       seed = self._default_seed if seed is None else seed
+      self._transform_name = transform.__class__.__name__
+    if isinstance(transform, transforms.MapTransform):
+      self._transform_name = transform.__class__.__name__
     self._map_fn, self._seed = _get_map_fn_and_seed(transform, seed)
 
   def __iter__(self) -> _MapDatasetIterator[T]:
@@ -259,4 +284,9 @@ class MapIterDataset(dataset.IterDataset[T]):
     )
 
   def __str__(self) -> str:
-    return f"MapIterDataset(parent={self._parent}"
+    if self._transform_name:
+      return f"MapIterDataset(transform={self._transform_name})"
+    elif hasattr(self._map_fn, "__name__"):
+      return f"MapIterDataset(transform={self._map_fn.__name__})"
+    else:
+      return "MapIterDataset"
