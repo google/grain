@@ -77,6 +77,13 @@ py_library(
     srcs_version = "PY3",
 )
 
+py_test(
+    name = "transforms_test",
+    srcs = ["transforms_test.py"],
+    srcs_version = "PY3",
+    deps = [":transforms"],
+)
+
 py_library(
     name = "tree",
     srcs = [

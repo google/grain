@@ -11,13 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for stats.py."""
+
 import collections
-import contextlib
 import functools
 import threading
 import time
-from typing import Sequence
 from unittest import mock
 
 from absl.testing import flagsaver
@@ -29,7 +27,7 @@ from grain._src.python.dataset import stats
 from absl.testing import absltest
 
 
-_MAP_DATASET_REPR = r"""RangeMapDataset
+_MAP_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
   ││
   ││  
   ││
@@ -43,7 +41,7 @@ _MAP_DATASET_REPR = r"""RangeMapDataset
 "<class 'int'>[]"
 
   ││
-  ││  MapWithIndexMapDataset
+  ││  MapWithIndexMapDataset(transform=_add_dummy_metadata @ .../python/dataset/stats_test.py:129)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -52,7 +50,7 @@ _MAP_DATASET_REPR = r"""RangeMapDataset
  'index': "<class 'int'>[]"}
 
   ││
-  ││  MapMapDataset
+  ││  MapMapDataset(transform=_identity @ .../python/dataset/stats_test.py:133)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -61,7 +59,7 @@ _MAP_DATASET_REPR = r"""RangeMapDataset
  'index': "<class 'int'>[]"}
 """
 
-_ITER_DATASET_REPR = r"""RangeMapDataset
+_ITER_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
   ││
   ││  
   ││
@@ -75,13 +73,13 @@ _ITER_DATASET_REPR = r"""RangeMapDataset
 "<class 'int'>[]"
 
   ││
-  ││  PrefetchIterDataset
+  ││  PrefetchIterDataset(read_options=ReadOptions(num_threads=16, prefetch_buffer_size=500), allow_nones=False)
   ││
   ╲╱
 "<class 'int'>[]"
 
   ││
-  ││  MapIterDataset
+  ││  MapIterDataset(transform=<lambda> @ .../python/dataset/stats_test.py:359)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -90,7 +88,7 @@ _ITER_DATASET_REPR = r"""RangeMapDataset
  'index': "<class 'int'>[]"}
 
   ││
-  ││  BatchIterDataset
+  ││  BatchIterDataset(batch_size=2, drop_remainder=False)
   ││
   ╲╱
 {'data': 'int64[2]',
@@ -101,7 +99,7 @@ _ITER_DATASET_REPR = r"""RangeMapDataset
 
 _MIX_DATASET_REPR = r"""WARNING: Detected multi-parent datasets. Only displaying the first parent.
 
-RangeMapDataset
+RangeMapDataset(start=0, stop=10, step=1)
   ││
   ││  
   ││
@@ -115,13 +113,13 @@ RangeMapDataset
 "<class 'int'>[]"
 
   ││
-  ││  MixedMapDataset
+  ││  MixedMapDataset[2 parents]
   ││
   ╲╱
 "<class 'int'>[]"
 
   ││
-  ││  MapMapDataset
+  ││  MapMapDataset(transform=_AddOne)
   ││
   ╲╱
 "<class 'int'>[]"
@@ -142,43 +140,22 @@ class _AddOne(transforms.MapTransform):
     return x + 1
 
 
-class TestStats(stats.Stats):
-
-  def __init__(self, name: str, parents: Sequence[stats.Stats]):
-    super().__init__(name, parents)
-    self.recorded_time = 0
-    self.recorded_spec = False
-    self.reported = False
-
-  @contextlib.contextmanager
-  def record_self_time(self):
-    yield
-    self.recorded_time += 1
-
-  def record_output_spec(self, element):
-    self.recorded_spec = True
-    return element
-
-  def report(self):
-    self.reported = True
-
-
 def _make_stats_tree(cls):
   return cls(
-      "root",
+      lambda: "root",
       [
           cls(
-              "left",
+              lambda: "left",
               [
-                  cls("left_left", []),
-                  cls("left_right", []),
+                  cls(lambda: "left_left", []),
+                  cls(lambda: "left_right", []),
               ],
           ),
           cls(
-              "right",
+              lambda: "right",
               [
-                  cls("right_left", []),
-                  cls("right_right", []),
+                  cls(lambda: "right_left", []),
+                  cls(lambda: "right_right", []),
               ],
           ),
       ],
@@ -208,34 +185,20 @@ class TimerTest(absltest.TestCase):
     self.assertEqual(timer.value(), 0)
 
 
-class StatsTest(absltest.TestCase):
-
-  def test_correct_output_node(self):
-    s = _make_stats_tree(TestStats)
-    self.assertTrue(s._is_output)
-    _for_each_node(lambda node: self.assertFalse(node._is_output), s._parents)
-
-  def test_record_self_time(self):
-    s = _make_stats_tree(TestStats)
-    with s.record_self_time():
-      pass
-    self.assertEqual(s.recorded_time, 1)
-
-  def test_record_output_spec(self):
-    s = _make_stats_tree(TestStats)
-    s.record_output_spec(1)
-    self.assertTrue(s.recorded_spec)
-
-  def test_report(self):
-    s = _make_stats_tree(TestStats)
-    s.report()
-    self.assertTrue(s.reported)
+def _make_name_raising_exception():
+  raise AssertionError("name should not be created")
 
 
 class NoopStatsTest(absltest.TestCase):
 
   def test_assert_is_noop(self):
     s = _make_stats_tree(stats.make_stats)
+    self.assertIsInstance(s, stats._NoopStats)
+
+  def test_assert_name_is_not_created(self):
+    s = stats.make_stats(_make_name_raising_exception, ())
+    with s.record_self_time():
+      pass
     self.assertIsInstance(s, stats._NoopStats)
 
   def test_record_self_time(self):

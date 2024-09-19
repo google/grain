@@ -40,7 +40,10 @@ class FlatMapMapDataset(dataset.MapDataset[T]):
     return self._transform.max_fan_out * len(self._parent)
 
   def __str__(self) -> str:
-    return f"FlatMapMapDataset(transform={self._transform.__class__.__name__})"
+    return (
+        "FlatMapMapDataset("
+        f"transform={transforms.get_pretty_transform_name(self._transform)})"
+    )
 
   def __getitem__(self, index):
     if isinstance(index, slice):
@@ -139,7 +142,10 @@ class FlatMapIterDataset(dataset.IterDataset[T]):
     self._transform = transform
 
   def __str__(self) -> str:
-    return f"FlatMapIterDataset(transform={self._transform.__class__.__name__})"
+    return (
+        "FlatMapIterDataset("
+        f"transform={transforms.get_pretty_transform_name(self._transform)})"
+    )
 
   def __iter__(self):
     parent_iter = self._parent.__iter__()

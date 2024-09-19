@@ -16,7 +16,9 @@
 from __future__ import annotations
 
 import abc
+from collections.abc import Callable
 import contextlib
+import functools
 import pprint
 import threading
 import time
@@ -100,8 +102,8 @@ class Stats(abc.ABC):
   interfaces for recording statistics in the given transformation node.
   """
 
-  def __init__(self, name: str, parents: Sequence[Stats]):
-    self._name = name
+  def __init__(self, name_fn: Callable[[], str], parents: Sequence[Stats]):
+    self._name_fn = name_fn
     self._output_spec = None
     self._parents = parents
     # Mark parent nodes as non-outputs. Nodes that are not updated are the
@@ -109,6 +111,11 @@ class Stats(abc.ABC):
     self._is_output = True
     for p in parents:
       p._is_output = False
+
+  @functools.cached_property
+  def name(self):
+    """Lazily constructs the name of this node."""
+    return self._name_fn()
 
   @contextlib.contextmanager
   @abc.abstractmethod
@@ -213,9 +220,9 @@ class Stats(abc.ABC):
           0
       ]._build_visualization_str(has_multiple_parents)
       # pylint: enable=protected-access
-      transform_repr = self._name
+      transform_repr = self.name
     else:
-      parent_vis = self._name
+      parent_vis = self.name
       transform_repr = ""
     return (
         has_multiple_parents,
@@ -244,13 +251,13 @@ class _NoopStats(Stats):
 class _VisualizationStats(Stats):
   """Produces Dataset Visualization Graph."""
 
-  def __init__(self, name: str, parents: Sequence[Stats]):
-    super().__init__(name, parents)
+  def __init__(self, name_fn: Callable[[], str], parents: Sequence[Stats]):
+    super().__init__(name_fn, parents)
     self._graph_vis_thread = None
     self._graph_vis_thread_init_lock = threading.Lock()
 
   def __reduce__(self):
-    return _VisualizationStats, (self._name, self._parents)
+    return _VisualizationStats, (self._name_fn, self._parents)
 
   @contextlib.contextmanager
   def record_self_time(self, offset_sec: float = 0.0, num_produced_elements=1):
@@ -279,8 +286,8 @@ class _VisualizationStats(Stats):
 class _ExecutionStats(_VisualizationStats):
   """Execution time statistics for transformations."""
 
-  def __init__(self, name: str, parents: Sequence[Stats]):
-    super().__init__(name, parents)
+  def __init__(self, name_fn: Callable[[], str], parents: Sequence[Stats]):
+    super().__init__(name_fn, parents)
     # Note that the buffer is intentionally not guarded by a lock to avoid lock
     # contention. Thread-safe operations are expected to only do atomic actions
     # on the buffer (such as `append`) making it safe due to GIL. See details in
@@ -291,7 +298,7 @@ class _ExecutionStats(_VisualizationStats):
     self._reporting_thread_init_lock = threading.Lock()
 
   def __reduce__(self):
-    return _ExecutionStats, (self._name, self._parents)
+    return _ExecutionStats, (self._name_fn, self._parents)
 
   def _reporting_loop(self):
     while True:
@@ -321,11 +328,11 @@ class _ExecutionStats(_VisualizationStats):
 
   def report(self):
     while self._self_times_buffer:
-      _self_time_ms_histogram.Record(self._self_times_buffer.pop(), self._name)
+      _self_time_ms_histogram.Record(self._self_times_buffer.pop(), self.name)
     for p in self._parents:
       p.report()
 
 
-def make_stats(name: str, parents: Sequence[Stats]) -> Stats:
+def make_stats(name_fn: Callable[[], str], parents: Sequence[Stats]) -> Stats:
   """Produces statistics instance according to the current execution mode."""
-  return _NoopStats(name=name, parents=parents)
+  return _NoopStats(name_fn=name_fn, parents=parents)

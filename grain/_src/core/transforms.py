@@ -21,10 +21,12 @@ the base classes below (examples: resize image, tokenize text, add padding).
 - Libraries applying transformations can use these base classes to correctly
   apply transformations as part of Beam pipelines, data ingestion pipelines etc.
 """
+from __future__ import annotations
 
 import abc
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 import dataclasses
+import inspect
 from typing import Any, Union
 
 import numpy as np
@@ -110,3 +112,52 @@ Transformation = Union[
     FlatMapTransform,
 ]
 Transformations = Sequence[Transformation]
+
+
+def get_pretty_transform_name(
+    transform: Transformation | Callable[..., Any],
+) -> str:
+  """Returns a name for a transformation or callable with source file and line.
+
+  Example: 'get_pretty_transform_name @ .../_src/core/transforms.py:116'
+
+  Args:
+    transform: The transfomation or callable to get the name of.
+  """
+  # We can't use `Transformation` here since `Union` does not support
+  # `isinstance` check in Python 3.9.
+  if isinstance(
+      transform,
+      (
+          BatchTransform,
+          MapTransform,
+          RandomMapTransform,
+          TfRandomMapTransform,
+          FilterTransform,
+          FlatMapTransform,
+      ),
+  ):
+    # Check if transform class defines `__str__` and `__repr__` and use them if
+    # so. Otherwise use the name of the class.
+    if (
+        transform.__class__.__str__ is object.__str__
+        and transform.__class__.__repr__ is object.__repr__
+    ):
+      return transform.__class__.__name__
+    return str(transform)
+
+  # Some functions may not have `__name__`, e.g. `functools.partial`.
+  transform_name = getattr(transform, "__name__", repr(transform))
+  try:
+    src_file = inspect.getsourcefile(transform)
+    if src_file is None:
+      return transform_name
+    # If path is too long, shorten it to the last 3 parts.
+    src_file_parts = src_file.split("/")
+    if len(src_file_parts) >= 3:
+      src_file = f".../{'/'.join(src_file_parts[-3:])}"
+    src_lineno = inspect.getsourcelines(transform)[1]
+    return f"{transform_name} @ {src_file}:{src_lineno}"
+  except (OSError, TypeError):
+    # `inspect` may raise if called on built-in functions.
+    return transform_name

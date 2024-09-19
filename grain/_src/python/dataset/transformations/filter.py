@@ -13,6 +13,7 @@
 # limitations under the License.
 """Filter transformation for LazyDataset."""
 
+import functools
 from typing import Any, Callable, TypeVar, Union
 
 from grain._src.core import transforms
@@ -33,12 +34,17 @@ class FilterMapDataset(dataset.MapDataset[T]):
       transform: Union[transforms.FilterTransform, Callable[[T], bool]],
   ):
     super().__init__(parent)
-    self._transform_name = None
     if isinstance(transform, transforms.FilterTransform):
       self._filter_fn = transform.filter
+      # Use the transform class name. The `cached_property` below will not
+      # be called.
       self._transform_name = transform.__class__.__name__
     else:
       self._filter_fn = transform
+
+  @functools.cached_property
+  def _transform_name(self):
+    return transforms.get_pretty_transform_name(self._filter_fn)
 
   def __len__(self) -> int:
     return len(self._parent)
@@ -53,9 +59,7 @@ class FilterMapDataset(dataset.MapDataset[T]):
       return None
 
   def __str__(self) -> str:
-    if self._transform_name:
-      return f"FilterMapDataset(transform={self._transform_name})"
-    return f"FilterMapDataset(transform={self._filter_fn.__name__})"
+    return f"FilterMapDataset(transform={self._transform_name})"
 
 
 class _FilterDatasetIterator(dataset.DatasetIterator[T]):
@@ -109,12 +113,17 @@ class FilterIterDataset(dataset.IterDataset[T]):
       transform: Union[transforms.FilterTransform, Callable[[T], bool]],
   ):
     super().__init__(parent)
-    self._transform_name = None
     if isinstance(transform, transforms.FilterTransform):
       self._filter_fn = transform.filter
+      # Use the transform class name. The `cached_property` below will not
+      # be called.
       self._transform_name = transform.__class__.__name__
     else:
       self._filter_fn = transform
+
+  @functools.cached_property
+  def _transform_name(self):
+    return transforms.get_pretty_transform_name(self._filter_fn)
 
   def __iter__(self) -> _FilterDatasetIterator[T]:
     parent_iter = self._parent.__iter__()
@@ -125,6 +134,4 @@ class FilterIterDataset(dataset.IterDataset[T]):
     )
 
   def __str__(self) -> str:
-    if self._transform_name:
-      return f"FilterIterDataset(transform={self._transform_name})"
-    return f"FilterIterDataset(transform={self._filter_fn.__name__})"
+    return f"FilterIterDataset(transform={self._transform_name})"

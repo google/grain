@@ -13,6 +13,7 @@
 # limitations under the License.
 """Map transformation for LazyDataset."""
 
+import functools
 import threading
 from typing import Any, Callable, Optional, TypeVar, Union
 
@@ -128,12 +129,13 @@ class MapMapDataset(dataset.MapDataset[T]):
       seed: Optional[int] = None,
   ):
     super().__init__(parent)
-    self._transform_name = None
     if isinstance(
         transform,
         (transforms.RandomMapTransform, transforms.TfRandomMapTransform),
     ):
       seed = self._default_seed if seed is None else seed
+      # Use the transform class name. The `cached_property` below will not
+      # be called.
       self._transform_name = transform.__class__.__name__
     if isinstance(transform, transforms.MapTransform):
       self._transform_name = transform.__class__.__name__
@@ -143,14 +145,12 @@ class MapMapDataset(dataset.MapDataset[T]):
   def __len__(self) -> int:
     return len(self._parent)
 
+  @functools.cached_property
+  def _transform_name(self):
+    return transforms.get_pretty_transform_name(self._map_fn)
+
   def __str__(self) -> str:
-    if self._transform_name:
-      return f"MapMapDataset(transform={self._transform_name})"
-    else:
-      if hasattr(self._map_fn, "__name__"):
-        return f"MapMapDataset(transform={self._map_fn.__name__})"
-      else:
-        return "MapMapDataset"
+    return f"MapMapDataset(transform={self._transform_name})"
 
   def __getitem__(self, index):
     if isinstance(index, slice):
@@ -179,21 +179,24 @@ class MapWithIndexMapDataset(dataset.MapDataset[T]):
       ],
   ):
     super().__init__(parent)
-    self._transform_name = None
     if isinstance(transform, transforms.MapWithIndexTransform):
       self._map_fn = transform.map_with_index
+      # Use the transform class name. The `cached_property` below will not
+      # be called.
       self._transform_name = transform.__class__.__name__
     else:
       # Expect Callable[[int, Any], T].
       self._map_fn = transform
 
+  @functools.cached_property
+  def _transform_name(self):
+    return transforms.get_pretty_transform_name(self._map_fn)
+
   def __len__(self) -> int:
     return len(self._parent)
 
   def __str__(self) -> str:
-    if self._transform_name:
-      return f"MapWithIndexMapDataset(transform={self._transform_name})"
-    return f"MapWithIndexMapDataset(transform={self._map_fn.__name__})"
+    return f"MapWithIndexMapDataset(transform={self._transform_name})"
 
   def __getitem__(self, index):
     with self._stats.record_self_time():
@@ -263,16 +266,21 @@ class MapIterDataset(dataset.IterDataset[T]):
       seed: Optional[int] = None,
   ):
     super().__init__(parent)
-    self._transform_name = None
     if isinstance(
         transform,
         (transforms.RandomMapTransform, transforms.TfRandomMapTransform),
     ):
       seed = self._default_seed if seed is None else seed
+      # Use the transform class name. The `cached_property` below will not
+      # be called.
       self._transform_name = transform.__class__.__name__
     if isinstance(transform, transforms.MapTransform):
       self._transform_name = transform.__class__.__name__
     self._map_fn, self._seed = _get_map_fn_and_seed(transform, seed)
+
+  @functools.cached_property
+  def _transform_name(self):
+    return transforms.get_pretty_transform_name(self._map_fn)
 
   def __iter__(self) -> _MapDatasetIterator[T]:
     parent_iter = self._parent.__iter__()
@@ -284,9 +292,4 @@ class MapIterDataset(dataset.IterDataset[T]):
     )
 
   def __str__(self) -> str:
-    if self._transform_name:
-      return f"MapIterDataset(transform={self._transform_name})"
-    elif hasattr(self._map_fn, "__name__"):
-      return f"MapIterDataset(transform={self._map_fn.__name__})"
-    else:
-      return "MapIterDataset"
+    return f"MapIterDataset(transform={self._transform_name})"
