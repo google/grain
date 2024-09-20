@@ -1010,6 +1010,12 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
     Returns:
       A dataset prefetching input elements concurrently.
     """
+    warnings.warn(
+        "Please use `grain.experimental.MultiprocessPrefetchIterDataset` "
+        "directly instead. We are not deprecating the functionality but are "
+        "actively working on improving this user-facing API and behavior.",
+        DeprecationWarning,
+    )
     # Loaded lazily due to a circular dependency (dataset <-> prefetch).
     # pylint: disable=g-import-not-at-top
     from grain._src.python.dataset.transformations import prefetch
