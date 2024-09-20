@@ -3,8 +3,8 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "grain-nightly"
-version = "0.0.9"
+name = "grain"
+version = "0.2.1"
 description = "Grain: A library for loading and transforming data for neural network training."
 keywords = []
 authors = [
