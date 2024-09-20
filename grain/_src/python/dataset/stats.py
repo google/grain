@@ -193,11 +193,6 @@ class Stats(abc.ABC):
     """
     ...
 
-  def _log_dataset_graph(self):
-    logging.info(
-        "Generated dataset graph is:\n \n%s", self._visualize_dataset_graph()
-    )
-
   def _visualize_dataset_graph(self):
     """Generates Dataset visualization graph."""
     # TODO:Save the graph to a dot file for advanced visualization.
@@ -253,8 +248,8 @@ class _VisualizationStats(Stats):
 
   def __init__(self, name_fn: Callable[[], str], parents: Sequence[Stats]):
     super().__init__(name_fn, parents)
-    self._graph_vis_thread = None
-    self._graph_vis_thread_init_lock = threading.Lock()
+    self._reported = False
+    self._reported_lock = threading.Lock()
 
   def __reduce__(self):
     return _VisualizationStats, (self._name_fn, self._parents)
@@ -264,23 +259,20 @@ class _VisualizationStats(Stats):
     yield
 
   def record_output_spec(self, element: T) -> T:
-    # Visualize the dataset graph once last node had seen a non-None element
-    if self._output_spec and self._is_output:
-      if self._graph_vis_thread is None:
-        with self._graph_vis_thread_init_lock:
-          # The check above with update without a lock is not atomic,
-          # need to check again under a lock.
-          if self._graph_vis_thread is None:
-            self._graph_vis_thread = threading.Thread(
-                target=self._log_dataset_graph, daemon=True
-            )
-            self._graph_vis_thread.start()
-    else:
+    # Visualize the dataset graph once last node had seen a non-None element.
+    if self._output_spec is None:
       self._output_spec = tree.spec_like(element)
+      if self._is_output and not self._reported:
+        # The check above with update without a lock is not atomic, need to
+        # check again under a lock.
+        with self._reported_lock:
+          if not self._reported:
+            self.report()
+            self._reported = True
     return element
 
   def report(self):
-    pass
+    logging.info("Grain Dataset graph:\n\n%s", self._visualize_dataset_graph())
 
 
 class _ExecutionStats(_VisualizationStats):

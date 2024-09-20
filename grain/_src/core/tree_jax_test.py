@@ -17,6 +17,7 @@ from absl.testing import absltest
 from grain._src.core import tree
 from grain._src.core import tree_test
 import jax
+import numpy as np
 
 
 class MyTree:
@@ -61,6 +62,15 @@ class TreeJaxTest(tree_test.TreeTest):
             "B": "<class 'float'>[]",
             "C": "list<grain._src.core.tree_test.TestClass>[2]",
         },
+    )
+
+  def test_spec_like_with_unknown_shape(self):
+    self.assertEqual(
+        tree.spec_like({
+            "B": [np.zeros([2]), np.zeros([1])],
+            "C": [],
+        }),
+        {"B": "list<numpy.ndarray>[unknown shape]", "C": "list<>[0]"},
     )
 
 

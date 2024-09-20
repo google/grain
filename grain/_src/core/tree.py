@@ -56,7 +56,6 @@ try:
       Same structure but with the leaves replaced with their stringified spec.
       Homogeneous lists and tuples are represented as `container<inner_type>`.
     """
-
     def _is_leaf(element):
       return isinstance(element, (list, tuple)) and all(
           isinstance(item, type(element[0])) for item in element
@@ -69,12 +68,21 @@ try:
           isinstance(item, type(obj[0])) for item in obj
       ):
         container_type = type(obj).__name__
-        inner_type = f"{type(obj[0]).__module__}.{type(obj[0]).__name__}"
+        if obj:
+          inner_type = f"{type(obj[0]).__module__}.{type(obj[0]).__name__}"
+        else:
+          inner_type = ""
         return f"{container_type}<{inner_type}>"
       return type(obj)
 
+    def _shape(obj):
+      try:
+        return list(np.asarray(obj).shape)
+      except ValueError:
+        return "[unknown shape]"
+
     return tree_util.tree_map(
-        lambda x: f"{_type(x)}{list(np.asarray(x).shape)}",
+        lambda x: f"{_type(x)}{_shape(x)}",
         structure,
         is_leaf=_is_leaf,
     )

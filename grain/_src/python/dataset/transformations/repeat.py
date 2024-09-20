@@ -58,4 +58,4 @@ class RepeatMapDataset(dataset.MapDataset[T]):
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
-    return self._parent[index]
+    return self._stats.record_output_spec(self._parent[index])

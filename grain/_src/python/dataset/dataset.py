@@ -984,7 +984,10 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
       raise ValueError("Cannot slice `IterDataset` source.")
     for parent in self._parents:
       if isinstance(parent, MapDataset):
-        sliced_parents.append(parent.slice(sl))
+        new_parent = parent.slice(sl)
+        # Need to let the parent stats node know it's not output node.
+        new_parent._stats._is_output = False  # pylint: disable=protected-access
+        sliced_parents.append(new_parent)
       else:
         assert isinstance(parent, IterDataset), parent
         parent._set_parent_maps_slice(sl)  # pylint: disable=protected-access
