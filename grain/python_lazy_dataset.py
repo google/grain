@@ -19,7 +19,6 @@ import warnings
 # pylint: disable=unused-import
 # pylint: disable=wildcard-import
 from ._src.python.dataset.base import DatasetSelectionMap
-from ._src.python.dataset.data_loader import DataLoader
 from ._src.python.dataset.dataset import (
     MapDataset as LazyMapDataset,
     IterDataset as LazyIterDataset,

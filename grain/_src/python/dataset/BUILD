@@ -55,28 +55,6 @@ py_test(
 )
 
 py_library(
-    name = "data_loader",
-    srcs = ["data_loader.py"],
-    srcs_version = "PY3",
-    deps = [
-        ":dataset",
-        "//grain/_src/python:options",
-    ],
-)
-
-py_test(
-    name = "data_loader_test",
-    srcs = ["data_loader_test.py"],
-    srcs_version = "PY3",
-    deps = [
-        ":data_loader",
-        ":dataset",
-        "//grain/_src/core:transforms",
-        "//grain/_src/python:options",
-    ],
-)
-
-py_library(
     name = "visualize",
     srcs = ["visualize.py"],
     srcs_version = "PY3",
