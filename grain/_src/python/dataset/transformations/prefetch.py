@@ -122,9 +122,9 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
           element = self._parent[self._next_index]
         self._next_index += 1
       if self._allow_nones or element is not None:
-        with self._stats.record_self_time(offset_sec=timer.value()):
+        with self._stats.record_self_time(offset_ns=timer.value()):
           return self._stats.record_output_spec(element)
-    with self._stats.record_self_time(offset_sec=timer.value()):
+    with self._stats.record_self_time(offset_ns=timer.value()):
       raise StopIteration
 
   def get_state(self):

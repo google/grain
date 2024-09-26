@@ -87,11 +87,8 @@ class _FilterDatasetIterator(dataset.DatasetIterator[T]):
       with timer:
         passed_filter = self._filter_fn(value)
     if not passed_filter:
-      with self._stats.record_self_time(
-          offset_sec=timer.value(), num_produced_elements=0
-      ):
-        raise StopIteration
-    with self._stats.record_self_time(offset_sec=timer.value()):
+      raise StopIteration
+    with self._stats.record_self_time(offset_ns=timer.value()):
       return self._stats.record_output_spec(value)
 
   def get_state(self):

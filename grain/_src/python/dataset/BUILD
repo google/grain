@@ -49,6 +49,7 @@ py_test(
     deps = [
         ":base",
         ":dataset",
+        ":stats",
         "//grain/_src/core:transforms",
         "//grain/_src/python:options",
     ],

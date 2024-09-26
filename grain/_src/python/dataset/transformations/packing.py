@@ -145,7 +145,7 @@ class SingleBinPackDatasetIterator(dataset.DatasetIterator):
     while True:
       # We got fully packed examples in the buffer.
       if self._packed_elements:
-        with self._stats.record_self_time(offset_sec=timer.value()):
+        with self._stats.record_self_time(offset_ns=timer.value()):
           result = self._packed_elements.popleft()
         return self._stats.record_output_spec(result)
 
@@ -155,7 +155,7 @@ class SingleBinPackDatasetIterator(dataset.DatasetIterator):
         # Parent iterator exhausted. Yield whatever is in the buffer as last
         # (potentially heavily padded) element.
         if self._element_buffer:
-          with self._stats.record_self_time(offset_sec=timer.value()):
+          with self._stats.record_self_time(offset_ns=timer.value()):
             packed_element = self._pack_elements(self._element_buffer)
             self._element_buffer = []
             self._element_buffer_space = copy.copy(self._flat_lengths)
@@ -406,7 +406,7 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
   def __next__(self):
     timer = dataset_stats.Timer()
     if self._packed_batch is not None:
-      with self._stats.record_self_time(offset_sec=timer.value()):
+      with self._stats.record_self_time(offset_ns=timer.value()):
         if self._shuffle_bins:
           next_row = self._shuffled_rows[self._next_row]
         else:

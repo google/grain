@@ -20,6 +20,7 @@ from collections.abc import Callable
 import contextlib
 import functools
 import pprint
+import sys
 import threading
 import time
 from typing import Sequence, TypeVar
@@ -76,14 +77,14 @@ class Timer:
   """
 
   def __init__(self):
-    self._accumulator = 0.0
-    self._last = 0.0
+    self._accumulator = 0
+    self._last = 0
 
   def __enter__(self):
-    self._last = time.perf_counter()
+    self._last = time.perf_counter_ns()
 
   def __exit__(self, *args):
-    self._accumulator += time.perf_counter() - self._last
+    self._accumulator += time.perf_counter_ns() - self._last
 
   def value(self):
     """Returns the accumulated timer value across multiple usages."""
@@ -91,8 +92,8 @@ class Timer:
 
   def reset(self):
     """Resets the accumulated timer value to 0."""
-    self._accumulator = 0.0
-    self._last = 0.0
+    self._accumulator = 0
+    self._last = 0
 
 
 class Stats(abc.ABC):
@@ -119,7 +120,7 @@ class Stats(abc.ABC):
 
   @contextlib.contextmanager
   @abc.abstractmethod
-  def record_self_time(self, offset_sec: float = 0.0, num_produced_elements=1):
+  def record_self_time(self, offset_ns: float = 0, num_produced_elements=1):
     """Records time spent in this node's transfromation.
 
     Thread-safe.
@@ -145,8 +146,8 @@ class Stats(abc.ABC):
     ```
 
     Args:
-      offset_sec: (Optional.) A offset to add to the self time measured by this
-        function. Default to 0.0.
+      offset_ns: (Optional.) A offset to add to the self time measured by this
+        function. Default to 0.
       num_produced_elements: (Optional) The number of elements produced during
         the measured self time. Default to 1.
     """
@@ -233,7 +234,7 @@ class _NoopStats(Stats):
   """Default implementation for statistics collection that does nothing."""
 
   @contextlib.contextmanager
-  def record_self_time(self, offset_sec: float = 0.0, num_produced_elements=1):
+  def record_self_time(self, offset_ns: int = 0, num_produced_elements=1):
     yield
 
   def record_output_spec(self, element: T) -> T:
@@ -255,7 +256,7 @@ class _VisualizationStats(Stats):
     return _VisualizationStats, (self._name_fn, self._parents)
 
   @contextlib.contextmanager
-  def record_self_time(self, offset_sec: float = 0.0, num_produced_elements=1):
+  def record_self_time(self, offset_ns: int = 0, num_produced_elements=1):
     yield
 
   def record_output_spec(self, element: T) -> T:
@@ -288,6 +289,10 @@ class _ExecutionStats(_VisualizationStats):
     self._self_times_buffer = []
     self._reporting_thread = None
     self._reporting_thread_init_lock = threading.Lock()
+    self._summary = execution_summary_pb2.ExecutionSummary.Node(
+        min_processing_time_ns=sys.maxsize,
+        max_processing_time_ns=0,
+    )
 
   def __reduce__(self):
     return _ExecutionStats, (self._name_fn, self._parents)
@@ -297,14 +302,43 @@ class _ExecutionStats(_VisualizationStats):
       time.sleep(_REPORTING_PERIOD_SEC)
       self.report()
 
+  def _build_execution_summary(
+      self,
+      execution_summary: execution_summary_pb2.ExecutionSummary,
+      node_id: int,
+  ):
+    """Computes the stats summary for the whole dataset pipeline."""
+    # By this point, all the nodes in the pipeline have been visited and
+    # `_output_spec` & `name` has been set.
+    self._summary.id = node_id
+    self._summary.name = self.name
+    self._summary.output_spec = str(self._output_spec)
+    self._summary.is_output = self._is_output
+    execution_summary.nodes.get_or_create(node_id)
+    execution_summary.nodes[node_id].CopyFrom(self._summary)
+    current_node_id = node_id
+    for p in self._parents:
+      node_id += 1
+      execution_summary.nodes[current_node_id].inputs.append(node_id)
+      # pytype: disable=attribute-error
+      _, node_id = p._build_execution_summary(execution_summary, node_id)  # pylint: disable=protected-access
+      # pytype: enable=attribute-error
+    return execution_summary, node_id
+
+  def _get_execution_summary(self) -> execution_summary_pb2.ExecutionSummary:
+    """Returns ExecutionStats Summary for the dataset pipeline."""
+    execution_summary = execution_summary_pb2.ExecutionSummary()
+    result, _ = self._build_execution_summary(execution_summary, 0)
+    return result
+
   @contextlib.contextmanager
-  def record_self_time(self, offset_sec: float = 0.0, num_produced_elements=1):
-    start_time = time.perf_counter()
+  def record_self_time(self, offset_ns: int = 0, num_produced_elements=1):
+    start_time = time.perf_counter_ns()
     try:
       yield
     finally:
       self._self_times_buffer.append(
-          time.perf_counter() - start_time + offset_sec
+          time.perf_counter_ns() - start_time + offset_ns
       )
       # We avoid acquiring `_reporting_thread_init_lock` here to avoid lock
       # contention.
@@ -320,7 +354,18 @@ class _ExecutionStats(_VisualizationStats):
 
   def report(self):
     while self._self_times_buffer:
-      _self_time_ms_histogram.Record(self._self_times_buffer.pop(), self.name)
+      # Each record in _self_times_buffer corresponds to a single element.
+      self._summary.num_produced_elements += 1
+      # Execution Summary must be cummulative from the beginning.
+      self_time_ns = self._self_times_buffer.pop()
+      self._summary.min_processing_time_ns = min(
+          self._summary.min_processing_time_ns, self_time_ns
+      )
+      self._summary.max_processing_time_ns = max(
+          self._summary.max_processing_time_ns, self_time_ns
+      )
+      self._summary.total_processing_time_ns += self_time_ns
+      _self_time_ms_histogram.Record(self_time_ns, self.name)
     for p in self._parents:
       p.report()
 

@@ -64,7 +64,7 @@ class FlatMapMapDataset(dataset.MapDataset[T]):
             " may suffer. Please consider preprocessing your data to keep the"
             " max fan-out size reasonable."
         )
-    with self._stats.record_self_time(offset_sec=timer.value()):
+    with self._stats.record_self_time(offset_ns=timer.value()):
       for i, sub_element in splits:
         if i == split_index:
           return self._stats.record_output_spec(sub_element)
@@ -103,7 +103,7 @@ class _FlatMapDatasetIterator(dataset.DatasetIterator[T]):
         self._next_index_in_buffer = 0
         self._buffer = self._flat_map(element)
 
-    with self._stats.record_self_time(offset_sec=timer.value()):
+    with self._stats.record_self_time(offset_ns=timer.value()):
       mapped_element = self._buffer[self._next_index_in_buffer]
       self._next_index_in_buffer += 1
       return self._stats.record_output_spec(mapped_element)

@@ -15,9 +15,12 @@
 
 import dataclasses
 import sys
+import time
 from typing import TypeVar, overload
+from unittest import mock
 
 from absl.testing import absltest
+from absl.testing import flagsaver
 from absl.testing import parameterized
 import cloudpickle
 from grain._src.core import transforms
@@ -25,11 +28,12 @@ import multiprocessing as mp
 from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset import stats as dataset_stats
 import numpy as np
 from typing_extensions import override
 
 
-_T = TypeVar('_T')
+_T = TypeVar("_T")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -348,13 +352,13 @@ class DatasetTest(parameterized.TestCase):
 
   @parameterized.named_parameters(
       dict(
-          testcase_name='default_args',
+          testcase_name="default_args",
           read_options=None,
           allow_nones=False,
           expected=[0, 2, 4, 6, 8, 10, 12, 14],
       ),
       dict(
-          testcase_name='custom_read_options',
+          testcase_name="custom_read_options",
           read_options=options.ReadOptions(
               num_threads=1, prefetch_buffer_size=1
           ),
@@ -362,7 +366,7 @@ class DatasetTest(parameterized.TestCase):
           expected=[0, 2, 4, 6, 8, 10, 12, 14],
       ),
       dict(
-          testcase_name='allow_nones',
+          testcase_name="allow_nones",
           read_options=None,
           allow_nones=True,
           expected=[
@@ -780,5 +784,5 @@ class ApplyTransformationsTest(parameterized.TestCase):
       _ = dataset.apply_transformations(ds, TfRandomMapAlwaysAddingOne())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
   absltest.main()
