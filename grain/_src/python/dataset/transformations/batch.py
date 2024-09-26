@@ -16,6 +16,8 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from concurrent import futures
+import functools
 import math
 import pprint
 from typing import Callable, TypeVar
@@ -28,15 +30,62 @@ import numpy as np
 T = TypeVar("T")
 S = TypeVar("S")
 
+# When requested to concatenate a value which would result in an array larger
+# than this threshold, we switch to a multi-threaded implementation of stack,
+# which we have seen is more efficient in practice than the NumPy impl.
+# TODO: Tune this threshold.
+_LARGE_CONCAT_THRESHOLD = 512 * 1024 * 1024
 
-def _make_batch(values: Sequence[T]) -> T:
+
+def _maybe_parallel_concatenate(
+    pool_provider: Callable[[], futures.ThreadPoolExecutor],
+    elements: np.ndarray,
+) -> np.ndarray:
+  first = elements[0]
+  count = len(elements)
+  if (count * first.size * first.dtype.itemsize) < _LARGE_CONCAT_THRESHOLD:
+    return np.stack(elements)
+
+  return _parallel_concatenate(pool_provider(), elements)
+
+
+def _parallel_concatenate(
+    pool: futures.ThreadPoolExecutor, elements: Sequence[np.ndarray]
+) -> np.ndarray:
+  """Stacks elements along a new batch dimension using multiple threads."""
+  first = elements[0]
+  if any((x.shape != first.shape or x.dtype != first.dtype) for x in elements):
+    raise ValueError(
+        "Expected all input elements to have the same shape and dtype but got:"
+        f"\n{pprint.pformat(tree.spec_like(elements))}"
+    )
+
+  result = np.empty((len(elements), *first.shape), dtype=first.dtype)
+  fs = []
+  for i, element in enumerate(elements):
+    fs.append(pool.submit(result.__setitem__, i, element))
+  for f in futures.as_completed(fs):
+    f.result()
+  return result
+
+
+def _make_batch(
+    pool_provider: Callable[[], futures.ThreadPoolExecutor] | None,
+    values: Sequence[T],
+) -> T:
   """Returns a batch of values with a new batch dimension at the front."""
 
   if not values:
     raise ValueError("Cannot batch 0 values. Please file a bug.")
 
+  if pool_provider is not None:
+    concat = functools.partial(_maybe_parallel_concatenate, pool_provider)
+  else:
+    concat = np.stack
+
+  values = tree.map_structure(np.asanyarray, values)
   try:
-    return tree.map_structure(lambda *xs: np.stack(xs), *values)
+    return tree.map_structure(lambda *xs: concat(xs), *values)
 
   except ValueError as e:
     # NumPy error message doesn't include actual shapes and dtypes. Provide a
@@ -117,7 +166,9 @@ class BatchMapDataset(dataset.MapDataset[T]):
       raise ValueError("batch_size must be positive.")
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
-    self._batch_fn = _make_batch if batch_fn is None else batch_fn
+    self._batch_fn = (
+        functools.partial(_make_batch, None) if batch_fn is None else batch_fn
+    )
     if self._drop_remainder:
       self._length = len(self._parent) // self._batch_size
     else:
@@ -172,15 +223,21 @@ class BatchIterDataset(dataset.IterDataset[T]):
     super().__init__(parent)
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
-    self._batch_fn = _make_batch if batch_fn is None else batch_fn
+    self._batch_fn = batch_fn
 
   def __iter__(self) -> _BatchDatasetIterator[T]:
+    batch_fn = self._batch_fn
+    if batch_fn is None:
+      pool_provider = functools.cache(
+          lambda: futures.ThreadPoolExecutor(max_workers=16)
+      )
+      batch_fn = functools.partial(_make_batch, pool_provider)
     parent_iter = self._parent.__iter__()
     return _BatchDatasetIterator(
         parent_iter,
         self._batch_size,
         drop_remainder=self._drop_remainder,
-        batch_fn=self._batch_fn,
+        batch_fn=batch_fn,
         stats=self._stats,
     )
 
