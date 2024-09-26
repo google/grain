@@ -48,7 +48,9 @@ def index_shuffle(index: int, max_index: int, seed: int, rounds: int) -> int:
   Args:
     index: an integer in [0, max_index)
     max_index: A positive integer.
-    seed: A posivtive integer used as seed for the pseudorandom permutation.
+    seed: A positive integer used as seed for the pseudorandom permutation. The
+      same seed will always result in the same permutation, but if you add any
+      new elements to the dataset, the permutation will be completely different.
     rounds: Ignored. For compatibility with C++ version.
 
   Returns:
