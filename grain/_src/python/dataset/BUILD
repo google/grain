@@ -1,4 +1,5 @@
 package(default_visibility = ["//grain:__subpackages__"])
+load("@pypi_grain//:requirements.bzl", "requirement")
 
 licenses(["notice"])
 
@@ -17,7 +18,7 @@ py_test(
     deps = [
         ":base",
         "//grain/_src/python:data_sources",
-    ],
+        requirement("absl_py"), requirement("numpy"), requirement("cloudpickle"), requirement("etils"), requirement("jax"), requirement("typing_extensions"), requirement("array_record"), requirement("tensorflow")    ],
 )
 
 py_library(
@@ -52,7 +53,7 @@ py_test(
         ":stats",
         "//grain/_src/core:transforms",
         "//grain/_src/python:options",
-    ],
+        requirement("absl_py"), requirement("numpy"), requirement("cloudpickle"), requirement("etils"), requirement("jax"), requirement("typing_extensions"), requirement("array_record"), requirement("tensorflow")    ],
 )
 
 py_library(
@@ -75,7 +76,7 @@ py_test(
         ":visualize",
         "//grain/_src/core:transforms",
         "//grain/_src/python:options",
-    ],
+        requirement("absl_py"), requirement("numpy"), requirement("cloudpickle"), requirement("etils"), requirement("jax"), requirement("typing_extensions"), requirement("array_record"), requirement("tensorflow")    ],
 )
 
 py_library(
@@ -97,5 +98,5 @@ py_test(
         ":dataset",
         ":stats",
         "//grain/_src/core:transforms",
-    ],
+        requirement("absl_py"), requirement("numpy"), requirement("cloudpickle"), requirement("etils"), requirement("jax"), requirement("typing_extensions"), requirement("array_record"), requirement("tensorflow")    ],
 )

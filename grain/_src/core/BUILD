@@ -1,4 +1,5 @@
 package(default_visibility = ["//grain:__subpackages__"])
+load("@pypi_grain//:requirements.bzl", "requirement")
 
 licenses(["notice"])
 
@@ -27,8 +28,7 @@ py_library(
     name = "monitoring",
     srcs = ["monitoring.py"],
     srcs_version = "PY3",
-    deps = [
-    ],
+    deps = [],
 )
 
 py_library(
@@ -43,7 +43,9 @@ py_test(
     name = "parallel_test",
     srcs = ["parallel_test.py"],
     srcs_version = "PY3",
-    deps = [":parallel"],
+    deps = [
+        ":parallel",
+        requirement("absl_py"), requirement("numpy"), requirement("cloudpickle"), requirement("etils"), requirement("jax"), requirement("typing_extensions"), requirement("array_record"), requirement("tensorflow")    ],
 )
 
 py_library(
@@ -62,7 +64,9 @@ py_test(
     name = "sharding_test",
     srcs = ["sharding_test.py"],
     srcs_version = "PY3",
-    deps = [":sharding"],
+    deps = [
+        ":sharding",
+        requirement("absl_py"), requirement("numpy"), requirement("cloudpickle"), requirement("etils"), requirement("jax"), requirement("typing_extensions"), requirement("array_record"), requirement("tensorflow")    ],
 )
 
 py_library(
@@ -81,7 +85,9 @@ py_test(
     name = "transforms_test",
     srcs = ["transforms_test.py"],
     srcs_version = "PY3",
-    deps = [":transforms"],
+    deps = [
+        ":transforms",
+        requirement("absl_py"), requirement("numpy"), requirement("cloudpickle"), requirement("etils"), requirement("jax"), requirement("typing_extensions"), requirement("array_record"), requirement("tensorflow")    ],
 )
 
 py_library(
@@ -106,7 +112,7 @@ py_test(
     srcs_version = "PY3",
     deps = [
         ":tree_test_lib",
-    ],
+        requirement("absl_py"), requirement("numpy"), requirement("cloudpickle"), requirement("etils"), requirement("jax"), requirement("typing_extensions"), requirement("array_record"), requirement("tensorflow")    ],
 )
 
 py_test(
@@ -116,5 +122,5 @@ py_test(
     deps = [
         ":tree",
         ":tree_test_lib",
-    ],
+        requirement("absl_py"), requirement("numpy"), requirement("cloudpickle"), requirement("etils"), requirement("jax"), requirement("typing_extensions"), requirement("array_record"), requirement("tensorflow")    ],
 )

@@ -1,0 +1,10 @@
+absl-py
+array_record @ https://github.com/vyeevani/array_record/releases/download/v0.6.0/array_record-0.6.0-py3-none-macosx_14_0_arm64.whl; sys_platform == 'darwin'
+array_record @ https://github.com/vyeevani/array_record/releases/download/v0.6.0/array_record-0.6.0-py3-none-manylinux2014_x86_64.whl; sys_platform == 'linux'
+jax
+cloudpickle
+etils[epath, epy]
+typing_extensions
+tensorflow
+jaxtyping
+dm-tree
