@@ -172,7 +172,6 @@ py_library(
         ":options",
         ":record",
         ":shared_memory_array",
-        "//grain/_src/core:config",
         "//grain/_src/core:parallel",
         "//grain/_src/core:tree",
     ],
