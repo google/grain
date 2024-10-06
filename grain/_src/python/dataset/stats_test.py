@@ -79,7 +79,7 @@ _ITER_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
 "<class 'int'>[]"
 
   ││
-  ││  MapIterDataset(transform=<lambda> @ .../python/dataset/stats_test.py:359)
+  ││  MapIterDataset(transform=<lambda> @ .../python/dataset/stats_test.py:345)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -142,20 +142,20 @@ class _AddOne(transforms.MapTransform):
 
 def _make_stats_tree(cls):
   return cls(
-      lambda: "root",
+      "root",
       [
           cls(
-              lambda: "left",
+              "left",
               [
-                  cls(lambda: "left_left", []),
-                  cls(lambda: "left_right", []),
+                  cls("left_left", []),
+                  cls("left_right", []),
               ],
           ),
           cls(
-              lambda: "right",
+              "right",
               [
-                  cls(lambda: "right_left", []),
-                  cls(lambda: "right_right", []),
+                  cls("right_left", []),
+                  cls("right_right", []),
               ],
           ),
       ],
@@ -185,20 +185,10 @@ class TimerTest(absltest.TestCase):
     self.assertEqual(timer.value(), 0)
 
 
-def _make_name_raising_exception():
-  raise AssertionError("name should not be created")
-
-
 class NoopStatsTest(absltest.TestCase):
 
   def test_assert_is_noop(self):
     s = _make_stats_tree(stats.make_stats)
-    self.assertIsInstance(s, stats._NoopStats)
-
-  def test_assert_name_is_not_created(self):
-    s = stats.make_stats(_make_name_raising_exception, ())
-    with s.record_self_time():
-      pass
     self.assertIsInstance(s, stats._NoopStats)
 
   def test_record_self_time(self):

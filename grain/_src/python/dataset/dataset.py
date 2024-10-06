@@ -103,7 +103,7 @@ class _Dataset:
       for p in self._parents:
         if hasattr(p, "_stats"):
           parents_stats.append(p._stats)
-    return dataset_stats.make_stats(lambda: str(self), parents_stats)
+    return dataset_stats.make_stats(str(self), parents_stats)
 
   @functools.cached_property
   def _default_seed(self) -> int | None:
@@ -1038,7 +1038,7 @@ class DatasetIterator(Iterator[T], abc.ABC):
   def __init__(self, stats: dataset_stats.Stats | None = None):
     # Implementations that do not call super constructor will lose the parent
     # link.
-    self._stats = stats or dataset_stats.make_stats(lambda: str(self), tuple())
+    self._stats = stats or dataset_stats.make_stats(str(self), tuple())
 
   def __iter__(self) -> DatasetIterator[T]:
     return self

@@ -16,9 +16,7 @@
 from __future__ import annotations
 
 import abc
-from collections.abc import Callable
 import contextlib
-import functools
 import pprint
 import sys
 import threading
@@ -103,8 +101,8 @@ class Stats(abc.ABC):
   interfaces for recording statistics in the given transformation node.
   """
 
-  def __init__(self, name_fn: Callable[[], str], parents: Sequence[Stats]):
-    self._name_fn = name_fn
+  def __init__(self, name: str, parents: Sequence[Stats]):
+    self.name = name
     self._output_spec = None
     self._parents = parents
     # Mark parent nodes as non-outputs. Nodes that are not updated are the
@@ -112,11 +110,6 @@ class Stats(abc.ABC):
     self._is_output = True
     for p in parents:
       p._is_output = False
-
-  @functools.cached_property
-  def name(self):
-    """Lazily constructs the name of this node."""
-    return self._name_fn()
 
   @contextlib.contextmanager
   @abc.abstractmethod
@@ -247,13 +240,13 @@ class _NoopStats(Stats):
 class _VisualizationStats(Stats):
   """Produces Dataset Visualization Graph."""
 
-  def __init__(self, name_fn: Callable[[], str], parents: Sequence[Stats]):
-    super().__init__(name_fn, parents)
+  def __init__(self, name: str, parents: Sequence[Stats]):
+    super().__init__(name, parents)
     self._reported = False
     self._reported_lock = threading.Lock()
 
   def __reduce__(self):
-    return _VisualizationStats, (self._name_fn, self._parents)
+    return _VisualizationStats, (self.name, self._parents)
 
   @contextlib.contextmanager
   def record_self_time(self, offset_ns: int = 0, num_produced_elements=1):
@@ -279,8 +272,8 @@ class _VisualizationStats(Stats):
 class _ExecutionStats(_VisualizationStats):
   """Execution time statistics for transformations."""
 
-  def __init__(self, name_fn: Callable[[], str], parents: Sequence[Stats]):
-    super().__init__(name_fn, parents)
+  def __init__(self, name: str, parents: Sequence[Stats]):
+    super().__init__(name, parents)
     # Note that the buffer is intentionally not guarded by a lock to avoid lock
     # contention. Thread-safe operations are expected to only do atomic actions
     # on the buffer (such as `append`) making it safe due to GIL. See details in
@@ -295,7 +288,7 @@ class _ExecutionStats(_VisualizationStats):
     )
 
   def __reduce__(self):
-    return _ExecutionStats, (self._name_fn, self._parents)
+    return _ExecutionStats, (self.name, self._parents)
 
   def _reporting_loop(self):
     while True:
@@ -370,6 +363,6 @@ class _ExecutionStats(_VisualizationStats):
       p.report()
 
 
-def make_stats(name_fn: Callable[[], str], parents: Sequence[Stats]) -> Stats:
+def make_stats(name: str, parents: Sequence[Stats]) -> Stats:
   """Produces statistics instance according to the current execution mode."""
-  return _NoopStats(name_fn=name_fn, parents=parents)
+  return _NoopStats(name, parents=parents)
