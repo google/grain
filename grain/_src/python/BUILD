@@ -1,5 +1,5 @@
 package(default_visibility = ["//grain:__subpackages__"])
-
+load("@pypi_grain//:requirements.bzl", "requirement")
 licenses(["notice"])
 
 py_library(
@@ -11,6 +11,7 @@ py_library(
     deps = [
         "//grain/_src/core:monitoring",
         "//grain/_src/core:usage_logging",
+        requirement("array_record")
     ],
 )
 
@@ -27,7 +28,7 @@ py_test(
     srcs_version = "PY3",
     deps = [
         ":data_sources",
-    ],
+        requirement("absl_py"), requirement("numpy"), requirement("cloudpickle"), requirement("etils"), requirement("jax"), requirement("typing_extensions"), requirement("array_record"), requirement("tensorflow")    ],
 )
 
 py_library(
@@ -44,7 +45,9 @@ py_test(
         "record_test.py",
     ],
     srcs_version = "PY3",
-    deps = [":record"],
+    deps = [
+        ":record",
+        requirement("absl_py"), requirement("numpy"), requirement("cloudpickle"), requirement("etils"), requirement("jax"), requirement("typing_extensions"), requirement("array_record"), requirement("tensorflow")    ],
 )
 
 py_library(
@@ -61,7 +64,9 @@ py_test(
         "multiprocessing_common_test.py",
     ],
     srcs_version = "PY3",
-    deps = [":multiprocessing_common"],
+    deps = [
+        ":multiprocessing_common",
+        requirement("absl_py"), requirement("numpy"), requirement("cloudpickle"), requirement("etils"), requirement("jax"), requirement("typing_extensions"), requirement("array_record"), requirement("tensorflow")    ],
 )
 
 py_library(
@@ -86,7 +91,7 @@ py_test(
     deps = [
         ":operations",
         ":record",
-    ],
+        requirement("absl_py"), requirement("numpy"), requirement("cloudpickle"), requirement("etils"), requirement("jax"), requirement("typing_extensions"), requirement("array_record"), requirement("tensorflow")    ],
 )
 
 py_library(
@@ -113,7 +118,7 @@ py_test(
         ":record",
         ":samplers",
         "//grain/_src/core:sharding",
-    ],
+        requirement("absl_py"), requirement("numpy"), requirement("cloudpickle"), requirement("etils"), requirement("jax"), requirement("typing_extensions"), requirement("array_record"), requirement("tensorflow")    ],
 )
 
 py_library(
@@ -159,7 +164,7 @@ py_test(
         ":shared_memory_array",
         "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
-    ],
+        requirement("absl_py"), requirement("numpy"), requirement("cloudpickle"), requirement("etils"), requirement("jax"), requirement("typing_extensions"), requirement("array_record"), requirement("tensorflow")    ],
 )
 
 py_library(
@@ -189,7 +194,7 @@ py_test(
         ":grain_pool",
         ":options",
         ":record",
-    ],
+        requirement("absl_py"), requirement("numpy"), requirement("cloudpickle"), requirement("etils"), requirement("jax"), requirement("typing_extensions"), requirement("array_record"), requirement("tensorflow")    ],
 )
 
 py_library(
@@ -226,7 +231,7 @@ py_test(
         ":data_sources",
         ":load",
         "//grain/_src/core:transforms",
-    ],
+        requirement("absl_py"), requirement("numpy"), requirement("cloudpickle"), requirement("etils"), requirement("jax"), requirement("typing_extensions"), requirement("array_record"), requirement("tensorflow")    ],
 )
 
 py_library(
@@ -245,7 +250,9 @@ py_test(
     name = "grain_logging_test",
     srcs = ["grain_logging_test.py"],
     srcs_version = "PY3",
-    deps = [":grain_logging"],
+    deps = [
+        ":grain_logging",
+        requirement("absl_py"), requirement("numpy"), requirement("cloudpickle"), requirement("etils"), requirement("jax"), requirement("typing_extensions"), requirement("array_record"), requirement("tensorflow")    ],
 )
 
 py_library(
@@ -262,5 +269,5 @@ py_test(
         ":operations",
         ":record",
         ":shared_memory_array",
-    ],
+        requirement("absl_py"), requirement("numpy"), requirement("cloudpickle"), requirement("etils"), requirement("jax"), requirement("typing_extensions"), requirement("array_record"), requirement("tensorflow")    ],
 )

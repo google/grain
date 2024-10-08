@@ -15,12 +15,12 @@
 
 from absl.testing import absltest
 from absl.testing import parameterized
+from grain._src.core import tree
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import batch
 from grain._src.python.dataset.transformations import repeat
 from grain._src.python.dataset.transformations import source
 import numpy as np
-import tree
 
 
 class MakeBatchTest(absltest.TestCase):

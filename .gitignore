@@ -1,0 +1,128 @@
+# Byte-compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+*.egg-info/
+dist/
+build/
+eggs/
+*.egg
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+*.env
+*.venv
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+*.cover
+*.py,cover
+.cache
+coverage.*
+.tox/
+nosetests.xml
+*.log
+
+# Pytest
+.pytest_cache/
+
+# mypy
+.mypy_cache/
+dmypy.json
+dmypy.json.*
+
+# Pyre
+.pyre/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# VSCode settings
+.vscode/
+
+# IDE directories
+.idea/
+*.iml
+
+# Sublime Text project files
+*.sublime-project
+*.sublime-workspace
+
+# macOS files
+.DS_Store
+
+# Windows files
+Thumbs.db
+# Bazel directories
+bazel-*
+
+# Bazel outputs
+bazel-bin/
+bazel-out/
+bazel-testlogs/
+bazel-genfiles/
+
+# Bazel caches
+bazel-cache/
+bazel-workspace/
+.bazelrc.user
+.bazelignore
+*.bazelproject
+
+# Bazel module files
+modules/
+bazel.lock
+bazel_external/
+bazel_dep_graph.dot
+
+# Build outputs
+build/
+dist/
+out/
+
+# Temporary files
+*.log
+*.tmp
+*.temp
+*.swp
+*.bak
+
+# IDE settings
+.idea/
+.project
+*.iml
+.vscode/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# C++ build artifacts (if you have native rules)
+*.o
+*.obj
+*.exe
+*.dll
+*.dylib
+*.so
+
+# Python build artifacts (if you use py_rules)
+__pycache__/
+*.py[cod]
+*.pyo

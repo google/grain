@@ -13,29 +13,31 @@
 # limitations under the License.
 """Minimal unit test for the Python wrapper of index_shuffle."""
 
-from absl.testing import absltest
+import unittest
 from grain._src.python.experimental.index_shuffle.python import index_shuffle_python
 
 
-class IndexShuffleTest(absltest.TestCase):
+class IndexShuffleTest(unittest.TestCase):
 
   def test_index_shuffle(self):
     max_index = 46_204
     seen = set()
     for x in range(max_index + 1):
       y = index_shuffle_python.index_shuffle(x, max_index, seed=52, rounds=4)
-      self.assertBetween(y, 0, max_index)
+      self.assertGreaterEqual(y, 0)
+      self.assertLessEqual(y, max_index)
       seen.add(y)
-    self.assertLen(seen, max_index + 1)
+    self.assertEqual(len(seen), max_index + 1)
 
   def test_index_shuffle_huge_number(self):
     max_index = 1_234_567_891
     seen = set()
     for x in range(10_000):
       y = index_shuffle_python.index_shuffle(x, max_index, seed=27, rounds=4)
-      self.assertBetween(y, 0, max_index)
+      self.assertGreaterEqual(y, 0)
+      self.assertLessEqual(y, max_index)
       seen.add(y)
-    self.assertLen(seen, 10_000)
+    self.assertEqual(len(seen), 10_000)
 
   def test_index_shuffle_single_record(self):
     self.assertEqual(
@@ -47,4 +49,4 @@ class IndexShuffleTest(absltest.TestCase):
 
 
 if __name__ == '__main__':
-  absltest.main()
+  unittest.main()

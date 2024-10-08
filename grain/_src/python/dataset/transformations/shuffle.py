@@ -62,8 +62,9 @@ class ShuffleMapDataset(dataset.MapDataset[T]):
       #   - we use different seeds for each epoch to ensure that the shuffle is
       #     different for each epoch
       per_epoch_seed = (self._seed + epoch) % 2**32
+      # raise RuntimeError(f"Expected int for index_in_epoch, got {type(index_in_epoch)}; Expected int for length - 1, got {type(length - 1)}; Expected int for per_epoch_seed, got {type(per_epoch_seed)}")
       shuffled_index_in_epoch = index_shuffle.index_shuffle(
-          index_in_epoch, max_index=length - 1, seed=per_epoch_seed, rounds=4
+          index=index_in_epoch, max_index=length - 1, seed=per_epoch_seed, rounds=4
       )
       shuffled_index = shuffled_index_in_epoch + epoch * length
     return self._stats.record_output_spec(self._parent[shuffled_index])
@@ -99,9 +100,9 @@ class WindowShuffleMapDataset(dataset.MapDataset[T]):
       seed = self._seed + window_index
       index_in_window = index_shuffle.index_shuffle(
           index_in_window,
-          max_index=self._window_size - 1,
-          seed=seed,
-          rounds=4,
+          self._window_size - 1,
+          seed,
+          4,
       )
       index = index_in_window + window_index * self._window_size
     return self._stats.record_output_spec(self._parent[index])
