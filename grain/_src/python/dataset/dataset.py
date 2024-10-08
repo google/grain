@@ -1078,7 +1078,9 @@ class _WithOptionsMapDataset(MapDataset[T]):
   def __len__(self) -> int:
     return self._parent.__len__()
 
-  def __getitem__(self, index) -> T:
+  def __getitem__(self, index):
+    if isinstance(index, slice):
+      return self.slice(index)
     return self._parent[index]
 
 

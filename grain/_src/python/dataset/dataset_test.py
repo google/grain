@@ -588,6 +588,13 @@ class DatasetTest(parameterized.TestCase):
     )
     self.assertNotEqual(list(ds1), list(ds3))
 
+  def test_seed_with_slice(self):
+    seed = 144
+    ds1 = Source15IntsFrom0MapDataset().seed(seed)[1::3].shuffle()
+    ds2 = Source15IntsFrom0MapDataset().seed(seed)[1::3].shuffle()
+    self.assertEqual(list(ds1), list(ds2))
+    self.assertNotEqual(list(ds1), list(range(15)))
+
   def test_seed_with_multiple_parents(self):
     seed = 128
     ds1 = dataset.MapDataset.mix(
