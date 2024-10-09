@@ -86,6 +86,7 @@ class RangeMapDataset(dataset.MapDataset[int]):
   def to_iter_dataset(
       self,
       read_options: options.ReadOptions | None = None,
+      *,
       allow_nones: bool = False,
   ) -> dataset.IterDataset[int]:
     # Override the default multithreaded execution to avoid wasting memory.

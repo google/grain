@@ -286,6 +286,7 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
   def batch(
       self,
       batch_size: int,
+      *,
       drop_remainder: bool = False,
       batch_fn: Callable[[Sequence[T]], S] | None = None,
   ) -> MapDataset[S]:
@@ -363,14 +364,7 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
     return filter_dataset.FilterMapDataset(parent=self, transform=transform)
 
   def map(
-      self,
-      transform: (
-          transforms.MapTransform
-          | Callable[[T], S]
-          | transforms.RandomMapTransform
-          | Callable[[T, np.random.Generator], S]
-      ),
-      seed: int | None = None,
+      self, transform: transforms.MapTransform | Callable[[T], S]
   ) -> MapDataset[S]:
     """Returns a dataset containing the elements transformed by `transform`.
 
@@ -383,30 +377,19 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
 
     Args:
       transform: Either a `MapTransform` containing the `map` method or a
-        callable that takes an element and returns a new element. The
-        `RandomMapTransform` and `Callable[[T, np.random.Generator], S]` types
-        are deprecated (use `random_map` instead).
-      seed: Deprecated. Use `random_map` instead.
+        callable that takes an element and returns a new element.
 
     Returns:
       A dataset containing the elements of the original dataset transformed by
       `transform`.
     """
-    if isinstance(transform, transforms.RandomMapTransform) or seed is not None:
-      warnings.warn(
-          "`MapDataset.map` with `RandomMapTransform` is deprecated. Use "
-          "`MapDataset.random_map` instead.",
-          DeprecationWarning,
-      )
     # Loaded lazily due to a circular dependency (dataset <-> map).
     # pylint: disable=g-import-not-at-top
     from grain._src.python.dataset.transformations import (
         map as map_dataset,
     )
     # pylint: enable=g-import-not-at-top
-    return map_dataset.MapMapDataset(
-        parent=self, transform=transform, seed=seed
-    )
+    return map_dataset.MapMapDataset(parent=self, transform=transform)
 
   def map_with_index(
       self,
@@ -649,6 +632,7 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
   def to_iter_dataset(
       self,
       read_options: grain_options.ReadOptions | None = None,
+      *,
       allow_nones: bool = False,
   ) -> IterDataset[T]:
     """Converts this dataset to an `IterDataset`.
@@ -756,6 +740,7 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
   def batch(
       self,
       batch_size: int,
+      *,
       drop_remainder: bool = False,
       batch_fn: Callable[[Sequence[T]], S] | None = None,
   ) -> IterDataset[S]:
@@ -870,19 +855,14 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
     """
     # Loaded lazily due to a circular dependency (dataset <-> filter).
     # pylint: disable=g-import-not-at-top
-    from grain._src.python.dataset.transformations import filter as filter_dataset
+    from grain._src.python.dataset.transformations import (
+        filter as filter_dataset,
+    )
     # pylint: enable=g-import-not-at-top
     return filter_dataset.FilterIterDataset(parent=self, transform=transform)
 
   def map(
-      self,
-      transform: (
-          transforms.MapTransform
-          | Callable[[T], S]
-          | transforms.RandomMapTransform
-          | Callable[[T, np.random.Generator], S]
-      ),
-      seed: int | None = None,
+      self, transform: transforms.MapTransform | Callable[[T], S]
   ) -> IterDataset[S]:
     """Returns a dataset containing the elements transformed by `transform`.
 
@@ -895,30 +875,19 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
 
     Args:
       transform: Either a `MapTransform` containing the `map` method or a
-        callable that takes an element and returns a new element. The
-        `RandomMapTransform` and `Callable[[T, np.random.Generator], S]` types
-        are deprecated (use `random_map` instead).
-      seed: Deprecated. Use `random_map` instead.
+        callable that takes an element and returns a new element.
 
     Returns:
       A dataset containing the elements of the original dataset transformed by
       `transform`.
     """
-    if isinstance(transform, transforms.RandomMapTransform) or seed is not None:
-      warnings.warn(
-          "`IterDataset.map` with `RandomMapTransform` is deprecated. Use "
-          "`IterDataset.random_map` instead.",
-          DeprecationWarning,
-      )
     # Loaded lazily due to a circular dependency (dataset <-> map).
     # pylint: disable=g-import-not-at-top
     from grain._src.python.dataset.transformations import (
         map as map_dataset,
     )
     # pylint: enable=g-import-not-at-top
-    return map_dataset.MapIterDataset(
-        parent=self, transform=transform, seed=seed
-    )
+    return map_dataset.MapIterDataset(parent=self, transform=transform)
 
   def random_map(
       self,
@@ -969,7 +938,7 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
         parent=self, transform=transform, seed=seed
     )
 
-  def _set_parent_maps_slice(self, sl: slice) -> None:
+  def _set_parent_maps_slice(self, sl: builtins.slice) -> None:
     """Replaces `MapDataset` parents with their sliced versions.
 
     WARNING: mutates the dataset object.
@@ -1115,22 +1084,21 @@ def apply_transformations(
   """
   if not isinstance(transformations, Sequence):
     transformations = (transformations,)
-  # NOTE: match case syntax was introduced in Python 3.10. We should switch to
-  # it once we drop support for Python 3.9 in OSS.
   for transformation in transformations:
-    if isinstance(transformation, transforms.BatchTransform):
-      ds = ds.batch(
-          transformation.batch_size,
-          drop_remainder=transformation.drop_remainder,
-      )
-    elif isinstance(transformation, transforms.MapTransform):
-      ds = ds.map(transformation)
-    elif isinstance(transformation, transforms.RandomMapTransform):
-      ds = ds.random_map(transformation)
-    elif isinstance(transformation, transforms.FilterTransform):
-      ds = ds.filter(transformation)
-    else:
-      raise NotImplementedError(
-          f"Transformation type: {transformation} is not supported."
-      )
+    match transformation:
+      case transforms.BatchTransform():
+        ds = ds.batch(
+            transformation.batch_size,
+            drop_remainder=transformation.drop_remainder,
+        )
+      case transforms.MapTransform():
+        ds = ds.map(transformation)
+      case transforms.RandomMapTransform():
+        ds = ds.random_map(transformation)
+      case transforms.FilterTransform():
+        ds = ds.filter(transformation)
+      case _:
+        raise NotImplementedError(
+            f"Transformation type: {transformation} is not supported."
+        )
   return ds

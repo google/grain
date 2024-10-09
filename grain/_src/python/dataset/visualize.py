@@ -100,10 +100,11 @@ class _SpecTrackingMapDataset(dataset.MapDataset[T]):
   def to_iter_dataset(
       self,
       read_options: options.ReadOptions | None = None,
+      *,
       allow_nones: bool = False,
   ) -> dataset.IterDataset[T]:
     return _SpecTrackingIterDataset(
-        super().to_iter_dataset(read_options, allow_nones),
+        super().to_iter_dataset(read_options, allow_nones=allow_nones),
         mock_source_output=None,
     )
 
