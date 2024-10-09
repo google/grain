@@ -15,7 +15,7 @@ function build_and_test_grain() {
 
   # Build wheels for multiple Python minor versions.
   PYTHON_MAJOR_VERSION=3
-  for PYTHON_MINOR_VERSION in 9 10 11 12
+  for PYTHON_MINOR_VERSION in 10 11 12
   do
     PYTHON_VERSION=$PYTHON_MAJOR_VERSION$PYTHON_MINOR_VERSION
     docker rmi -f grain:${PYTHON_VERSION}

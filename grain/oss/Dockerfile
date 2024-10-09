@@ -46,9 +46,6 @@ RUN --mount=type=cache,target=/root/.cache \
 # Install dependencies needed for grain tests
 RUN --mount=type=cache,target=/root/.cache \
   ${PYTHON_BIN}/python -m pip install -U \
-    # h5py is a tensorflow dependency. 3.11 release no longer has aarch64 wheels
-    # for some reason so we manually install the one that has.
-    h5py==3.10 \
     auditwheel \
     dill \
     jax \

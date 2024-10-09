@@ -13,8 +13,6 @@
 # limitations under the License.
 """Tests for batch transformation."""
 
-import sys
-
 from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.python.dataset import dataset
@@ -22,9 +20,6 @@ from grain._src.python.dataset.transformations import packing
 from grain._src.python.dataset.transformations import source
 import numpy as np
 import tree
-
-
-_IS_PY310 = sys.version_info >= (3, 10)
 
 
 def _assert_trees_equal(actual, expected):
@@ -62,9 +57,7 @@ class SingleBinPackIterDatasetTest(parameterized.TestCase):
         # Second, fourth and five element packed together.
         ([5, 6, 7, 8], [1, 1, 2, 3], [0, 1, 0, 0]),
     ]
-    for actual, expected in zip(
-        ds_iter, expected_elements, **({"strict": True} if _IS_PY310 else {})
-    ):
+    for actual, expected in zip(ds_iter, expected_elements, strict=True):
       # Elements are tuples with (inputs, inputs_segment_ids, inputs_positions).
       self.assertLen(actual, 3)
       np.testing.assert_array_equal(actual, expected)
@@ -89,9 +82,7 @@ class SingleBinPackIterDatasetTest(parameterized.TestCase):
         ([5, 6, 7, 0], [1, 1, 2, 0], [0, 1, 0, 0]),
     ]
 
-    for actual, expected in zip(
-        ds_iter, expected_elements, **({"strict": True} if _IS_PY310 else {})
-    ):
+    for actual, expected in zip(ds_iter, expected_elements, strict=True):
       # Elements are tuples with (inputs, inputs_segment_ids, inputs_positions).
       self.assertLen(actual, 3)
       np.testing.assert_array_equal(actual, expected)
@@ -148,9 +139,7 @@ class SingleBinPackIterDatasetTest(parameterized.TestCase):
         },
     ]
 
-    for actual, expected in zip(
-        ds_iter, expected_elements, **({"strict": True} if _IS_PY310 else {})
-    ):
+    for actual, expected in zip(ds_iter, expected_elements, strict=True):
       # Compare keys.
       self.assertSequenceEqual(sorted(actual), sorted(expected))
       np.testing.assert_array_equal(actual[feature], expected[feature])
@@ -220,9 +209,7 @@ class SingleBinPackIterDatasetTest(parameterized.TestCase):
             "targets_positions": [0, 1, 2, 0],
         },
     ]
-    for actual, expected in zip(
-        ds_iter, expected_elements, **({"strict": True} if _IS_PY310 else {})
-    ):
+    for actual, expected in zip(ds_iter, expected_elements, strict=True):
       # Compare keys.
       self.assertSequenceEqual(sorted(actual), sorted(expected))
       np.testing.assert_array_equal(actual[feature], expected[feature])
@@ -282,9 +269,7 @@ class SingleBinPackIterDatasetTest(parameterized.TestCase):
             "targets_positions": [0, 1, 2, 0],
         },
     ]
-    for actual, expected in zip(
-        ds_iter, expected_elements, **({"strict": True} if _IS_PY310 else {})
-    ):
+    for actual, expected in zip(ds_iter, expected_elements, strict=True):
       np.testing.assert_array_equal(actual[feature], expected[feature])
 
   @parameterized.parameters(
@@ -336,9 +321,7 @@ class SingleBinPackIterDatasetTest(parameterized.TestCase):
             "input_vectors_positions": [0, 1, 0],
         },
     ]
-    for actual, expected in zip(
-        ds_iter, expected_elements, **({"strict": True} if _IS_PY310 else {})
-    ):
+    for actual, expected in zip(ds_iter, expected_elements, strict=True):
       np.testing.assert_array_equal(actual[feature], expected[feature])
 
   def test_checkpointing(self):

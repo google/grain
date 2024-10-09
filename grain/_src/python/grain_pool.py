@@ -70,7 +70,6 @@ from grain._src.python import shared_memory_array
 from grain._src.python.options import MultiprocessingOptions  # pylint: disable=g-importing-member
 
 T = TypeVar("T")
-_IS_PY310 = sys.version_info >= (3, 10)
 
 # Maximum number of threads for starting and stopping processes.
 _PROCESS_MANAGEMENT_MAX_THREADS = 64
@@ -89,9 +88,7 @@ class _ProcessingComplete:
 _PROCESSING_COMPLETE = _ProcessingComplete()
 
 
-@dataclasses.dataclass(
-    **({"slots": True, "frozen": True} if _IS_PY310 else {"frozen": True})
-)
+@dataclasses.dataclass(slots=True, frozen=True)
 class GrainPoolElement:
   """Wrapper for output records emited by Grain Pool."""
 
@@ -418,9 +415,7 @@ class GrainPool(Iterator[T]):
           process.terminate()
 
 
-@dataclasses.dataclass(
-    **({"slots": True, "frozen": True} if _IS_PY310 else {"frozen": True})
-)
+@dataclasses.dataclass(slots=True, frozen=True)
 class _ReaderQueueElement:
   """Element to be added to the reader queue."""
 
