@@ -55,13 +55,12 @@ import queue
 import sys
 import threading
 import traceback
-from typing import Any, Protocol, TypeVar, Union
+from typing import Any, Callable, Protocol, TypeVar, Union
 
 from absl import logging
 import cloudpickle
 from grain._src.core import parallel
 from grain._src.core import tree
-from grain._src.core.config import config
 import multiprocessing as mp
 from grain._src.python import grain_logging
 from grain._src.python import multiprocessing_common
@@ -127,11 +126,13 @@ class GetElementProducerFn(Protocol[T]):
     """Returns a generator of elements."""
 
 
-def _get_element_producer_from_queue(
+def _initialize_and_get_element_producer(
     args_queue: queues.Queue, *, worker_index: int, worker_count: int
 ) -> Iterator[Any]:
   """Unpickles the element producer from the args queue and closes the queue."""
-  serialized_element_producer_fn = args_queue.get()
+  serialized_init_fn, serialized_element_producer_fn = args_queue.get()
+  init_fn: Callable[[], None] = cloudpickle.loads(serialized_init_fn)
+  init_fn()
   element_producer_fn: GetElementProducerFn[Any] = cloudpickle.loads(
       serialized_element_producer_fn
   )
@@ -160,7 +161,7 @@ def _worker_loop(
         f"PyGrain Worker {worker_index}"
     )
     logging.info("Starting work.")
-    element_producer = _get_element_producer_from_queue(
+    element_producer = _initialize_and_get_element_producer(
         args_queue, worker_index=worker_index, worker_count=worker_count
     )
     profiling_enabled = enable_profiling and worker_index == 0
@@ -297,7 +298,9 @@ class GrainPool(Iterator[T]):
       # absl.app.run() is called. We send arguments via a queue to ensure that
       # they are unpickled after absl.app.run() was called in the child
       # processes.
-      worker_args_queue.put(get_element_producer_fn)
+      worker_init_fn = lambda: None
+      worker_init_fn = cloudpickle.dumps(worker_init_fn)
+      worker_args_queue.put((worker_init_fn, get_element_producer_fn))
       process = ctx.Process(  # pytype: disable=attribute-error  # re-none
           target=_worker_loop, kwargs=process_kwargs, daemon=True
       )
