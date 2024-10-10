@@ -1005,9 +1005,16 @@ class DatasetIterator(Iterator[T], abc.ABC):
   """`IterDataset` iterator."""
 
   def __init__(self, stats: dataset_stats.Stats | None = None):
-    # Implementations that do not call super constructor will lose the parent
+    # Implementations that do not pass stats explicitly will lose the parent
     # link.
-    self._stats = stats or dataset_stats.make_stats(str(self), tuple())
+    if stats is not None:
+      self._stats = stats
+
+  @functools.cached_property
+  def _stats(self):
+    # The default stats will be created iff `_stats` is not set in the
+    # constructor.
+    return dataset_stats.make_stats(str(self), tuple())
 
   def __iter__(self) -> DatasetIterator[T]:
     return self

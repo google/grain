@@ -14,6 +14,7 @@
 """Tests for dataset.py."""
 
 import dataclasses
+import gc
 import sys
 import time
 from typing import TypeVar, overload
@@ -742,6 +743,47 @@ class DatasetTest(parameterized.TestCase):
     ds = ds.map(add_one)  # [8, 11, 14]
     # Note that the final dataset still has the correct type ineferred.
     self.assertSequenceEqual(list(ds), [8, 11, 14])
+
+  def test_dataset_has_no_reference_cycle(self):
+    # Clean up any existing garbage in case there's other objects of relevant
+    # types.
+    gc.disable()
+    gc.collect()
+    gc.garbage.clear()
+
+    # Here we create multiple dataset transformations objects, delete them and
+    # expect them to be immediately collected. If there are any reference cycles
+    # between them, the collection will be delayed.
+    ds = dataset.MapDataset.range(10)
+    ds = ds.map(lambda x: x + 1).seed(42)
+    ds = ds.shuffle(42)
+    ds = ds.random_map(AddRandomInteger())
+    ds = ds.filter(lambda x: x > 10)
+    ds = ds.batch(batch_size=2)
+    ds = ds.to_iter_dataset()
+    ds = ds.map(lambda x: x)
+    it = iter(ds)
+    _ = next(it)
+    ds_types = set()
+    to_visit = [ds]
+    while to_visit:
+      next_ds = to_visit.pop()
+      ds_types.add(type(next_ds))
+      to_visit.extend(next_ds.parents)
+
+    del ds, it
+
+    # Manually collect garbage that has not been collected yet. It is saved for
+    # inspection against the relevant dataset types.
+    gc.set_debug(gc.DEBUG_SAVEALL)
+    gc.collect()
+    forbidden_garbage = [g for g in gc.garbage if type(g) in ds_types]
+    # Reset the GC back to normal.
+    gc.set_debug(0)
+    gc.garbage.clear()
+    gc.collect()
+    gc.enable()
+    self.assertEmpty(forbidden_garbage)
 
 
 class TfRandomMapAlwaysAddingOne(transforms.TfRandomMapTransform):
