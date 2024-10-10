@@ -41,7 +41,7 @@ _MAP_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
 "<class 'int'>[]"
 
   ││
-  ││  MapWithIndexMapDataset(transform=_add_dummy_metadata @ .../python/dataset/stats_test.py:129)
+  ││  MapWithIndexMapDataset(transform=_add_dummy_metadata @ .../python/dataset/stats_test.py:130)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -50,7 +50,7 @@ _MAP_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
  'index': "<class 'int'>[]"}
 
   ││
-  ││  MapMapDataset(transform=_identity @ .../python/dataset/stats_test.py:133)
+  ││  MapMapDataset(transform=_identity @ .../python/dataset/stats_test.py:134)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -79,7 +79,7 @@ _ITER_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
 "<class 'int'>[]"
 
   ││
-  ││  MapIterDataset(transform=<lambda> @ .../python/dataset/stats_test.py:345)
+  ││  MapIterDataset(transform=<lambda> @ .../python/dataset/stats_test.py:414)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
