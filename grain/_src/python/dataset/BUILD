@@ -96,5 +96,6 @@ py_test(
     deps = [
         ":dataset",
         ":stats",
+        "//grain/_src/core:transforms",
     ],
 )
