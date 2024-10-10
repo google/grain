@@ -30,6 +30,12 @@ class MyTree:
     return self.a == other.a and self.b == other.b
 
 
+class MyClass:
+
+  def __init__(self, c):
+    self.c = c
+
+
 class TreeJaxTest(tree_test.TreeTest):
 
   def test_map_custom_tree(self):
@@ -42,10 +48,10 @@ class TreeJaxTest(tree_test.TreeTest):
 
   def test_spec_like_with_class(self):
     self.assertEqual(
-        tree.spec_like({"B": 1232.4, "C": tree_test.TestClass(a=1, b="v2")}),
+        tree.spec_like({"B": 1232.4, "C": MyClass(1)}),
         {
             "B": "<class 'float'>[]",
-            "C": "<class 'grain._src.core.tree_test.TestClass'>[]",
+            "C": "<class '__main__.MyClass'>[]",
         },
     )
 
@@ -71,6 +77,13 @@ class TreeJaxTest(tree_test.TreeTest):
             "C": [],
         }),
         {"B": "list<numpy.ndarray>[unknown shape]", "C": "list<>[0]"},
+    )
+
+  def test_spec_like_with_dataclass(self):
+    self.assertEqual(
+        tree.spec_like(tree_test.TestClass(a=1, b="v2")),
+        "<class 'grain._src.core.tree_test.TestClass'>\n"
+        "{'a': \"<class 'int'>[]\", 'b': \"<class 'str'>[]\"}[]",
     )
 
 

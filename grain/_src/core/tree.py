@@ -22,6 +22,9 @@ direct dependency on JAX, we check if it's already present and resort to the
 
 We should be able to remove this module once b/257971667 is resolved.
 """
+import dataclasses
+import pprint
+
 import numpy as np
 
 try:
@@ -73,6 +76,14 @@ try:
         else:
           inner_type = ""
         return f"{container_type}<{inner_type}>"
+      elif dataclasses.is_dataclass(obj):
+        # We avoid registering the dataclass with jax's tree_util because
+        # that would affect the behavior outside of this module. We also avoid
+        # using dataclasses.asdict() since it makes data copy.
+        fields = {}
+        for field in dataclasses.fields(obj):
+          fields[field.name] = getattr(obj, field.name)
+        return f"{type(obj)}\n{pprint.pformat(spec_like(fields))}"
       return type(obj)
 
     def _shape(obj):
