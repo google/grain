@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Flatmap transformation for MapDataset."""
-
+import functools
 from typing import Any, Callable, Sequence, TypeVar
 
 from grain._src.core import transforms
@@ -78,14 +78,14 @@ class _FlatMapDatasetIterator(dataset.DatasetIterator[T]):
       self,
       parent: dataset.DatasetIterator[S],
       flat_map: Callable[[S], Sequence[T]],
-      stats: dataset_stats.Stats,
+      transform_name: str,
   ):
-    super().__init__(stats)
-    self._parent = parent
+    super().__init__(parent)
     self._flat_map = flat_map
     self._next_index_in_buffer = 0
     self._buffer = []
     self._last_parent_state = self._parent.get_state()
+    self._transform_name = transform_name
 
   def _has_consumed_all_buffer_elements(self):
     return self._next_index_in_buffer >= len(self._buffer)
@@ -129,6 +129,9 @@ class _FlatMapDatasetIterator(dataset.DatasetIterator[T]):
       self._next_index_in_buffer = 0
       pass
 
+  def __str__(self) -> str:
+    return f"FlatMapDatasetIterator(transform={self._transform_name})"
+
 
 class FlatMapIterDataset(dataset.IterDataset[T]):
   """Flat map for one-to-many split."""
@@ -141,14 +144,15 @@ class FlatMapIterDataset(dataset.IterDataset[T]):
     super().__init__(parent)
     self._transform = transform
 
+  @functools.cached_property
+  def _transform_name(self):
+    return transforms.get_pretty_transform_name(self._transform)
+
   def __str__(self) -> str:
-    return (
-        "FlatMapIterDataset("
-        f"transform={transforms.get_pretty_transform_name(self._transform)})"
-    )
+    return f"FlatMapIterDataset(transform={self._transform_name})"
 
   def __iter__(self):
     parent_iter = self._parent.__iter__()
     return _FlatMapDatasetIterator(
-        parent_iter, self._transform.flat_map, self._stats
+        parent_iter, self._transform.flat_map, self._transform_name
     )

@@ -68,15 +68,17 @@ class FilterMapDataset(dataset.MapDataset[T]):
 class _FilterDatasetIterator(dataset.DatasetIterator[T]):
   """Iterator that filters elements."""
 
+  _MUTATES_ELEMENT_SPEC = False
+
   def __init__(
       self,
       parent: dataset.DatasetIterator,
       filter_fn: Callable[[T], bool],
-      stats: dataset_stats.Stats,
+      transform_name: str,
   ):
-    super().__init__(stats)
-    self._parent = parent
+    super().__init__(parent)
     self._filter_fn = filter_fn
+    self._transform_name = transform_name
 
   def __next__(self):
     value = None
@@ -101,13 +103,11 @@ class _FilterDatasetIterator(dataset.DatasetIterator[T]):
     self._parent.set_state(state)
 
   def __str__(self) -> str:
-    return f"FilterDatasetIterator(parent={self._parent}"
+    return f"FilterDatasetIterator(transform={self._transform_name})"
 
 
 class FilterIterDataset(dataset.IterDataset[T]):
   """Filter transformation for IterDatasets."""
-
-  _MUTATES_ELEMENT_SPEC = False
 
   def __init__(
       self,
@@ -133,7 +133,7 @@ class FilterIterDataset(dataset.IterDataset[T]):
     return _FilterDatasetIterator(
         parent_iter,
         filter_fn=self._filter_fn,
-        stats=self._stats,
+        transform_name=self._transform_name,
     )
 
   def __str__(self) -> str:

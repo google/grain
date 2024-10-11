@@ -92,7 +92,8 @@ class SingleBinPackIterDataset(dataset.IterDataset):
 
   def __iter__(self) -> dataset.DatasetIterator:
     return SingleBinPackDatasetIterator(
-        self._parent.__iter__(), self._length_struct, self._stats
+        self._parent.__iter__(),
+        self._length_struct,
     )
 
 
@@ -106,10 +107,8 @@ class SingleBinPackDatasetIterator(dataset.DatasetIterator):
       self,
       parent: dataset.DatasetIterator,
       length_struct: PyTree[Optional[int]],
-      stats: dataset_stats.Stats,
   ):
-    super().__init__(stats)
-    self._parent = parent
+    super().__init__(parent)
     self._length_struct = length_struct
     # Same as above but flattened. Some operations are easier using the
     # flattened representation.
@@ -257,6 +256,9 @@ class SingleBinPackDatasetIterator(dataset.DatasetIterator):
       next(self)
     assert self._num_next_calls == state["num_next_calls"]
 
+  def __str__(self) -> str:
+    return "SingleBinPackDatasetIterator"
+
 
 class FirstFitPackIterDataset(dataset.IterDataset):
   """Implements first-fit packing of sequences.
@@ -315,7 +317,6 @@ class FirstFitPackIterDataset(dataset.IterDataset):
         length_struct=self._length_struct,
         shuffle_bins=self._shuffle_bins,
         meta_features=self._meta_features,
-        stats=self._stats,
     )
 
 
@@ -330,10 +331,8 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
       length_struct: PyTree[Optional[int]],
       shuffle_bins: bool,
       meta_features: Sequence[str],
-      stats: dataset_stats.Stats,
   ):
-    super().__init__(stats)
-    self._parent = parent
+    super().__init__(parent)
     self._num_packing_bins = num_packing_bins
     self._length_struct = length_struct
     self._shuffle_bins = shuffle_bins
@@ -476,3 +475,6 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
             )
         # We now have packed batch.
         return next(self)
+
+  def __str__(self) -> str:
+    return "FirstFitPackDatasetIterator"

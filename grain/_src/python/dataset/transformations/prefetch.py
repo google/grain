@@ -41,8 +41,6 @@ T = TypeVar("T")
 class PrefetchIterDataset(dataset.IterDataset[T]):
   """Iterable dataset that uses a thread pool for prefetching."""
 
-  _MUTATES_ELEMENT_SPEC = False
-
   def __init__(
       self,
       parent: dataset.MapDataset[T],
@@ -62,23 +60,26 @@ class PrefetchIterDataset(dataset.IterDataset[T]):
 
   def __iter__(self) -> dataset.DatasetIterator[T]:
     return PrefetchDatasetIterator(
-        self._parent, self._read_options, self._allow_nones, self._stats
+        self._parent, self._read_options, self._allow_nones
     )
 
 
 class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
   """Iterator that performs prefetching using a thread pool."""
 
+  _MUTATES_ELEMENT_SPEC = False
+
   def __init__(
       self,
       parent: dataset.MapDataset[T],
       read_options: grain_options.ReadOptions,
       allow_nones: bool,
-      stats: dataset_stats.Stats,
   ):
-    super().__init__(stats)
-    self._parent = parent
+    # Note that the parent is not a conventional iterator, but a MapDataset.
+    super().__init__()
+    self._map_parent = parent
     self._dataset_length = len(parent)
+    self._read_options = read_options
     self._next_index = 0
     self._buffer = None
     self._lock = threading.Lock()
@@ -105,7 +106,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
                 ),
             )
             self._buffer = collections.deque(
-                self._executor.submit(self._parent.__getitem__, i)
+                self._executor.submit(self._map_parent.__getitem__, i)
                 for i in indices
             )
           element = self._buffer.popleft()
@@ -115,13 +116,13 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
           ):
             self._buffer.append(
                 self._executor.submit(
-                    self._parent.__getitem__,
+                    self._map_parent.__getitem__,
                     self._next_index + self._prefetch_buffer_size,
                 )
             )
           element = element.result()
         else:
-          element = self._parent[self._next_index]
+          element = self._map_parent[self._next_index]
         self._next_index += 1
       if self._allow_nones or element is not None:
         with self._stats.record_self_time(offset_ns=timer.value()):
@@ -142,6 +143,22 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
         )
       if self._prefetch_buffer_size > 0:
         self._buffer = None
+
+  @functools.cached_property
+  def _stats(self):
+    # Keep stats link to the MapDataset parent.
+    return dataset_stats.make_stats(
+        dataset_stats.StatsConfig(
+            name=str(self), transform_mutates_spec=self._MUTATES_ELEMENT_SPEC
+        ),
+        (self._map_parent._stats,),  # pylint: disable=protected-access
+    )
+
+  def __str__(self) -> str:
+    return (
+        f"PrefetchDatasetIterator(read_options={self._read_options},"
+        f" allow_nones={self._allow_nones})"
+    )
 
 
 def _iterator_with_context(
@@ -173,7 +190,10 @@ class MultiprocessPrefetchIterDataset(dataset.IterDataset[T]):
     self._multiprocessing_options = multiprocessing_options
 
   def __str__(self) -> str:
-    return f"MultiprocessPrefetchIterDataset(multiprocessing_options={self._multiprocessing_options})"
+    return (
+        "MultiprocessPrefetchIterDataset("
+        f"multiprocessing_options={self._multiprocessing_options})"
+    )
 
   def _validate_parent_dataset(self):
     """Checks that there's a single level of parallelization."""
@@ -189,7 +209,7 @@ class MultiprocessPrefetchIterDataset(dataset.IterDataset[T]):
 
   def __iter__(self) -> MultiprocessPrefetchDatasetIterator[T]:
     return MultiprocessPrefetchDatasetIterator(
-        self._parent, self._multiprocessing_options, self._stats
+        self._parent, self._multiprocessing_options
     )
 
 
@@ -245,14 +265,15 @@ def _open_struct_from_shm(struct: Any) -> Any:
 class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   """Iterator that performs prefetching using a multiprocessing pool."""
 
+  _MUTATES_ELEMENT_SPEC = False
+
   def __init__(
       self,
       parent: dataset.IterDataset[T],
       multiprocessing_options: grain_options.MultiprocessingOptions,
-      stats: dataset_stats.Stats,
   ):
-    super().__init__(stats)
-    self._parent = parent
+    super().__init__()
+    self._iter_parent = parent
     self._multiprocessing_options = multiprocessing_options
     # The underlying iterator producing elements and workers state.
     self._iterator = None
@@ -265,7 +286,9 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     workers_state = {}
     iterations_to_skip = {}
     for i in range(multiprocessing_options.num_workers):
-      workers_state[str(i)] = iter(self._parent).get_state()  # pytype: disable=attribute-error
+      workers_state[str(i)] = iter(
+          self._iter_parent
+      ).get_state()  # pytype: disable=attribute-error
       iterations_to_skip[str(i)] = 0
 
     self._state = {
@@ -289,7 +312,7 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       else:
         self._state[_ITERATIONS_TO_SKIP][worker_index_str] = 0
         self._state[_WORKERS_STATE][worker_index_str] = state
-    return _open_struct_from_shm(self._stats.record_output_spec(result))
+    return _open_struct_from_shm(result)
 
   def start_prefetch(self) -> None:
     """Prefetches elements from the iterator.
@@ -317,7 +340,7 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     """Creates a `MultiProcessIterator`."""
 
     state = self._state
-    parent = self._parent
+    parent = self._iter_parent
 
     def get_element_producer_fn(
         worker_index: int, worker_count: int
@@ -348,6 +371,12 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         % self._multiprocessing_options.num_workers,
     )
 
+  def __str__(self) -> str:
+    return (
+        "MultiprocessPrefetchDatasetIterator("
+        f"multiprocessing_options={self._multiprocessing_options})"
+    )
+
 
 class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
   """Iterable dataset that uses a synchronized queue for prefetching.
@@ -369,11 +398,14 @@ class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
     self._prefetch_buffer_size = prefetch_buffer_size
 
   def __str__(self) -> str:
-    return f"ThreadPrefetchIterDataset(prefetch_buffer_size={self._prefetch_buffer_size})"
+    return (
+        "ThreadPrefetchIterDataset("
+        f"prefetch_buffer_size={self._prefetch_buffer_size})"
+    )
 
   def __iter__(self) -> ThreadPrefetchDatasetIterator[T]:
     return ThreadPrefetchDatasetIterator(
-        self._parent, self._prefetch_buffer_size, self._stats
+        self._parent, self._prefetch_buffer_size
     )
 
 
@@ -388,15 +420,15 @@ _INITIAL_STATE_SENTINEL = object()
 class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   """Iterator that performs prefetching using a synchronized queue."""
 
+  _MUTATES_ELEMENT_SPEC = False
+
   def __init__(
       self,
       parent: dataset.IterDataset[T],
       prefetch_buffer_size: int,
-      stats: dataset_stats.Stats,
   ):
-    super().__init__(stats)
-    self._parent: dataset.IterDataset[T] = parent
-    self._iterator: dataset.DatasetIterator[T] = parent.__iter__()
+    super().__init__(parent.__iter__())
+    self._iter_parent: dataset.IterDataset[T] = parent
     self._prefetch_buffer_size = prefetch_buffer_size
     self._state: StateT | None = None
 
@@ -424,7 +456,9 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
     if self._work_thread is None:
       self._work_thread = threading.Thread(
-          target=self._work_loop, daemon=True, name=f"Prefetch-{self._parent}"
+          target=self._work_loop,
+          daemon=True,
+          name=f"Prefetch-{self._iter_parent}",
       )
       self._work_thread.start()
 
@@ -458,19 +492,19 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     """
     try:
       if initial_state is not None:
-        self._iterator.set_state(initial_state)
+        self._parent.set_state(initial_state)
       else:
         # Put the initial state of the iterator with a sentinel value, which
         # will be discarded. This avoids having to call a potentially expensive
         # and unused get_state() on the main thread.
         output_buffer.put(
-            (_INITIAL_STATE_SENTINEL, self._iterator.get_state(), None)
+            (_INITIAL_STATE_SENTINEL, self._parent.get_state(), None)
         )
       # Check if the producer thread should be running every time an item is
       # retrieved from the queue.
       while running.is_set():
         while True:
-          element, state = next(self._iterator), self._iterator.get_state()
+          element, state = next(self._parent), self._parent.get_state()
           output_buffer.put((element, state, None))
           break
     except Exception as e:  # pylint: disable=broad-except
@@ -562,3 +596,9 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   def _work_loop(self):
     while not self._closed:
       self._work_queue.get()()
+
+  def __str__(self) -> str:
+    return (
+        "ThreadPrefetchDatasetIterator("
+        f"prefetch_buffer_size={self._prefetch_buffer_size})"
+    )
