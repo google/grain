@@ -66,7 +66,7 @@ from ._src.python.samplers import (
     Sampler,
     SequentialSampler,
 )
-from ._src.python.shared_memory_array import SharedMemoryArray
+from ._src.python.shared_memory_array import SharedMemoryArray, SharedMemoryArrayMetadata
 
 # These are imported only if Orbax is present.
 try:
