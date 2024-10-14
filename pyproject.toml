@@ -31,6 +31,7 @@ classifiers = [
 
 [project.optional-dependencies]
 testing = [
+    'attrs',
     'dill',
     'jax',
     'jaxlib',

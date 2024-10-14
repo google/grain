@@ -22,10 +22,37 @@ direct dependency on JAX, we check if it's already present and resort to the
 
 We should be able to remove this module once b/257971667 is resolved.
 """
+import dataclasses
+import pprint
+
 import numpy as np
 
 try:
-  from jax import tree_util  # pytype: disable=import-error # pylint: disable=g-import-not-at-top
+  # `attrs` is not a native package, avoid explicit dependency and only check if
+  # it's present.
+  import attrs  # pylint: disable=g-import-not-at-top
+
+  def _is_attrs(obj):
+    return attrs.has(obj)
+
+  def _attrs_fields(obj):
+    result = {}
+    for field in attrs.fields(obj.__class__):
+      result[field.name] = getattr(obj, field.name)
+    return result
+
+except ImportError:
+  attrs = None
+
+  def _is_attrs(unused_obj):
+    return False
+
+  def _attrs_fields(unused_obj):
+    return {}
+
+
+try:
+  from jax import tree_util  # pylint: disable=g-import-not-at-top  # pytype: disable=import-error
 
   map_structure = tree_util.tree_map
   map_structure_with_path = tree_util.tree_map_with_path
@@ -73,6 +100,16 @@ try:
         else:
           inner_type = ""
         return f"{container_type}<{inner_type}>"
+      elif dataclasses.is_dataclass(obj):
+        # We avoid registering the dataclass with jax's tree_util because
+        # that would affect the behavior outside of this module. We also avoid
+        # using dataclasses.asdict() since it makes data copy.
+        fields = {}
+        for field in dataclasses.fields(obj):
+          fields[field.name] = getattr(obj, field.name)
+        return f"{type(obj)}\n{pprint.pformat(spec_like(fields))}"
+      elif _is_attrs(obj):
+        return f"{type(obj)}\n{pprint.pformat(spec_like(_attrs_fields(obj)))}"
       return type(obj)
 
     def _shape(obj):

@@ -46,6 +46,7 @@ RUN --mount=type=cache,target=/root/.cache \
 # Install dependencies needed for grain tests
 RUN --mount=type=cache,target=/root/.cache \
   ${PYTHON_BIN}/python -m pip install -U \
+    attrs \
     auditwheel \
     dill \
     jax \
