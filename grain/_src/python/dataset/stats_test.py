@@ -35,13 +35,25 @@ _MAP_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
 "<class 'int'>[]"
 
   ││
+  ││  WithOptionsMapDataset
+  ││
+  ╲╱
+"<class 'int'>[]"
+
+  ││
   ││  ShuffleMapDataset
   ││
   ╲╱
 "<class 'int'>[]"
 
   ││
-  ││  MapWithIndexMapDataset(transform=_add_dummy_metadata @ .../python/dataset/stats_test.py:130)
+  ││  SliceMapDataset[1:10:3]
+  ││
+  ╲╱
+"<class 'int'>[]"
+
+  ││
+  ││  MapWithIndexMapDataset(transform=_add_dummy_metadata @ .../python/dataset/stats_test.py:151)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -50,7 +62,16 @@ _MAP_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
  'index': "<class 'int'>[]"}
 
   ││
-  ││  MapMapDataset(transform=_identity @ .../python/dataset/stats_test.py:134)
+  ││  MapMapDataset(transform=_identity @ .../python/dataset/stats_test.py:155)
+  ││
+  ╲╱
+{'data': "<class 'int'>[]",
+ 'dataset_index': "<class 'int'>[]",
+ 'epoch': "<class 'int'>[]",
+ 'index': "<class 'int'>[]"}
+
+  ││
+  ││  RepeatMapDataset(num_epochs=2)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -79,7 +100,7 @@ _ITER_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
 "<class 'int'>[]"
 
   ││
-  ││  MapIterDataset(transform=<lambda> @ .../python/dataset/stats_test.py:414)
+  ││  MapIterDataset(transform=<lambda> @ .../python/dataset/stats_test.py:440)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -142,20 +163,20 @@ class _AddOne(transforms.MapTransform):
 
 def _make_stats_tree(cls):
   return cls(
-      "root",
+      stats.StatsConfig(name="root"),
       [
           cls(
-              "left",
+              stats.StatsConfig(name="left"),
               [
-                  cls("left_left", []),
-                  cls("left_right", []),
+                  cls(stats.StatsConfig(name="left_left"), []),
+                  cls(stats.StatsConfig(name="left_right"), []),
               ],
           ),
           cls(
-              "right",
+              stats.StatsConfig(name="right"),
               [
-                  cls("right_left", []),
-                  cls("right_right", []),
+                  cls(stats.StatsConfig(name="right_left"), []),
+                  cls(stats.StatsConfig(name="right_right"), []),
               ],
           ),
       ],

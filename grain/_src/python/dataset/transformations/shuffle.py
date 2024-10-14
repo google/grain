@@ -27,6 +27,8 @@ T = TypeVar("T")
 class ShuffleMapDataset(dataset.MapDataset[T]):
   """Shuffles the parent dataset."""
 
+  _MUTATES_ELEMENT_SPEC = False
+
   def __init__(
       self,
       parent: dataset.MapDataset[T],
@@ -66,7 +68,7 @@ class ShuffleMapDataset(dataset.MapDataset[T]):
           index_in_epoch, max_index=length - 1, seed=per_epoch_seed, rounds=4
       )
       shuffled_index = shuffled_index_in_epoch + epoch * length
-    return self._stats.record_output_spec(self._parent[shuffled_index])
+    return self._parent[shuffled_index]
 
 
 class WindowShuffleMapDataset(dataset.MapDataset[T]):

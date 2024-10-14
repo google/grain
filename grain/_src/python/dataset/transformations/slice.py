@@ -22,6 +22,8 @@ T = TypeVar("T")
 class SliceMapDataset(dataset.MapDataset[T]):
   """Slices a MapDataset similar to the slicing syntax in Python."""
 
+  _MUTATES_ELEMENT_SPEC = False
+
   def __init__(self, parent: dataset.MapDataset[T], sl: slice):
     super().__init__(parent)
     if not isinstance(sl, slice):
@@ -37,8 +39,7 @@ class SliceMapDataset(dataset.MapDataset[T]):
       return SliceMapDataset(self, index)
     with self._stats.record_self_time():
       parent_index = self._start + (index % len(self)) * self._step
-    element = self._parent[parent_index]
-    return self._stats.record_output_spec(element)
+    return self._parent[parent_index]
 
   def __str__(self) -> str:
     return f"SliceMapDataset[{self._start}:{self._stop}:{self._step}]"

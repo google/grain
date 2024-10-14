@@ -17,15 +17,16 @@ from __future__ import annotations
 
 import abc
 import contextlib
+import dataclasses
 import pprint
 import sys
 import threading
 import time
 import types
-from typing import Sequence, TypeVar
+from typing import Any, Sequence, TypeVar
 
 from absl import logging
-from grain._src.core import config
+from grain._src.core import config as grain_config
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import tree
 
@@ -204,6 +205,18 @@ class Timer:
     self._last = 0
 
 
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class StatsConfig:
+  """Statistics recording condiguration."""
+
+  # Name of the current statistics recording node -- this is usually the name
+  # of the current transformation.
+  name: str
+  # Whether this transformation mutates the element spec. This is used to
+  # determine element spec of the current transformation.
+  transform_mutates_spec: bool = True
+
+
 class Stats(abc.ABC):
   """Base abstract class for statistics recording.
 
@@ -211,9 +224,9 @@ class Stats(abc.ABC):
   interfaces for recording statistics in the given transformation node.
   """
 
-  def __init__(self, name: str, parents: Sequence[Stats]):
-    self.name = name
-    self._output_spec = None
+  def __init__(self, config: StatsConfig, parents: Sequence[Stats]):
+    self._config = config
+    self._self_output_spec = None
     self._parents = parents
     # Mark parent nodes as non-outputs. Nodes that are not updated are the
     # output nodes.
@@ -221,9 +234,16 @@ class Stats(abc.ABC):
     for p in parents:
       p._is_output = False
 
+  @property
+  def output_spec(self) -> Any:
+    if self._config.transform_mutates_spec:
+      return self._self_output_spec
+    assert self._parents
+    return self._parents[0].output_spec
+
   @contextlib.contextmanager
   @abc.abstractmethod
-  def record_self_time(self, offset_ns: float = 0, num_produced_elements=1):
+  def record_self_time(self, offset_ns: float = 0):
     """Records time spent in this node's transfromation.
 
     Thread-safe.
@@ -251,8 +271,6 @@ class Stats(abc.ABC):
     Args:
       offset_ns: (Optional.) A offset to add to the self time measured by this
         function. Default to 0.
-      num_produced_elements: (Optional) The number of elements produced during
-        the measured self time. Default to 1.
     """
     ...
 
@@ -319,16 +337,16 @@ class Stats(abc.ABC):
           0
       ]._build_visualization_str(has_multiple_parents)
       # pylint: enable=protected-access
-      transform_repr = self.name
+      transform_repr = self._config.name
     else:
-      parent_vis = self.name
+      parent_vis = self._config.name
       transform_repr = ""
     return (
         has_multiple_parents,
         _EDGE_TEMPLATE.format(
             input_spec=parent_vis,
             transform=transform_repr,
-            output_spec=pprint.pformat(self._output_spec),
+            output_spec=pprint.pformat(self.output_spec),
         ),
     )
 
@@ -337,7 +355,7 @@ class _NoopStats(Stats):
   """Default implementation for statistics collection that does nothing."""
 
   @contextlib.contextmanager
-  def record_self_time(self, offset_ns: int = 0, num_produced_elements=1):
+  def record_self_time(self, offset_ns: int = 0):
     yield
 
   def record_output_spec(self, element: T) -> T:
@@ -350,22 +368,22 @@ class _NoopStats(Stats):
 class _VisualizationStats(Stats):
   """Produces Dataset Visualization Graph."""
 
-  def __init__(self, name: str, parents: Sequence[Stats]):
-    super().__init__(name, parents)
+  def __init__(self, config: StatsConfig, parents: Sequence[Stats]):
+    super().__init__(config, parents)
     self._reported = False
     self._reported_lock = threading.Lock()
 
   def __reduce__(self):
-    return _VisualizationStats, (self.name, self._parents)
+    return _VisualizationStats, (self._config.name, self._parents)
 
   @contextlib.contextmanager
-  def record_self_time(self, offset_ns: int = 0, num_produced_elements=1):
+  def record_self_time(self, offset_ns: int = 0):
     yield
 
   def record_output_spec(self, element: T) -> T:
     # Visualize the dataset graph once last node had seen a non-None element.
-    if self._output_spec is None:
-      self._output_spec = tree.spec_like(element)
+    if self._self_output_spec is None:
+      self._self_output_spec = tree.spec_like(element)
       if self._is_output and not self._reported:
         # The check above with update without a lock is not atomic, need to
         # check again under a lock.
@@ -382,8 +400,8 @@ class _VisualizationStats(Stats):
 class _ExecutionStats(_VisualizationStats):
   """Execution time statistics for transformations."""
 
-  def __init__(self, name: str, parents: Sequence[Stats]):
-    super().__init__(name, parents)
+  def __init__(self, config: StatsConfig, parents: Sequence[Stats]):
+    super().__init__(config, parents)
     # Note that the buffer is intentionally not guarded by a lock to avoid lock
     # contention. Thread-safe operations are expected to only do atomic actions
     # on the buffer (such as `append`) making it safe due to GIL. See details in
@@ -400,7 +418,7 @@ class _ExecutionStats(_VisualizationStats):
     )
 
   def __reduce__(self):
-    return _ExecutionStats, (self.name, self._parents)
+    return _ExecutionStats, (self._config, self._parents)
 
   def _reporting_loop(self):
     while True:
@@ -425,8 +443,8 @@ class _ExecutionStats(_VisualizationStats):
     # By this point, all the nodes in the pipeline have been visited and
     # `_output_spec` & `name` has been set.
     self._summary.id = node_id
-    self._summary.name = self.name
-    self._summary.output_spec = str(self._output_spec)
+    self._summary.name = self._config.name
+    self._summary.output_spec = str(self.output_spec)
     self._summary.is_output = self._is_output
     execution_summary.nodes.get_or_create(node_id)
     execution_summary.nodes[node_id].CopyFrom(self._summary)
@@ -446,7 +464,7 @@ class _ExecutionStats(_VisualizationStats):
     return result
 
   @contextlib.contextmanager
-  def record_self_time(self, offset_ns: int = 0, num_produced_elements=1):
+  def record_self_time(self, offset_ns: int = 0):
     start_time = time.perf_counter_ns()
     try:
       yield
@@ -488,11 +506,11 @@ class _ExecutionStats(_VisualizationStats):
           self._summary.max_processing_time_ns, self_time_ns
       )
       self._summary.total_processing_time_ns += self_time_ns
-      _self_time_ms_histogram.Record(self_time_ns, self.name)
+      _self_time_ms_histogram.Record(self_time_ns, self._config.name)
     for p in self._parents:
       p.report()
 
 
-def make_stats(name: str, parents: Sequence[Stats]) -> Stats:
+def make_stats(config: StatsConfig, parents: Sequence[Stats]) -> Stats:
   """Produces statistics instance according to the current execution mode."""
-  return _NoopStats(name, parents=parents)
+  return _NoopStats(config, parents=parents)

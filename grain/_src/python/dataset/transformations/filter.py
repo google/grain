@@ -28,6 +28,8 @@ T = TypeVar("T")  # pylint: disable=invalid-name
 class FilterMapDataset(dataset.MapDataset[T]):
   """Filter MapDataset."""
 
+  _MUTATES_ELEMENT_SPEC = False
+
   def __init__(
       self,
       parent: dataset.MapDataset[T],
@@ -36,15 +38,16 @@ class FilterMapDataset(dataset.MapDataset[T]):
     super().__init__(parent)
     if isinstance(transform, transforms.FilterTransform):
       self._filter_fn = transform.filter
-      # Use the transform class name. The `cached_property` below will not
-      # be called.
-      self._transform_name = transform.__class__.__name__
+      self._transform_cls_name = transform.__class__.__name__
     else:
       self._filter_fn = transform
+      self._transform_cls_name = None
 
   @functools.cached_property
   def _transform_name(self):
-    return transforms.get_pretty_transform_name(self._filter_fn)
+    return self._transform_cls_name or transforms.get_pretty_transform_name(
+        self._filter_fn
+    )
 
   def __len__(self) -> int:
     return len(self._parent)
@@ -55,7 +58,7 @@ class FilterMapDataset(dataset.MapDataset[T]):
     element = self._parent[index]
     with self._stats.record_self_time():
       if element is not None and self._filter_fn(element):
-        return self._stats.record_output_spec(element)
+        return element
       return None
 
   def __str__(self) -> str:
@@ -104,6 +107,8 @@ class _FilterDatasetIterator(dataset.DatasetIterator[T]):
 class FilterIterDataset(dataset.IterDataset[T]):
   """Filter transformation for IterDatasets."""
 
+  _MUTATES_ELEMENT_SPEC = False
+
   def __init__(
       self,
       parent: dataset.IterDataset,
@@ -112,15 +117,16 @@ class FilterIterDataset(dataset.IterDataset[T]):
     super().__init__(parent)
     if isinstance(transform, transforms.FilterTransform):
       self._filter_fn = transform.filter
-      # Use the transform class name. The `cached_property` below will not
-      # be called.
-      self._transform_name = transform.__class__.__name__
+      self._transform_cls_name = transform.__class__.__name__
     else:
       self._filter_fn = transform
+      self._transform_cls_name = None
 
   @functools.cached_property
   def _transform_name(self):
-    return transforms.get_pretty_transform_name(self._filter_fn)
+    return self._transform_cls_name or transforms.get_pretty_transform_name(
+        self._filter_fn
+    )
 
   def __iter__(self) -> _FilterDatasetIterator[T]:
     parent_iter = self._parent.__iter__()

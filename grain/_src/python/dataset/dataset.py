@@ -86,6 +86,10 @@ class _Dataset:
   transformations.
   """
 
+  # Whether this transformation mutates parent elements. This does not affect
+  # the transformation itself, only used for information purposes in statistics.
+  _MUTATES_ELEMENT_SPEC = True
+
   def __init__(self, parents: Sequence[_Dataset]):
     # Seeds a `SeedSequence` used to generate default seeds for all
     # downstream transformations. Set by `_WithOptions{Map|Iter}Dataset`.
@@ -103,7 +107,12 @@ class _Dataset:
       for p in self._parents:
         if hasattr(p, "_stats"):
           parents_stats.append(p._stats)
-    return dataset_stats.make_stats(str(self), parents_stats)
+    return dataset_stats.make_stats(
+        dataset_stats.StatsConfig(
+            name=str(self), transform_mutates_spec=self._MUTATES_ELEMENT_SPEC
+        ),
+        parents_stats,
+    )
 
   @functools.cached_property
   def _default_seed(self) -> int | None:
@@ -1005,16 +1014,17 @@ class DatasetIterator(Iterator[T], abc.ABC):
   """`IterDataset` iterator."""
 
   def __init__(self, stats: dataset_stats.Stats | None = None):
-    # Implementations that do not pass stats explicitly will lose the parent
-    # link.
-    if stats is not None:
-      self._stats = stats
+    self._stats_from_init = stats
 
   @functools.cached_property
   def _stats(self):
-    # The default stats will be created iff `_stats` is not set in the
-    # constructor.
-    return dataset_stats.make_stats(str(self), tuple())
+    # Implementations that do not pass stats explicitly will lose the parent
+    # link.
+    stats = getattr(self, "_stats_from_init", None)
+    return stats or dataset_stats.make_stats(
+        dataset_stats.StatsConfig(name=str(self), transform_mutates_spec=True),
+        tuple(),
+    )
 
   def __iter__(self) -> DatasetIterator[T]:
     return self
@@ -1047,6 +1057,8 @@ class DatasetIterator(Iterator[T], abc.ABC):
 class _WithOptionsMapDataset(MapDataset[T]):
   """Holds options used by downstream transformations."""
 
+  _MUTATES_ELEMENT_SPEC = False
+
   def __init__(self, parent: MapDataset[T], *, seed: int):
     super().__init__(parent)
     self._seed_rng_seed = seed
@@ -1059,9 +1071,14 @@ class _WithOptionsMapDataset(MapDataset[T]):
       return self.slice(index)
     return self._parent[index]
 
+  def __str__(self):
+    return "WithOptionsMapDataset"
+
 
 class _WithOptionsIterDataset(IterDataset[T]):
   """Holds options used by downstream transformations."""
+
+  _MUTATES_ELEMENT_SPEC = False
 
   def __init__(self, parent: IterDataset[T], *, seed: int):
     super().__init__(parent)
@@ -1069,6 +1086,9 @@ class _WithOptionsIterDataset(IterDataset[T]):
 
   def __iter__(self) -> DatasetIterator[T]:
     return self._parent.__iter__()
+
+  def __str__(self):
+    return "WithOptionsIterDataset"
 
 
 _ConsistentDatasetType = TypeVar(

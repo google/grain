@@ -28,6 +28,8 @@ class RepeatMapDataset(dataset.MapDataset[T]):
   of steps.
   """
 
+  _MUTATES_ELEMENT_SPEC = False
+
   def __init__(
       self,
       parent: dataset.MapDataset[T],

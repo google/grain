@@ -41,6 +41,8 @@ T = TypeVar("T")
 class PrefetchIterDataset(dataset.IterDataset[T]):
   """Iterable dataset that uses a thread pool for prefetching."""
 
+  _MUTATES_ELEMENT_SPEC = False
+
   def __init__(
       self,
       parent: dataset.MapDataset[T],
@@ -123,7 +125,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
         self._next_index += 1
       if self._allow_nones or element is not None:
         with self._stats.record_self_time(offset_ns=timer.value()):
-          return self._stats.record_output_spec(element)
+          return element
     with self._stats.record_self_time(offset_ns=timer.value()):
       raise StopIteration
 
