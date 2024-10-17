@@ -24,7 +24,6 @@ from typing import Any, TypeVar, overload
 from grain._src.core import exceptions
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
-from grain._src.python.dataset import stats as dataset_stats
 from typing_extensions import override
 
 Element = Any
@@ -33,7 +32,7 @@ T = TypeVar("T")  # pylint: disable=invalid-name
 
 @dataclasses.dataclass
 class SelectionWithProportionsMap(base.DatasetSelectionMap):
-  """A lazy map mixing datasets acording to their proportions."""
+  """A map mixing datasets according to their proportions."""
 
   def __init__(
       self,
@@ -128,14 +127,14 @@ class _MixedDatasetIterator(dataset.DatasetIterator[T]):
   datasets or deviating from the given proportions.
   """
 
+  _MUTATES_ELEMENT_SPEC = False
+
   def __init__(
       self,
       parents: Sequence[dataset.DatasetIterator[T]],
       proportions: Sequence[int] | None,
-      stats: dataset_stats.Stats,
   ):
-    super().__init__(stats)
-    self._parents = parents
+    super().__init__(parents)
     self._proportions = tuple(proportions)
     self._index = 0
     self._stop = False
@@ -172,7 +171,7 @@ class _MixedDatasetIterator(dataset.DatasetIterator[T]):
 
   def __str__(self) -> str:
     return (
-        f"MixedDatasetIterator(parents={self._parents},"
+        f"MixedDatasetIterator([{len(self._parents)} parents],"
         f" proportions={self._proportions})"
     )
 
@@ -201,7 +200,6 @@ class MixedIterDataset(dataset.IterDataset[T]):
     return _MixedDatasetIterator(
         parent_iters,
         proportions=self._proportions,
-        stats=self._stats,
     )
 
   def __str__(self) -> str:

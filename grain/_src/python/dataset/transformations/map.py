@@ -20,7 +20,6 @@ from typing import Any, Callable, Optional, TypeVar, Union
 from absl import logging
 from grain._src.core import transforms
 from grain._src.python.dataset import dataset
-from grain._src.python.dataset import stats as dataset_stats
 import numpy as np
 
 
@@ -216,14 +215,14 @@ class _MapDatasetIterator(dataset.DatasetIterator[T]):
       parent: dataset.DatasetIterator,
       map_fn: Callable[..., T],
       seed: Optional[int],
-      stats: dataset_stats.Stats,
+      transform_name: str,
   ):
-    super().__init__(stats)
-    self._parent = parent
+    super().__init__(parent)
     self._map_fn = map_fn
     self._index_for_rng = 0
     self._seed = seed
     self._rng = np.random.Generator(np.random.Philox(seed))
+    self._transform_name = transform_name
 
   def __next__(self):
     try:
@@ -253,7 +252,7 @@ class _MapDatasetIterator(dataset.DatasetIterator[T]):
     self._index_for_rng = state["index_for_rng"]
 
   def __str__(self) -> str:
-    return f"MapDatasetIterator(parent={self._parent}"
+    return f"MapDatasetIterator(transform={self._transform_name})"
 
 
 class MapIterDataset(dataset.IterDataset[T]):
@@ -288,7 +287,7 @@ class MapIterDataset(dataset.IterDataset[T]):
         parent_iter,
         map_fn=self._map_fn,
         seed=self._seed,
-        stats=self._stats,
+        transform_name=self._transform_name,
     )
 
   def __str__(self) -> str:

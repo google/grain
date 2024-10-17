@@ -17,7 +17,7 @@ import dataclasses
 import gc
 import sys
 import time
-from typing import TypeVar, overload
+from typing import Any, TypeVar, overload
 from unittest import mock
 
 from absl.testing import absltest
@@ -124,7 +124,26 @@ class Source15IntsFrom0IterDataset(dataset.IterDataset[int]):
 
   @override
   def __iter__(self):
-    return iter(range(15))
+    return Source15IntsFrom0DatasetIterator()
+
+
+class Source15IntsFrom0DatasetIterator(dataset.DatasetIterator[int]):
+
+  def __init__(self):
+    super().__init__(parents=[])
+    self._iter = iter(range(15))
+
+  def __next__(self):
+    return next(self._iter)
+
+  def __iter__(self) -> dataset.DatasetIterator[int]:
+    return self
+
+  def get_state(self) -> dict[str, Any]:
+    raise NotImplementedError
+
+  def set_state(self, state: dict[str, Any]) -> None:
+    raise NotImplementedError
 
 
 class AddRandomInteger(transforms.RandomMapTransform):
