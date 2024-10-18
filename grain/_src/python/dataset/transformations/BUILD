@@ -2,13 +2,14 @@ package(default_visibility = ["//grain:__subpackages__"])
 
 licenses(["notice"])
 
-# Transformations that are considered core and are supported by the convenient API in
-# MapDataset or IterDataset.
+# Core transfromations defined in Grain. This filegroup exists to prevent dependency cycle with
+# `dataset` target.
 filegroup(
     name = "core_transformations",
     srcs = [
         "batch.py",
         "filter.py",
+        "flatmap.py",
         "map.py",
         "mix.py",
         "prefetch.py",
@@ -16,6 +17,7 @@ filegroup(
         "shuffle.py",
         "slice.py",
         "source.py",
+        "zip.py",
     ],
 )
 
@@ -55,23 +57,11 @@ py_test(
     deps = ["//grain/_src/python/dataset"],
 )
 
-py_library(
-    name = "flatmap",
-    srcs = ["flatmap.py"],
-    srcs_version = "PY3",
-    deps = [
-        "//grain/_src/core:transforms",
-        "//grain/_src/python/dataset",
-        "//grain/_src/python/dataset:stats",
-    ],
-)
-
 py_test(
     name = "flatmap_test",
     srcs = ["flatmap_test.py"],
     srcs_version = "PY3",
     deps = [
-        ":flatmap",
         "//grain/_src/core:transforms",
         "//grain/_src/python/dataset",
     ],
@@ -147,19 +137,9 @@ py_test(
     deps = ["//grain/_src/python/dataset"],
 )
 
-py_library(
-    name = "zip",
-    srcs = ["zip.py"],
-    srcs_version = "PY3",
-    deps = ["//grain/_src/python/dataset"],
-)
-
 py_test(
     name = "zip_test",
     srcs = ["zip_test.py"],
     srcs_version = "PY3",
-    deps = [
-        ":zip",
-        "//grain/_src/python/dataset",
-    ],
+    deps = ["//grain/_src/python/dataset"],
 )
