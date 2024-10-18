@@ -94,13 +94,13 @@ _ITER_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
 "<class 'int'>[]"
 
   ││
-  ││  PrefetchIterDataset(read_options=ReadOptions(num_threads=16, prefetch_buffer_size=500), allow_nones=False)
+  ││  PrefetchDatasetIterator(read_options=ReadOptions(num_threads=16, prefetch_buffer_size=500), allow_nones=False)
   ││
   ╲╱
 "<class 'int'>[]"
 
   ││
-  ││  MapIterDataset(transform=<lambda> @ .../python/dataset/stats_test.py:440)
+  ││  MapDatasetIterator(transform=<lambda> @ .../python/dataset/stats_test.py:441)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -109,7 +109,7 @@ _ITER_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
  'index': "<class 'int'>[]"}
 
   ││
-  ││  BatchIterDataset(batch_size=2, drop_remainder=False)
+  ││  BatchDatasetIterator(batch_size=2, drop_remainder=False)
   ││
   ╲╱
 {'data': 'int64[2]',

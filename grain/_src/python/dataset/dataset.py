@@ -82,8 +82,7 @@ S = TypeVar("S")
 class _Dataset:
   """Node of a dataset tree structure that represents data transfromation.
 
-  Supports recording statitstics and generating default seed for random
-  transformations.
+  Supports generating default seed for random transformations.
   """
 
   # Whether this transformation mutates parent elements. This does not affect
@@ -95,24 +94,6 @@ class _Dataset:
     # downstream transformations. Set by `_WithOptions{Map|Iter}Dataset`.
     self._seed_rng_seed = None
     self._parents = parents
-
-  @functools.cached_property
-  def _stats(self) -> dataset_stats.Stats:
-    """Returns the Stats property of this dataset."""
-    # There may be parent `_Dataset` nodes introduced by users that did not
-    # call super init and thus don't have `_stats`.
-    # pylint: disable=protected-access
-    parents_stats = []
-    if hasattr(self, "_parents"):
-      for p in self._parents:
-        if hasattr(p, "_stats"):
-          parents_stats.append(p._stats)
-    return dataset_stats.make_stats(
-        dataset_stats.StatsConfig(
-            name=str(self), transform_mutates_spec=self._MUTATES_ELEMENT_SPEC
-        ),
-        parents_stats,
-    )
 
   @functools.cached_property
   def _default_seed(self) -> int | None:
@@ -256,6 +237,10 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
   Transformations do not mutate the dataset object. Instead, they return a new
   dataset. From the perspective of public APIs, `MapDataset` is immutable.
   """
+
+  # Whether this transformation mutates parent elements. This does not affect
+  # the transformation itself, only used for information purposes in statistics.
+  _MUTATES_ELEMENT_SPEC = True
 
   def __init__(self, parents: MapDataset | Sequence[MapDataset] = ()):
     if isinstance(parents, MapDataset):
@@ -675,6 +660,22 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
   def __iter__(self) -> DatasetIterator[T]:
     return self.to_iter_dataset().__iter__()
 
+  @functools.cached_property
+  def _stats(self) -> dataset_stats.Stats:
+    """Returns the Stats object for recording statistics about this dataset."""
+    # There may be parent `MapDataset` nodes introduced by users that did not
+    # call super init and thus don't have `_parents`.
+    parents_stats = []
+    if hasattr(self, "_parents"):
+      for p in self._parents:
+        parents_stats.append(p._stats)  # pylint: disable=protected-access
+    return dataset_stats.make_stats(
+        dataset_stats.StatsConfig(
+            name=str(self), transform_mutates_spec=self._MUTATES_ELEMENT_SPEC
+        ),
+        parents_stats,
+    )
+
 
 class _IterDatasetMeta(abc.ABCMeta):
   """Metaclass for `IterDataset` containing factory transformations."""
@@ -1013,18 +1014,23 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
 class DatasetIterator(Iterator[T], abc.ABC):
   """`IterDataset` iterator."""
 
-  def __init__(self, stats: dataset_stats.Stats | None = None):
-    self._stats_from_init = stats
+  # Whether this transformation mutates parent elements. This does not affect
+  # the transformation itself, only used for information purposes in statistics.
+  _MUTATES_ELEMENT_SPEC = True
 
-  @functools.cached_property
-  def _stats(self):
-    # Implementations that do not pass stats explicitly will lose the parent
-    # link.
-    stats = getattr(self, "_stats_from_init", None)
-    return stats or dataset_stats.make_stats(
-        dataset_stats.StatsConfig(name=str(self), transform_mutates_spec=True),
-        tuple(),
-    )
+  def __init__(
+      self,
+      parents: DatasetIterator | Sequence[DatasetIterator] = (),
+  ):
+    if isinstance(parents, DatasetIterator):
+      self._parents = (parents,)
+    else:
+      self._parents = tuple(parents)
+
+  @property
+  def _parent(self) -> DatasetIterator:
+    assert len(self._parents) == 1, self._parents
+    return self._parents[0]
 
   def __iter__(self) -> DatasetIterator[T]:
     return self
@@ -1053,6 +1059,22 @@ class DatasetIterator(Iterator[T], abc.ABC):
     """
     raise NotImplementedError
 
+  @functools.cached_property
+  def _stats(self):
+    """Returns the Stats object for recording statistics about this iterator."""
+    # There may be parent `DatasetIterator` nodes introduced by users that did
+    # not call super init and thus don't have `_stats`.
+    parents_stats = []
+    if hasattr(self, "_parents"):
+      for p in self._parents:
+        parents_stats.append(p._stats)  # pylint: disable=protected-access
+    return dataset_stats.make_stats(
+        dataset_stats.StatsConfig(
+            name=str(self), transform_mutates_spec=self._MUTATES_ELEMENT_SPEC
+        ),
+        parents_stats,
+    )
+
 
 class _WithOptionsMapDataset(MapDataset[T]):
   """Holds options used by downstream transformations."""
@@ -1077,8 +1099,6 @@ class _WithOptionsMapDataset(MapDataset[T]):
 
 class _WithOptionsIterDataset(IterDataset[T]):
   """Holds options used by downstream transformations."""
-
-  _MUTATES_ELEMENT_SPEC = False
 
   def __init__(self, parent: IterDataset[T], *, seed: int):
     super().__init__(parent)
