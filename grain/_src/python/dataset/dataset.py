@@ -957,35 +957,12 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
         parent=self, transform=transform, seed=seed
     )
 
-  def _set_parent_maps_slice(self, sl: builtins.slice) -> None:
-    """Replaces `MapDataset` parents with their sliced versions.
-
-    WARNING: mutates the dataset object.
-
-    Applies recursively for `IterDataset` parents.
-
-    Args:
-     sl: slice to apply.
-    """
-    sliced_parents = []
-    if not self._parents:
-      raise ValueError("Cannot slice `IterDataset` source.")
-    for parent in self._parents:
-      if isinstance(parent, MapDataset):
-        new_parent = parent.slice(sl)
-        # Need to let the parent stats node know it's not output node.
-        new_parent._stats._is_output = False  # pylint: disable=protected-access
-        sliced_parents.append(new_parent)
-      else:
-        assert isinstance(parent, IterDataset), parent
-        parent._set_parent_maps_slice(sl)  # pylint: disable=protected-access
-        sliced_parents.append(parent)
-    self._parents = tuple(sliced_parents)
-
   def prefetch(
       self, multiprocessing_options: grain_options.MultiprocessingOptions
   ) -> IterDataset[T]:
-    """Returns a dataset prefetching the elements in multiple processes.
+    """Deprecated, use `mp_prefetch` instead.
+
+    Returns a dataset prefetching the elements in multiple processes.
 
     Each of the processes will process a slice of the dataset after all
     `MapDataset` transformations.
@@ -1001,18 +978,43 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
     Returns:
       A dataset prefetching input elements concurrently.
     """
-    warnings.warn(
-        "Please use `grain.experimental.MultiprocessPrefetchIterDataset` "
-        "directly instead. We are not deprecating the functionality but are "
-        "actively working on improving this user-facing API and behavior.",
-        DeprecationWarning,
-    )
+    warnings.warn("Please use `mp_prefetch` instead.", DeprecationWarning)
+    return self.mp_prefetch(multiprocessing_options)
+
+  def mp_prefetch(
+      self,
+      options: grain_options.MultiprocessingOptions | None = None,
+  ) -> IterDataset[T]:
+    """Returns a dataset prefetching elements in multiple processes.
+
+    Each of the processes works on a slice of the dataset. The slicing happens
+    after all `MapDataset` transformations (right before `to_iter_dataset`).
+
+    WARNING: If the dataset contains many-to-one transformations (such as
+    `filter`) or stateful transformations (such as packing), output of
+    `mp_prefetch` may change if `num_workers` is changed. However, it is still
+    going to be determisitic. If you need elasticity in the number of prefetch
+    workers, consider moving many-to-one and stateful transformations to after
+    `mp_prefetch` or outside of the Grain pipeline.
+
+
+    Args:
+      options: options for the prefetching processes. `options.num_workers` must
+        be greater than or equal to 0. If `options.num_workers` is 0,
+        `mp_prefetch` has no effect. Defaults to
+        `MultiprocessingOptions(num_workers=10)`.
+
+    Returns:
+      A dataset prefetching input elements in separate processes.
+    """
+    options = options or grain_options.MultiprocessingOptions(num_workers=10)
     # Loaded lazily due to a circular dependency (dataset <-> prefetch).
     # pylint: disable=g-import-not-at-top
     from grain._src.python.dataset.transformations import prefetch
     # pylint: enable=g-import-not-at-top
     return prefetch.MultiprocessPrefetchIterDataset(
-        self, multiprocessing_options=multiprocessing_options
+        self,
+        multiprocessing_options=options,
     )
 
   @abc.abstractmethod

@@ -497,18 +497,14 @@ class DatasetTest(parameterized.TestCase):
     self.assertNotEqual(epoch_1, epoch_2)
 
   def test_multiprocess_prefetch(self):
-    ds = (
-        Source15IntsFrom0MapDataset()
-        .to_iter_dataset()
-        .prefetch(options.MultiprocessingOptions(num_workers=4))
-    )
+    ds = dataset.MapDataset.range(15).to_iter_dataset().mp_prefetch()
     self.assertSequenceEqual(list(ds), list(range(15)))
 
   def test_start_prefetch(self):
     ds = (
-        Source15IntsFrom0MapDataset()
+        dataset.MapDataset.range(15)
         .to_iter_dataset()
-        .prefetch(options.MultiprocessingOptions(num_workers=4))
+        .mp_prefetch(options.MultiprocessingOptions(num_workers=4))
     )
     it = ds.__iter__()
     it.start_prefetch()

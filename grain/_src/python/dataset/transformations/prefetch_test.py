@@ -11,8 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for prefetch.py."""
-
 import dataclasses
 import sys
 import time
@@ -177,6 +175,11 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
 
   @parameterized.named_parameters(
       dict(
+          testcase_name='0_workers',
+          num_workers=0,
+          per_worker_buffer_size=1,
+      ),
+      dict(
           testcase_name='1_worker',
           num_workers=1,
           per_worker_buffer_size=1,
@@ -207,6 +210,11 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
     self.assertSequenceEqual(actual, expected)
 
   @parameterized.named_parameters(
+      dict(
+          testcase_name='0_workers',
+          num_workers=0,
+          record_state_interval=prefetch._RECORD_STATE_INTERVAL_S,
+      ),
       dict(
           testcase_name='1_worker',
           num_workers=7,
@@ -246,13 +254,13 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
           value = next(ds_iter)
           self.assertEqual(value, values_without_interruption[i])
 
-  def test_fails_with_0_workers(self):
+  def test_fails_with_negative_num_workers(self):
     with self.assertRaisesRegex(
-        ValueError, '`num_workers` must be greater than 0'
+        ValueError, '`num_workers` must be greater than or equal to 0'
     ):
       prefetch.MultiprocessPrefetchIterDataset(
           self.iter_ds,
-          options.MultiprocessingOptions(),
+          options.MultiprocessingOptions(num_workers=-1),
       )
 
   def test_fails_with_multiple_prefetches(self):

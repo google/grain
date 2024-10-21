@@ -23,7 +23,8 @@ import functools
 import queue
 import threading
 import time
-from typing import Any, Mapping, Optional, TypeVar
+import typing
+from typing import Any, Mapping, Optional, Protocol, TypeVar
 
 from concurrent import futures
 from grain._src.core import tree
@@ -36,6 +37,14 @@ from grain._src.python.dataset import stats as dataset_stats
 import numpy as np
 
 T = TypeVar("T")
+
+
+@typing.runtime_checkable
+class SupportsInPlaceSlicing(Protocol):
+  """Datasets that support mutation by setting the processed data slice."""
+
+  def set_slice(self, sl: slice) -> None:
+    ...
 
 
 class PrefetchIterDataset(dataset.IterDataset[T]):
@@ -51,6 +60,12 @@ class PrefetchIterDataset(dataset.IterDataset[T]):
     super().__init__(parent)
     self._read_options = read_options
     self._allow_nones = allow_nones
+
+  def set_slice(self, sl: slice) -> None:
+    """Replaces `MapDataset` parents with their sliced versions."""
+    assert isinstance(self._parent, dataset.MapDataset), self._parent
+    self._parents = (self._parent.slice(sl),)
+    self._parent._stats._is_output = False  # pylint: disable=protected-access
 
   def __str__(self) -> str:
     return (
@@ -180,14 +195,14 @@ class MultiprocessPrefetchIterDataset(dataset.IterDataset[T]):
       parent: dataset.IterDataset[T],
       multiprocessing_options: grain_options.MultiprocessingOptions,
   ):
-    if multiprocessing_options.num_workers < 1:
+    if multiprocessing_options.num_workers < 0:
       raise ValueError(
-          "`num_workers` must be greater than 0, got "
+          "`num_workers` must be greater than or equal to 0, got "
           f"{multiprocessing_options.num_workers}."
       )
     super().__init__(parent)
-    self._validate_parent_dataset()
     self._multiprocessing_options = multiprocessing_options
+    self._validate_parent_dataset()
 
   def __str__(self) -> str:
     return (
@@ -195,9 +210,9 @@ class MultiprocessPrefetchIterDataset(dataset.IterDataset[T]):
         f"multiprocessing_options={self._multiprocessing_options})"
     )
 
-  def _validate_parent_dataset(self):
-    """Checks that there's a single level of parallelization."""
-    to_check = [self._parent]
+  def _validate_parent_dataset(self) -> None:
+    """Checks the number of levels of parallelization."""
+    to_check: list[dataset.MapDataset | dataset.IterDataset] = [self._parent]
     while to_check:
       ds = to_check.pop(0)
       if isinstance(ds, MultiprocessPrefetchIterDataset):
@@ -207,7 +222,9 @@ class MultiprocessPrefetchIterDataset(dataset.IterDataset[T]):
         )
       to_check.extend(ds.parents)
 
-  def __iter__(self) -> MultiprocessPrefetchDatasetIterator[T]:
+  def __iter__(self) -> dataset.DatasetIterator[T]:
+    if self._multiprocessing_options.num_workers == 0:
+      return self._parent.__iter__()
     return MultiprocessPrefetchDatasetIterator(
         self._parent, self._multiprocessing_options
     )
@@ -260,6 +277,33 @@ def _open_leaf_from_shm(leaf: Any) -> Any:
 def _open_struct_from_shm(struct: Any) -> Any:
   """Recovers leaf ndarrays of the structure from shared memory."""
   return tree.map_structure(_open_leaf_from_shm, struct)
+
+
+def _set_slice(ds: dataset.IterDataset, sl: slice) -> None:
+  """Sets data slice for the given dataset in place.
+
+  WARNING: mutates the dataset object. Must only be used on dataset object copy.
+
+  Applies recursively for `IterDataset` parents.
+
+  Args:
+   ds: dataset to apply slice to.
+   sl: slice to apply.
+  """
+  if isinstance(ds, SupportsInPlaceSlicing):
+    ds.set_slice(sl)
+    return
+  if not ds.parents:
+    raise ValueError("Cannot slice `IterDataset` source.")
+  for parent in ds.parents:
+    if isinstance(parent, dataset.MapDataset):
+      raise NotImplementedError(
+          "Slicing required by multiprocess prefetch is not implemented for"
+          f" {ds}."
+      )
+    else:
+      assert isinstance(parent, dataset.IterDataset), parent
+      _set_slice(parent, sl)
 
 
 class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
@@ -348,7 +392,7 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       # Recover from the last recorded state for the given worker.
       worker_state = state[_WORKERS_STATE][str(worker_index)]
       if worker_count > 1:
-        parent._set_parent_maps_slice(slice(worker_index, None, worker_count))  # pylint: disable=protected-access
+        _set_slice(parent, slice(worker_index, None, worker_count))
       it = iter(parent)
       it.set_state(worker_state)  # pytype: disable=attribute-error
       # Skip the required number of iterations after the last recorded state.
