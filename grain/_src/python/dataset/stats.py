@@ -51,7 +51,7 @@ _self_time_ms_histogram = monitoring.EventMetric(
 T = TypeVar("T")
 # Time between two consecutive monitoring reports.
 _REPORTING_PERIOD_SEC = 10
-_LOG_EXECTION_SUMMARY_PERIOD_SEC = 60
+_LOG_EXECUTION_SUMMARY_PERIOD_SEC = 60
 
 _EDGE_TEMPLATE = r"""{input_spec}
   ││
@@ -243,8 +243,8 @@ class Stats(abc.ABC):
 
   @contextlib.contextmanager
   @abc.abstractmethod
-  def record_self_time(self, offset_ns: float = 0):
-    """Records time spent in this node's transfromation.
+  def record_self_time(self, offset_ns: int = 0):
+    """Records time spent in this node's transformation.
 
     Thread-safe.
 
@@ -422,17 +422,17 @@ class _ExecutionStats(_VisualizationStats):
 
   def _reporting_loop(self):
     while True:
-      time.sleep(_REPORTING_PERIOD_SEC)
       self.report()
+      time.sleep(_REPORTING_PERIOD_SEC)
 
   def _logging_execution_summary_loop(self):
     while True:
-      time.sleep(_LOG_EXECTION_SUMMARY_PERIOD_SEC)
       summary = self._get_execution_summary()
       logging.info(
           "Grain Dataset Execution Summary:\n\n%s",
           _pretty_format_summary(summary),
       )
+      time.sleep(_LOG_EXECUTION_SUMMARY_PERIOD_SEC)
 
   def _build_execution_summary(
       self,
