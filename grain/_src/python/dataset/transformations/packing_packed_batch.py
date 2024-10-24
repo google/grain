@@ -173,7 +173,8 @@ class PackedBatch(Generic[_T]):
     )
     if any(tree.flatten(length_exceeded)):
       raise ValueError(
-          "Inputs to PackAndBatchOperation must be truncated to max length."
+          f"Inputs to {self.__class__.__name__} must be truncated to max"
+          " length."
       )
 
     # For each row, check whether the total length after adding the current
