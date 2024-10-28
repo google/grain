@@ -22,6 +22,7 @@ from typing import Any
 
 from absl.testing import absltest
 from absl.testing import parameterized
+from grain._src.core import config
 import multiprocessing as mp
 from grain._src.python import data_sources
 from grain._src.python import grain_pool as gp

@@ -188,6 +188,7 @@ py_test(
         ":grain_pool",
         ":options",
         ":record",
+        "//grain/_src/core:config",
     ],
 )
 

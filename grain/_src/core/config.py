@@ -116,6 +116,12 @@ _DATASET_VISUALIZATION_OUTPUT_DIR = flags.DEFINE_string(
     "If set, generates the pipeline visulization graph in the logs.",
 )
 
+_RELAY_SIGTERM_TO_MAIN = flags.DEFINE_bool(
+    "grain_py_relay_sigterm_to_main",
+    False,
+    "If True, grain workers will relay SIGTERM to the main process.",
+)
+
 _GRAIN_FLAGS = (
     _INTERLEAVED_SHUFFLE,
     _INTERLEAVED_SHUFFLE_BLOCK_SIZE,
@@ -127,6 +133,7 @@ _GRAIN_FLAGS = (
     _PREFETCH_BUFFER_SIZE,
     _DEBUG_MODE,
     _DATASET_VISUALIZATION_OUTPUT_DIR,
+    _RELAY_SIGTERM_TO_MAIN,
 )
 
 _grain_experiment_metric = monitoring.Metric(
