@@ -249,7 +249,7 @@ class VisualizeTest(absltest.TestCase):
         .shuffle(42)
         .map_with_index(_add_dummy_metadata)
         .to_iter_dataset()
-        .prefetch(options.MultiprocessingOptions(num_workers=1))
+        .mp_prefetch(options.MultiprocessingOptions(num_workers=1))
     )
     self._assert_visualization(ds, _PREFETCH_DATASET_REPR)
 
