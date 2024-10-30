@@ -1050,7 +1050,20 @@ class DatasetIterator(Iterator[T], abc.ABC):
 
   @abc.abstractmethod
   def get_state(self) -> dict[str, Any]:
-    """Returns the current state of the iterator."""
+    """Returns the current state of the iterator.
+
+    We reserve the right to evolve the state format over time. The states
+    returned from this method are only guaranteed to be restorable by the same
+    version of the code that produced them.
+
+    Implementation Note: It is recommended that iterator implementations always
+    produce states with the same shapes and types throughout the lifetime of the
+    iterator. Some frameworks rely on this property to perform checkpointing,
+    and all standard library iterators are compliant. It is also recommended to
+    produce state values that support shapes and types, e.g. using `np.int64`
+    instead of `int`. The standard library iterators are not currently compliant
+    with this recommendation.
+    """
 
   @abc.abstractmethod
   def set_state(self, state: dict[str, Any]):
