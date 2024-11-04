@@ -55,7 +55,7 @@ import queue
 import sys
 import threading
 import traceback
-from typing import Any, Callable, Protocol, TypeVar, Union
+from typing import Any, Callable, Protocol, TypeVar, Union, runtime_checkable
 
 from absl import logging
 import cloudpickle
@@ -120,10 +120,38 @@ def _print_profile(preamble: str, profile: cProfile.Profile):
   stats.print_stats()
 
 
+@runtime_checkable
 class GetElementProducerFn(Protocol[T]):
+  """A callable class able to generate elements with serialization support."""
 
   def __call__(self, *, worker_index: int, worker_count: int) -> Iterator[T]:
     """Returns a generator of elements."""
+
+  def serialize(self) -> bytes:
+    """Serializes itself and the result will be used by `deserialize`.
+
+    If a class inherits from this class, it should make sure `deserialize`
+    is compatible with this `serialize` function.
+    i.e. `GetElementProducerFn.deserialize(obj.serialize())` should return the
+    same object as `obj: GetElementProducerFn`.
+
+    Returns:
+      a serialized string of myself.
+    """
+    return cloudpickle.dumps(self)
+
+  @classmethod
+  def deserialize(cls, serialized: bytes) -> GetElementProducerFn[T]:
+    """Deserializes the result from `serialize`."""
+    del cls
+
+    obj = cloudpickle.loads(serialized)
+    if not isinstance(obj, GetElementProducerFn):
+      raise ValueError(
+          "`serialized` should be deserialized into `GetElementProducerFn`."
+      )
+
+    return obj
 
 
 def _initialize_and_get_element_producer(
@@ -133,9 +161,10 @@ def _initialize_and_get_element_producer(
   serialized_init_fn, serialized_element_producer_fn = args_queue.get()
   init_fn: Callable[[], None] = cloudpickle.loads(serialized_init_fn)
   init_fn()
-  element_producer_fn: GetElementProducerFn[Any] = cloudpickle.loads(
-      serialized_element_producer_fn
+  element_producer_fn: GetElementProducerFn[Any] = (
+      GetElementProducerFn.deserialize(serialized_element_producer_fn)
   )
+
   element_producer = element_producer_fn(
       worker_index=worker_index, worker_count=worker_count
   )
@@ -271,7 +300,7 @@ class GrainPool(Iterator[T]):
     self.worker_error_queue = ctx.Queue(self.num_processes)
 
     try:
-      get_element_producer_fn = cloudpickle.dumps(get_element_producer_fn)
+      get_element_producer_fn = get_element_producer_fn.serialize()
     except Exception as e:
       if sys.version_info >= (3, 11):
         e.add_note(

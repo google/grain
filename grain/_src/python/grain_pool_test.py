@@ -43,8 +43,13 @@ class GrainPoolTest(absltest.TestCase):
 
     # 12 elements in the `in_memory_ds` are divided
     # equally among 4 processes.
-    def get_element_producer_fn(worker_index: int, worker_count: int):
-      return iter(range(worker_index, 12, worker_count))
+    class GetElementProducerFn(gp.GetElementProducerFn):
+
+      def __call__(self, *, worker_index: int, worker_count: int):
+        del self
+        return iter(range(worker_index, 12, worker_count))
+
+    get_element_producer_fn = GetElementProducerFn()
 
     output_elements = []
     with gp.GrainPool(
@@ -67,8 +72,13 @@ class GrainPoolTest(absltest.TestCase):
     ctx = mp.get_context("spawn")
 
     # 16 elements divide equally among 4 processes
-    def get_element_producer_fn(worker_index: int, worker_count: int):
-      return iter(range(worker_index, 16, worker_count))
+    class GetElementProducerFn(gp.GetElementProducerFn):
+
+      def __call__(self, *, worker_index: int, worker_count: int):
+        del self
+        return iter(range(worker_index, 16, worker_count))
+
+    get_element_producer_fn = GetElementProducerFn()
 
     options = MultiprocessingOptions(num_workers=4, per_worker_buffer_size=1)
     output_elements = []
@@ -95,8 +105,13 @@ class GrainPoolTest(absltest.TestCase):
     ctx = mp.get_context("spawn")
 
     # 14 elements do not divide equally among 4 processes
-    def get_element_producer_fn(worker_index: int, worker_count: int):
-      return iter(range(worker_index, 14, worker_count))
+    class GetElementProducerFn(gp.GetElementProducerFn):
+
+      def __call__(self, *, worker_index: int, worker_count: int):
+        del self
+        return iter(range(worker_index, 14, worker_count))
+
+    get_element_producer_fn = GetElementProducerFn()
 
     options = MultiprocessingOptions(num_workers=4, per_worker_buffer_size=1)
     output_elements = []
@@ -120,8 +135,13 @@ class GrainPoolTest(absltest.TestCase):
   def test_pool_kill_child(self):
     ctx = mp.get_context("spawn")
 
-    def get_element_producer_fn(worker_index: int, worker_count: int):
-      return iter(range(worker_index, 14, worker_count))
+    class GetElementProducerFn(gp.GetElementProducerFn):
+
+      def __call__(self, *, worker_index: int, worker_count: int):
+        del self
+        return iter(range(worker_index, 14, worker_count))
+
+    get_element_producer_fn = GetElementProducerFn()
 
     options = MultiprocessingOptions(num_workers=4, per_worker_buffer_size=1)
     with gp.GrainPool(
@@ -141,8 +161,13 @@ class GrainPoolTest(absltest.TestCase):
   def test_pool_object_deletion(self):
     ctx = mp.get_context("spawn")
 
-    def get_element_producer_fn(worker_index: int, worker_count: int):
-      return iter(range(worker_index, 14, worker_count))
+    class GetElementProducerFn(gp.GetElementProducerFn):
+
+      def __call__(self, *, worker_index: int, worker_count: int):
+        del self
+        return iter(range(worker_index, 14, worker_count))
+
+    get_element_producer_fn = GetElementProducerFn()
 
     options = MultiprocessingOptions(num_workers=4, per_worker_buffer_size=1)
 
@@ -165,27 +190,34 @@ class GrainPoolTest(absltest.TestCase):
 def _make_uniform_element_producer_fn(
     last_seen_index: int = -1,
 ) -> gp.GetElementProducerFn:
-  def roundrobin_element_producer_fn(
-      worker_index: int, worker_count: int
-  ) -> Iterator[int]:
-    yield from range(10)[last_seen_index + 1 + worker_index :: worker_count]
 
-  return roundrobin_element_producer_fn
+  class _RoundrobinElementProducerFn(gp.GetElementProducerFn):
 
+    def __call__(
+        self, *, worker_index: int, worker_count: int
+    ) -> Iterator[int]:
+      del self
+      yield from range(10)[last_seen_index + 1 + worker_index :: worker_count]
 
-def _roundrobin_record_producer_fn(
-    worker_index: int, worker_count: int
-) -> Iterator[record.Record[int]]:
-  for i in range(5)[worker_index::worker_count]:
-    yield record.Record(record.RecordMetadata(i), i)
+  return _RoundrobinElementProducerFn()
 
 
-def _non_uniform_element_producer_fn(
-    worker_index: int, worker_count: int
-) -> Iterator[int]:
-  del worker_count
-  for _ in range(worker_index * 3):
-    yield worker_index
+class RoundrobinRecordElementProducerFn(gp.GetElementProducerFn):
+
+  def __call__(
+      self, *, worker_index: int, worker_count: int
+  ) -> Iterator[record.Record[int]]:
+    del self
+    for i in range(5)[worker_index::worker_count]:
+      yield record.Record(record.RecordMetadata(i), i)
+
+
+class NonUniformElementProducerFn(gp.GetElementProducerFn):
+
+  def __call__(self, *, worker_index: int, worker_count: int) -> Iterator[int]:
+    del self, worker_count
+    for _ in range(worker_index * 3):
+      yield worker_index
 
 
 class MultiProcessIteratorTest(parameterized.TestCase):
@@ -214,14 +246,14 @@ class MultiProcessIteratorTest(parameterized.TestCase):
       ),
       dict(
           testcase_name="non_uniform",
-          get_element_producer_fn=_non_uniform_element_producer_fn,
+          get_element_producer_fn=NonUniformElementProducerFn(),
           multiprocessing_options=MultiprocessingOptions(num_workers=3),
           worker_index_to_start_reading=0,
           expected=[1, 2, 1, 2, 1, 2, 2, 2, 2],
       ),
       dict(
           testcase_name="record_producer_fn",
-          get_element_producer_fn=_roundrobin_record_producer_fn,
+          get_element_producer_fn=RoundrobinRecordElementProducerFn(),
           multiprocessing_options=MultiprocessingOptions(num_workers=3),
           worker_index_to_start_reading=0,
           expected=[
@@ -279,7 +311,7 @@ class MultiProcessIteratorTest(parameterized.TestCase):
       ),
       dict(
           testcase_name="non_uniform_record_producer_fn",
-          get_element_producer_fn=_non_uniform_element_producer_fn,
+          get_element_producer_fn=NonUniformElementProducerFn(),
           multiprocessing_options=MultiprocessingOptions(num_workers=3),
           worker_index_to_start_reading=0,
           num_iters=6,
@@ -318,11 +350,15 @@ class MultiProcessIteratorTest(parameterized.TestCase):
   def test_propagates_error(self):
     error_msg = "very unique error"
 
-    def failing_get_element_producer_fn(
-        worker_index: int, worker_count: int
-    ) -> Iterator[int]:
-      del worker_index, worker_count
-      raise ValueError(error_msg)
+    class FailingGetElementProducerFn(gp.GetElementProducerFn):
+
+      def __call__(
+          self, *, worker_index: int, worker_count: int
+      ) -> Iterator[int]:
+        del self, worker_index, worker_count
+        raise ValueError(error_msg)
+
+    failing_get_element_producer_fn = FailingGetElementProducerFn()
 
     with gp.MultiProcessIterator(
         failing_get_element_producer_fn,
@@ -334,11 +370,15 @@ class MultiProcessIteratorTest(parameterized.TestCase):
 
   def test_reports_worker_crash(self):
 
-    def failing_get_element_producer_fn(
-        worker_index: int, worker_count: int
-    ) -> Iterator[int]:
-      del worker_index, worker_count
-      sys.exit(12)
+    class FailingGetElementProducerFn(gp.GetElementProducerFn):
+
+      def __call__(
+          self, *, worker_index: int, worker_count: int
+      ) -> Iterator[int]:
+        del self, worker_index, worker_count
+        sys.exit(12)
+
+    failing_get_element_producer_fn = FailingGetElementProducerFn()
 
     with gp.MultiProcessIterator(
         failing_get_element_producer_fn,
@@ -360,11 +400,17 @@ class MultiProcessIteratorTest(parameterized.TestCase):
 
     local_state = UnpicklableObject()
 
-    def get_element_producer_fn_with_unpicklable_closure(
-        worker_index: int, worker_count: int
-    ) -> Iterator[int]:
-      del worker_index, worker_count
-      yield 1 if local_state is None else 2
+    class GetElementProducerFnWithUnpicklableClosure(gp.GetElementProducerFn):
+
+      def __call__(
+          self, *, worker_index: int, worker_count: int
+      ) -> Iterator[int]:
+        del self, worker_index, worker_count
+        yield 1 if local_state is None else 2
+
+    get_element_producer_fn_with_unpicklable_closure = (
+        GetElementProducerFnWithUnpicklableClosure()
+    )
 
     with gp.MultiProcessIterator(
         get_element_producer_fn_with_unpicklable_closure,

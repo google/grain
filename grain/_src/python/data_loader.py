@@ -368,6 +368,25 @@ def _iterator_with_context(
     yield from it
 
 
+class GetElementProducerFn(grain_pool.GetElementProducerFn):
+  """Implements `grain_pool.GetElementProducerFn`."""
+
+  def __init__(
+      self,
+      state: _IteratorState,
+      read_and_transform_data: Callable[[int], Iterator[record.Record]],
+  ):
+    self._state = state
+    self._read_and_transform_data = read_and_transform_data
+
+  def __call__(
+      self, *, worker_index: int, worker_count: int
+  ) -> Iterator[record.Record]:
+    del worker_count
+    last_seen_index = self._state[_LAST_SEEN_INDICES].get(str(worker_index))
+    yield from self._read_and_transform_data(last_seen_index)
+
+
 class PyGrainDatasetIterator(collections.abc.Iterator[_T]):
   """DataLoader iterator providing get/set state functionality.
 
@@ -413,12 +432,9 @@ class PyGrainDatasetIterator(collections.abc.Iterator[_T]):
       # by e.g. making `_read_and_transform_data` a property.
       read_and_transform_data = self._data_loader._read_and_transform_data  # pylint: disable=protected-access
 
-      def get_element_producer_fn(
-          worker_index: int, worker_count: int
-      ) -> Iterator[record.Record]:
-        del worker_count
-        last_seen_index = state[_LAST_SEEN_INDICES].get(str(worker_index))
-        yield from read_and_transform_data(last_seen_index)
+      get_element_producer_fn = GetElementProducerFn(
+          state, read_and_transform_data
+      )
 
       worker_index_to_start_reading = (
           state[_LAST_WORKER_INDEX] + 1
@@ -461,7 +477,7 @@ class PyGrainDatasetIterator(collections.abc.Iterator[_T]):
     """
     state = json.loads(state.decode())
     self._data_loader._validate_state(state)  # pylint: disable=protected-access
-    self._state = state
+    self._state: _IteratorState = state
     self._raw_iterator = None
     self._iterator = None
 

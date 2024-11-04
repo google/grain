@@ -330,12 +330,10 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
       list(ds)
 
   def test_reports_unpicklable_transform(self):
-    error_msg = 'UnpicklableObject is not picklable'
-
     class UnpicklableObject:
 
       def __getstate__(self):
-        raise ValueError(error_msg)
+        raise ValueError('UnpicklableObject is not picklable')
 
     local_state = UnpicklableObject()
 
@@ -343,8 +341,101 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
         self.iter_ds.map(lambda _: 1 if local_state is None else 2),
         options.MultiprocessingOptions(num_workers=1),
     )
-    with self.assertRaisesRegex(ValueError, error_msg):
+    with self.assertRaisesRegex(
+        ValueError, 'UnpicklableObject is not picklable'
+    ) as context_manager:
       list(ds)
+
+    if sys.version_info >= (3, 11):
+      self.assertRegex(
+          ''.join(context_manager.exception.__notes__),
+          r'Dataset: MapIterDataset.* cannot be pickled!',
+      )
+
+  def test_reports_first_unpicklable_dataset_when_with_multiple_parents(self):
+    class UnpicklableObject:
+
+      def __getstate__(self):
+        raise ValueError('UnpicklableObject is not picklable')
+
+    local_unpicklable_obj = UnpicklableObject()
+
+    class LeftTransform(transforms.MapTransform):
+
+      def map(self, x):
+        return x if local_unpicklable_obj else x
+
+    class RightTransform(transforms.MapTransform):
+
+      def map(self, x):
+        return x if local_unpicklable_obj else x
+
+    ds_left = dataset.MapDataset.range(0, 10)
+    ds_left = ds_left.map(LeftTransform())
+    ds_right = dataset.MapDataset.range(10, 20)
+    ds_right = ds_right.map(RightTransform())
+
+    ds = dataset.MapDataset.mix([ds_left, ds_right], [1.0, 1.0])
+
+    iter_ds = ds.to_iter_dataset(
+        read_options=options.ReadOptions(prefetch_buffer_size=0)
+    )
+    iter_ds = iter_ds.mp_prefetch()
+
+    with self.assertRaisesRegex(
+        ValueError,
+        r'UnpicklableObject is not picklable',
+    ) as context_manager:
+      list(iter_ds)
+
+    if sys.version_info >= (3, 11):
+      self.assertRegex(
+          ''.join(context_manager.exception.__notes__),
+          r'Dataset: MapMapDataset\(transform=LeftTransform\) cannot be'
+          r' pickled!',
+      )
+
+  def test_reports_unpicklable_issue_when_only_one_parent_unpicklable(self):
+    class UnpicklableObject:
+
+      def __getstate__(self):
+        raise ValueError('UnpicklableObject is not picklable')
+
+    class PickleableTransform(transforms.MapTransform):
+
+      def map(self, x):
+        return x
+
+    local_unpicklable_obj = UnpicklableObject()
+
+    class RightTransform(transforms.MapTransform):
+
+      def map(self, x):
+        return x if local_unpicklable_obj else x
+
+    ds_left = dataset.MapDataset.range(0, 10)
+    ds_left = ds_left.map(PickleableTransform())
+    ds_right = dataset.MapDataset.range(10, 20)
+    ds_right = ds_right.map(RightTransform())
+
+    ds = dataset.MapDataset.mix([ds_left, ds_right], [1.0, 1.0])
+
+    iter_ds = ds.to_iter_dataset(
+        read_options=options.ReadOptions(prefetch_buffer_size=0)
+    )
+    iter_ds = iter_ds.mp_prefetch()
+
+    with self.assertRaisesRegex(
+        ValueError, 'UnpicklableObject is not picklable'
+    ) as context_manager:
+      list(iter_ds)
+
+    if sys.version_info >= (3, 11):
+      self.assertRegex(
+          ''.join(context_manager.exception.__notes__),
+          r'Dataset: MapMapDataset\(transform=RightTransform\) cannot be'
+          r' pickled!',
+      )
 
   @parameterized.product(
       start_prefetch_calls=[0, 1, 10],

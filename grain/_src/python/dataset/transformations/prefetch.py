@@ -21,11 +21,13 @@ import contextlib
 import copy
 import functools
 import queue
+import sys
 import threading
 import time
 import typing
-from typing import Any, Mapping, Optional, Protocol, TypeVar
+from typing import Any, Generic, Mapping, Optional, Protocol, TypeVar
 
+import cloudpickle
 from concurrent import futures
 from grain._src.core import tree
 import multiprocessing as mp
@@ -306,6 +308,90 @@ def _set_slice(ds: dataset.IterDataset, sl: slice) -> None:
       _set_slice(parent, sl)
 
 
+def _check_picklable(
+    ds: dataset.IterDataset | dataset.MapDataset,
+):
+  """Detects the first unpickle-able dataset in post-order.
+
+  Args:
+    ds: IterDataset or MapDataset to check whether it is picklable.
+
+  NOTE: This function's time complexity is O(n^2) where n is the number of
+  Grain dataset operations because `cloudpickle.dumps(ds)` will trigger
+  pickling into all the datasets. If this naive O(n^2) algorithm takes too
+  much time, we could consider doing copying `ds`, delete its parents and then
+  do `cloudpickle.dumps(new_ds)` to reduce the time complexity to O(n).
+  """
+
+  # Traverses the graph in post-order to find the first unpickle-able subtree
+  for parent in ds.parents:
+    _check_picklable(parent)
+
+  try:
+    cloudpickle.dumps(ds)
+  except Exception as e:  # pylint: disable=broad-exception-caught
+    if sys.version_info >= (3, 11):
+      e.add_note(
+          f"Dataset: {ds} cannot be pickled!"
+      )
+    raise e
+
+
+class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
+  """Implements `GetElementProducerFn` for `grain_pool.MultiProcessIterator`.
+
+  This class implements `GetElementProducerFn` with `serialize` being overriden
+  to generate better error messages if user-provided dataset is not pickle-able.
+  """
+
+  def __init__(
+      self, state: dict[str, dict[str, Any] | int], ds: dataset.IterDataset[T]
+  ):
+    self._state = state
+    self._ds = ds
+
+  def __call__(
+      self, *, worker_index: int, worker_count: int
+  ) -> Iterator[tuple[T, Optional[dict[str, Any]]]]:
+    # Recover from the last recorded state for the given worker.
+    worker_state = self._state[_WORKERS_STATE][str(worker_index)]
+    if worker_count > 1:
+      _set_slice(self._ds, slice(worker_index, None, worker_count))
+    it = iter(self._ds)
+    it.set_state(worker_state)  # pytype: disable=attribute-error
+    # Skip the required number of iterations after the last recorded state.
+    for _ in range(self._state[_ITERATIONS_TO_SKIP][str(worker_index)]):
+      _ = next(it)
+    last_recorded_state_time = time.time()
+    for element in it:
+      now = time.time()
+      element = _copy_struct_to_shm(element)
+      if now - last_recorded_state_time >= _RECORD_STATE_INTERVAL_S:
+        last_recorded_state_time = now
+        yield (element, it.get_state())  # pytype: disable=attribute-error
+      else:
+        yield (element, None)
+
+  def serialize(self) -> bytes:
+    """Overrides the default implementation to generate better error messages."""
+
+    try:
+      return cloudpickle.dumps(self)
+    except Exception as e:  # pylint: disable=broad-except
+      # Calls `_check_picklable` to generate useful pickle errors
+      #
+      # Note: No need to check `self._state` because it should not generate
+      # unpicklable errors and it is controlled by us, not from user's code
+      # in most cases. Except for the case when users try to implement their own
+      # `MapDataset` and `IterDataset` with custom pickle-ing logic that
+      # contains unpickle-able objects.
+      _check_picklable(self._ds)
+
+      # If somehow we cannot find the dataset that is causing the pickle
+      # issues, just raise the original error
+      raise e
+
+
 class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   """Iterator that performs prefetching using a multiprocessing pool."""
 
@@ -327,15 +413,15 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     # Create initial state. We record state of each worker periodically together
     # with the number of iterations without the recorded state and index of the
     # last worker.
-    workers_state = {}
-    iterations_to_skip = {}
+    workers_state: dict[str, Any] = {}
+    iterations_to_skip: dict[str, int] = {}
     for i in range(multiprocessing_options.num_workers):
       workers_state[str(i)] = iter(
           self._iter_parent
       ).get_state()  # pytype: disable=attribute-error
       iterations_to_skip[str(i)] = 0
 
-    self._state = {
+    self._state: dict[str, dict[str, Any] | int] = {
         _WORKERS_STATE: workers_state,
         _ITERATIONS_TO_SKIP: iterations_to_skip,
         _LAST_WORKER_INDEX: -1,
@@ -349,13 +435,19 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     result, state = next(self._iterator)
     with self._stats.record_self_time():
       worker_index = self._raw_iterator.get_last_worker_index()  # pytype: disable=attribute-error
+
+      # pytype: disable=annotation-type-mismatch
+      iterations_to_skip: dict[str, Any] = self._state[_ITERATIONS_TO_SKIP]
+      worker_state: dict[str, Any] = self._state[_WORKERS_STATE]
+      # pytype: enable=annotation-type-mismatch
+
       self._state[_LAST_WORKER_INDEX] = worker_index
       worker_index_str = str(worker_index)
       if state is None:
-        self._state[_ITERATIONS_TO_SKIP][worker_index_str] += 1
+        iterations_to_skip[worker_index_str] += 1
       else:
-        self._state[_ITERATIONS_TO_SKIP][worker_index_str] = 0
-        self._state[_WORKERS_STATE][worker_index_str] = state
+        iterations_to_skip[worker_index_str] = 0
+        worker_state[worker_index_str] = state
     return _open_struct_from_shm(result)
 
   def start_prefetch(self) -> None:
@@ -366,7 +458,7 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     """
     self._ensure_iterator_initialized()
 
-  def set_state(self, state) -> None:
+  def set_state(self, state: dict[str, dict[str, Any] | int]) -> None:
     self._state = state
     self._raw_iterator = None
     self._iterator = None
@@ -383,30 +475,9 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   def _create_iterator_context(self) -> grain_pool.MultiProcessIterator[T]:
     """Creates a `MultiProcessIterator`."""
 
-    state = self._state
-    parent = self._iter_parent
-
-    def get_element_producer_fn(
-        worker_index: int, worker_count: int
-    ) -> Iterator[tuple[T, Optional[dict[str, Any]]]]:
-      # Recover from the last recorded state for the given worker.
-      worker_state = state[_WORKERS_STATE][str(worker_index)]
-      if worker_count > 1:
-        _set_slice(parent, slice(worker_index, None, worker_count))
-      it = iter(parent)
-      it.set_state(worker_state)  # pytype: disable=attribute-error
-      # Skip the required number of iterations after the last recorded state.
-      for _ in range(state[_ITERATIONS_TO_SKIP][str(worker_index)]):
-        _ = next(it)
-      last_recorded_state_time = time.time()
-      for element in it:
-        now = time.time()
-        element = _copy_struct_to_shm(element)
-        if now - last_recorded_state_time >= _RECORD_STATE_INTERVAL_S:
-          last_recorded_state_time = now
-          yield (element, it.get_state())  # pytype: disable=attribute-error
-        else:
-          yield (element, None)
+    get_element_producer_fn = GetElementProducerFn(
+        self._state, self._iter_parent
+    )
 
     return grain_pool.MultiProcessIterator(
         get_element_producer_fn,
