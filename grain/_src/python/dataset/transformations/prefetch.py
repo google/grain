@@ -36,6 +36,7 @@ from grain._src.python import options as grain_options
 from grain._src.python import shared_memory_array
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
+from grain._src.python.dataset.transformations import filter as filter_dataset
 import numpy as np
 
 T = TypeVar("T")
@@ -105,6 +106,16 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     if self._prefetch_buffer_size > 0:
       self._executor = futures.ThreadPoolExecutor(read_options.num_threads)
 
+  @functools.cached_property
+  def _threshold_checker(self):
+    # Sparse `MapDataset` transformations produce Nones which we filter out
+    # here. The validator helps to detect if we discard too many elements.
+    return filter_dataset.FilterThresholdChecker(
+        transform_name=str(self),
+        warn_threshold=self._options_with_default.filter_warn_threshold_ratio,
+        raise_threshold=self._options_with_default.filter_raise_threshold_ratio,
+    )
+
   def __next__(self) -> T:
     # We loop here to skip all None elements (in case the underlying dataset
     # is sparse), if self._allow_nones = False, else we return Nones too.
@@ -141,7 +152,9 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
         else:
           element = self._map_parent[self._next_index]
         self._next_index += 1
-      if self._allow_nones or element is not None:
+      return_element = self._allow_nones or element is not None
+      self._threshold_checker.check(return_element)
+      if return_element:
         with self._stats.record_self_time(offset_ns=timer.value()):
           return element
     with self._stats.record_self_time(offset_ns=timer.value()):

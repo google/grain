@@ -16,6 +16,7 @@
 import functools
 from typing import Any, Callable, TypeVar, Union
 
+from absl import logging
 from grain._src.core import transforms
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
@@ -65,6 +66,64 @@ class FilterMapDataset(dataset.MapDataset[T]):
     return f"FilterMapDataset(transform={self._transform_name})"
 
 
+# The number of filtered elements is checked on intervals of this size.
+_CHECK_FILTERED_INTERVAL = 1000
+# The interval between warnings about filtered elements.
+_WARN_FILTERED_INTERVAL_SEC = 60
+
+
+class FilterThresholdChecker:
+  """Warns or raises an error if the filtered elements ratio is too high."""
+
+  def __init__(
+      self,
+      transform_name: str,
+      warn_threshold: float | None,
+      raise_threshold: float | None,
+  ):
+    self._transform_name = transform_name
+    self._passed = 0
+    self._skipped = 0
+    self._warn_threshold: float = warn_threshold or float("inf")
+    self._raise_threshold: float = raise_threshold or float("inf")
+
+  def check(self, passed: bool) -> None:
+    """Record whether an element was filtered out and check the ratio."""
+    if passed:
+      self._passed += 1
+    else:
+      self._skipped += 1
+
+    if self._passed + self._skipped >= _CHECK_FILTERED_INTERVAL:
+      skipped_ratio = self._skipped / (self._passed + self._skipped)
+      if skipped_ratio >= self._raise_threshold:
+        raise ValueError(
+            f"Transformation {self._transform_name} skipped"
+            f" {(skipped_ratio*100):.2f} % of the last seen"
+            f" {self._passed + self._skipped} elements. Please check the"
+            " filtering logic. If this is intended, consider pre-filtering the"
+            " input dataset before training. To disable this check, set"
+            " `grain.experimental.DatasetOptions.filter_raise_threshold_ratio`"
+            " used in `WithOptionsIterDataset` to `None`."
+        )
+      if skipped_ratio >= self._warn_threshold:
+        logging.log_every_n_seconds(
+            logging.WARNING,
+            "Transformation %s skipped %.2f %% of the last seen %d elements."
+            " Please check the filtering logic. If this is intended, consider"
+            " pre-filtering the input dataset before training. To disable this"
+            " check, set"
+            " `grain.experimental.DatasetOptions.filter_warn_threshold_ratio`"
+            " used in `WithOptionsIterDataset` to `None`.",
+            _WARN_FILTERED_INTERVAL_SEC,
+            self._transform_name,
+            skipped_ratio * 100,
+            self._passed + self._skipped,
+        )
+      self._passed = 0
+      self._skipped = 0
+
+
 class _FilterDatasetIterator(dataset.DatasetIterator[T]):
   """Iterator that filters elements."""
 
@@ -80,6 +139,14 @@ class _FilterDatasetIterator(dataset.DatasetIterator[T]):
     self._filter_fn = filter_fn
     self._transform_name = transform_name
 
+  @functools.cached_property
+  def _threshold_checker(self):
+    return FilterThresholdChecker(
+        transform_name=str(self),
+        warn_threshold=self._options_with_default.filter_warn_threshold_ratio,
+        raise_threshold=self._options_with_default.filter_raise_threshold_ratio,
+    )
+
   def __next__(self):
     value = None
     passed_filter = False
@@ -91,6 +158,7 @@ class _FilterDatasetIterator(dataset.DatasetIterator[T]):
         break
       with timer:
         passed_filter = self._filter_fn(value)
+        self._threshold_checker.check(passed_filter)
     if not passed_filter:
       raise StopIteration
     with self._stats.record_self_time(offset_ns=timer.value()):

@@ -39,6 +39,13 @@ class FilterKeepingOddElementsOnly(transforms.FilterTransform):
     return bool(element % 2)
 
 
+@dataclasses.dataclass(frozen=True)
+class FilterAllElements(transforms.FilterTransform):
+
+  def filter(self, element: int):
+    return False
+
+
 class RepeatedIntSourceIterDataset(dataset.IterDataset[int]):
 
   def __iter__(self) -> dataset.DatasetIterator[int]:
@@ -71,6 +78,7 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     self.prefetch_lazy_iter_ds = prefetch.PrefetchIterDataset(
         self.range_ds, read_options=options.ReadOptions()
     )
+    filter_lazy_dataset._WARN_FILTERED_INTERVAL_SEC = 0.0
 
   def test_dataset_and_iterator_types(self):
     self.assertIsInstance(
@@ -161,6 +169,50 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
         ' length 20.',
     ):
       ds_iter.set_state({'next_index': next_index})  # pytype: disable=attribute-error
+
+  def test_filter_all_elements_warns(self):
+    ds = (
+        dataset.MapDataset.range(0, 1000)
+        .filter(FilterAllElements())
+        .to_iter_dataset()
+    )
+    with self.assertLogs(level='WARNING') as logs:
+      _ = list(ds)
+    logs = logs[0][0].message
+    self.assertRegex(
+        logs,
+        r'Transformation'
+        r' PrefetchDatasetIterator\(read_options=ReadOptions\(num_threads=16,'
+        r' prefetch_buffer_size=500\), allow_nones=False\)'
+        r' skipped 100.00 \% of the last seen 1000 elements.',
+    )
+
+  def test_filter_all_elements_raises(self):
+    ds = (
+        dataset.MapDataset.range(0, 1000)
+        .filter(FilterAllElements())
+        .to_iter_dataset()
+    )
+    ds_options = dataset.DatasetOptions(filter_raise_threshold_ratio=0.9)
+    ds = dataset.WithOptionsIterDataset(ds, ds_options)
+    with self.assertRaisesRegex(
+        ValueError,
+        r'Transformation'
+        r' PrefetchDatasetIterator\(read_options=ReadOptions\(num_threads=16,'
+        r' prefetch_buffer_size=500\), allow_nones=False\)'
+        r' skipped 100.00 \% of the last seen 1000 elements.',
+    ):
+      _ = list(ds)
+
+  def test_filter_all_elements_doesnt_raise_with_allow_nones(self):
+    ds = (
+        dataset.MapDataset.range(0, 1000)
+        .filter(FilterAllElements())
+        .to_iter_dataset(allow_nones=True)
+    )
+    ds_options = dataset.DatasetOptions(filter_raise_threshold_ratio=0.9)
+    ds = dataset.WithOptionsIterDataset(ds, ds_options)
+    self.assertEqual(list(ds), [None] * 1000)
 
 
 class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):

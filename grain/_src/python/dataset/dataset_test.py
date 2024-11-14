@@ -848,5 +848,119 @@ class ApplyTransformationsTest(parameterized.TestCase):
       _ = dataset.apply_transformations(ds, TfRandomMapAlwaysAddingOne())
 
 
+class DatasetOptionsTest(parameterized.TestCase):
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name="no_conflicts",
+          a=dataset.DatasetOptions(filter_warn_threshold_ratio=0.1),
+          b=dataset.DatasetOptions(filter_raise_threshold_ratio=0.2),
+          expected=dataset.DatasetOptions(
+              filter_warn_threshold_ratio=0.1,
+              filter_raise_threshold_ratio=0.2,
+          ),
+      ),
+      dict(
+          testcase_name="all_fields_default",
+          a=dataset.DatasetOptions(),
+          b=dataset.DatasetOptions(
+              filter_warn_threshold_ratio=0.4,
+              filter_raise_threshold_ratio=0.3,
+          ),
+          expected=dataset.DatasetOptions(
+              filter_warn_threshold_ratio=0.4,
+              filter_raise_threshold_ratio=0.3,
+          ),
+      ),
+      dict(
+          testcase_name="field_conflict",
+          a=dataset.DatasetOptions(filter_raise_threshold_ratio=0.1),
+          b=dataset.DatasetOptions(filter_raise_threshold_ratio=0.2),
+          expected=dataset.DatasetOptions(
+              filter_raise_threshold_ratio=0.1,
+          ),
+      ),
+  )
+  def test_merge(self, a, b, expected):
+    self.assertEqual(a.merge(b), expected)
+
+
+class WithOptionsIterDatasetTest(parameterized.TestCase):
+
+  def _assert_subtree_options_equal(
+      self, ds: dataset.IterDataset, expected: dataset.DatasetOptions
+  ):
+    to_check = [ds.__iter__()]
+    while to_check:
+      next_it = to_check.pop()
+      self.assertEqual(
+          next_it._options,
+          expected,
+          f"Options are not equal for {next_it}; actual: {next_it._options},"
+          f" expected: {expected}.",
+      )
+      to_check.extend(next_it._parents)
+
+  def test_propagates_options_in_linear_pipeline(self):
+    actual_options = dataset.DatasetOptions(
+        filter_warn_threshold_ratio=0.1,
+        filter_raise_threshold_ratio=0.2,
+    )
+    ds = (
+        dataset.MapDataset.range(10)
+        .to_iter_dataset()
+        .map(lambda x: x + 1)
+        .batch(batch_size=2)
+        .filter(lambda x: True)
+    )
+    ds = dataset.WithOptionsIterDataset(ds, actual_options)
+    ds = ds.map(lambda x: x).filter(lambda x: True)
+    self._assert_subtree_options_equal(ds, actual_options)
+
+  def test_propagates_options_in_tree_pipeline(self):
+    actual_options = dataset.DatasetOptions(
+        filter_warn_threshold_ratio=0.1,
+        filter_raise_threshold_ratio=0.2,
+    )
+    components = []
+    for _ in range(10):
+      ds = (
+          dataset.MapDataset.range(10)
+          .to_iter_dataset()
+          .map(lambda x: x + 1)
+          .filter(lambda x: True)
+      )
+      ds = ds.map(lambda x: x).filter(lambda x: True)
+      components.append(ds)
+    mixed = dataset.IterDataset.mix(components)
+    mixed = dataset.WithOptionsIterDataset(mixed, actual_options)
+    mixed = mixed.map(lambda x: x).filter(lambda x: True)
+    self._assert_subtree_options_equal(mixed, actual_options)
+
+  def test_conflicting_options(self):
+    ds = (
+        dataset.MapDataset.range(10)
+        .to_iter_dataset()
+        .map(lambda x: x + 1)
+        .batch(batch_size=2)
+        .filter(lambda x: True)
+    )
+    options1 = dataset.DatasetOptions(
+        filter_warn_threshold_ratio=0.1,
+        filter_raise_threshold_ratio=0.2,
+    )
+    ds = dataset.WithOptionsIterDataset(ds, options1)
+    ds = ds.map(lambda x: x).filter(lambda x: True)
+    options2 = dataset.DatasetOptions(filter_raise_threshold_ratio=0.4)
+    ds = dataset.WithOptionsIterDataset(ds, options2)
+    self._assert_subtree_options_equal(
+        ds,
+        dataset.DatasetOptions(
+            filter_warn_threshold_ratio=0.1,
+            filter_raise_threshold_ratio=0.4,
+        ),
+    )
+
+
 if __name__ == "__main__":
   absltest.main()

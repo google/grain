@@ -99,6 +99,8 @@ class FilterIterDatasetTest(absltest.TestCase):
   def setUp(self):
     super().setUp()
     self.range_iter_ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
+    # Issue warnings without wait.
+    filter_dataset._WARN_FILTERED_INTERVAL_SEC = 0.0
 
   def test_filter_no_elements(self):
     filter_no_elts_iter_ds = iter(
@@ -126,6 +128,84 @@ class FilterIterDatasetTest(absltest.TestCase):
     expected_data = [_ for _ in range(1, 10, 2)]
     actual_data = [next(filter_even_elts_iter_ds) for _ in range(5)]
     self.assertEqual(expected_data, actual_data)
+
+  def test_filter_all_elements_warns(self):
+    ds = (
+        dataset.MapDataset.range(0, 1000)
+        .to_iter_dataset()
+        .filter(FilterAllElements())
+    )
+    with self.assertLogs(level="WARNING") as logs:
+      _ = list(ds)
+    logs = logs[0][0].message
+    self.assertRegex(
+        logs,
+        r"Transformation FilterDatasetIterator\(transform=FilterAllElements\)"
+        r" skipped 100.00 \% of the last seen 1000 elements.",
+    )
+
+  def test_filter_all_elements_raises(self):
+    ds = (
+        dataset.MapDataset.range(0, 1000)
+        .to_iter_dataset()
+        .filter(FilterAllElements())
+    )
+    ds = dataset.WithOptionsIterDataset(
+        ds, dataset.DatasetOptions(filter_raise_threshold_ratio=0.999)
+    )
+    with self.assertRaisesRegex(
+        ValueError,
+        r"Transformation FilterDatasetIterator\(transform=FilterAllElements\)"
+        r" skipped 100.00 \% of the last seen 1000 elements.",
+    ):
+      _ = list(ds)
+
+
+class FilterValidatorTest(absltest.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    filter_dataset._WARN_FILTERED_INTERVAL_SEC = 0.0
+
+  def test_validates(self):
+    default_options = dataset.DatasetOptions()
+    v = filter_dataset.FilterThresholdChecker(
+        "test",
+        default_options.filter_warn_threshold_ratio,
+        default_options.filter_raise_threshold_ratio,
+    )
+    passed = [True] * 101 + [False] * 899 + [True] * 100 + [False] * 900
+    for p in passed:
+      v.check(p)
+
+  def test_warns(self):
+    default_options = dataset.DatasetOptions()
+    v = filter_dataset.FilterThresholdChecker(
+        "test",
+        default_options.filter_warn_threshold_ratio,
+        default_options.filter_raise_threshold_ratio,
+    )
+    passed = [True] + [False] * filter_dataset._CHECK_FILTERED_INTERVAL
+    with self.assertLogs(level="WARNING") as logs:
+      for p in passed:
+        v.check(p)
+    logs = logs[0][0].message
+    self.assertRegex(
+        logs,
+        r"Transformation test skipped 99.90 \% of the last seen 1000"
+        r" elements.",
+    )
+
+  def test_raises(self):
+    v = filter_dataset.FilterThresholdChecker("test", None, 0.999)
+    passed = [False] * filter_dataset._CHECK_FILTERED_INTERVAL
+    with self.assertRaisesRegex(
+        ValueError,
+        r"Transformation test skipped 100.00 \% of the last seen 1000"
+        r" elements.",
+    ):
+      for p in passed:
+        v.check(p)
 
 
 if __name__ == "__main__":

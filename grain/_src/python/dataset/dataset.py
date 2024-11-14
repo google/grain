@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import abc
 import builtins
+import dataclasses
 import functools
 from typing import (
     Any,
@@ -341,6 +342,13 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
     NOTE: `list(ds)` converts the dataset to an `IterDataset` with
     `to_iter_dataset()` under the hood which by default skips `None` elements.
 
+    `to_iter_dataset` produces a warning when iterating through a filtered
+    dataset if the filter removes more than 90% of the elements.
+    You can adjust the threshold through
+    `grain.experimental.DatasetOptions.filter_warn_threshold_ratio` used in
+    `WithOptionsIterDataset`. In order to produce an exception in such case use
+    `filter_raise_threshold_ratio`.
+
     Args:
       transform: Either a `FilterTransform` containing the `filter` method or a
         callable that takes an element and returns a boolean.
@@ -472,7 +480,7 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
     Returns:
       A dataset with elements unchanged.
     """
-    return _WithOptionsMapDataset(parent=self, seed=seed)
+    return _WithSeedMapDataset(parent=self, seed=seed)
 
   def shuffle(self, seed: int | None = None) -> MapDataset[T]:
     """Returns a dataset with the same elements in a globally shuffled order.
@@ -850,7 +858,7 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
     Returns:
       A dataset with elements unchanged.
     """
-    return _WithOptionsIterDataset(parent=self, seed=seed)
+    return _WithSeedIterDataset(parent=self, seed=seed)
 
   def filter(
       self, transform: transforms.FilterTransform | Callable[[T], bool]
@@ -863,6 +871,12 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
     ds = ds.filter(lambda x: x % 2 == 0)
     list(ds) == [0, 2, 4]
     ```
+
+    Produces a warning if the filter removes more than 90% of the elements.
+    You can adjust the threshold through
+    `grain.experimental.DatasetOptions.filter_warn_threshold_ratio` used in
+    `WithOptionsIterDataset`. In order to produce an exception in such case use
+    `filter_raise_threshold_ratio`.
 
     Args:
       transform: Either a `FilterTransform` containing the `filter` method or a
@@ -1037,6 +1051,27 @@ class DatasetIterator(Iterator[T], abc.ABC):
       self._parents = (parents,)
     else:
       self._parents = tuple(parents)
+    # The options are set in `WithOptionsIterDataset`.
+    self._options: DatasetOptions | None = None
+    parent_options = []
+    for p in self._parents:
+      # Not all user iterators call super().__init__ and thus don't have the
+      # options set.
+      if (p_options := getattr(p, "_options", None)) is not None:
+        parent_options.append(p_options)
+    if parent_options:
+      self._options = functools.reduce(lambda x, y: x.merge(y), parent_options)
+
+  @property
+  def _options_with_default(self) -> DatasetOptions:
+    """Returns options for the pipeline including the given iterator.
+
+    WARNING: must be accessed after all iterators in the pipeline have been
+    initialized.
+    """
+    # TODO: Relax the requirement to access options after all iterators
+    # in the pipeline have been initialized.
+    return self._options or DatasetOptions()
 
   @property
   def _parent(self) -> DatasetIterator:
@@ -1100,8 +1135,8 @@ class DatasetIterator(Iterator[T], abc.ABC):
     )
 
 
-class _WithOptionsMapDataset(MapDataset[T]):
-  """Holds options used by downstream transformations."""
+class _WithSeedMapDataset(MapDataset[T]):
+  """Holds seed used by downstream transformations."""
 
   _MUTATES_ELEMENT_SPEC = False
 
@@ -1121,8 +1156,8 @@ class _WithOptionsMapDataset(MapDataset[T]):
     return "WithOptionsMapDataset"
 
 
-class _WithOptionsIterDataset(IterDataset[T]):
-  """Holds options used by downstream transformations."""
+class _WithSeedIterDataset(IterDataset[T]):
+  """Holds seed used by downstream transformations."""
 
   def __init__(self, parent: IterDataset[T], *, seed: int):
     super().__init__(parent)
@@ -1133,6 +1168,118 @@ class _WithOptionsIterDataset(IterDataset[T]):
 
   def __str__(self):
     return "WithOptionsIterDataset"
+
+
+@dataclasses.dataclass(slots=True, frozen=True)
+class _Default(Generic[T]):
+  """Default options value holder."""
+
+  value: T
+
+
+@dataclasses.dataclass(kw_only=True, frozen=True)
+class DatasetOptions:
+  """Holds options used by dataset transformations."""
+
+  # If the ratio of filtered out elements is above these thresholds, a warning
+  # or an exception will be issued, respectively. Value `None` disables the
+  # check.
+  # The ratio is calculated on non-overlapping windows of 1000 elements. For
+  # instancce, with `filter_warn_threshold_ratio=0.9` and 901 elements out of
+  # the first 1000 (or elements 1000...2000) filtered out, a warning will be
+  # issued.
+  filter_warn_threshold_ratio: float | None | _Default[float] = _Default(0.9)
+  filter_raise_threshold_ratio: float | None | _Default[None] = _Default(None)
+
+  # Internal fields.
+
+  # Names of fields which were set by the user.
+  _user_set_fields: set[str] = dataclasses.field(
+      default_factory=set, init=False
+  )
+
+  def __post_init__(self):
+    # Replace default value objects with actual values.
+    for field in dataclasses.fields(DatasetOptions):
+      value = getattr(self, field.name)
+      if isinstance(value, _Default):
+        super().__setattr__(field.name, value.value)
+      elif field.init:
+        self._user_set_fields.add(field.name)
+
+  def merge(self, other: DatasetOptions | None) -> DatasetOptions:
+    """Merges these options with the other.
+
+    Explicitly set options in `self` take precedence over options in `other`.
+
+    Args:
+      other: Options to merge.
+
+    Returns:
+      Merged options.
+    """
+    if other is None:
+      return self
+
+    merged = {}
+    for field in dataclasses.fields(DatasetOptions):
+      if field.name in self._user_set_fields:
+        merged[field.name] = getattr(self, field.name)
+      elif field.name in other._user_set_fields:  # pylint: disable=protected-access
+        merged[field.name] = getattr(other, field.name)
+    return DatasetOptions(**merged)
+
+
+class WithOptionsIterDataset(IterDataset[T]):
+  """Applies options to transformations in the pipeline.
+
+  The options will apply to all transformations in the pipeline (before and
+  after `WithOptionsIterDataset`). The options can be set multiple times in the
+  pipeline, in which case they are merged. If the same option is set multiple
+  times, the latest value takes precedence.
+
+  Example:
+  ```
+  ds = MapDataset.range(5).to_iter_dataset()
+  ds = WithOptionsIterDataset(
+         ds,
+         DatasetOptions(
+             filter_warn_threshold_ratio=0.6,
+             filter_raise_threshold_ratio=0.8,
+         ),
+       )
+  ds = ds.filter(...)
+  ds = WithOptionsIterDataset(
+         ds,
+         DatasetOptions(filter_warn_threshold_ratio=0.7),
+       )
+  ds = ds.filter(...)
+  ```
+  In this case, the options will be:
+  ```
+  filter_warn_threshold_ratio=0.7
+  filter_raise_threshold_ratio=0.8
+  ```
+  """
+
+  def __init__(self, parent: IterDataset[T], options: DatasetOptions):
+    super().__init__(parent)
+    self._options = options
+
+  def __iter__(self) -> DatasetIterator[T]:
+    result = self._parent.__iter__()
+    # The parent iterator options are merged from the entire subtree. Merge
+    # them with the latest options and update the subtree options.
+    options = self._options.merge(result._options)
+    to_visit = [result]
+    while to_visit:
+      current = to_visit.pop()
+      current._options = options
+      to_visit.extend(current._parents)
+    return result
+
+  def __str__(self):
+    return f"WithOptionsIterDataset(options={self._options})"
 
 
 _ConsistentDatasetType = TypeVar(

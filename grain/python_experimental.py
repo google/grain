@@ -30,7 +30,11 @@ with epy.lazy_imports():
 
 del epy
 
-from ._src.python.dataset.dataset import apply_transformations
+from ._src.python.dataset.dataset import (
+    apply_transformations,
+    DatasetOptions,
+    WithOptionsIterDataset,
+)
 from ._src.python.dataset.transformations.flatmap import (
     FlatMapMapDataset,
     FlatMapIterDataset,
