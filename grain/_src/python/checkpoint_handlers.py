@@ -105,5 +105,5 @@ try:
   class PyGrainCheckpointRestore(ocp.args.CheckpointArgs):
     item: Any
 
-except (ImportError, TypeError):
+except (ImportError, TypeError, AttributeError):
   pass
