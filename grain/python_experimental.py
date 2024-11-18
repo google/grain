@@ -39,6 +39,9 @@ from ._src.python.dataset.transformations.flatmap import (
     FlatMapMapDataset,
     FlatMapIterDataset,
 )
+from ._src.python.dataset.transformations.interleave import (
+    InterleavedIterDataset,
+)
 from ._src.python.dataset.transformations.map import RngPool
 from ._src.python.dataset.transformations.mix import ConcatenateMapDataset
 from ._src.python.dataset.transformations.packing import FirstFitPackIterDataset

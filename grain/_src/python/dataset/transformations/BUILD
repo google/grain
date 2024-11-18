@@ -163,3 +163,21 @@ py_test(
         "//grain/_src/python/dataset",
     ],
 )
+
+py_library(
+    name = "interleave",
+    srcs = ["interleave.py"],
+    srcs_version = "PY3",
+    deps = ["//grain/_src/python/dataset"],
+)
+
+py_test(
+    name = "interleave_test",
+    srcs = ["interleave_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":interleave",
+        "//grain/_src/python:options",
+        "//grain/_src/python/dataset",
+    ],
+)
