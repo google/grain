@@ -68,7 +68,7 @@ class MixedIterDatasetTest(parameterized.TestCase):
         dataset.MapDataset.source(elements).to_iter_dataset()
         for elements in to_mix
     ]
-    ds = interleave.InterleavedIterDataset(datasets, cycle_length=cycle_length)
+    ds = interleave.InterleaveIterDataset(datasets, cycle_length=cycle_length)
     self.assertEqual(list(ds), expected)
     # Sanity check.
     flat_inputs = []
@@ -82,7 +82,7 @@ class MixedIterDatasetTest(parameterized.TestCase):
         dataset.MapDataset.source(elements).to_iter_dataset()
         for elements in to_mix
     ]
-    ds = interleave.InterleavedIterDataset(datasets, cycle_length=cycle_length)
+    ds = interleave.InterleaveIterDataset(datasets, cycle_length=cycle_length)
     ds_iter = ds.__iter__()
     checkpoints = {}
     for i in range(len(expected)):
@@ -102,7 +102,7 @@ class MixedIterDatasetTest(parameterized.TestCase):
 
     filenames = dataset.MapDataset.source(["11", "2345", "678", "9999"])
     sources = filenames.shuffle(seed=42).map(make_dummy_source)
-    ds = interleave.InterleavedIterDataset(sources, cycle_length=2)
+    ds = interleave.InterleaveIterDataset(sources, cycle_length=2)
     self.assertEqual(
         list(ds),
         ["1", "2", "1", "3", "6", "4", "7", "5", "8", "9", "9", "9", "9"],
@@ -112,7 +112,7 @@ class MixedIterDatasetTest(parameterized.TestCase):
     ds = dataset.MapDataset.range(1, 6).map(
         lambda i: dataset.MapDataset.source([i]).repeat(i).to_iter_dataset()
     )
-    ds = interleave.InterleavedIterDataset(ds, cycle_length=5)
+    ds = interleave.InterleaveIterDataset(ds, cycle_length=5)
     ds = ds.mp_prefetch(options.MultiprocessingOptions(num_workers=3))
     self.assertEqual(list(ds), [1, 2, 3, 4, 5, 3, 4, 2, 3, 4, 5, 4, 5, 5, 5])
 

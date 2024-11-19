@@ -40,7 +40,7 @@ from ._src.python.dataset.transformations.flatmap import (
     FlatMapIterDataset,
 )
 from ._src.python.dataset.transformations.interleave import (
-    InterleavedIterDataset,
+    InterleaveIterDataset,
 )
 from ._src.python.dataset.transformations.map import RngPool
 from ._src.python.dataset.transformations.mix import ConcatenateMapDataset

@@ -33,7 +33,7 @@ def _add_prefetch_and_make_iterator(
   ).__iter__()
 
 
-class _InterleavedDatasetIterator(dataset.DatasetIterator[T]):
+class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
   """Iterates over the interleaved datasets."""
 
   def __init__(
@@ -111,12 +111,12 @@ class _InterleavedDatasetIterator(dataset.DatasetIterator[T]):
 
   def __str__(self) -> str:
     return (
-        f"InterleavedDatasetIterator([{len(self._datasets)} datasets],"
+        f"InterleaveDatasetIterator([{len(self._datasets)} datasets],"
         f" cycle_length={self._cycle_length})"
     )
 
 
-class InterleavedIterDataset(dataset.IterDataset[T]):
+class InterleaveIterDataset(dataset.IterDataset[T]):
   """Interleaves the given sequence of datasets.
 
   The sequence can be a `MapDataset`.
@@ -134,7 +134,7 @@ class InterleavedIterDataset(dataset.IterDataset[T]):
     ...
 
   ds = grain.MapDataset.source(filenames).shuffle(seed=42).map(make_source)
-  ds = grain.experimental.InterleavedIterDataset(ds, cycle_length=4)
+  ds = grain.experimental.InterleaveIterDataset(ds, cycle_length=4)
   ds = ...
   ds = ds.mp_prefetch(ds, 2)
   for element in ds:
@@ -152,8 +152,8 @@ class InterleavedIterDataset(dataset.IterDataset[T]):
     self._datasets = datasets
     self._cycle_length = cycle_length
 
-  def __iter__(self) -> _InterleavedDatasetIterator[T]:
-    return _InterleavedDatasetIterator(
+  def __iter__(self) -> _InterleaveDatasetIterator[T]:
+    return _InterleaveDatasetIterator(
         self._datasets,
         cycle_length=self._cycle_length,
     )
@@ -163,6 +163,6 @@ class InterleavedIterDataset(dataset.IterDataset[T]):
 
   def __str__(self) -> str:
     return (
-        f"InterleavedIterDataset([{len(self._datasets)} datasets],"
+        f"InterleaveIterDataset([{len(self._datasets)} datasets],"
         f" cycle_length={self._cycle_length})"
     )
