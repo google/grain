@@ -513,7 +513,8 @@ class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
 
   Attributes:
     parent: The parent dataset to prefetch from.
-    prefetch_buffer_size: The size of the prefetch buffer.
+    prefetch_buffer_size: The size of the prefetch buffer. When less than or
+      equal to zero, the buffer size is infinite.
   """
 
   def __init__(
