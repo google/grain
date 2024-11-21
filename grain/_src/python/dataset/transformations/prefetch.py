@@ -513,7 +513,8 @@ class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
 
   Attributes:
     parent: The parent dataset to prefetch from.
-    prefetch_buffer_size: The size of the prefetch buffer.
+    prefetch_buffer_size: The size of the prefetch buffer. Must be greater than
+      or equal to 0. If 0, prefetching is disabled and this is a noop.
   """
 
   def __init__(
@@ -523,6 +524,11 @@ class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
       prefetch_buffer_size: int,
   ):
     super().__init__(parent)
+    if prefetch_buffer_size < 0:
+      raise ValueError(
+          "`prefetch_buffer_size` must be greater than or equal to 0, got "
+          f"{prefetch_buffer_size}."
+      )
     self._prefetch_buffer_size = prefetch_buffer_size
 
   def __str__(self) -> str:
@@ -531,9 +537,14 @@ class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
         f"prefetch_buffer_size={self._prefetch_buffer_size})"
     )
 
-  def __iter__(self) -> ThreadPrefetchDatasetIterator[T]:
-    return ThreadPrefetchDatasetIterator(
-        self._parent, self._prefetch_buffer_size
+  def __iter__(self) -> dataset.DatasetIterator[T]:
+    parent_iter = self._parent.__iter__()
+    if self._prefetch_buffer_size == 0:
+      # Avoid raising a NotImplemented error and make a noop instead.
+      parent_iter.start_prefetch = lambda: None
+      return parent_iter
+    return _ThreadPrefetchDatasetIterator(
+        parent_iter, self._prefetch_buffer_size, str(self)
     )
 
 
@@ -545,19 +556,21 @@ StateT = Mapping[str, Any]
 _INITIAL_STATE_SENTINEL = object()
 
 
-class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
+class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   """Iterator that performs prefetching using a synchronized queue."""
 
   _MUTATES_ELEMENT_SPEC = False
 
   def __init__(
       self,
-      parent: dataset.IterDataset[T],
+      parent: dataset.DatasetIterator[T],
       prefetch_buffer_size: int,
+      parent_transform_name: str,
   ):
-    super().__init__(parent.__iter__())
-    self._iter_parent: dataset.IterDataset[T] = parent
+    super().__init__(parent)
+    assert prefetch_buffer_size > 0, prefetch_buffer_size
     self._prefetch_buffer_size = prefetch_buffer_size
+    self._parent_transform_name = parent_transform_name
     self._state: StateT | None = None
 
     self._work_queue = queue.Queue[Callable[[], Any]]()
@@ -586,7 +599,7 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       self._work_thread = threading.Thread(
           target=self._work_loop,
           daemon=True,
-          name=f"Prefetch-{self._iter_parent}",
+          name=f"Prefetch-{self._parent_transform_name}",
       )
       self._work_thread.start()
 

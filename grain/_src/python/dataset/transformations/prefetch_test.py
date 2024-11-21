@@ -573,6 +573,16 @@ class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
 
   @parameterized.named_parameters(
       dict(
+          testcase_name='no_prefetch',
+          prefetch_buffer_size=0,
+          warm_start=False,
+      ),
+      dict(
+          testcase_name='no_prefetch_with_warm_start',
+          prefetch_buffer_size=0,
+          warm_start=True,
+      ),
+      dict(
           testcase_name='thread',
           prefetch_buffer_size=1,
           warm_start=True,
@@ -631,6 +641,12 @@ class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
         for i in range(starting_step, max_steps):
           value = next(ds_iter)
           self.assertEqual(value, values_without_interruption[i])
+
+  def test_fails_with_negative_prefetch_buffer_size(self):
+    with self.assertRaisesRegex(
+        ValueError, '`prefetch_buffer_size` must be greater than or equal to 0'
+    ):
+      prefetch.ThreadPrefetchIterDataset(self.ds, prefetch_buffer_size=-1)
 
 
 if __name__ == '__main__':
