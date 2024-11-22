@@ -157,8 +157,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
       if return_element:
         with self._stats.record_self_time(offset_ns=timer.value()):
           return element
-    with self._stats.record_self_time(offset_ns=timer.value()):
-      raise StopIteration
+    raise StopIteration
 
   def get_state(self):
     return {"next_index": self._next_index}
