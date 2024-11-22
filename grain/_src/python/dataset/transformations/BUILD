@@ -200,5 +200,6 @@ py_test(
         ":interleave",
         "//grain/_src/python:options",
         "//grain/_src/python/dataset",
+        requirement("absl_py"), requirement("numpy"), requirement("cloudpickle"), requirement("etils"), requirement("jax"), requirement("typing_extensions"), requirement("array_record"), requirement("tensorflow")
     ],
 )

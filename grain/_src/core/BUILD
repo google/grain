@@ -122,5 +122,5 @@ py_test(
     deps = [
         ":tree",
         ":tree_test_lib",
-        requirement("absl_py"), requirement("numpy"), requirement("cloudpickle"), requirement("etils"), requirement("jax"), requirement("typing_extensions"), requirement("array_record"), requirement("tensorflow")    ],
+        requirement("absl_py"), requirement("numpy"), requirement("cloudpickle"), requirement("etils"), requirement("jax"), requirement("typing_extensions"), requirement("array_record"), requirement("tensorflow"), requirement("attrs")    ],
 )
