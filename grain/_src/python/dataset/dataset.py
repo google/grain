@@ -1037,7 +1037,11 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
 
 
 class DatasetIterator(Iterator[T], abc.ABC):
-  """`IterDataset` iterator."""
+  """`IterDataset` iterator.
+
+  NOTE: The methods are assumed to be thread-unsafe. Please ensure only a single
+  thread can access a `DatasetIterator` instance.
+  """
 
   # Whether this transformation mutates parent elements. This does not affect
   # the transformation itself, only used for information purposes in statistics.
