@@ -20,14 +20,17 @@ from collections.abc import Callable, Iterator
 import contextlib
 import copy
 import functools
+import os
 import queue
 import sys
+import tempfile
 import threading
 import time
 import typing
 from typing import Any, Generic, Mapping, Optional, Protocol, TypeVar
 
 import cloudpickle
+from grain._src.core import config as grain_config
 from concurrent import futures
 from grain._src.core import tree
 import multiprocessing as mp
@@ -357,10 +360,14 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
   """
 
   def __init__(
-      self, state: dict[str, dict[str, Any] | int], ds: dataset.IterDataset[T]
+      self,
+      state: dict[str, dict[str, Any] | int],
+      ds: dataset.IterDataset[T],
+      stats_fifos: list[str],
   ):
     self._state = state
     self._ds = ds
+    self._stats_fifos = stats_fifos
 
   def __call__(
       self, *, worker_index: int, worker_count: int
@@ -407,8 +414,6 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
 class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   """Iterator that performs prefetching using a multiprocessing pool."""
 
-  _MUTATES_ELEMENT_SPEC = False
-
   def __init__(
       self,
       parent: dataset.IterDataset[T],
@@ -427,6 +432,9 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     # last worker.
     workers_state: dict[str, Any] = {}
     iterations_to_skip: dict[str, int] = {}
+    self._create_main_connection_thread = None
+    self._tmp_dir = tempfile.mkdtemp()
+    self._stats_fifos = []
     for i in range(multiprocessing_options.num_workers):
       workers_state[str(i)] = iter(
           self._iter_parent
@@ -484,11 +492,22 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       self._raw_iterator.start_prefetch()
       self._iterator = _iterator_with_context(self._raw_iterator)
 
+  def _create_main_connections(self) -> None:
+    """Creates a `MainConnection` for each worker to receive data from."""
+    if not grain_config.config.py_debug_mode:
+      return
+    connections = []
+    for stats_fifo in self._stats_fifos:
+      connection = dataset_stats.MainConnection(stats_fifo)
+      connection.open()
+      connections.append(connection)
+    self._stats._config.main_stats_connections = connections  # pylint: disable=protected-access
+
   def _create_iterator_context(self) -> grain_pool.MultiProcessIterator[T]:
     """Creates a `MultiProcessIterator`."""
 
     get_element_producer_fn = GetElementProducerFn(
-        self._state, self._iter_parent
+        self._state, self._iter_parent, self._stats_fifos
     )
 
     return grain_pool.MultiProcessIterator(
