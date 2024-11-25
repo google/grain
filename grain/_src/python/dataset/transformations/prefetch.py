@@ -105,6 +105,16 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._allow_nones = allow_nones
     if self._prefetch_buffer_size > 0:
       self._executor = futures.ThreadPoolExecutor(read_options.num_threads)
+    # Stats on the parent `MapDataset` are intialized lazily on the first
+    # lookup. Multithreaded lookups result in multithreaded initialization
+    # of stats through `functools.cached_property` that is not thread-safe.
+    # We eagerly initialize stats to avoid race condition.
+    self._stats = dataset_stats.make_stats(
+        dataset_stats.StatsConfig(
+            name=str(self), transform_mutates_spec=self._MUTATES_ELEMENT_SPEC
+        ),
+        (self._map_parent._stats,),  # pylint: disable=protected-access
+    )
 
   @functools.cached_property
   def _threshold_checker(self):
@@ -172,16 +182,6 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
         )
       if self._prefetch_buffer_size > 0:
         self._buffer = None
-
-  @functools.cached_property
-  def _stats(self):
-    # Keep stats link to the MapDataset parent.
-    return dataset_stats.make_stats(
-        dataset_stats.StatsConfig(
-            name=str(self), transform_mutates_spec=self._MUTATES_ELEMENT_SPEC
-        ),
-        (self._map_parent._stats,),  # pylint: disable=protected-access
-    )
 
   def __str__(self) -> str:
     return (

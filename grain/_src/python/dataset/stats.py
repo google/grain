@@ -52,6 +52,8 @@ T = TypeVar("T")
 # Time between two consecutive monitoring reports.
 _REPORTING_PERIOD_SEC = 10
 _LOG_EXECTION_SUMMARY_PERIOD_SEC = 60
+# Stop reporting if there has been no statistics updates for this long.
+_REPORTING_TIMEOUT_SEC = 120
 
 _EDGE_TEMPLATE = r"""{input_spec}
   ││
@@ -416,23 +418,30 @@ class _ExecutionStats(_VisualizationStats):
         min_processing_time_ns=sys.maxsize,
         max_processing_time_ns=0,
     )
+    self._last_update_time = 0
+    self._last_report_time = 0
 
   def __reduce__(self):
     return _ExecutionStats, (self._config, self._parents)
 
+  def _should_report(self):
+    return time.time() - self._last_update_time < _REPORTING_TIMEOUT_SEC
+
   def _reporting_loop(self):
-    while True:
+    while self._should_report():
       time.sleep(_REPORTING_PERIOD_SEC)
       self.report()
 
   def _logging_execution_summary_loop(self):
-    while True:
+    while self._should_report():
       time.sleep(_LOG_EXECTION_SUMMARY_PERIOD_SEC)
-      summary = self._get_execution_summary()
-      logging.info(
-          "Grain Dataset Execution Summary:\n\n%s",
-          _pretty_format_summary(summary),
-      )
+      if self._last_update_time > self._last_report_time:
+        self._last_report_time = time.time()
+        summary = self._get_execution_summary()
+        logging.info(
+            "Grain Dataset Execution Summary:\n\n%s",
+            _pretty_format_summary(summary),
+        )
 
   def _build_execution_summary(
       self,
@@ -475,6 +484,7 @@ class _ExecutionStats(_VisualizationStats):
       if self._is_output:
         # We avoid acquiring `_reporting_thread_init_lock` here to avoid lock
         # contention.
+        self._last_update_time = time.time()
         if self._reporting_thread is None:
           with self._reporting_thread_init_lock:
             # Check above together with update would not be atomic -- another
