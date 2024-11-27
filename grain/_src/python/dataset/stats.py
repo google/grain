@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import abc
+from collections.abc import Sequence
 import contextlib
 import dataclasses
 import pprint
@@ -23,7 +24,7 @@ import sys
 import threading
 import time
 import types
-from typing import Any, Sequence, TypeVar
+from typing import Any, TypeVar
 
 from absl import logging
 from grain._src.core import config as grain_config
@@ -73,6 +74,9 @@ _COLUMN_NAME_OVERRIDES = types.MappingProxyType({
     "output_spec": "output spec",
 })
 
+_MAX_COLUMN_WIDTH = 30
+_MAX_ROW_LINES = 5
+
 
 def _pretty_format_ns(value: int) -> str:
   """Pretty formats a time value in nanoseconds to human readable value."""
@@ -105,10 +109,18 @@ def _pretty_format_summary(
   """Returns Execution Stats Summary for the dataset pipeline in tabular format."""
   tabular_summary = []
   col_names = [key for key in summary.nodes[0].DESCRIPTOR.fields_by_name.keys()]
+  # Remove the columns `output_spec` and `is_output` as they are available in
+  # the visualization graph.
+  col_names.remove("output_spec")
+  col_names.remove("is_output")
   # Insert the average processing time column after the max processing time
   # column.
   index = col_names.index("max_processing_time_ns")
   col_names.insert(index + 1, _AVG_PROCESSING_TIME_COLUMN_NAME)
+
+  tabular_summary.append(
+      [_COLUMN_NAME_OVERRIDES.get(name, name) for name in col_names]
+  )
 
   # Compute the maximum width of each column.
   col_widths = []
@@ -122,24 +134,12 @@ def _pretty_format_summary(
       max_width = max(len(str(value)), max_width)
     col_widths.append(max_width)
 
-  col_headers = [
-      "| {:<{}} |".format(_COLUMN_NAME_OVERRIDES.get(name, name), width)
-      for name, width in zip(col_names, col_widths)
-  ]
-  col_seperators = ["-" * len(header) for header in col_headers]
-
-  tabular_summary.extend(col_seperators)
-  tabular_summary.append("\n")
-  tabular_summary.extend(col_headers)
-  tabular_summary.append("\n")
-  tabular_summary.extend(col_seperators)
-  tabular_summary.append("\n")
-
   for node_id in sorted(summary.nodes, reverse=True):
-    is_total_processing_time_zero = (
-        summary.nodes[node_id].total_processing_time_ns == 0
-    )
-    for name, width in zip(col_names, col_widths):
+    row_values = []
+    for name in col_names:
+      is_total_processing_time_zero = (
+          summary.nodes[node_id].total_processing_time_ns == 0
+      )
       if name == _AVG_PROCESSING_TIME_COLUMN_NAME:
         value = _get_avg_processing_time_ns(summary, node_id)
       else:
@@ -156,19 +156,74 @@ def _pretty_format_summary(
         # produced an element and processing times & num_produced_elements are
         # not yet meaningful.
         if is_total_processing_time_zero:
-          col_value = f"{f'| N/A':<{width+2}} |"
+          col_value = "N/A"
         elif name != "num_produced_elements":
-          col_value = f"{f'| {_pretty_format_ns(value)}':<{width+2}} |"
+          col_value = _pretty_format_ns(value)
         else:
-          col_value = f"{f'| {value}':<{width+2}} |"
+          col_value = str(value)
       else:
-        col_value = "| {:<{}} |".format(str(value), width)
-      tabular_summary.append(col_value)
-    tabular_summary.append("\n")
+        col_value = str(value)
+      row_values.append(col_value)
+    tabular_summary.append(row_values)
+  table = _Table(tabular_summary, col_widths=col_widths)
+  return table.get_pretty_wrapped_summary()  # pylint: disable=protected-access
 
-  for seperator in col_seperators:
-    tabular_summary.append(seperator)
-  return "".join(tabular_summary)
+
+class _Table:
+  """Table class for pretty printing tabular data."""
+
+  def __init__(
+      self,
+      contents,
+      *,
+      col_widths,
+      col_delim="|",
+      row_delim="-",
+  ):
+
+    self._contents = contents
+    self._max_col_width = _MAX_COLUMN_WIDTH
+    self._col_delim = col_delim
+    self._col_widths = col_widths
+    self._pretty_summary = []
+    self._col_header = []
+
+    # Determine the number of row_delim characters to fill the space used by
+    # col_delim characters in a column header.
+    col_delim_space_fill = len(self._col_delim) * (len(self._contents[0]) - 1)
+
+    self._col_header.append(self._col_delim)
+    for col_width in self._col_widths:
+      if col_width > self._max_col_width:
+        col_width = self._max_col_width
+      self._col_header.append(row_delim * (col_width + 2))
+    self._col_header.append(row_delim * (col_delim_space_fill))
+    self._col_header.append(self._col_delim + "\n")
+    self._pretty_summary.extend(self._col_header)
+
+  def get_pretty_wrapped_summary(self):
+    """Wraps the table contents within the max column width and max row lines."""
+
+    for row in self._contents:
+      max_wrap = (max([len(i) for i in row]) // self._max_col_width) + 1
+      max_wrap = min(max_wrap, _MAX_ROW_LINES)
+      for r in range(max_wrap):
+        self._pretty_summary.append(self._col_delim)
+        for index in range(len(row)):
+          if self._col_widths[index] > self._max_col_width:
+            wrap = self._max_col_width
+          else:
+            wrap = self._col_widths[index]
+          start = r * self._max_col_width
+          end = (r + 1) * self._max_col_width
+          self._pretty_summary.append(" ")
+          self._pretty_summary.append(row[index][start:end].ljust(wrap))
+          self._pretty_summary.append(" ")
+          self._pretty_summary.append(self._col_delim)
+        self._pretty_summary.append("\n")
+      self._pretty_summary.extend(self._col_header)
+
+    return "".join(self._pretty_summary)
 
 
 class Timer:

@@ -100,7 +100,7 @@ _ITER_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
 "<class 'int'>[]"
 
   ││
-  ││  MapDatasetIterator(transform=<lambda> @ .../python/dataset/stats_test.py:441)
+  ││  MapDatasetIterator(transform=<lambda> @ .../python/dataset/stats_test.py:462)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
