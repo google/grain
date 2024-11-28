@@ -23,6 +23,7 @@ from typing import Generic, TypeVar
 import jax
 import jaxtyping as jt
 import numpy as np
+
 import tree
 
 

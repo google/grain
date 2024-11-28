@@ -64,8 +64,9 @@ class ShuffleMapDataset(dataset.MapDataset[T]):
       #   - we use different seeds for each epoch to ensure that the shuffle is
       #     different for each epoch
       per_epoch_seed = (self._seed + epoch) % 2**32
+      # raise RuntimeError(f"Expected int for index_in_epoch, got {type(index_in_epoch)}; Expected int for length - 1, got {type(length - 1)}; Expected int for per_epoch_seed, got {type(per_epoch_seed)}")
       shuffled_index_in_epoch = index_shuffle.index_shuffle(
-          index_in_epoch, max_index=length - 1, seed=per_epoch_seed, rounds=4
+          index=index_in_epoch, max_index=length - 1, seed=per_epoch_seed, rounds=4
       )
       shuffled_index = shuffled_index_in_epoch + epoch * length
     return self._parent[shuffled_index]
@@ -101,9 +102,90 @@ class WindowShuffleMapDataset(dataset.MapDataset[T]):
       seed = self._seed + window_index
       index_in_window = index_shuffle.index_shuffle(
           index_in_window,
-          max_index=self._window_size - 1,
-          seed=seed,
-          rounds=4,
+          self._window_size - 1,
+          seed,
+          4,
       )
       index = index_in_window + window_index * self._window_size
     return self._stats.record_output_spec(self._parent[index])
+
+
+class WindowShuffleIterDataset(dataset.IterDataset[T]):
+  """Shuffles the parent dataset within a given window.
+
+  Shuffles the iterator's next within a range, given by window_size. There is a
+  one-to-one mapping and hence a guarantee that no shuffled indices are repeated
+  within a given window).
+  """
+
+  def __init__(
+      self, parent: dataset.IterDataset, *, window_size: int, seed: int
+  ):
+    super().__init__(parent)
+    self._window_size = window_size
+    self._seed = seed
+
+  def __iter__(self) -> _WindowShuffleDatasetIterator[T]:
+    parent_iter = self._parent.__iter__()
+    return _WindowShuffleDatasetIterator(
+        parent_iter, window_size=self._window_size, seed=self._seed
+    )
+
+  def __str__(self) -> str:
+    return "WindowShuffleIterDataset"
+
+
+class _WindowShuffleDatasetIterator(dataset.DatasetIterator[T]):
+  """Iterator that within awindow shuffles elements."""
+
+  _MUTATES_ELEMENT_SPEC = False
+
+  def __init__(
+      self,
+      parent: dataset.DatasetIterator,
+      window_size: int,
+      seed: int,
+  ):
+    super().__init__(parent)
+    self._window_size = window_size
+    self._seed = seed
+    self._len = 0
+    self._windows_iterators: list[dict[str, dataset.DatasetIterator[T]]] = []
+    self._iter_pos = 0
+
+    while True:
+      try:
+        next(parent)
+        if self._len % window_size == 0:
+          self._windows_iterators.append(self._parent.__iter__().get_state())
+        self._len += 1
+      except StopIteration:
+        break
+
+  def __next__(self):
+    index_window, index_in_window = divmod(self._iter_pos, self._window_size)
+    self._iter_pos += 1
+    seed = self._seed + index_window
+    index_in_window = index_shuffle.index_shuffle(
+        index_in_window,
+        max_index=self._window_size - 1,
+        seed=seed,
+        rounds=4,
+    )
+    tmp_iter: dataset.DatasetIterator[T] = self._parent.__iter__()
+    tmp_iter.set_state(self._windows_iterators[index_window])
+    # Due to iterator semantics, next() points to the next position but we need
+    # the current position.
+    value = next(tmp_iter) - 1
+    for _ in range(index_in_window - 1):
+      value = next(tmp_iter)
+    return value
+
+  def get_state(self):
+    return self._parent.get_state()
+
+  def set_state(self, state):
+    self._parent.set_state(state)
+
+  def __str__(self) -> str:
+    return "WindowShuffleDatasetIterator"

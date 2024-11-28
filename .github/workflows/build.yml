@@ -1,0 +1,75 @@
+name: Build and Save Python Wheel
+
+on:
+  push:
+    branches:
+      - '**'  # Build on all branches
+    tags:
+      - 'v*'  # Trigger the release workflow only when a tag is pushed (e.g., v1.0.0)
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest]  # Specify both macOS and Linux environments
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Ensures that the full history is cloned to handle any branch-specific build needs
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install setuptools wheel
+
+      # Run the build script and capture the output directory
+      - name: Run build script
+        id: build
+        run: |
+          bazel run //:requirements.update
+          bazel build ...
+
+      - name: Run Bazel Tests
+        run: |
+          bazel test ...
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: built-wheels-${{ matrix.os }}
+          path: bazel-bin/*.whl
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')  # Only run this job if a tag starting with "v" is pushed
+    steps:
+      - name: Download Artifacts from macOS
+        uses: actions/download-artifact@v3
+        with:
+          name: built-wheels-macos-latest
+          path: ./artifacts/macos
+
+      - name: Download Artifacts from Linux
+        uses: actions/download-artifact@v3
+        with:
+          name: built-wheels-ubuntu-latest
+          path: ./artifacts/linux
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}  # Use the current tag name as the release version
+          files: |
+            artifacts/macos/*.whl
+            artifacts/linux/*.whl
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

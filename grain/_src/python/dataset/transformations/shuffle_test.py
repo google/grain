@@ -102,5 +102,44 @@ class WindowShuffleMapDatasetTest(absltest.TestCase):
       self.assertBetween(elements[i], i, i + (window_size - 1))
 
 
+class WindowShuffleInterDatasetTest(absltest.TestCase):
+  _DATASET_SIZE = 30
+  _WINDOW_SIZE = 10
+
+  def setUp(self):
+    super().setUp()
+    self.range_iter_ds = dataset.MapDataset.range(
+        0, self._DATASET_SIZE
+    ).to_iter_dataset()
+
+  def test_shuffle_range(self):
+    ds = shuffle.WindowShuffleIterDataset(
+        self.range_iter_ds, window_size=self._WINDOW_SIZE, seed=42
+    )
+    ds_iter = iter(ds)
+    elements = [next(ds_iter) for _ in range(30)]
+    for i in range(0, self._DATASET_SIZE, self._WINDOW_SIZE):
+      self.assertBetween(elements[i], i, i + (self._WINDOW_SIZE - 1))
+
+  def test_shuffle_range_within_window(self):
+    ds = shuffle.WindowShuffleIterDataset(
+        self.range_iter_ds, window_size=self._WINDOW_SIZE, seed=42
+    )
+    ds_iter = iter(ds)
+    elements = [next(ds_iter) for _ in range(30)]
+    num_windows = int(self._DATASET_SIZE / self._WINDOW_SIZE)
+    for window_num in range(0, num_windows):
+      for pos_in_window in range(0, self._WINDOW_SIZE):
+        first_pos_in_window = window_num * self._WINDOW_SIZE
+        last_pos_in_window = (
+            window_num * self._WINDOW_SIZE + self._WINDOW_SIZE - 1
+        )
+        self.assertBetween(
+            elements[window_num * self._WINDOW_SIZE + pos_in_window],
+            first_pos_in_window,
+            last_pos_in_window,
+        )
+
+
 if __name__ == "__main__":
   absltest.main()

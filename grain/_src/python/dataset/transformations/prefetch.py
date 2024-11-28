@@ -29,8 +29,8 @@ from typing import Any, Generic, Mapping, Optional, Protocol, TypeVar
 
 import cloudpickle
 from concurrent import futures
-from grain._src.core import tree
 import multiprocessing as mp
+from grain._src.core import tree
 from grain._src.python import grain_pool
 from grain._src.python import options as grain_options
 from grain._src.python import shared_memory_array
