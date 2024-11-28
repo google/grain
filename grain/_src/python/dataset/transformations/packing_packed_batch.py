@@ -161,20 +161,28 @@ class PackedBatch(Generic[_T]):
         return the index of that row. If it doesn't fit in any of the rows,
         return the names of the components that caused it to fail to fit.
     """
+    tree.assert_same_structure(element, self._length_struct)
+
     element_feature_lengths = jax.tree.map(
         lambda x: 1 if np.ndim(x) == 0 else len(x), element
     )
 
     # Check no feature exceeds max length
-    length_exceeded = jax.tree.map(
-        lambda feature_length, max_length: feature_length > max_length,
-        element_feature_lengths,
-        self._length_struct,
-    )
-    if any(tree.flatten(length_exceeded)):
+    features_exceeding_max_length = []
+    for (path, feature_length), (_, max_length) in zip(
+        tree.flatten_with_path(element_feature_lengths),
+        tree.flatten_with_path(self._length_struct),
+        strict=True,
+    ):
+      if feature_length > max_length:
+        features_exceeding_max_length.append((path, feature_length, max_length))
+
+    if features_exceeding_max_length:
       raise ValueError(
           f"Inputs to {self.__class__.__name__} must be truncated to max"
-          " length."
+          " length. Received the following features that exceed their max: "
+          "(feature_path, feature_length, max_length) = "
+          f"{features_exceeding_max_length}"
       )
 
     # For each row, check whether the total length after adding the current
