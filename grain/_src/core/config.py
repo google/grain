@@ -144,6 +144,15 @@ _grain_experiment_metric = monitoring.Metric(
     fields=[("name", str)],
 )
 
+_grain_framework_type_metric = monitoring.Counter(
+    "/grain/framework_type",
+    metadata=monitoring.Metadata(
+        description="The framework type used to build the Grain dataset."
+    ),
+    root=grain_monitoring.get_monitoring_root(),
+    fields=[("name", str)],
+)
+
 
 class Config:
   """Class for holding current Grain configuration."""
@@ -171,6 +180,9 @@ class Config:
       setattr(flags.FLAGS, flag_name, value)
       return
     raise ValueError(f"Unrecognized config option: {name}")
+
+  def record_framework_type(self, framework_type: str):
+    _grain_framework_type_metric.Increment(framework_type)
 
 
 config = Config()
