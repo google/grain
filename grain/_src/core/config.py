@@ -144,6 +144,15 @@ _grain_experiment_metric = monitoring.Metric(
     fields=[("name", str)],
 )
 
+grain_framework_type_metric = monitoring.Counter(
+    "/grain/framework_type",
+    metadata=monitoring.Metadata(
+        description="The framework type used to build the Grain dataset."
+    ),
+    root=grain_monitoring.get_monitoring_root(),
+    fields=[("name", str)],
+)
+
 
 class Config:
   """Class for holding current Grain configuration."""
