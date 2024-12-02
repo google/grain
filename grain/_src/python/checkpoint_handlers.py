@@ -27,6 +27,8 @@ IteratorType = TypeVar(
 
 
 # Ipmlements orbax.checkpoint.CheckpointHandler.
+
+
 class PyGrainCheckpointHandler:
   """Orbax CheckpointHandler for PyGrain iterators."""
 
