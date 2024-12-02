@@ -49,6 +49,7 @@ py_library(
     data = ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
     srcs_version = "PY3",
     # Implicit build flag
+    visibility = [":experimental_pygrain_users"],
     deps = [
         ":python_lazy_dataset",  # build_cleaner: keep
         "//grain/_src/core:transforms",  # build_cleaner: keep
