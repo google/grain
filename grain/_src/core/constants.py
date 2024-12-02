@@ -33,7 +33,10 @@ EPOCH = "_epoch"
 SEED = "_seed"
 # Serialized record.
 RECORD = "_record"
+# Whether this record is filtered. This is used to enable filtering through map
+# in mixtures, improving performance.
+FILTER = "_filter"
 
 META_FEATURES = frozenset(
-    [INDEX, RECORD_KEY, DATASET_INDEX, EPOCH, SEED, RECORD]
+    [INDEX, RECORD_KEY, DATASET_INDEX, EPOCH, SEED, RECORD, FILTER]
 )
