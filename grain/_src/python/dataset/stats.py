@@ -485,11 +485,21 @@ class _ExecutionStats(_VisualizationStats):
   def _reporting_loop(self):
     while self._should_report():
       time.sleep(_REPORTING_PERIOD_SEC)
+      # A node can be marked as non-output after the corresponding
+      # transformation started processing elements -- we do not control the
+      # initialization time.
+      if not self._is_output:
+        return
       self.report()
 
   def _logging_execution_summary_loop(self):
     while self._should_report():
       time.sleep(_LOG_EXECTION_SUMMARY_PERIOD_SEC)
+      # A node can be marked as non-output after the corresponding
+      # transformation started processing elements -- we do not control the
+      # initialization time.
+      if not self._is_output:
+        return
       if self._last_update_time > self._last_report_time:
         self._last_report_time = time.time()
         summary = self._get_execution_summary()

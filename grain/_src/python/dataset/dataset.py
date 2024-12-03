@@ -677,21 +677,12 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
     if hasattr(self, "_parents"):
       for p in self._parents:
         parents_stats.append(p._stats)  # pylint: disable=protected-access
-    result = dataset_stats.make_stats(
+    return dataset_stats.make_stats(
         dataset_stats.StatsConfig(
             name=str(self), transform_mutates_spec=self._MUTATES_ELEMENT_SPEC
         ),
         parents_stats,
     )
-    # `cached_property` is not thread-safe. By the time we finish constructing
-    # the stats object, another thread may have already done it. So we check and
-    # return it if that's the case. Note that this operation together with
-    # `cached_property`s setter is not atomic so there's still a very small
-    # chance of a race condition. However, consequences of the race are that the
-    # optional stats collection will be disabled for the current transformation.
-    # This is much less severe than the alternative of introducing lock
-    # contention on the first batch processing.
-    return self.__dict__.get("_stats", result)
 
 
 class _IterDatasetMeta(abc.ABCMeta):

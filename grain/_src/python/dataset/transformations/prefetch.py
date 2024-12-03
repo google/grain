@@ -105,11 +105,11 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._allow_nones = allow_nones
     if self._prefetch_buffer_size > 0:
       self._executor = futures.ThreadPoolExecutor(read_options.num_threads)
-    # Stats on the parent `MapDataset` are intialized lazily on the first
-    # lookup. Multithreaded lookups result in multithreaded initialization
-    # of stats through `functools.cached_property` that is not thread-safe.
-    # We eagerly initialize stats to avoid race condition.
-    self._stats = dataset_stats.make_stats(
+
+  @functools.cached_property
+  def _stats(self):
+    # Connect to `MapDataset` parent stats.
+    return dataset_stats.make_stats(
         dataset_stats.StatsConfig(
             name=str(self), transform_mutates_spec=self._MUTATES_ELEMENT_SPEC
         ),
@@ -143,6 +143,9 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
                     self._dataset_length,
                 ),
             )
+            # Stats initialization is not thread-safe, so we trigger map parent
+            # stats initialization before multithreaded prefetching.
+            _ = self._stats
             self._buffer = collections.deque(
                 self._executor.submit(self._map_parent.__getitem__, i)
                 for i in indices
@@ -406,8 +409,6 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
 
 class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   """Iterator that performs prefetching using a multiprocessing pool."""
-
-  _MUTATES_ELEMENT_SPEC = False
 
   def __init__(
       self,
