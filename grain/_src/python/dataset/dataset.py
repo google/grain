@@ -668,21 +668,43 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
   def __iter__(self) -> DatasetIterator[T]:
     return self.to_iter_dataset().__iter__()
 
-  @functools.cached_property
-  def _stats(self) -> dataset_stats.Stats:
-    """Returns the Stats object for recording statistics about this dataset."""
+  def _initialize_stats(
+      self, execution_tracking_mode: dataset_stats.ExecutionTrackingMode
+  ):
+    """Eagerly initializes the stats object with given execution tracking mode.
+
+    Sets the `_stats` attribute with specified execution tracking mode,
+    bypassing the `_stats` cached property.
+    This is beneficial when we want to initialize the stats object eagerly from
+    PrefetchDatasetIterator, using the appropriate execution tracking mode from
+    the grain options.
+
+    Args:
+      execution_tracking_mode: The execution tracking mode to use for the stats
+        object.
+
+    Returns:
+      The initialized stats object.
+    """
     # There may be parent `MapDataset` nodes introduced by users that did not
     # call super init and thus don't have `_parents`.
     parents_stats = []
     if hasattr(self, "_parents"):
       for p in self._parents:
-        parents_stats.append(p._stats)  # pylint: disable=protected-access
-    return dataset_stats.make_stats(
+        parents_stats.append(p._initialize_stats(execution_tracking_mode))  # pylint: disable=protected-access
+    self._stats = dataset_stats.make_stats(
         dataset_stats.StatsConfig(
             name=str(self), transform_mutates_spec=self._MUTATES_ELEMENT_SPEC
         ),
         parents_stats,
+        execution_tracking_mode=execution_tracking_mode,
     )
+    return self._stats
+
+  @functools.cached_property
+  def _stats(self) -> dataset_stats.Stats:
+    """Returns the Stats object for recording statistics about this dataset."""
+    return self._initialize_stats(dataset_stats.ExecutionTrackingMode.DISABLED)
 
 
 class _IterDatasetMeta(abc.ABCMeta):
@@ -1066,7 +1088,7 @@ class DatasetIterator(Iterator[T], abc.ABC):
     """
     # TODO: Relax the requirement to access options after all iterators
     # in the pipeline have been initialized.
-    return self._options or DatasetOptions()
+    return getattr(self, "_options", None) or DatasetOptions()
 
   @property
   def _parent(self) -> DatasetIterator:
@@ -1124,9 +1146,11 @@ class DatasetIterator(Iterator[T], abc.ABC):
         parents_stats.append(p._stats)  # pylint: disable=protected-access
     return dataset_stats.make_stats(
         dataset_stats.StatsConfig(
-            name=str(self), transform_mutates_spec=self._MUTATES_ELEMENT_SPEC
+            name=str(self),
+            transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
         ),
         parents_stats,
+        execution_tracking_mode=self._options_with_default.execution_tracking_mode,
     )
 
 
@@ -1174,17 +1198,32 @@ class _Default(Generic[T]):
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class DatasetOptions:
-  """Holds options used by dataset transformations."""
+  """Holds options used by dataset transformations.
 
-  # If the ratio of filtered out elements is above these thresholds, a warning
-  # or an exception will be issued, respectively. Value `None` disables the
-  # check.
-  # The ratio is calculated on non-overlapping windows of 1000 elements. For
-  # instancce, with `filter_warn_threshold_ratio=0.9` and 901 elements out of
-  # the first 1000 (or elements 1000...2000) filtered out, a warning will be
-  # issued.
+  Available options:
+    filter_warn_threshold_ratio:
+      If the ratio of filtered out elements is above these thresholds, a warning
+      will be issued. Value `None` disables the check. The ratio is calculated
+      on non-overlapping windows of 1000 elements. For instance, with
+      `filter_warn_threshold_ratio=0.9` and 901 elements out of the first 1000
+      (or elements 1000...2000) filtered out, a warning will be issued.
+    filter_raise_threshold_ratio:
+      If the ratio of filtered out elements is above these thresholds, an
+      exception will be issued. Value `None` disables the check.
+    execution_tracking_mode:
+      The collection of execution statistics like total processing time taken by
+      each transformation, number of elements produced etc. can be managed
+      through various modes. If `DISABLED`, no statistics are collected.If
+      `STAGE_TIMING`, the time it takes to process each transormation is
+      collected. See `ExecutionTrackingMode` for more details.
+  """
+
   filter_warn_threshold_ratio: float | None | _Default[float] = _Default(0.9)
   filter_raise_threshold_ratio: float | None | _Default[None] = _Default(None)
+  execution_tracking_mode: (
+      dataset_stats.ExecutionTrackingMode
+      | _Default[dataset_stats.ExecutionTrackingMode]
+  ) = _Default(dataset_stats.ExecutionTrackingMode.DISABLED)
 
   # Internal fields.
 
