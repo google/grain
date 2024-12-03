@@ -682,6 +682,7 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
             name=str(self), transform_mutates_spec=self._MUTATES_ELEMENT_SPEC
         ),
         parents_stats,
+        execution_tracking_mode=dataset_stats.ExecutionTrackingMode.DISABLED,
     )
 
 
@@ -1124,9 +1125,11 @@ class DatasetIterator(Iterator[T], abc.ABC):
         parents_stats.append(p._stats)  # pylint: disable=protected-access
     return dataset_stats.make_stats(
         dataset_stats.StatsConfig(
-            name=str(self), transform_mutates_spec=self._MUTATES_ELEMENT_SPEC
+            name=str(self),
+            transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
         ),
         parents_stats,
+        execution_tracking_mode=self._options_with_default.execution_tracking_mode,
     )
 
 
@@ -1185,6 +1188,11 @@ class DatasetOptions:
   # issued.
   filter_warn_threshold_ratio: float | None | _Default[float] = _Default(0.9)
   filter_raise_threshold_ratio: float | None | _Default[None] = _Default(None)
+  execution_tracking_mode: (
+      dataset_stats.ExecutionTrackingMode
+      | None
+      | _Default[dataset_stats.ExecutionTrackingMode]
+  ) = _Default(dataset_stats.ExecutionTrackingMode.DISABLED)
 
   # Internal fields.
 
