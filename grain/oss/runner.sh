@@ -19,7 +19,7 @@ if [ -n "${BUILD_ARRAY_RECORD}" ]; then
   ARRAY_RECORD_OUTPUT_DIR="/tmp/array_record"
   git clone https://github.com/google/array_record ${ARRAY_RECORD_OUTPUT_DIR}
   source ${ARRAY_RECORD_OUTPUT_DIR}/oss/runner_common.sh
-  build_and_test_array_record "${ARRAY_RECORD_OUTPUT_DIR}"
+  build_and_test_array_record_linux "${ARRAY_RECORD_OUTPUT_DIR}"
 
   # array-record scripts override these variables, so we need to reset them.
   SOURCE_DIR=$PWD
@@ -30,4 +30,4 @@ fi
 
 
 source ${SOURCE_DIR}/third_party/py/grain/oss/runner_common.sh
-build_and_test_grain "${OUTPUT_DIR}"
+build_and_test_grain_linux "${OUTPUT_DIR}"
