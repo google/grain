@@ -111,9 +111,11 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     # Connect to `MapDataset` parent stats.
     return dataset_stats.make_stats(
         dataset_stats.StatsConfig(
-            name=str(self), transform_mutates_spec=self._MUTATES_ELEMENT_SPEC
+            name=str(self),
+            transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
         ),
         (self._map_parent._stats,),  # pylint: disable=protected-access
+        execution_tracking_mode=self._options_with_default.execution_tracking_mode,
     )
 
   @functools.cached_property
