@@ -1308,6 +1308,13 @@ def apply_transformations(
         ds = ds.map(transformation)
       case transforms.RandomMapTransform():
         ds = ds.random_map(transformation)
+      case transforms.MapWithIndexTransform():
+        if isinstance(ds, MapDataset):
+          ds = ds.map_with_index(transformation)
+        else:
+          raise NotImplementedError(
+              "MapWithIndexTransform is only supported for MapDataset."
+          )
       case transforms.FilterTransform():
         ds = ds.filter(transformation)
       case _:

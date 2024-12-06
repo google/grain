@@ -110,6 +110,7 @@ Transformation = Union[
     TfRandomMapTransform,
     FilterTransform,
     FlatMapTransform,
+    MapWithIndexTransform,
 ]
 Transformations = Sequence[Transformation]
 
