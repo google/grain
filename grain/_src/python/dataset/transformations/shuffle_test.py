@@ -102,5 +102,75 @@ class WindowShuffleMapDatasetTest(absltest.TestCase):
       self.assertBetween(elements[i], i, i + (window_size - 1))
 
 
+class WindowShuffleInterDatasetTest(absltest.TestCase):
+  _DATASET_SIZE = 30
+  _WINDOW_SIZE = 10
+
+  def setUp(self):
+    super().setUp()
+    self.range_iter_ds = dataset.MapDataset.range(
+        0, self._DATASET_SIZE
+    ).to_iter_dataset()
+
+  def test_elements_are_shuffled(self):
+    ds = shuffle.WindowShuffleIterDataset(
+        self.range_iter_ds, window_size=self._WINDOW_SIZE, seed=42
+    )
+    original_elements = list(self.range_iter_ds)
+    shuffled_elements = list(ds)
+    self.assertNotEqual(original_elements, shuffled_elements)
+    self.assertCountEqual(original_elements, shuffled_elements)
+
+  def test_different_seeds_used_between_windows(self):
+    window_size = 8
+    original_ds = dataset.MapDataset.range(window_size).repeat(3)
+    shuffled_ds = shuffle.WindowShuffleIterDataset(
+        original_ds.to_iter_dataset(), window_size=window_size, seed=42
+    )
+    shuffled_ds_iter = shuffled_ds.__iter__()
+    first_window = [next(shuffled_ds_iter) for _ in range(window_size)]
+    second_window = [next(shuffled_ds_iter) for _ in range(window_size)]
+    third_window = [next(shuffled_ds_iter) for _ in range(window_size)]
+    self.assertNotEqual(first_window, second_window)
+    self.assertNotEqual(second_window, third_window)
+    self.assertNotEqual(first_window, third_window)
+    self.assertCountEqual(first_window, second_window)
+    self.assertCountEqual(second_window, third_window)
+    self.assertCountEqual(first_window, third_window)
+
+  def test_shuffled_checkpoints(self):
+    ds = shuffle.WindowShuffleIterDataset(
+        self.range_iter_ds, window_size=4, seed=42
+    )
+    ds_iter = ds.__iter__()
+    checkpoints = []
+    checkpoints_values = []
+    for _ in range(self._DATASET_SIZE):
+      checkpoints.append(ds_iter.get_state())
+      checkpoints_values.append(next(ds_iter))
+    for i in range(len(checkpoints)):
+      ds_iter.set_state(checkpoints[i])
+      self.assertDictEqual(
+          ds_iter.get_state(),
+          checkpoints[i],
+          msg=f"Checkpoint state failed at {i}.",
+      )
+      values = list(ds_iter)
+      self.assertEqual(
+          checkpoints_values[i:],
+          values,
+          msg=f"Checkpoint values failed from checkpoint {i}.",
+      )
+
+  def test_shuffled_raises_stop_iteration(self):
+    ds = shuffle.WindowShuffleIterDataset(
+        self.range_iter_ds, window_size=self._WINDOW_SIZE, seed=42
+    )
+    ds_iter = ds.__iter__()
+    with self.assertRaises(StopIteration):
+      for _ in range(self._DATASET_SIZE + 1):
+        next(ds_iter)
+
+
 if __name__ == "__main__":
   absltest.main()
