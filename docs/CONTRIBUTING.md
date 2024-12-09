@@ -98,7 +98,7 @@ you can do the following:
 
 ```bash
 pip install pre-commit
-git add docs/new_tutorial.*          # stage the new changes
+git add docs/tutorials/new_tutorial.*          # stage the new changes
 pre-commit run                       # run pre-commit checks on added files
-git add docs/new_tutorial.*          # stage the files updated by pre-commit
+git add docs/tutorials/new_tutorial.*          # stage the files updated by pre-commit
 git commit -m "Update new tutorial"  # commit to the branch
