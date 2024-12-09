@@ -9,3 +9,5 @@ sphinx-copybutton
 pydata-sphinx-theme<=0.16.0
 # To sync notebooks and markdown files.
 jupytext
+# To generate API documentation.
+sphinx-autoapi
