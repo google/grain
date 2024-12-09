@@ -19,7 +19,7 @@ class RandomAccessDataSource(Protocol, Generic[T]):
 
 Note that the underlying file format/storage system needs to support efficient
 random access.
-Grain currently supports random-access file format [ArrayRecord](https://github.com/google/array_record)
+Grain currently supports random-access file format [ArrayRecord](https://github.com/google/array_record).
 
 ## Available Data Sources
 
@@ -77,24 +77,27 @@ Arguments are equivalent to `tfds.load()`.
 tfds_data_source = tfds.data_source("imagenet2012", split="train[:75%]")
 ```
 
-TIP: Make sure to depend on `//tensorflow_datasets:tf_less`. The
+```{tip}
+Make sure to depend on `//tensorflow_datasets:tf_less`. The
+```
+
 ## Implement your own Data Source
 
 You can implement your own data source and use it with PyGrain. It needs to
 implement the `RandomAccessDataSource` protocol defined above. In addition, you
 need to pay attention to the following:
 
-*   **Data Sources should be pickleable.** This is because in the multi-worker
-    setting, data sources are pickled and sent to child processes, where each
-    child process reads only the records it needs to process. File reader
-    objects are usually not pickleable. In our data sources, we implement
-    `__getstate__` and `__setstate__` to ensure that file readers aren't part of
-    the state when the data source is pickled, but rather are recreated upon
-    unpickling.
-*   **Open file handles should be closed after use.** Data sources typically
-    open underlying files in order to read records from them. We recommend
-    implementing data sources as context managers that close their open file
-    handles within the `__exit__` method. When opening a data source, the
-    `DataLoader` will first attempt to use the data source as a context manager.
-    If the data source doesn't implement the context manager protocol, it will
-    be used as-is, without a `with` statement.
+* **Data Sources should be pickleable.** This is because in the multi-worker
+  setting, data sources are pickled and sent to child processes, where each
+  child process reads only the records it needs to process. File reader
+  objects are usually not pickleable. In our data sources, we implement
+  `__getstate__` and `__setstate__` to ensure that file readers aren't part of
+  the state when the data source is pickled, but rather are recreated upon
+  unpickling.
+* **Open file handles should be closed after use.** Data sources typically
+  open underlying files in order to read records from them. We recommend
+  implementing data sources as context managers that close their open file
+  handles within the `__exit__` method. When opening a data source, the
+  `DataLoader` will first attempt to use the data source as a context manager.
+  If the data source doesn't implement the context manager protocol, it will
+  be used as-is, without a `with` statement.

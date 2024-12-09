@@ -3,6 +3,17 @@
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+# -- Path setup --------------------------------------------------------------
+
+# If extensions (or modules to document with autodoc) are in another directory,
+# add these directories to sys.path here. If the directory is relative to the
+# documentation root, use os.path.abspath to make it absolute, like shown here.
+#
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path('..', 'grain').resolve()))
+
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
@@ -17,6 +28,9 @@ extensions = [
     'myst_nb',
     'sphinx_copybutton',
     'sphinx_design',
+    # 'autodoc2',
+    # 'sphinx.ext.autodoc',
+    'autoapi.extension',
 ]
 myst_enable_extensions = ["colon_fence"]
 
@@ -45,3 +59,9 @@ html_theme_options = {
     'path_to_docs': 'docs/',
     'navigation_with_keys': True,
 }
+
+# Autodoc settings
+# Should be relative to the source of the documentation
+autoapi_dirs = [
+    '../grain/_src/core',              
+                ]

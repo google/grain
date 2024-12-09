@@ -30,7 +30,7 @@ it left off and produce the same output as if it was never preempted.
 
 :::{grid-item-card} Performant
 We took care while designing PyGrain to ensure that it's
-performant (refer to the[Behind the Scenes](behind_the_scenes.md)
+performant (refer to the [Behind the Scenes](behind_the_scenes.md)
 section of the documentation.)
 We also tested it against multiple data modalities (e.g.Text/Audio/Images/Videos).
 :::
@@ -55,4 +55,11 @@ data_sources
 :caption: Data Loader
 data_loader/samplers
 data_loader/transformations
+```
+
+<!-- Automatically generated documentation from docstrings -->
+```{toctree}
+:maxdepth: 1
+:caption: References
+autoapi/index
 ```
