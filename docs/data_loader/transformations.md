@@ -1,27 +1,20 @@
 # Transformations
 
-
-
-https://github.com/google/grain/blob/main/docs/data_loader/transformations.md
-
-
-
 Grain Transforms interface denotes transformations which are applied to data. In
 the case of local transformations (such as map, random map, filter), the
 transforms receive an element on which custom changes are applied. For global
 transformations (such as batching), one must provide the batch size.
 
 The Grain core transforms interface code is
-[here](https://github.com/google/grain/tree/main/grain/_src/core/transforms.py).
-
+[in the GitHub repository](https://github.com/google/grain/tree/main/grain/_src/core/transforms.py).
 
 ## MapTransform
 
-MapTransform is for 1:1 transformations of elements. Elements can be of any
+`MapTransform` is for 1:1 transformations of elements. Elements can be of any
 type, it is the user's responsibility to use the transformation such that the
 inputs it receives correspond to the signature.
 
-Example of transformation which implements MapTransform (for elements of type
+Example of transformation which implements `MapTransform` (for elements of type
 `int`):
 
 ```python
@@ -33,10 +26,10 @@ class PlusOne(transforms.MapTransform):
 
 ## RandomMapTransform
 
-RandomMapTransform is for 1:1 random transformations of elements. The interface
+`RandomMapTransform` is for 1:1 random transformations of elements. The interface
 requires a `np.random.Generator` as parameter to the 'random_map' function.
 
-Example of a RandomMapTransform:
+Example of a `RandomMapTransform`:
 
 ```python
 class PlusRandom(transforms.RandomMapTransform):
@@ -47,11 +40,11 @@ class PlusRandom(transforms.RandomMapTransform):
 
 ## FlatMapTransform
 
-FlatMapTransform is for splitting operations of individual elements. The
+`FlatMapTransform` is for splitting operations of individual elements. The
 `max_fan_out` is the maximum number of splits that an element can generate.
 Please consult the code for detailed info.
 
-Example of a FlatMapTransform:
+Example of a `FlatMapTransform`:
 
 ```python
 class FlatMapTransformExample(transforms.FlatMapTransform):
@@ -64,10 +57,10 @@ class FlatMapTransformExample(transforms.FlatMapTransform):
 
 ## FilterTransform
 
-FilterTransform is for applying filtering to individual elements. Elements for
+`FilterTransform` is for applying filtering to individual elements. Elements for
 which the filter function returns False will be removed.
 
-Example of a FilterTransform that removes all even elements:
+Example of a `FilterTransform` that removes all even elements:
 
 ```python
 class RemoveEvenElements(FilterTransform):
@@ -78,7 +71,7 @@ class RemoveEvenElements(FilterTransform):
 
 ## Batch
 
-To apply the Batch transform, just pass `grain.Batch(batch_size=batch_size, drop_remainder=drop_remainder)`.
+To apply the Batch transform, pass `grain.Batch(batch_size=batch_size, drop_remainder=drop_remainder)`.
 
 Note: The batch size used when passing Batch transform will be the global batch
 size if it is done before sharding and the *per host* batch size if it is after.
