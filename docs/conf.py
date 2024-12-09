@@ -6,9 +6,9 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'grain'
+project = 'PyGrain'
 copyright = '2024, grain team'
-author = 'grain team'
+author = 'PyGrain team'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -16,7 +16,9 @@ author = 'grain team'
 extensions = [
     'myst_nb',
     'sphinx_copybutton',
+    'sphinx_design',
 ]
+myst_enable_extensions = ["colon_fence"]
 
 templates_path = ['_templates']
 source_suffix = ['.rst', '.ipynb', '.md']
@@ -26,7 +28,7 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'sphinx_book_theme'
-html_title = 'grain'
+html_title = 'PyGrain'
 html_static_path = ['_static']
 # TODO: Add logo and favicon
 # html_logo = '_static/'
@@ -36,7 +38,7 @@ html_static_path = ['_static']
 # https://sphinx-book-theme.readthedocs.io/en/stable/reference.html
 html_theme_options = {
     'show_navbar_depth': 2,
-    'show_toc_level': 2,
+    'show_toc_level': 3,
     'repository_url': 'https://github.com/google/grain',
     'use_issues_button': True,
     'use_repository_button': True,
