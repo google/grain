@@ -8,5 +8,3 @@ open source, fast and deterministic.
 * Grain is used by [MaxText](https://github.com/google/maxtext/tree/main), a simple, performant and scalable JAX codebase for LLM.
 
 Check out [`tutorials/`](./tutorials) for more information on how to use Grain!
-
-

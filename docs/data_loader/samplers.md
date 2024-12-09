@@ -1,15 +1,9 @@
 # Samplers
 
-
-
-https://github.com/google/grain/blob/main/docs/data_loader/samplers.md
-
 Samplers in PyGrain are responsible for determining the order in which records
 are processed. This allows PyGrain to implement global transformations (e.g.
 global shuffling, sharding, repeating for multiple epochs) before reading any
 records.
-
-
 
 Samplers need to implement the following iterator protocol:
 
@@ -38,6 +32,7 @@ class RecordMetadata:
 ```
 
 ## Index Sampler
+
 This is our recommended Sampler. It supports:
 
 * Sharding across multiple machines (`shard_options` parameter).
@@ -45,7 +40,7 @@ This is our recommended Sampler. It supports:
 * Repeating records for multiple epochs (`num_epochs` parameter). Note that the
 shuffle order changes across epochs. Behind the scenes, this relies on
 [tf.random_index_shuffle](https://www.tensorflow.org/api_docs/python/tf/random_index_shuffle).
-* Stateless random operations. Each `RecordMetadata` object emitted by the 
+* Stateless random operations. Each `RecordMetadata` object emitted by the
 `IndexSampler` contains an RNG uniquely seeded on a per-record basis. This
 RNG can be used for random augmentations while not relying on a global state.
 
@@ -73,12 +68,13 @@ for record_metadata in index_sampler:
 ```
 
 ## Implement your Own Sampler
+
 PyGrain can accommodate custom user-defined samplers. Users implementing their
 own sampler should ensure it:
 
 * implements the aforementioned interface.
-* is adequately performant. Since PyGrain's
-`DataLoader` iterates sequentially through the sampler to distribute indices to
-child processes, a slow sampler will become a bottleneck and reduce end-to-end
-pipeline performance. As a reference, we recommend sampler iteration performance
-of at approx. 50,000 elements / sec for most use cases.
+* is adequately performant. Since PyGrain's `DataLoader` iterates sequentially
+  through the sampler to distribute indices to
+  child processes, a slow sampler will become a bottleneck and reduce end-to-end
+  pipeline performance. As a reference, we recommend sampler iteration performance
+  of at approx. 50,000 elements / sec for most use cases.
