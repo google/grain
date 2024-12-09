@@ -34,7 +34,7 @@ multiple epochs, sharding across multiple machines) before reading any records.
 *Local transformations* that map/filter (aka preprocessing) a single example or
 combine multiple consecutive records happen after reading.
 
-![Difference between typical tf.data pipeline and a PyGrain pipeline](grain_pipeline.svg)
+![Difference between typical tf.data pipeline and a PyGrain pipeline](./images/grain_pipeline.svg)
 
 Steps in the pipeline:
 

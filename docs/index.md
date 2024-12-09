@@ -57,6 +57,18 @@ data_loader/samplers
 data_loader/transformations
 ```
 
+```{toctree}
+:maxdepth: 1
+:caption: Tutorials
+tutorials/dataset_basic_tutorial
+```
+
+```{toctree}
+:maxdepth: 1
+:caption: Contributor guides
+CONTRIBUTING
+```
+
 <!-- Automatically generated documentation from docstrings -->
 ```{toctree}
 :maxdepth: 1
