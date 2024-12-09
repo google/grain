@@ -1,0 +1,14 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-ast
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+
+  - repo: https://github.com/mwouts/jupytext
+    rev: v1.15.2
+    hooks:
+      - id: jupytext
+        files: docs/
+        args: [--sync]
