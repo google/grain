@@ -13,7 +13,9 @@ kernelspec:
 
 +++ {"id": "BvnXLPI_2dNJ"}
 
-# Installs PyGrain (OSS only)
+# Dataset Basic Tutorial with PyGrain
+
+Installs PyGrain (OSS only)
 
 ```{code-cell}
 ---
