@@ -6,8 +6,6 @@ myst-parser[linkify]
 sphinx-book-theme
 sphinx-copybutton
 # Avoiding an issue with the collapsible sidebar.
-pydata-sphinx-theme<=0.16.0
-# To sync notebooks and markdown files.
-jupytext
+pydata-sphinx-theme<0.16.0
 # To generate API documentation.
 sphinx-autoapi
