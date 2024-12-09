@@ -1,0 +1,19 @@
+# Add a link to preview the documentation on Read the Docs for every pull request.
+name: "RTD preview"
+
+on:
+  pull_request_target:
+    types:
+      - opened
+
+permissions:
+  pull-requests: write
+
+jobs:
+  documentation-links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: readthedocs/actions/preview@v1
+        with:
+          project-slug: "readthedocs-preview"
+          single-version: true
