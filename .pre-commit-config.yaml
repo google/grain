@@ -11,5 +11,5 @@ repos:
     rev: v1.15.2
     hooks:
       - id: jupytext
-        files: docs/
+        files: docs/tutorials/
         args: [--sync]

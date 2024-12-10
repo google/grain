@@ -1,6 +1,6 @@
 # Contributing to PyGrain
 
-## Contributing to the grain project documentation
+## Contributing to the PyGrain project documentation
 
 ### Pre-requisites
 

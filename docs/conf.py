@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path('..', 'grain').resolve()))
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'PyGrain'
-copyright = '2024, grain team'
+copyright = '2024, PyGrain team'
 author = 'PyGrain team'
 
 # -- General configuration ---------------------------------------------------
