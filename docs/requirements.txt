@@ -1,0 +1,13 @@
+# Sphinx-related requirements.
+sphinx
+sphinx-book-theme>=1.0.1
+myst-nb
+myst-parser[linkify]
+sphinx-book-theme
+sphinx-copybutton
+sphinx-design
+# Avoiding an issue with the collapsible sidebar.
+pydata-sphinx-theme<0.16.0
+# To generate API documentation.
+sphinx-autoapi
+sphinx-autodoc2

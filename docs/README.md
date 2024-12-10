@@ -2,10 +2,6 @@
 
 
 
-https://github.com/google/grain/tree/main/docs
-
-
-
 PyGrain is the pure Python backend for Grain, primarily targeted at JAX users.
 PyGrain is designed to be:
 
@@ -26,19 +22,19 @@ of dependencies when possible. For example, it should not depend on TensorFlow.
 
 ## High Level Idea
 
-The PyGrain backend differs from traditional tf.data pipelines. Instead of
+The PyGrain backend differs from traditional `tf.data` pipelines. Instead of
 starting from filenames that need to be shuffled and interleaved to shuffle the
 data, PyGrain pipeline starts by sampling indices.
 
 Indices are globally unique, monotonically increasing values used to track
 progress of the pipeline (for checkpointing). These indices are then mapped into
-record keys in the range [0, len(dataset)]. Doing so enables *global
+record keys in the range `[0, len(dataset)]`. Doing so enables *global
 transformations* to be performed (e.g. global shuffling, mixing, repeating for
 multiple epochs, sharding across multiple machines) before reading any records.
 *Local transformations* that map/filter (aka preprocessing) a single example or
 combine multiple consecutive records happen after reading.
 
-![Difference between typical tf.data pipeline and a PyGrain pipeline](grain_pipeline.svg)
+![Difference between typical tf.data pipeline and a PyGrain pipeline](./images/grain_pipeline.svg)
 
 Steps in the pipeline:
 
@@ -55,7 +51,7 @@ Steps in the pipeline:
 
 ## Training Loop
 
-*PyGrain* has no opinion on how you write your training loop. Instead PyGrain
+*PyGrain* has no opinion on how you write your training loop. Instead, PyGrain
 will return an iterator that implements:
 
 *   `next(ds_iter)` returns the element as NumPy arrays.
@@ -99,4 +95,3 @@ order defined by the user. The first of these transformations needs to be able
 to process the raw records as read by the data source. The second transformation
 needs to be able to process the elements produced by the first transformation
 and so on.
-

@@ -9,4 +9,3 @@ open source, fast and deterministic.
 
 Check out [`tutorials/`](./tutorials) for more information on how to use Grain!
 
-
