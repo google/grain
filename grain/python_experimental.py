@@ -35,6 +35,7 @@ from ._src.python.dataset.dataset import (
     DatasetOptions,
     WithOptionsIterDataset,
 )
+from ._src.python.dataset.stats import ExecutionTrackingMode
 from ._src.python.dataset.transformations.flatmap import (
     FlatMapMapDataset,
     FlatMapIterDataset,

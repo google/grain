@@ -108,12 +108,18 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   @functools.cached_property
   def _stats(self):
+    execution_tracking_mode = self._options_with_default.execution_tracking_mode
+    parent_stats = self._map_parent._initialize_stats(  # pylint: disable=protected-access
+        execution_tracking_mode
+    )
     # Connect to `MapDataset` parent stats.
     return dataset_stats.make_stats(
         dataset_stats.StatsConfig(
-            name=str(self), transform_mutates_spec=self._MUTATES_ELEMENT_SPEC
+            name=str(self),
+            transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
         ),
-        (self._map_parent._stats,),  # pylint: disable=protected-access
+        (parent_stats,),
+        execution_tracking_mode,
     )
 
   @functools.cached_property
