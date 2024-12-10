@@ -28,15 +28,14 @@ extensions = [
     'myst_nb',
     'sphinx_copybutton',
     'sphinx_design',
-    # 'autoapi.extension',
-    'autodoc2',
+    'autoapi.extension',
 ]
 
 templates_path = ['_templates']
 source_suffix = ['.rst', '.ipynb', '.md']
 exclude_patterns = [
-    '_build', 
-    'Thumbs.db', 
+    '_build',
+    'Thumbs.db',
     '.DS_Store',
     'tutorials/dataset_basic_tutorial.md',
     ]
@@ -69,16 +68,16 @@ html_theme_options = {
 
 # Autodoc settings
 # Should be relative to the source of the documentation
-# autoapi_dirs = [
-#     '../grain/_src/core',                         
-#     '../grain/_src/python',              
-#                 ]
+autoapi_dirs = [
+    '../grain/_src/core',
+    '../grain/_src/python',
+                ]
 
-# autoapi_ignore = [
-#     '*_test.py',
-#     'testdata/*',
-#     '*/dataset/stats.py',
-# ]
+autoapi_ignore = [
+    '*_test.py',
+    'testdata/*',
+    '*/dataset/stats.py',
+]
 
 # -- Myst configurations -------------------------------------------------
 myst_enable_extensions = ["colon_fence"]
@@ -95,9 +94,3 @@ nb_execution_timeout = 100
 nb_execution_excludepatterns = [
     'tutorials/dataset_basic_tutorial.ipynb',
 ]
-
-autodoc2_packages = [
-    {
-        'path': '../grain/_src/core',
-     },
-    ]

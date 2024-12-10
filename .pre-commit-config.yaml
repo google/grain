@@ -5,6 +5,7 @@ repos:
       - id: check-ast
       - id: check-merge-conflict
       - id: end-of-file-fixer
+      - id: trailing-whitespace
 
   - repo: https://github.com/mwouts/jupytext
     rev: v1.15.2
