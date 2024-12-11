@@ -15,5 +15,5 @@ jobs:
     steps:
       - uses: readthedocs/actions/preview@v1
         with:
-          project-slug: "readthedocs-preview"
+          project-slug: "google-grain"
           single-version: true
