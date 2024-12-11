@@ -89,6 +89,10 @@ class PyGrainCheckpointHandler:
   def close(self):
     pass
 
+  @classmethod
+  def typestr(cls):
+    return f"{cls.__module__}.{cls.__qualname__}"
+
 
 try:
   # Register the handler to be used with the new checkpointing API if Orbax is
