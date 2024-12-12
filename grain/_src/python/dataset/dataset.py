@@ -40,15 +40,12 @@ from __future__ import annotations
 
 import abc
 import builtins
+from collections.abc import Callable, Iterable, Iterator, Sequence
 import dataclasses
 import functools
 from typing import (
     Any,
-    Callable,
     Generic,
-    Iterable,
-    Iterator,
-    Sequence,
     TypeVar,
     Union,
     cast,
@@ -119,7 +116,9 @@ class _Dataset:
 class _MapDatasetMeta(abc.ABCMeta):
   """Metaclass for `MapDataset` containing factory transfromations."""
 
-  def source(cls, source: base.RandomAccessDataSource[T]) -> MapDataset[T]:
+  def source(
+      cls, source: Sequence[T] | base.RandomAccessDataSource[T]
+  ) -> MapDataset[T]:
     """Returns a dataset that wraps a data source supporting random access.
 
     Example usage: `ds = MapDataset.source(ArrayRecordDataSource(paths))`.
