@@ -7,6 +7,7 @@ set -x -e
 SOURCE_DIR=$PWD
 OUTPUT_DIR="/tmp/grain"
 mkdir -p ${OUTPUT_DIR}
+PLATFORM="$(uname)"
 
 # Copybara export to OUTPUT_DIR.
 copybara ${SOURCE_DIR}/third_party/py/grain/oss/copy.bara.sky local .. \
@@ -19,7 +20,11 @@ if [ -n "${BUILD_ARRAY_RECORD}" ]; then
   ARRAY_RECORD_OUTPUT_DIR="/tmp/array_record"
   git clone https://github.com/google/array_record ${ARRAY_RECORD_OUTPUT_DIR}
   source ${ARRAY_RECORD_OUTPUT_DIR}/oss/runner_common.sh
-  build_and_test_array_record_linux "${ARRAY_RECORD_OUTPUT_DIR}"
+  if [[ "$PLATFORM" == "Darwin" ]]; then
+    build_and_test_array_record_macos "${ARRAY_RECORD_OUTPUT_DIR}"
+  else
+    build_and_test_array_record_linux "${ARRAY_RECORD_OUTPUT_DIR}"
+  fi
 
   # array-record scripts override these variables, so we need to reset them.
   SOURCE_DIR=$PWD
@@ -28,6 +33,9 @@ if [ -n "${BUILD_ARRAY_RECORD}" ]; then
   cp -r ${ARRAY_RECORD_OUTPUT_DIR}/all_dist/* ${OUTPUT_DIR}/grain/oss/array_record
 fi
 
-
-source ${SOURCE_DIR}/third_party/py/grain/oss/runner_common.sh
-build_and_test_grain_linux "${OUTPUT_DIR}"
+source ${SOURCE_DIR}/grain/oss/runner_common.sh
+if [[ "$PLATFORM" == "Darwin" ]]; then
+  build_and_test_grain_macos "${OUTPUT_DIR}"
+else
+  build_and_test_grain_linux "${OUTPUT_DIR}"
+fi
