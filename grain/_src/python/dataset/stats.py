@@ -493,6 +493,7 @@ class _ExecutionStats(_VisualizationStats):
       self.report()
 
   def _logging_execution_summary_loop(self):
+    """Logs the execution summary periodically."""
     while self._should_report():
       time.sleep(_LOG_EXECTION_SUMMARY_PERIOD_SEC)
       # A node can be marked as non-output after the corresponding
@@ -504,9 +505,14 @@ class _ExecutionStats(_VisualizationStats):
         self._last_report_time = time.time()
         summary = self._get_execution_summary()
         logging.info(
-            "Grain Dataset Execution Summary:\n\n%s",
-            _pretty_format_summary(summary),
+            "Grain Dataset Execution Summary:\n\nNOTE: Before analyzing the"
+            " `MapDataset` nodes, ensure that the `total_processing_time` of"
+            " the `PrefetchDatasetIterator` node indicates it is a bottleneck."
+            " The `MapDataset` nodes are executed in multiple threads and thus,"
+            " should not be compared to the `total_processing_time` of"
+            " `DatasetIterator` nodes.."
         )
+        logging.info(_pretty_format_summary(summary))
 
   def _build_execution_summary(
       self,
