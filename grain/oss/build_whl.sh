@@ -22,6 +22,7 @@ function main() {
 
   echo "=== Copy grain files"
 
+  cp README.md "${TMPDIR}"
   cp setup.py "${TMPDIR}"
   cp pyproject.toml "${TMPDIR}"
   cp LICENSE "${TMPDIR}"
