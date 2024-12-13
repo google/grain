@@ -11,36 +11,49 @@ kernelspec:
   name: python3
 ---
 
++++ {"id": "JBD-hzAdSv7F"}
+
+# `Dataset` basics
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/google/grain/blob/main/docs/tutorials/dataset_basic_tutorial.ipynb)
+
+`Dataset` is a low-level API that uses chaining syntax to define data
+transformation steps. It allows more general types of processing (e.g. dataset
+mixing) and more control over the execution (e.g. different order of data
+sharding and shuffling). `Dataset` transformations are composed in a way that
+allows to preserve random access property past the source and some of the
+transformations. This, among other things, can be used for debugging by
+evaluating dataset elements at specific positions without processing the entire
+dataset.
+
+There are 3 main classes comprising the `Dataset` API: `MapDataset`,
+`IterDataset`, and `DatasetIterator`. Most data pipelines will start with one or
+more `MapDataset` (often derived from a `RandomAccessDataSource`) and switch to
+`IterDataset` late or not at all. The following sections will provide more
+details about each class.
+
 +++ {"id": "BvnXLPI_2dNJ"}
 
-# Installs PyGrain (OSS only)
+## Install and import Grain
 
 ```{code-cell}
----
-colab:
-  base_uri: https://localhost:8080/
-id: sHOibn5Q2GRt
-outputId: f4c3e5a6-56b8-47f1-c5a1-a25fd0c433b3
----
+:id: sHOibn5Q2GRt
+
 # @test {"output": "ignore"}
 !pip install grain
 ```
 
-+++ {"id": "8UuJxi2p3lPp"}
-
-# Imports
-
 ```{code-cell}
 ---
 executionInfo:
-  elapsed: 3685
+  elapsed: 4007
   status: ok
-  timestamp: 1733956461547
+  timestamp: 1734118718461
   user:
     displayName: ''
     userId: ''
   user_tz: 480
-id: ZgB5xOru2Zz8
+id: FCZXw2YhhPyu
 ---
 import grain.python as grain
 import pprint
@@ -48,22 +61,22 @@ import pprint
 
 +++ {"id": "gPv3wrQd3pZS"}
 
-# `MapDataset`
+## `MapDataset`
 
 `MapDataset` defines a dataset that supports efficient random access. Think of it as an (infinite) `Sequence` that computes values lazily. It will either be the starting point of the input pipeline or in the middle of the pipeline following another `MapDataset`. Grain provides many basic transformations for users to get started.
 
 ```{code-cell}
 ---
 executionInfo:
-  elapsed: 55
+  elapsed: 57
   status: ok
-  timestamp: 1733956464592
+  timestamp: 1734118721729
   user:
     displayName: ''
     userId: ''
   user_tz: 480
 id: 3z3Em5jC2iVz
-outputId: a7f3963f-6493-4132-e3f6-17e0691562e8
+outputId: c63e44a8-7a03-4d01-c210-b292ad6c5bdf
 ---
 dataset = (
     # You can also use a shortcut grain.MapDataset.range for
@@ -85,14 +98,14 @@ The requirement for `MapDataset`'s source is a `grain.RandomAccessDataSource` in
 ```{code-cell}
 ---
 executionInfo:
-  elapsed: 52
+  elapsed: 55
   status: ok
-  timestamp: 1733956476197
+  timestamp: 1734118753268
   user:
     displayName: ''
     userId: ''
   user_tz: 480
-id: kCbDSzlS4a-A
+id: 592ut9AgiDCz
 ---
 # Note: Inheriting `grain.RandomAccessDataSource` is optional but recommended.
 class MySource(grain.RandomAccessDataSource):
@@ -109,15 +122,15 @@ class MySource(grain.RandomAccessDataSource):
 ```{code-cell}
 ---
 executionInfo:
-  elapsed: 54
+  elapsed: 5
   status: ok
-  timestamp: 1733956478654
+  timestamp: 1734118755899
   user:
     displayName: ''
     userId: ''
   user_tz: 480
 id: m8Cyn7gt6FYy
-outputId: 35a47622-ee59-44a1-cd81-3a1e41b8ca74
+outputId: ff59f222-042c-48fb-d426-c2b3da9a2017
 ---
 source = MySource()
 
@@ -139,15 +152,15 @@ Access by index will never raise an `IndexError` and can treat indices that are 
 ```{code-cell}
 ---
 executionInfo:
-  elapsed: 53
+  elapsed: 3
   status: ok
-  timestamp: 1733956481133
+  timestamp: 1734118760614
   user:
     displayName: ''
     userId: ''
   user_tz: 480
 id: GSW1cJe06NEO
-outputId: 080bb98b-5184-469a-97be-f74416568449
+outputId: ffe2b9e8-069c-45f1-ac93-c391604b5b34
 ---
 # Prints the 3rd element of the second epoch.
 pprint.pprint(dataset[len(dataset)+2])
@@ -160,15 +173,15 @@ Note that `dataset[idx] == dataset[len(dataset) + idx]` iff there's no random tr
 ```{code-cell}
 ---
 executionInfo:
-  elapsed: 2
+  elapsed: 3
   status: ok
-  timestamp: 1733956483414
+  timestamp: 1734118766095
   user:
     displayName: ''
     userId: ''
   user_tz: 480
 id: _o3wxb8k7XDY
-outputId: 17f2b8ab-128e-41dc-ace0-ca3d32162c3a
+outputId: f4c2a263-0084-45d3-dd0f-51f58c96bead
 ---
 pprint.pprint(dataset[len(dataset)+2] == dataset[2])
 ```
@@ -184,13 +197,13 @@ Returning `None` for the majority of positions can negatively impact performance
 executionInfo:
   elapsed: 54
   status: ok
-  timestamp: 1733956489906
+  timestamp: 1734118794030
   user:
     displayName: ''
     userId: ''
   user_tz: 480
 id: ai4zcltV7sSN
-outputId: f9c0bd67-12c0-498a-cf41-6b2aa98fff5b
+outputId: c8818ad2-c7d7-414f-8359-0bd2e679b9ed
 ---
 filtered_dataset = dataset.filter(lambda e: (e[0] + e[1]) % 2 == 0)
 
@@ -205,15 +218,15 @@ pprint.pprint([filtered_dataset[i] for i in range(len(filtered_dataset))])
 ```{code-cell}
 ---
 executionInfo:
-  elapsed: 54
+  elapsed: 57
   status: ok
-  timestamp: 1733956492078
+  timestamp: 1734118798792
   user:
     displayName: ''
     userId: ''
   user_tz: 480
 id: -fuS_OGS8x5Z
-outputId: 630a9277-d6b9-419c-dc9a-78a81bf63688
+outputId: 7ce27bed-0adb-43a4-8abb-8d48937f1e22
 ---
 shard_index = 0
 shard_count = 2
@@ -233,15 +246,15 @@ This brings us to the next section of the tutorial: `IterDataset`.
 ```{code-cell}
 ---
 executionInfo:
-  elapsed: 2
+  elapsed: 55
   status: ok
-  timestamp: 1733956494196
+  timestamp: 1734118801247
   user:
     displayName: ''
     userId: ''
   user_tz: 480
 id: FnWPIpce9aAJ
-outputId: 495c2c20-7de8-4ee9-e1d8-a21b30e5aa77
+outputId: dba2951e-a965-4dd3-816c-dcbbea6352f7
 ---
 iter_dataset = sharded_dataset.to_iter_dataset(grain.ReadOptions(num_threads=16, prefetch_buffer_size=500))
 
@@ -251,7 +264,7 @@ for element in iter_dataset:
 
 +++ {"id": "W-Brm4Mh_Bo1"}
 
-# IterDataset
+## IterDataset
 
 Most data pipelines will start with one or more `MapDataset` (often derived from a `RandomAccessDataSource`) and switch to `IterDataset` late or not at all. `IterDataset` does not support efficient random access and only supports iterating over it. It's an `Iterable`.
 
@@ -266,15 +279,15 @@ Essentially, `DatasetIterator` only checkpoints index information for it to reco
 ```{code-cell}
 ---
 executionInfo:
-  elapsed: 2
+  elapsed: 57
   status: ok
-  timestamp: 1733956497535
+  timestamp: 1734118805719
   user:
     displayName: ''
     userId: ''
   user_tz: 480
 id: DRgatGFX_nxL
-outputId: 89383832-1676-4f16-ebfa-bb74d913d415
+outputId: 5ec46759-41a9-4211-c856-3f46c2ee2a9c
 ---
 dataset_iter = iter(dataset)
 pprint.pprint(isinstance(dataset_iter, grain.DatasetIterator))
@@ -283,15 +296,15 @@ pprint.pprint(isinstance(dataset_iter, grain.DatasetIterator))
 ```{code-cell}
 ---
 executionInfo:
-  elapsed: 157
+  elapsed: 184
   status: ok
-  timestamp: 1733956500621
+  timestamp: 1734118814192
   user:
     displayName: ''
     userId: ''
   user_tz: 480
 id: dOCiJfSJ_vi4
-outputId: 01d5a3e8-4d43-4818-fe5c-184d8afda412
+outputId: 6e010a76-11e3-4aad-ef16-93c00aa6ae27
 ---
 pprint.pprint(next(dataset_iter))
 

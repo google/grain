@@ -49,7 +49,7 @@ suppress_warnings = [
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'sphinx_book_theme'
-html_title = 'PyGrain'
+html_title = 'Grain'
 html_static_path = ['_static']
 
 # TODO: Add logo and favicon
