@@ -13,6 +13,7 @@
 # limitations under the License.
 """Flatmap transformation for MapDataset."""
 import functools
+import sys
 from typing import Any, Callable, Sequence, TypeVar
 
 from grain._src.core import transforms
@@ -37,6 +38,11 @@ class FlatMapMapDataset(dataset.MapDataset[T]):
     self._transform = transform
 
   def __len__(self) -> int:
+    # If the parent dataset is on infinite repeat, its length is
+    # sys.maxsize and would result in overflows if further increased.
+    # In this case, we just keep the length as sys.maxsize.
+    if len(self._parent) >= sys.maxsize:
+      return sys.maxsize
     return self._transform.max_fan_out * len(self._parent)
 
   def __str__(self) -> str:
