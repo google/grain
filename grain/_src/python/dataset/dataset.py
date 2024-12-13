@@ -236,6 +236,14 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
 
   Transformations do not mutate the dataset object. Instead, they return a new
   dataset. From the perspective of public APIs, `MapDataset` is immutable.
+
+  NOTE:
+    `MapDataset` transformations such as `.filter()` use `None` to indicate
+    absence of an element. Generally, the implementation of `MapDataset`
+    transformations already handle `None` as a special case (e.g. by returning
+    `None` as soon as `__getitem__` sees `None`). This means the user-defined
+    functions passed to the `MapDataset` transformations do not need to
+    explicitly handle `None`s.
   """
 
   # Whether this transformation mutates parent elements. This does not affect
