@@ -15,6 +15,7 @@
 
 import dataclasses
 import itertools
+import sys
 from typing import Any, Sequence
 
 from absl.testing import absltest
@@ -72,6 +73,13 @@ class FlatMapMapDatasetTest(absltest.TestCase):
         self.range_ds, FixedSizeSplitWithNoTransform(max_fan_out=self.fan_out)
     )
     self.assertLen(flatmap_ds, self.fan_out * len(self.range_ds))
+
+  def test_flatmap_ds_length_after_repeat(self):
+    flatmap_ds = flatmap.FlatMapMapDataset(
+        self.range_ds.repeat(),
+        FixedSizeSplitWithNoTransform(max_fan_out=self.fan_out),
+    )
+    self.assertLen(flatmap_ds, sys.maxsize)
 
   def test_fixed_fan_out_data_no_transform(self):
     flatmap_ds = flatmap.FlatMapMapDataset(
