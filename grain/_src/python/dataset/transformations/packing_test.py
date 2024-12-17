@@ -13,8 +13,10 @@
 # limitations under the License.
 """Tests for batch transformation."""
 
+from collections.abc import Sequence
 from absl.testing import absltest
 from absl.testing import parameterized
+from grain._src.core import constants
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import packing
 from grain._src.python.dataset.transformations import source
@@ -356,6 +358,9 @@ def _common_test_body(
     *,
     num_packing_bins: int,
     shuffle_bins: bool = False,
+    use_epoch_aware_shuffling: bool = False,
+    epoch_feature: str = constants.EPOCH,
+    meta_features: Sequence[str] = (),
 ):
   """Factor out common test operations in a separate function."""
   input_elements = [
@@ -369,6 +374,9 @@ def _common_test_body(
       num_packing_bins=num_packing_bins,
       length_struct=length_struct,
       shuffle_bins=shuffle_bins,
+      use_epoch_aware_shuffling=use_epoch_aware_shuffling,
+      epoch_feature=epoch_feature,
+      meta_features=meta_features,
   )
   actual_elements = list(ld)
   np.testing.assert_equal(len(actual_elements), len(expected_elements))
@@ -502,6 +510,66 @@ class FirstFitPackIterDatasetTest(parameterized.TestCase):
         length_struct,
         num_packing_bins=num_packing_bins,
         shuffle_bins=True,
+    )
+
+  @parameterized.parameters(
+      {"num_packing_bins": 3},
+      {"num_packing_bins": 5},
+  )
+  def test_pack_sequences_length_epoch_aware_shuffle_bins(
+      self, num_packing_bins: int
+  ):
+    input_elements = [
+        {
+            "inputs": [1, 2, 3],
+            "epoch": [2],
+        },
+        {
+            "inputs": [4, 5],
+            "epoch": [3],
+        },
+        {
+            "inputs": [6],
+            "epoch": [3],
+        },
+        {
+            "inputs": [7],
+            "epoch": [2],
+        },
+    ]
+
+    length_struct = {"inputs": 3, "epoch": 3}
+
+    expected_elements = [
+        {
+            "inputs": [7, 0, 0],
+            "epoch": [2, 0, 0],
+            "inputs_segment_ids": [1, 0, 0],
+            "inputs_positions": [0, 0, 0],
+        },
+        {
+            "inputs": [1, 2, 3],
+            "epoch": [2, 0, 0],
+            "inputs_segment_ids": [1, 1, 1],
+            "inputs_positions": [0, 1, 2],
+        },
+        {
+            "inputs": [4, 5, 6],
+            "epoch": [3, 3, 0],
+            "inputs_segment_ids": [1, 1, 2],
+            "inputs_positions": [0, 1, 0],
+        },
+    ]
+
+    _common_test_body(
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=num_packing_bins,
+        shuffle_bins=True,
+        use_epoch_aware_shuffling=True,
+        epoch_feature="epoch",
+        meta_features=["epoch"],
     )
 
   def test_pack_sequences_length_4(self):
