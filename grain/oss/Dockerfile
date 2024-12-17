@@ -13,8 +13,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN yum install -y rsync
 
-ENV PYTHON_BIN=/opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin
-ENV PATH="${PYTHON_BIN}:${PATH}"
+ENV PYTHON_BIN_PATH=/opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin
+ENV PYTHON_BIN=${PYTHON_BIN_PATH}/python
+ENV PATH="${PYTHON_BIN_PATH}:${PATH}"
 
 # Download the correct bazel version and make sure it's on path.
 RUN BAZEL_ARCH_SUFFIX="$(uname -m | sed s/aarch64/arm64/)" \
@@ -28,12 +29,12 @@ RUN BAZEL_ARCH_SUFFIX="$(uname -m | sed s/aarch64/arm64/)" \
 # exists.
 COPY /array_recor[d] /tmp/grain/array_record
 RUN --mount=type=cache,target=/root/.cache \
-  ${PYTHON_BIN}/python -m pip install -U \
+  $PYTHON_BIN -m pip install -U \
     --find-links=/tmp/grain/array_record array_record;
 
 # Install dependencies needed for grain.
 RUN --mount=type=cache,target=/root/.cache \
-  ${PYTHON_BIN}/python -m pip install -U \
+  $PYTHON_BIN -m pip install -U \
     absl-py \
     build \
     cloudpickle \
@@ -45,7 +46,7 @@ RUN --mount=type=cache,target=/root/.cache \
 
 # Install dependencies needed for grain tests
 RUN --mount=type=cache,target=/root/.cache \
-  ${PYTHON_BIN}/python -m pip install -U \
+  $PYTHON_BIN -m pip install -U \
     attrs \
     auditwheel \
     dill \
