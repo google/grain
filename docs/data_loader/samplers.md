@@ -1,7 +1,7 @@
 # Samplers
 
-Samplers in PyGrain are responsible for determining the order in which records
-are processed. This allows PyGrain to implement global transformations (e.g.
+Samplers in Grain are responsible for determining the order in which records
+are processed. This allows Grain to implement global transformations (e.g.
 global shuffling, sharding, repeating for multiple epochs) before reading any
 records.
 
@@ -71,11 +71,11 @@ for record_metadata in index_sampler:
 ```
 
 ## Implement your Own Sampler
-PyGrain can accommodate custom user-defined samplers. Users implementing their
+Grain can accommodate custom user-defined samplers. Users implementing their
 own sampler should ensure it:
 
 *   implements the aforementioned interface.
-*   is adequately performant. Since PyGrain's `DataLoader` iterates sequentially
+*   is adequately performant. Since Grain's `DataLoader` iterates sequentially
     through the sampler to distribute indices to child processes, a slow sampler
     will become a bottleneck and reduce end-to-end pipeline performance. As a
     reference, we recommend sampler iteration performance of at approx. 50,000

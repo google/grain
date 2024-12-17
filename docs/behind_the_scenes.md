@@ -1,13 +1,13 @@
 # Behind the Scenes
 
-In this section, we explore the design of PyGrain. The following diagram
-illustrates the data flow within PyGrain. Parent process (where user creates the
+In this section, we explore the design of Grain. The following diagram
+illustrates the data flow within Grain. Parent process (where user creates the
 `DataLoader` object) is highlighted in blue while the child processes are
 highlighted in green.
 
 
 
-![Diagram showing PyGrain data flow in the generic case of multiple workers.](images/data_flow_multiple_workers.png "PyGrain DataFlow, multiple workers.")
+![Diagram showing Grain data flow in the generic case of multiple workers.](images/data_flow_multiple_workers.png "Grain DataFlow, multiple workers.")
 
 *   A. Parent process launches the Feeder thread. The Feeder thread iterates
     through the sampler and distributes `RecordMetadata` objects to input queues
@@ -45,7 +45,7 @@ Note that the diagram above illustrates the case when `num_workers` is greater
 than 0. When `num_workers` is 0, there are no child processes launched. Thus the
 flow of data becomes as follows:
 
-![Diagram showing PyGrain dataflow when number of workers is 0](images/data_flow_zero_workers.png "PyGrain DataFlow, zero workers.")
+![Diagram showing Grain dataflow when number of workers is 0](images/data_flow_zero_workers.png "Grain DataFlow, zero workers.")
 
 ## The Need for Multiprocessing
 
@@ -88,8 +88,8 @@ to serialise/deserialise the data. This works is as follows:
 shared memory block. The block is afterwards closed and unlinked to free its
 memory.
 
-PyGrain provides a shared memory backed class called [SharedMemoryArray](https://github.com/google/grain/tree/main/grain/_src/python/shared_memory_array.py), which is implemented as a subclass of numpy array.
-Depending on what your pipeline's last transform/operation is, PyGrain handles the usage of `SharedMemoryArray` in two distinct ways. If last operation is the [BatchOperation](https://github.com/google/grain/tree/main/grain/_src/python/operations.py), then the `np.stack` is configured to produce a `SharedMemoryArray` directly. Else, a `CopyNumPyArrayToSharedMemory` MapTransform is automatically appended to the end and the transform copies the regular numpy array to a `SharedMemoryArray`.
+Grain provides a shared memory backed class called [SharedMemoryArray](https://github.com/google/grain/tree/main/grain/_src/python/shared_memory_array.py), which is implemented as a subclass of numpy array.
+Depending on what your pipeline's last transform/operation is, Grain handles the usage of `SharedMemoryArray` in two distinct ways. If last operation is the [BatchOperation](https://github.com/google/grain/tree/main/grain/_src/python/operations.py), then the `np.stack` is configured to produce a `SharedMemoryArray` directly. Else, a `CopyNumPyArrayToSharedMemory` MapTransform is automatically appended to the end and the transform copies the regular numpy array to a `SharedMemoryArray`.
 
 As an example, suppose a child process produces the following batch of images:
 
@@ -104,7 +104,7 @@ As an example, suppose a child process produces the following batch of images:
 
 ```python
 {
-  # SharedMemoryArrayMetadata is an internal PyGrain class to hold shared memory
+  # SharedMemoryArrayMetadata is an internal Grain class to hold shared memory
   # block info, namely the block name and the shape and dtype of the Numpy array.
   'file_names': SharedMemoryArrayMetadata(name, shape, dtype),
   'images': SharedMemoryArrayMetadata(name, shape, dtype)
@@ -118,7 +118,7 @@ Shared memory opening, closing, and unlinking are all time-consuming, and we mak
 
 ## Determinism
 
-One of the core requirements of PyGrain is determinism. Determinism involves
+One of the core requirements of Grain is determinism. Determinism involves
 producing the same elements in the same ordering across multiple runs of the
 pipeline.
 

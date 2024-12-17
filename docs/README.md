@@ -1,30 +1,30 @@
-# PyGrain
+# Grain
 
 
 
-PyGrain is the pure Python backend for Grain, primarily targeted at JAX users.
-PyGrain is designed to be:
+Grain is designed to be:
 
-* **Powerful.** Users can bring arbitrary python transformations.
-* **Flexible.** PyGrain is designed in a modular fashion. Users can easily
-override PyGrain components if need be with their own implementation.
-* **Deterministic.** Multiple runs of the same pipeline should produce the same
-output.
-* **Resilient to preemptions.** PyGrain is designed such that
-checkpoints have minimal size. After pre-emption, PyGrain can resume from where
-it left off and produce the same output as if it was never preempted.
-* **Performant.** We took care while designing PyGrain to ensure that it's
-performant (refer to [Behind the Scenes](https://github.com/google/grain/blob/main/docs/behind_the_scenes.md)
-section.) We also tested it against multiple data modalities (e.g.
-Text/Audio/Images/Videos).
-* **With minimal dependencies.** PyGrain should minimize its set
-of dependencies when possible. For example, it should not depend on TensorFlow.
+*   **Powerful.** Users can bring arbitrary python transformations.
+*   **Flexible.** Grain is designed in a modular fashion. Users can easily
+    override Grain components if need be with their own implementation.
+*   **Deterministic.** Multiple runs of the same pipeline should produce the
+    same output.
+*   **Resilient to preemptions.** Grain is designed such that checkpoints have
+    minimal size. After pre-emption, Grain can resume from where it left off
+    and produce the same output as if it was never preempted.
+*   **Performant.** We took care while designing Grain to ensure that it's
+    performant (refer to
+    [Behind the Scenes](https://github.com/google/grain/blob/main/docs/behind_the_scenes.md)
+    section.) We also tested it against multiple data modalities (e.g.
+    Text/Audio/Images/Videos).
+*   **With minimal dependencies.** Grain should minimize its set of
+    dependencies when possible. For example, it should not depend on TensorFlow.
 
 ## High Level Idea
 
-The PyGrain backend differs from traditional `tf.data` pipelines. Instead of
+The Grain backend differs from traditional `tf.data` pipelines. Instead of
 starting from filenames that need to be shuffled and interleaved to shuffle the
-data, PyGrain pipeline starts by sampling indices.
+data, Grain pipeline starts by sampling indices.
 
 Indices are globally unique, monotonically increasing values used to track
 progress of the pipeline (for checkpointing). These indices are then mapped into
@@ -34,7 +34,7 @@ multiple epochs, sharding across multiple machines) before reading any records.
 *Local transformations* that map/filter (aka preprocessing) a single example or
 combine multiple consecutive records happen after reading.
 
-![Difference between typical tf.data pipeline and a PyGrain pipeline](./images/grain_pipeline.svg)
+![Difference between typical tf.data pipeline and a Grain pipeline](./images/grain_pipeline.svg)
 
 Steps in the pipeline:
 
@@ -51,7 +51,7 @@ Steps in the pipeline:
 
 ## Training Loop
 
-*PyGrain* has no opinion on how you write your training loop. Instead, PyGrain
+*Grain* has no opinion on how you write your training loop. Instead, Grain
 will return an iterator that implements:
 
 *   `next(ds_iter)` returns the element as NumPy arrays.
@@ -70,7 +70,7 @@ In traditional *tf.data* pipelines global shuffle is implementing hierarchical
 3.  An in-memory shuffle buffer with ~10k elements shuffles elements on the fly.
 
 This is complex and makes it impossible to keep track of the position without
-storing massive checkpoints. Instead *PyGrain* performs streaming global shuffle
+storing massive checkpoints. Instead *Grain* performs streaming global shuffle
 of the indices in the beginning of each epoch and then reads the elements
 according to the random order. We have found this to be generally fast enough,
 even when using hard drives and distributed file systems.
@@ -79,15 +79,15 @@ The index shuffle code can be found [here](https://github.com/google/grain/tree/
 
 ## Reproducibility
 
-*PyGrain* pipelines are fully reproducible without materialization of the dataset
-and with small checkpoints. *PyGrain* starts with a list of indices and keeps
+*Grain* pipelines are fully reproducible without materialization of the dataset
+and with small checkpoints. *Grain* starts with a list of indices and keeps
 track of the last seen index. The whole input pipeline is a stateless
 transformation from the index to the actual element. Pipelines can be started at
 any index without going through prior indices.
 
 ## Data Model and Types
 
-PyGrain does not care about the structure or the type of the data elements. Each
+Grain does not care about the structure or the type of the data elements. Each
 step in the pipeline needs to produce data elements that can be consumed by the
 next step. To elaborate more, the data loader uses the data source to read raw
 records. It then applies the Transformations (e.g. map/filter/batch) in the

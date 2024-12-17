@@ -43,10 +43,11 @@ not depend on TensorFlow.
 ``` {toctree}
 :maxdepth: 1
 :hidden:
-:caption: Getting started
+:caption: Get started
 installation
-behind_the_scenes
+api_choice
 data_sources
+behind_the_scenes
 ```
 
 ``` {toctree}
@@ -61,6 +62,7 @@ data_loader/transformations
 :maxdepth: 1
 :hidden:
 :caption: Tutorials
+tutorials/data_loader_tutorial
 tutorials/dataset_basic_tutorial
 ```
 

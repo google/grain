@@ -1,8 +1,8 @@
-# PyGrain Data Sources
+# Data Sources
 
 
 
-A PyGrain data source is responsible for retrieving individual records. Records
+A Grain data source is responsible for retrieving individual records. Records
 could be in a file/storage system or generated on the fly. Data sources need to
 implement the following protocol:
 
@@ -24,13 +24,13 @@ random access. Grain currently supports random-access file format [ArrayRecord](
 
 ## Available Data Sources
 
-We provide a variety of data sources for PyGrain, which we discuss in the following sections.
+We provide a variety of data sources for Grain, which we discuss in the following sections.
 
 ### Range Data Source
 
 This data source mimics the built-in Python
 [range class](https://docs.python.org/3/library/functions.html#func-range). It
-can be used for initial PyGrain testing or if your use case involves generating
+can be used for initial Grain testing or if your use case involves generating
 records on the fly (for example if you only want to generate synthetic records
 online rather than read records from storage.)
 
@@ -71,7 +71,7 @@ File instruction objects enable a few use cases:
 
 ### TFDS Data Source
 
-TFDS provides PyGrain compatible data sources via `tfds.data_source()`.
+TFDS provides Grain compatible data sources via `tfds.data_source()`.
 Arguments are equivalent to `tfds.load()`. For more information see
 
 ```python
@@ -80,7 +80,7 @@ tfds_data_source = tfds.data_source("imagenet2012", split="train[:75%]")
 
 ## Implement your own Data Source
 
-You can implement your own data source and use it with PyGrain. It needs to
+You can implement your own data source and use it with Grain. It needs to
 implement the `RandomAccessDataSource` protocol defined above. In addition, you
 need to pay attention to the following:
 

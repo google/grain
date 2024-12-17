@@ -95,4 +95,5 @@ nb_execution_timeout = 100
 # files that will not be executed.
 nb_execution_excludepatterns = [
     'tutorials/dataset_basic_tutorial.ipynb',
+    'tutorials/data_loader_tutorial.ipynb',
 ]
