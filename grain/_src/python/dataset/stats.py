@@ -19,6 +19,7 @@ import abc
 from collections.abc import Sequence
 import contextlib
 import dataclasses
+import enum
 import pprint
 import sys
 import threading
@@ -52,7 +53,7 @@ _self_time_ms_histogram = monitoring.EventMetric(
 T = TypeVar("T")
 # Time between two consecutive monitoring reports.
 _REPORTING_PERIOD_SEC = 10
-_LOG_EXECTION_SUMMARY_PERIOD_SEC = 60
+_LOG_EXECUTION_SUMMARY_PERIOD_SEC = 60
 # Stop reporting if there has been no statistics updates for this long.
 _REPORTING_TIMEOUT_SEC = 120
 
@@ -169,6 +170,25 @@ def _pretty_format_summary(
   return table.get_pretty_wrapped_summary()  # pylint: disable=protected-access
 
 
+@enum.unique
+class ExecutionTrackingMode(enum.Flag):
+  """Represents different modes for tracking execution statistics.
+
+  Available modes:
+    DISABLED:
+      No execution statistics are measured. This mode is the default.
+    STAGE_TIMING:
+      The time taken for each transformation stage to execute is measured and
+      recorded. This recorded time reflects the duration spent within the
+      specific transformation to return an element, excluding the time spent in
+      any parent transformations. The recorded time can be retrieved using
+      `grain.experimental.get_execution_summary` method.
+  """
+
+  DISABLED = enum.auto()
+  STAGE_TIMING = enum.auto()
+
+
 class _Table:
   """Table class for pretty printing tabular data."""
 
@@ -272,6 +292,8 @@ class StatsConfig:
   # Whether this transformation mutates the element spec. This is used to
   # determine element spec of the current transformation.
   transform_mutates_spec: bool = True
+  # Whether to log the execution summary.
+  log_summary: bool = False
 
 
 class Stats(abc.ABC):
@@ -495,7 +517,7 @@ class _ExecutionStats(_VisualizationStats):
   def _logging_execution_summary_loop(self):
     """Logs the execution summary periodically."""
     while self._should_report():
-      time.sleep(_LOG_EXECTION_SUMMARY_PERIOD_SEC)
+      time.sleep(_LOG_EXECUTION_SUMMARY_PERIOD_SEC)
       # A node can be marked as non-output after the corresponding
       # transformation started processing elements -- we do not control the
       # initialization time.
@@ -565,8 +587,7 @@ class _ExecutionStats(_VisualizationStats):
                   target=self._reporting_loop, daemon=True
               )
               self._reporting_thread.start()
-
-        if self._logging_thread is None:
+        if self._config.log_summary and self._logging_thread is None:
           with self._logging_thread_init_lock:
             if self._logging_thread is None:
               self._logging_thread = threading.Thread(
@@ -592,6 +613,10 @@ class _ExecutionStats(_VisualizationStats):
       p.report()
 
 
-def make_stats(config: StatsConfig, parents: Sequence[Stats]) -> Stats:
+def make_stats(
+    config: StatsConfig,
+    parents: Sequence[Stats],
+    execution_tracking_mode: ExecutionTrackingMode = ExecutionTrackingMode.DISABLED,
+) -> Stats:
   """Produces statistics instance according to the current execution mode."""
   return _NoopStats(config, parents=parents)
