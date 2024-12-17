@@ -448,6 +448,8 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
           self._packed_batch_parent_state = None
           self._next_row = 0
           self._shuffled_rows = None
+        data = self._stats.record_output_spec(element)
+        print(f"SINGHAAYUSH: data: {data}")
         return self._stats.record_output_spec(element)
 
     while True:
@@ -455,7 +457,11 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
       assert prior_iterator_state is not None
       try:
         element = next(self._parent)
+        print(f"SINGHAAYUSH: prior_iterator_state: {prior_iterator_state}")
+        print(f"SINGHAAYUSH: element: {element}")
+        print(f"SINGHAAYUSH: self._current_batch: {self._current_batch}")
       except StopIteration as e:
+        print(f"SINGHAAYUSH: self._current_batch: {self._current_batch}")
         if self._current_batch:
           with timer:
             self._finalize_current_batch(None)
