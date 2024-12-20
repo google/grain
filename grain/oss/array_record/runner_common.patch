@@ -1,5 +1,5 @@
 diff --git a/oss/runner_common.sh b/oss/runner_common.sh
-index 2ee2c8c..0e32962 100644
+index 2ee2c8c..433698f 100644
 --- a/oss/runner_common.sh
 +++ b/oss/runner_common.sh
 @@ -2,7 +2,7 @@
@@ -20,11 +20,10 @@ index 2ee2c8c..0e32962 100644
    do
      PYTHON_VERSION=${PYTHON_MAJOR_VERSION}.${PYTHON_MINOR_VERSION}
      PYTHON_BIN=/opt/python/cp${PYTHON_MAJOR_VERSION}${PYTHON_MINOR_VERSION}-cp${PYTHON_MAJOR_VERSION}${PYTHON_MINOR_VERSION}/bin
-@@ -40,5 +40,81 @@ function build_and_test_array_record() {
-       bash oss/build_whl.sh
+@@ -41,4 +41,78 @@ function build_and_test_array_record() {
    done
  
-+  ls ${SOURCE_DIR}/all_dist/*.whl
+   ls ${SOURCE_DIR}/all_dist/*.whl
 +}
 +
 +function install_and_init_pyenv {
@@ -99,7 +98,5 @@ index 2ee2c8c..0e32962 100644
 +    # Build and test ArrayRecord.
 +    bash ${SOURCE_DIR}/oss/build_whl.sh
 +  done
-+
-   ls ${SOURCE_DIR}/all_dist/*.whl
  }
 \ No newline at end of file

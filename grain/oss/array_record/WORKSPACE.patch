@@ -1,8 +1,42 @@
 diff --git a/WORKSPACE b/WORKSPACE
-index e63922f..02958ea 100644
+index e63922f..f25e016 100644
 --- a/WORKSPACE
 +++ b/WORKSPACE
-@@ -87,9 +87,9 @@ protobuf_deps()
+@@ -3,13 +3,11 @@ workspace(name = "array_record")
+ load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+ 
+-# Abseil LTS 20230125.0
+ http_archive(
+     name = "com_google_absl",
+-    sha256 = "3ea49a7d97421b88a8c48a0de16c16048e17725c7ec0f1d3ea2683a2a75adc21",  # SHARED_ABSL_SHA
+-    strip_prefix = "abseil-cpp-20230125.0",
++    strip_prefix = "abseil-cpp-20230802.1",
+     urls = [
+-        "https://github.com/abseil/abseil-cpp/archive/refs/tags/20230125.0.tar.gz",
++        "https://github.com/abseil/abseil-cpp/archive/refs/tags/20230802.1.tar.gz",
+     ],
+ )
+ # Version: pypi-v0.11.0, 2020/10/27
+@@ -70,15 +68,13 @@ http_archive(
+ load("@pybind11_bazel//:python_configure.bzl", "python_configure")
+ python_configure(name = "local_config_python")
+ 
+-# V21.12, 20230130
+ # proto_library, cc_proto_library, and java_proto_library rules implicitly
+ # depend on @com_google_protobuf for protoc and proto runtimes.
+ # This statement defines the @com_google_protobuf repo.
+ http_archive(
+     name = "com_google_protobuf",
+-    sha256 = "22fdaf641b31655d4b2297f9981fa5203b2866f8332d3c6333f6b0107bb320de",
+-    strip_prefix = "protobuf-21.12",
+-    urls = ["https://github.com/protocolbuffers/protobuf/archive/v21.12.tar.gz"],
++    strip_prefix = "protobuf-23.1",
++    urls = ["https://github.com/protocolbuffers/protobuf/archive/v23.1.tar.gz"],
+ )
+ 
+ load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
+@@ -87,9 +83,9 @@ protobuf_deps()
  # Riegeli does not cut releases, so we reference the head
  http_archive(
      name = "com_google_riegeli",

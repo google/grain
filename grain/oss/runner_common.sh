@@ -123,6 +123,4 @@ function build_and_test_grain_macos() {
 
     bash grain/oss/build_whl.sh
   done
-
-  ls ${SOURCE_DIR}/all_dist/*.whl
 }
