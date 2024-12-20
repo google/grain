@@ -698,6 +698,7 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
     parents_stats = []
     if hasattr(self, "_parents"):
       for p in self._parents:
+        p._stats._is_multithread = True  # pylint: disable=protected-access
         parents_stats.append(p._initialize_stats(execution_tracking_mode))  # pylint: disable=protected-access
     self._stats = dataset_stats.make_stats(
         dataset_stats.StatsConfig(
