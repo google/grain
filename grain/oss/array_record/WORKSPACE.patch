@@ -1,0 +1,16 @@
+diff --git a/WORKSPACE b/WORKSPACE
+index e63922f..02958ea 100644
+--- a/WORKSPACE
++++ b/WORKSPACE
+@@ -87,9 +87,9 @@ protobuf_deps()
+ # Riegeli does not cut releases, so we reference the head
+ http_archive(
+     name = "com_google_riegeli",
+-    strip_prefix = "riegeli-master",
++    strip_prefix = "riegeli-904c0c263b8632265103f0066c168a92c7713b07",
+     urls = [
+-        "https://github.com/google/riegeli/archive/master.zip",
++        "https://github.com/google/riegeli/archive/904c0c263b8632265103f0066c168a92c7713b07.zip",
+     ],
+ )
+ # Riegeli's dependencies

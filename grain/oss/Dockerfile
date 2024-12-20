@@ -11,7 +11,7 @@ ARG BAZEL_VERSION
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN yum install -y rsync
+RUN ulimit -n 1024 && yum install -y rsync
 
 ENV PYTHON_BIN=/opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin
 ENV PATH="${PYTHON_BIN}:${PATH}"

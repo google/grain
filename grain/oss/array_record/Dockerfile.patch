@@ -1,0 +1,13 @@
+diff --git a/oss/build.Dockerfile b/oss/build.Dockerfile
+index 5fefa86..17fd296 100644
+--- a/oss/build.Dockerfile
++++ b/oss/build.Dockerfile
+@@ -11,7 +11,7 @@ ARG BAZEL_VERSION
+ 
+ ENV DEBIAN_FRONTEND=noninteractive
+ 
+-RUN yum install -y rsync
++RUN ulimit -n 1024 && yum install -y rsync
+ ENV PATH="${PYTHON_BIN}:${PATH}"
+ 
+ # Download the correct bazel version and make sure it's on path.
