@@ -108,6 +108,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   @functools.cached_property
   def _stats(self):
+    self._map_parent._stats._is_multithread = True  # pylint: disable=protected-access
     execution_tracking_mode = self._options_with_default.execution_tracking_mode
     parent_stats = self._map_parent._initialize_stats(  # pylint: disable=protected-access
         execution_tracking_mode
