@@ -3,13 +3,10 @@
 
 set -e -x
 
-CP_VERSION="cp${PYTHON_MAJOR_VERSION}${PYTHON_MINOR_VERSION}"
-PYTHON_BIN_PATH="/opt/python/${CP_VERSION}-${CP_VERSION}/bin/python"
-
 function main() {
   bazel clean
-  bazel build ... --action_env PYTHON_BIN_PATH="${PYTHON_BIN_PATH}" --action_env MACOSX_DEPLOYMENT_TARGET=11.0
-  bazel test --verbose_failures --test_output=errors ... --action_env PYTHON_BIN_PATH="${PYTHON_BIN_PATH}"
+  bazel build ... --action_env PYTHON_BIN_PATH="${PYTHON_BIN}" --action_env MACOSX_DEPLOYMENT_TARGET=11.0
+  bazel test --verbose_failures --test_output=errors ... --action_env PYTHON_BIN_PATH="${PYTHON_BIN}"
 
   DEST="/tmp/grain/all_dist"
   mkdir -p "${DEST}"
@@ -38,11 +35,13 @@ function main() {
     plat_name="--plat-name macosx_11_0_$(uname -m)"
   fi
 
-  "python${PYTHON_VERSION}" setup.py bdist_wheel --python-tag py3${PYTHON_MINOR_VERSION} $plat_name
+  $PYTHON_BIN setup.py bdist_wheel --python-tag py3${PYTHON_MINOR_VERSION} $plat_name
   cp dist/*.whl "${DEST}"
 
-  echo $(date) : "=== Auditing wheel"
-  auditwheel repair --plat ${AUDITWHEEL_PLATFORM} -w dist dist/*.whl
+  if [ -n "${AUDITWHEEL_PLATFORM}" ]; then
+    echo $(date) : "=== Auditing wheel"
+    auditwheel repair --plat ${AUDITWHEEL_PLATFORM} -w dist dist/*.whl
+  fi
 
   echo $(date) : "=== Listing wheel"
   ls -lrt dist/*.whl

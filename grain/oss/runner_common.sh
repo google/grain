@@ -80,7 +80,7 @@ function update_bazel_macos {
 }
 
 function install_grain_deps {
-  AR_DIR="./grain/oss/array_record"
+  AR_DIR="$SOURCE_DIR/grain/oss/array_record"
   $PYTHON_BIN -m pip install -U --find-links=$AR_DIR array_record --no-cache-dir;
   $PYTHON_BIN -m pip install -U \
     absl-py \
@@ -121,6 +121,6 @@ function build_and_test_grain_macos() {
     install_and_init_pyenv
     install_grain_deps
 
-    bash grain/oss/build_whl.sh
+    bash "${SOURCE_DIR}/grain/oss/build_whl.sh"
   done
 }
