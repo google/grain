@@ -22,7 +22,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
-        os: [macos-latest]
+        os: [macos-13]
 
     steps:
       - uses: "actions/checkout@v3"
@@ -36,8 +36,8 @@ jobs:
           export PYTHON_VERSION=${{ matrix.python-version }}
           export PYTHON_MAJOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f1)
           export PYTHON_MINOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f2)
-          export PYTHON="python"
-          export PYTHON_BIN=$(which python)
+          export PYTHON="python3"
+          export PYTHON_BIN=$(which python3)
           export BAZEL_VERSION="5.4.0"
           export OUTPUT_DIR="/tmp/grain"
           export ARRAY_RECORD_OUTPUT_DIR="/tmp/array_record"
