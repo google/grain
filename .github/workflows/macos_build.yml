@@ -36,8 +36,8 @@ jobs:
           export PYTHON_VERSION=${{ matrix.python-version }}
           export PYTHON_MAJOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f1)
           export PYTHON_MINOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f2)
-          export PYTHON="python3"
-          export PYTHON_BIN=$(which python3)
+          export PYTHON="python${PYTHON_VERSION}"
+          export PYTHON_BIN=$(which ${PYTHON})
           export BAZEL_VERSION="5.4.0"
           export OUTPUT_DIR="/tmp/grain"
           export ARRAY_RECORD_OUTPUT_DIR="/tmp/array_record"
