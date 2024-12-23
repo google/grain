@@ -1,0 +1,83 @@
+# This workflow will upload a Python Package to PyPI when a release is created
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#publishing-to-package-registries
+
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: MacOS builds
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: "Python ${{ matrix.python-version }} on ${{ matrix.os }}"
+    runs-on: "${{ matrix.os }}"
+
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+        os: [macos-latest]
+
+    steps:
+      - uses: "actions/checkout@v3"
+      - name: Create directory
+        run: |
+          mkdir -p /tmp/grain
+          cp -r . /tmp/grain
+      - name: Build package
+        run: |
+          set -xe
+          export PYTHON_VERSION=${{ matrix.python-version }}
+          export PYTHON_MAJOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f1)
+          export PYTHON_MINOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f2)
+          export PYTHON="python3"
+          export PYTHON_BIN="python3"
+          export BAZEL_VERSION="5.4.0"
+          export OUTPUT_DIR="tmp/grain"
+          export ARRAY_RECORD_OUTPUT_DIR="/tmp/array_record"
+          git clone https://github.com/google/array_record ${ARRAY_RECORD_OUTPUT_DIR}
+          pushd ${ARRAY_RECORD_OUTPUT_DIR}
+          # Use ArrayRecord commit when build was still working.
+          git reset --hard ef9be1b9de19e9e9ca5c272490a2fca4afb3c4ec
+          git apply ${OUTPUT_DIR}/grain/oss/array_record/WORKSPACE.patch
+          git apply ${OUTPUT_DIR}/grain/oss/array_record/build_whl.patch
+          git apply ${OUTPUT_DIR}/grain/oss/array_record/runner_common.patch
+          git apply ${OUTPUT_DIR}/grain/oss/array_record/Dockerfile.patch
+          git apply ${OUTPUT_DIR}/grain/oss/array_record/setup.patch
+          git apply ${OUTPUT_DIR}/grain/oss/array_record/array_record_reader.patch
+          source ${ARRAY_RECORD_OUTPUT_DIR}/oss/runner_common.sh
+          export SOURCE_DIR="${ARRAY_RECORD_OUTPUT_DIR}"
+          update_bazel_macos ${BAZEL_VERSION}
+          bazel --version
+          cd ${SOURCE_DIR}
+          bash ${SOURCE_DIR}/oss/build_whl.sh
+          ls ${SOURCE_DIR}/all_dist/*.whl
+          popd
+          OUTPUT_DIR="/tmp/grain"
+          mkdir -p ${OUTPUT_DIR}/grain/oss/array_record
+          cp -r /tmp/array_record/all_dist/* ${OUTPUT_DIR}/grain/oss/array_record
+          pushd ${OUTPUT_DIR}
+          source ${OUTPUT_DIR}/grain/oss/runner_common.sh
+          export SOURCE_DIR="${OUTPUT_DIR}"
+          install_grain_deps
+          bash "${SOURCE_DIR}/grain/oss/build_whl.sh"
+          popd
+          cp -r /tmp/grain/all_dist/* ${OUTPUT_DIR}/grain/all_dist
+      - name: Upload ArrayRecord artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: built-ar-wheels-${{ matrix.os }}-${{ matrix.python-version }}
+          path: /tmp/array_record/**/*.whl
+      - name: Upload Grain artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: built-grain-wheels-${{ matrix.os }}-${{ matrix.python-version }}
+          path: /tmp/grain/**/*.whl
+
