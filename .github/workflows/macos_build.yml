@@ -36,8 +36,6 @@ jobs:
           export PYTHON_VERSION=${{ matrix.python-version }}
           export PYTHON_MAJOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f1)
           export PYTHON_MINOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f2)
-          export PYTHON="python${PYTHON_VERSION}"
-          export PYTHON_BIN=$(which ${PYTHON})
           export BAZEL_VERSION="5.4.0"
           export OUTPUT_DIR="/tmp/grain"
           export ARRAY_RECORD_OUTPUT_DIR="/tmp/array_record"
@@ -57,7 +55,10 @@ jobs:
           update_bazel_macos ${BAZEL_VERSION}
           bazel --version
           cd ${SOURCE_DIR}
-          $PYTHON_BIN -m pip install etils[array_types,epath,epy]
+          echo "Creating array_record wheel for Python Version $PYTHON_VERSION"
+          setup_env_vars_py $PYTHON_MAJOR_VERSION $PYTHON_MINOR_VERSION
+          install_and_init_pyenv
+          install_ar_deps
           bash ${SOURCE_DIR}/oss/build_whl.sh
           ls ${SOURCE_DIR}/all_dist/*.whl
           popd
