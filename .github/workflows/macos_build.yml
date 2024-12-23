@@ -39,19 +39,19 @@ jobs:
           export PYTHON="python3"
           export PYTHON_BIN="python3"
           export BAZEL_VERSION="5.4.0"
-          export OUTPUT_DIR="tmp/grain"
+          export OUTPUT_DIR="/tmp/grain"
           export ARRAY_RECORD_OUTPUT_DIR="/tmp/array_record"
           git clone https://github.com/google/array_record ${ARRAY_RECORD_OUTPUT_DIR}
           pushd ${ARRAY_RECORD_OUTPUT_DIR}
           # Use ArrayRecord commit when build was still working.
           git reset --hard ef9be1b9de19e9e9ca5c272490a2fca4afb3c4ec
           ls ${OUTPUT_DIR}
-          git apply ${OUTPUT_DIR}/oss/array_record/WORKSPACE.patch
-          git apply ${OUTPUT_DIR}/oss/array_record/build_whl.patch
-          git apply ${OUTPUT_DIR}/oss/array_record/runner_common.patch
-          git apply ${OUTPUT_DIR}/oss/array_record/Dockerfile.patch
-          git apply ${OUTPUT_DIR}/oss/array_record/setup.patch
-          git apply ${OUTPUT_DIR}/oss/array_record/array_record_reader.patch
+          git apply ${OUTPUT_DIR}/grain/oss/array_record/WORKSPACE.patch
+          git apply ${OUTPUT_DIR}/grain/oss/array_record/build_whl.patch
+          git apply ${OUTPUT_DIR}/grain/oss/array_record/runner_common.patch
+          git apply ${OUTPUT_DIR}/grain/oss/array_record/Dockerfile.patch
+          git apply ${OUTPUT_DIR}/grain/oss/array_record/setup.patch
+          git apply ${OUTPUT_DIR}/grain/oss/array_record/array_record_reader.patch
           source ${ARRAY_RECORD_OUTPUT_DIR}/oss/runner_common.sh
           export SOURCE_DIR="${ARRAY_RECORD_OUTPUT_DIR}"
           update_bazel_macos ${BAZEL_VERSION}
