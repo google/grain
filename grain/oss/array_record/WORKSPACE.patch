@@ -41,10 +41,10 @@ index e63922f..8a0c80e 100644
  http_archive(
      name = "com_google_riegeli",
 -    strip_prefix = "riegeli-master",
-+    strip_prefix = "riegeli-904c0c263b8632265103f0066c168a92c7713b07",
++    strip_prefix = "riegeli-02482f25efc0f1bfb8c01e37bb852fc4cfb0cf2b",
      urls = [
 -        "https://github.com/google/riegeli/archive/master.zip",
-+        "https://github.com/google/riegeli/archive/904c0c263b8632265103f0066c168a92c7713b07.zip",
++        "https://github.com/google/riegeli/archive/02482f25efc0f1bfb8c01e37bb852fc4cfb0cf2b.zip",
      ],
  )
  # Riegeli's dependencies
