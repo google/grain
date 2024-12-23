@@ -1,5 +1,5 @@
 diff --git a/WORKSPACE b/WORKSPACE
-index e63922f..f25e016 100644
+index e63922f..a655bdb 100644
 --- a/WORKSPACE
 +++ b/WORKSPACE
 @@ -3,13 +3,11 @@ workspace(name = "array_record")
@@ -48,3 +48,15 @@ index e63922f..f25e016 100644
      ],
  )
  # Riegeli's dependencies
+@@ -131,9 +127,8 @@ http_archive(
+ http_archive(
+     name = "highwayhash",
+     build_file = "@com_google_riegeli//third_party:highwayhash.BUILD",
+-    sha256 = "5380cb7cf19e7c9591f31792b7794d48084f6a3ab7c03d637cd6a32cf2ee8686",
+-    strip_prefix = "highwayhash-a7f68e2f95fac08b24327d74747521cf634d5aff",
+-    urls = ["https://github.com/google/highwayhash/archive/a7f68e2f95fac08b24327d74747521cf634d5aff.zip"],  # 2023-08-09
++    strip_prefix = "highwayhash-3d6a8d35a6bc823b9dbe08804fc2a2d08d373cd7",
++    urls = ["https://github.com/google/highwayhash/archive/3d6a8d35a6bc823b9dbe08804fc2a2d08d373cd7.zip"],
+ )
+ 
+ # Tensorflow, 20230705
