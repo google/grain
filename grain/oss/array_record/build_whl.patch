@@ -38,7 +38,7 @@ index 275c868..f312188 100755
 -  ${PYTHON_BIN} setup.py bdist_wheel --python-tag py3${PYTHON_MINOR_VERSION}
 +  plat_name=""
 +  if [[ "$(uname)" == "Darwin" ]]; then
-+    plat_name="--plat-name macosx_11_0_$(uname -m)"
++    plat_name="--plat-name macosx_11_0_universal2"
 +  fi
 +  ${PYTHON_BIN} setup.py bdist_wheel --python-tag py3${PYTHON_MINOR_VERSION} $plat_name
  
