@@ -37,7 +37,7 @@ jobs:
           export PYTHON_MAJOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f1)
           export PYTHON_MINOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f2)
           export PYTHON="python"
-          export PYTHON_BIN="python"
+          export PYTHON_BIN=$(which python)
           export BAZEL_VERSION="5.4.0"
           export OUTPUT_DIR="/tmp/grain"
           export ARRAY_RECORD_OUTPUT_DIR="/tmp/array_record"
