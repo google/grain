@@ -52,12 +52,12 @@ jobs:
           git apply ${OUTPUT_DIR}/grain/oss/array_record/Dockerfile.patch
           git apply ${OUTPUT_DIR}/grain/oss/array_record/setup.patch
           git apply ${OUTPUT_DIR}/grain/oss/array_record/array_record_reader.patch
-          $PYTHON_BIN -m pip install -U etils[epath,epy]
           source ${ARRAY_RECORD_OUTPUT_DIR}/oss/runner_common.sh
           export SOURCE_DIR="${ARRAY_RECORD_OUTPUT_DIR}"
           update_bazel_macos ${BAZEL_VERSION}
           bazel --version
           cd ${SOURCE_DIR}
+          $PYTHON_BIN -m pip install etils[array_types,epath,epy]
           bash ${SOURCE_DIR}/oss/build_whl.sh
           ls ${SOURCE_DIR}/all_dist/*.whl
           popd
