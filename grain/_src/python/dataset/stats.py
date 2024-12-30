@@ -532,9 +532,9 @@ class _ExecutionStats(_VisualizationStats):
             " the `PrefetchDatasetIterator` node indicates it is a bottleneck."
             " The `MapDataset` nodes are executed in multiple threads and thus,"
             " should not be compared to the `total_processing_time` of"
-            " `DatasetIterator` nodes.."
+            " `DatasetIterator` nodes.\n\n%s",
+            _pretty_format_summary(summary),
         )
-        logging.info(_pretty_format_summary(summary))
 
   def _build_execution_summary(
       self,
