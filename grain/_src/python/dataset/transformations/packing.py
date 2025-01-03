@@ -16,6 +16,7 @@ import collections
 from collections.abc import Sequence
 import copy
 from typing import Any, Optional
+from grain._src.core import constants
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
 from grain._src.python.dataset.transformations import packing_packed_batch
@@ -288,6 +289,8 @@ class FirstFitPackIterDataset(dataset.IterDataset):
       length_struct: Any,
       num_packing_bins: int,
       shuffle_bins: bool = True,
+      use_epoch_aware_shuffling: bool = False,
+      epoch_feature: str = constants.EPOCH,
       meta_features: Sequence[str] = (),
   ):
     """Creates a dataset that packs sequences from the parent dataset.
@@ -298,6 +301,12 @@ class FirstFitPackIterDataset(dataset.IterDataset):
       length_struct: Target sequence length for each feature.
       num_packing_bins: Number of bins to pack sequences into.
       shuffle_bins: Whether to shuffle bins after packing.
+      use_epoch_aware_shuffling: Only used if shuffle_bins is True. If True, we
+        will group the bins by which epoch(s) they contain and shuffle within
+        each group. If False, the entire batch is shuffled without regard to
+        epoch.
+      epoch_feature: Name of the feature containing the epoch. Only used if
+        use_epoch_aware_shuffling is True.
       meta_features: Meta features that do not need *_segment_ids and
         *_positions features.
     """
@@ -305,6 +314,8 @@ class FirstFitPackIterDataset(dataset.IterDataset):
     self._length_struct = length_struct
     self._num_packing_bins = num_packing_bins
     self._shuffle_bins = shuffle_bins
+    self._use_epoch_aware_shuffling = use_epoch_aware_shuffling
+    self._epoch_feature = epoch_feature
     self._meta_features = meta_features
 
   def __str__(self) -> str:
@@ -316,6 +327,8 @@ class FirstFitPackIterDataset(dataset.IterDataset):
         num_packing_bins=self._num_packing_bins,
         length_struct=self._length_struct,
         shuffle_bins=self._shuffle_bins,
+        use_epoch_aware_shuffling=self._use_epoch_aware_shuffling,
+        epoch_feature=self._epoch_feature,
         meta_features=self._meta_features,
     )
 
@@ -330,12 +343,16 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
       num_packing_bins: int,
       length_struct: PyTree[Optional[int]],
       shuffle_bins: bool,
+      use_epoch_aware_shuffling: bool,
+      epoch_feature: str,
       meta_features: Sequence[str],
   ):
     super().__init__(parent)
     self._num_packing_bins = num_packing_bins
     self._length_struct = length_struct
     self._shuffle_bins = shuffle_bins
+    self._use_epoch_aware_shuffling = use_epoch_aware_shuffling
+    self._epoch_feature = epoch_feature
     self._meta_features = meta_features
     self._reset()
 
@@ -391,6 +408,21 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
       self._shuffled_rows = np.random.default_rng(seed).permuted(
           range(self._packed_batch_num_bins)
       )
+      if self._use_epoch_aware_shuffling:
+        unique_epochs_in_row = [
+            np.unique(row) for row in self._packed_batch[self._epoch_feature]
+        ]
+        average_epoch_per_row = [
+            # nan_to_num is for the divide by zero case.
+            np.nan_to_num(np.sum(s) / np.count_nonzero(s), nan=0.0)
+            for s in unique_epochs_in_row
+        ]
+        tuples_to_sort = [
+            (average_epoch_per_row[i], self._shuffled_rows[i], i)
+            for i in range(self._packed_batch_num_bins)
+        ]
+        # Sort by average epoch followed by original shuffle position.
+        self._shuffled_rows = [t[2] for t in sorted(tuples_to_sort)]
 
     if element_for_shapes is None:
       self._current_batch = None
