@@ -83,6 +83,7 @@ py_library(
     srcs = ["stats.py"],
     srcs_version = "PY3",
     deps = [
+        ":base",
         "//grain/_src/core:config",
         "//grain/_src/core:monitoring",
         "//grain/_src/core:tree",
