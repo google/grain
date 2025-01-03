@@ -18,6 +18,7 @@ import itertools
 
 from absl.testing import absltest
 from grain._src.core import transforms
+from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import filter as filter_dataset
 
@@ -151,7 +152,7 @@ class FilterIterDatasetTest(absltest.TestCase):
         .filter(FilterAllElements())
     )
     ds = dataset.WithOptionsIterDataset(
-        ds, dataset.DatasetOptions(filter_raise_threshold_ratio=0.999)
+        ds, base.DatasetOptions(filter_raise_threshold_ratio=0.999)
     )
     with self.assertRaisesRegex(
         ValueError,
@@ -168,7 +169,7 @@ class FilterValidatorTest(absltest.TestCase):
     filter_dataset._WARN_FILTERED_INTERVAL_SEC = 0.0
 
   def test_validates(self):
-    default_options = dataset.DatasetOptions()
+    default_options = base.DatasetOptions()
     v = filter_dataset.FilterThresholdChecker(
         "test",
         default_options.filter_warn_threshold_ratio,
@@ -179,7 +180,7 @@ class FilterValidatorTest(absltest.TestCase):
       v.check(p)
 
   def test_warns(self):
-    default_options = dataset.DatasetOptions()
+    default_options = base.DatasetOptions()
     v = filter_dataset.FilterThresholdChecker(
         "test",
         default_options.filter_warn_threshold_ratio,

@@ -20,7 +20,6 @@ from typing import Any, Callable, Optional, TypeVar, Union
 from absl import logging
 from grain._src.core import transforms
 from grain._src.python.dataset import dataset
-from grain._src.python.dataset.transformations import prefetch
 import numpy as np
 
 
@@ -238,8 +237,8 @@ class _MapDatasetIterator(dataset.DatasetIterator[T]):
           # execution. The actual index value doesn't matter as long as it is
           # unique for each process.
           index_for_rng = (
-              prefetch.worker_process_index
-              + self._index_for_rng * prefetch.worker_process_count
+              self._ctx.mp_context.process_index
+              + self._index_for_rng * self._ctx.mp_context.process_count
           )
           _reset_rng_state(self._rng, op_seed=0, index=index_for_rng)
           element = self._map_fn(element, self._rng)
