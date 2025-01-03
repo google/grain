@@ -123,6 +123,7 @@ py_library(
     srcs = ["packing_packed_batch.py"],
     srcs_version = "PY3",
     deps = [
+        "//grain/_src/core:tree",
     ],
 )
 
