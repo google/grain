@@ -16,9 +16,10 @@ import collections
 from collections.abc import Sequence
 import copy
 from typing import Any, Optional
+from absl import logging
+from grain._src.cpp.transformations.packing.python import packing
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
-from grain._src.python.dataset.transformations import packing_packed_batch
 from jaxtyping import PyTree  # pylint: disable=g-importing-member
 import numpy as np
 import tree
@@ -289,6 +290,7 @@ class FirstFitPackIterDataset(dataset.IterDataset):
       num_packing_bins: int,
       shuffle_bins: bool = True,
       meta_features: Sequence[str] = (),
+      use_cc_version: bool = False,
   ):
     """Creates a dataset that packs sequences from the parent dataset.
 
@@ -300,6 +302,7 @@ class FirstFitPackIterDataset(dataset.IterDataset):
       shuffle_bins: Whether to shuffle bins after packing.
       meta_features: Meta features that do not need *_segment_ids and
         *_positions features.
+      use_cc_version: Whether to use the faster C++ implementation.
     """
     super().__init__(parent)
     self._length_struct = length_struct

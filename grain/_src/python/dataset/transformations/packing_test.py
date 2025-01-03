@@ -371,6 +371,8 @@ def _common_test_body(
       shuffle_bins=shuffle_bins,
   )
   actual_elements = list(ld)
+  print("got", actual_elements)
+  print("want", expected_elements)
   np.testing.assert_equal(len(actual_elements), len(expected_elements))
 
   def _check_equivalence(path, actual_val, expected_val):
@@ -390,10 +392,8 @@ def _common_test_body(
 class FirstFitPackIterDatasetTest(parameterized.TestCase):
   """Tests for FirstFitPackIterDataset."""
 
-  @parameterized.parameters(
-      {"num_packing_bins": 1},
-      {"num_packing_bins": 2},
-      {"num_packing_bins": 3},
+  @parameterized.product(
+      num_packing_bins=[1, 2, 3],
   )
   def test_pack_sequences_length_3(self, num_packing_bins: int):
     input_elements = [
@@ -447,11 +447,13 @@ class FirstFitPackIterDatasetTest(parameterized.TestCase):
         num_packing_bins=num_packing_bins,
     )
 
-  @parameterized.parameters(
-      {"num_packing_bins": 3},
-      {"num_packing_bins": 5},
+  @parameterized.product(
+      num_packing_bins=[3, 5],
   )
-  def test_pack_sequences_length_shuffle_bins(self, num_packing_bins: int):
+  def test_pack_sequences_length_shuffle_bins(
+      self,
+      num_packing_bins: int,
+  ):
     input_elements = [
         {
             "inputs": [1, 2, 3],
@@ -541,7 +543,10 @@ class FirstFitPackIterDatasetTest(parameterized.TestCase):
     ]
 
     _common_test_body(
-        input_elements, expected_elements, length_struct, num_packing_bins=2
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=2,
     )
 
   def test_pack_sequences_length_5(self):
@@ -581,7 +586,10 @@ class FirstFitPackIterDatasetTest(parameterized.TestCase):
     ]
 
     _common_test_body(
-        input_elements, expected_elements, length_struct, num_packing_bins=2
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=2,
     )
 
   def test_pack_sequences_length_6(self):
@@ -611,7 +619,10 @@ class FirstFitPackIterDatasetTest(parameterized.TestCase):
     }]
 
     _common_test_body(
-        input_elements, expected_elements, length_struct, num_packing_bins=2
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=2,
     )
 
   def test_pack_sequences_length_7(self):
@@ -641,7 +652,10 @@ class FirstFitPackIterDatasetTest(parameterized.TestCase):
     }]
 
     _common_test_body(
-        input_elements, expected_elements, length_struct, num_packing_bins=1
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=1,
     )
 
   def test_pack_sequences_different_lengths(self):
@@ -688,7 +702,10 @@ class FirstFitPackIterDatasetTest(parameterized.TestCase):
         },
     ]
     _common_test_body(
-        input_elements, expected_elements, length_struct, num_packing_bins=3
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=3,
     )
 
   def test_pack_sequences_two_dimensional_features(self):
@@ -738,14 +755,14 @@ class FirstFitPackIterDatasetTest(parameterized.TestCase):
     ]
 
     _common_test_body(
-        input_elements, expected_elements, length_struct, num_packing_bins=2
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=2,
     )
 
-  @parameterized.parameters(
-      {"restore_at_step": 0},
-      {"restore_at_step": 1},
-      {"restore_at_step": 2},
-      {"restore_at_step": 3},
+  @parameterized.product(
+      restore_at_step=[0, 1, 2, 3],
   )
   def test_checkpointing(self, restore_at_step: int):
     input_elements = [

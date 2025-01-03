@@ -118,6 +118,18 @@ py_test(
     ],
 )
 
+# copybara: strip_begin
+py_test(
+    name = "fast_packing_test",
+    srcs = ["fast_packing_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":packing",
+        "//grain/_src/python/dataset",
+    ],
+)
+# copybara: strip_end
+
 py_library(
     name = "packing_packed_batch",
     srcs = ["packing_packed_batch.py"],
