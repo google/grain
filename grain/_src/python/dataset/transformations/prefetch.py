@@ -41,6 +41,14 @@ import numpy as np
 
 T = TypeVar("T")
 
+# Index of the current worker process and total number of processes. If used
+# before multiprocess prefetch, must only be used during or after iterator
+# initialization.
+# TODO: Introduce context shared by all iterators and put these
+# variables there.
+worker_process_index = 0
+worker_process_count = 1
+
 
 @typing.runtime_checkable
 class SupportsInPlaceSlicing(Protocol):
@@ -374,12 +382,16 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
   def __call__(
       self, *, worker_index: int, worker_count: int
   ) -> Iterator[tuple[T, Optional[dict[str, Any]]]]:
-    # Recover from the last recorded state for the given worker.
-    worker_state = self._state[_WORKERS_STATE][str(worker_index)]
+    global worker_process_index, worker_process_count
+    worker_process_index = worker_index
+    worker_process_count = worker_count
     if worker_count > 1:
       _set_slice(self._ds, slice(worker_index, None, worker_count))
-    it = iter(self._ds)
-    it.set_state(worker_state)  # pytype: disable=attribute-error
+    it = self._ds.__iter__()
+    # Recover from the last recorded state for the given worker.
+    worker_state = self._state[_WORKERS_STATE][str(worker_index)]
+    if worker_state is not None:
+      it.set_state(worker_state)
     # Skip the required number of iterations after the last recorded state.
     for _ in range(self._state[_ITERATIONS_TO_SKIP][str(worker_index)]):
       _ = next(it)
@@ -432,13 +444,12 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     # Create initial state. We record state of each worker periodically together
     # with the number of iterations without the recorded state and index of the
     # last worker.
-    workers_state: dict[str, Any] = {}
-    iterations_to_skip: dict[str, int] = {}
-    for i in range(multiprocessing_options.num_workers):
-      workers_state[str(i)] = iter(
-          self._iter_parent
-      ).get_state()  # pytype: disable=attribute-error
-      iterations_to_skip[str(i)] = 0
+    iterations_to_skip: dict[str, int] = {
+        str(i): 0 for i in range(multiprocessing_options.num_workers)
+    }
+    workers_state: dict[str, Any] = {
+        str(i): None for i in range(multiprocessing_options.num_workers)
+    }
 
     self._state: dict[str, dict[str, Any] | int] = {
         _WORKERS_STATE: workers_state,
@@ -483,7 +494,16 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._iterator = None
 
   def get_state(self) -> dict[str, Any]:
-    return copy.deepcopy(self._state)
+    result = copy.deepcopy(self._state)
+    workers_state: dict[str, Any] = result[_WORKERS_STATE]  # pytype: disable=annotation-type-mismatch
+    parent_state = None
+    for worker_index, worker_state in workers_state.items():
+      # Create initial state from the parent iterator. This is to make sure the
+      # spec of the produced iterator does not change.
+      if worker_state is None:
+        parent_state = parent_state or self._iter_parent.__iter__().get_state()
+        workers_state[worker_index] = copy.deepcopy(parent_state)
+    return result
 
   def _ensure_iterator_initialized(self) -> None:
     if self._iterator is None:

@@ -20,6 +20,7 @@ from typing import Any, Callable, Optional, TypeVar, Union
 from absl import logging
 from grain._src.core import transforms
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset.transformations import prefetch
 import numpy as np
 
 
@@ -233,7 +234,14 @@ class _MapDatasetIterator(dataset.DatasetIterator[T]):
     with self._stats.record_self_time():
       if element is not None:
         if self._seed is not None:
-          _reset_rng_state(self._rng, op_seed=0, index=self._index_for_rng)
+          # Shift index for the current worker process in case of multiprocess
+          # execution. The actual index value doesn't matter as long as it is
+          # unique for each process.
+          index_for_rng = (
+              prefetch.worker_process_index
+              + self._index_for_rng * prefetch.worker_process_count
+          )
+          _reset_rng_state(self._rng, op_seed=0, index=index_for_rng)
           element = self._map_fn(element, self._rng)
         else:
           element = self._map_fn(element)

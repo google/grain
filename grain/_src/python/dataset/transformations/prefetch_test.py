@@ -561,6 +561,19 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
     # buffers.
     time.sleep(30)
 
+  def test_prefetch_with_random_map(self):
+    ds = dataset.MapDataset.source([0]).repeat(100).to_iter_dataset()
+    ds = ds.random_map(lambda x, rng: x + rng.integers(sys.maxsize), seed=42)
+    ds = prefetch.MultiprocessPrefetchIterDataset(
+        ds,
+        options.MultiprocessingOptions(num_workers=5),
+    )
+    # Make sure that sliced datasets on workers are seeded differently and thus
+    # produce different random elements.
+    elements = list(ds)
+    distinct_elements = set(elements)
+    self.assertLen(distinct_elements, len(elements))
+
 
 class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
 
