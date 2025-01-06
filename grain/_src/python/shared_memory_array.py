@@ -39,11 +39,10 @@ class SharedMemoryArrayMetadata:
     shm.unlink()
 
 
-def close_with_semaphore(
-    shm: shared_memory.SharedMemory, semaphore: threading.Semaphore
-) -> None:
-  with semaphore:
-    shm.close()
+def _del_shm(shm: shared_memory.SharedMemory, unlink: bool) -> None:
+  shm.close()
+  if unlink:
+    shm.unlink()
 
 
 class SharedMemoryArray(np.ndarray):
@@ -59,8 +58,8 @@ class SharedMemoryArray(np.ndarray):
   """
 
   _lock: threading.Lock = threading.Lock()
-  _unlink_thread_pool: pool.ThreadPool | None = None
-  _unlink_semaphore: threading.Semaphore | None = None
+  _del_thread_pool: pool.ThreadPool | None = None
+  _outstanding_del_requests: threading.Semaphore | None = None
 
   def __new__(
       cls,
@@ -121,11 +120,46 @@ class SharedMemoryArray(np.ndarray):
     return self.from_shared_memory, (self.shm, self.shape, self.dtype)
 
   @classmethod
-  def enable_async_del(cls, num_threads: int = 1) -> None:
-    with cls._lock:
-      if not SharedMemoryArray._unlink_thread_pool:
-        SharedMemoryArray._unlink_thread_pool = pool.ThreadPool(num_threads)
-        SharedMemoryArray._unlink_semaphore = threading.Semaphore(num_threads)
+  def enable_async_del(
+      cls, num_threads: int = 1, max_outstanding_requests: int = 50
+  ) -> None:
+    """Enables asynchronous deletion of shared memory arrays.
+
+    Args:
+      num_threads: The number of threads to use for deletion.
+      max_outstanding_requests: The maximum number of outstanding requests to
+        close/unlink shared memory. A larger value may make the __del__ method
+        faster, but it may also lead to OOM errors or hitting file descriptor
+        limits, since `max_outstanding_requests` shared memory objects and their
+        associated file descriptors may be buffered before deletion.
+    """
+    with SharedMemoryArray._lock:
+      if not SharedMemoryArray._del_thread_pool:
+        if max_outstanding_requests < num_threads:
+          raise ValueError(
+              "max_outstanding_requests must be at least num_threads."
+          )
+        SharedMemoryArray._del_thread_pool = pool.ThreadPool(num_threads)
+        SharedMemoryArray._outstanding_del_requests = threading.Semaphore(
+            max_outstanding_requests
+        )
+
+  # For use in tests.
+  @classmethod
+  def _disable_async_del(cls) -> None:
+    cls._del_thread_pool = None
+    cls._outstanding_del_requests = None
+
+  # Mocked in tests, so be careful refactoring.
+  @classmethod
+  def close_shm_async(
+      cls,
+      shm: shared_memory.SharedMemory,
+      unlink: bool,
+  ) -> None:
+    _del_shm(shm, unlink)
+    assert cls._outstanding_del_requests is not None
+    cls._outstanding_del_requests.release()
 
   def unlink_on_del(self) -> None:
     """Mark this object responsible for unlinking the shared memory."""
@@ -135,19 +169,19 @@ class SharedMemoryArray(np.ndarray):
     # Ensure that this array is not a view before closing shared memory
     if not isinstance(self.base, mmap.mmap):
       return
-    thread_pool = SharedMemoryArray._unlink_thread_pool
-    semaphore = SharedMemoryArray._unlink_semaphore
+    thread_pool = SharedMemoryArray._del_thread_pool
+    outstanding_del_requests = SharedMemoryArray._outstanding_del_requests
     shm = self.shm
     assert isinstance(shm, shared_memory.SharedMemory)
     if thread_pool:
-      assert semaphore is not None
+      assert outstanding_del_requests is not None
       # We use a semaphore to make sure that we don't accumulate too many
-      # requests to close/unlink shared memory, which could lead to OOM errors
-      thread_pool.apply_async(close_with_semaphore, args=(shm, semaphore))
-    else:
-      shm.close()
-    if self._unlink_on_del:
-      if thread_pool:
-        thread_pool.apply_async(shm.unlink)
+      # requests to close/unlink shared memory, which could lead to OOM errors.
+      if outstanding_del_requests.acquire(blocking=False):
+        thread_pool.apply_async(
+            SharedMemoryArray.close_shm_async, args=(shm, self._unlink_on_del)
+        )
       else:
-        shm.unlink()
+        _del_shm(shm, unlink=self._unlink_on_del)
+    else:
+      _del_shm(shm, unlink=self._unlink_on_del)

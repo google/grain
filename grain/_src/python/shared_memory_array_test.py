@@ -13,6 +13,9 @@
 # limitations under the License.
 """Tests for shared memory array."""
 from multiprocessing import shared_memory
+import threading
+import time
+from unittest import mock
 from absl.testing import absltest
 from absl.testing import parameterized
 import multiprocessing
@@ -23,6 +26,23 @@ from grain._src.python.shared_memory_array import SharedMemoryArrayMetadata
 import jax
 import numpy as np
 import tensorflow as tf
+
+
+def _create_and_delete_shm() -> SharedMemoryArrayMetadata:
+  data = np.array([[1, 2], [3, 4]], dtype=np.int32)
+  shm_array = SharedMemoryArray(data.shape, data.dtype)
+  shm_array.unlink_on_del()
+  metadata = shm_array.metadata
+  return metadata
+
+
+def _wait_for_deletion(metadata: SharedMemoryArrayMetadata) -> None:
+  while True:
+    try:
+      _ = shared_memory.SharedMemory(name=metadata.name, create=False)
+      time.sleep(0.1)
+    except FileNotFoundError:
+      break
 
 
 class SharedMemoryArrayTest(parameterized.TestCase):
@@ -73,6 +93,89 @@ class SharedMemoryArrayTest(parameterized.TestCase):
     shm_metadata.close_and_unlink_shm()
     with self.assertRaises(FileNotFoundError):
       _ = shared_memory.SharedMemory(name=shm_metadata.name, create=False)
+
+  def test_async_unlink_limit(self):
+    SharedMemoryArray._disable_async_del()
+    SharedMemoryArray.enable_async_del(max_outstanding_requests=1)
+    event = threading.Event()
+    original_close_shm_async = SharedMemoryArray.close_shm_async
+
+    def _wait_for_event(shm, unlink_on_del):
+      event.wait(timeout=60)
+      original_close_shm_async(shm, unlink_on_del)
+
+    with mock.patch.object(
+        SharedMemoryArray, "close_shm_async", side_effect=_wait_for_event
+    ):
+      metadata = _create_and_delete_shm()
+      time.sleep(1)
+      # This should succeed, since the unlink request is async and we haven't
+      # yet allowed it to progress past the event.
+      _ = shared_memory.SharedMemory(name=metadata.name, create=False)
+
+      # All outstanding requests in use, so this should delete the shared memory
+      # right away.
+      metadata_2 = _create_and_delete_shm()
+      with self.assertRaises(FileNotFoundError):
+        _ = shared_memory.SharedMemory(name=metadata_2.name, create=False)
+
+      event.set()
+      _wait_for_deletion(metadata)
+
+  def test_del_no_pool(self):
+    SharedMemoryArray._disable_async_del()
+    # Tests deletion of SharedMemory resource when enable_async_del is not
+    # called.
+    data = np.array([[1, 2], [3, 4]], dtype=np.int32)
+    shm_array = SharedMemoryArray(data.shape, data.dtype)
+    shm_array.unlink_on_del()
+    metadata = shm_array.metadata
+    del shm_array
+    with self.assertRaises(FileNotFoundError):
+      _ = shared_memory.SharedMemory(name=metadata.name, create=False)
+
+  def test_del_many_async(self):
+    SharedMemoryArray._disable_async_del()
+    SharedMemoryArray.enable_async_del(
+        num_threads=4, max_outstanding_requests=20
+    )
+    shm_metadatas = [_create_and_delete_shm() for _ in range(50)]
+    for metadata in shm_metadatas:
+      _wait_for_deletion(metadata)
+
+  def test_del_many_async_reuse_pool(self):
+    max_outstanding_requests = 20
+    SharedMemoryArray._disable_async_del()
+    SharedMemoryArray.enable_async_del(
+        num_threads=4, max_outstanding_requests=max_outstanding_requests
+    )
+    original_close_shm_async = SharedMemoryArray.close_shm_async
+
+    def my_close_shm_async(shm, unlink_on_del):
+      original_close_shm_async(shm, unlink_on_del)
+
+    with mock.patch.object(
+        SharedMemoryArray, "close_shm_async", side_effect=my_close_shm_async
+    ) as mock_close_shm_async:
+      with self.subTest("first_round_of_requests"):
+        shm_metadatas = [
+            _create_and_delete_shm() for _ in range(max_outstanding_requests)
+        ]
+        for metadata in shm_metadatas:
+          _wait_for_deletion(metadata)
+        self.assertEqual(
+            max_outstanding_requests, mock_close_shm_async.call_count
+        )
+      with self.subTest("second_round_of_requests"):
+        # Do it again to make sure the pool is reused.
+        shm_metadatas = [
+            _create_and_delete_shm() for _ in range(max_outstanding_requests)
+        ]
+        for metadata in shm_metadatas:
+          _wait_for_deletion(metadata)
+        self.assertEqual(
+            2 * max_outstanding_requests, mock_close_shm_async.call_count
+        )
 
 
 if __name__ == "__main__":
