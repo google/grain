@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from concurrent import futures
 import dataclasses
 import sys
 import time
@@ -660,6 +661,22 @@ class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
         ValueError, '`prefetch_buffer_size` must be greater than or equal to 0'
     ):
       prefetch.ThreadPrefetchIterDataset(self.ds, prefetch_buffer_size=-1)
+
+  def test_concurrent_start_prefetch(self):
+    num_iters = 10  # Can't set this much higher without Forge OOMing.
+
+    def make_iter(i):
+      ds = dataset.MapDataset.source([i])
+      ds = ds.to_iter_dataset()
+      ds = ds.mp_prefetch(options=options.MultiprocessingOptions(num_workers=1))
+      return ds.__iter__()
+
+    iters = [make_iter(i) for i in range(num_iters)]
+    with futures.ThreadPoolExecutor(max_workers=num_iters) as executor:
+      for it in iters:
+        executor.submit(it.start_prefetch)
+    for it in iters:
+      _ = next(it)
 
 
 if __name__ == '__main__':

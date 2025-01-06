@@ -58,6 +58,7 @@ class SharedMemoryArray(np.ndarray):
   the memory will not be freed.
   """
 
+  _lock: threading.Lock = threading.Lock()
   _unlink_thread_pool: pool.ThreadPool | None = None
   _unlink_semaphore: threading.Semaphore | None = None
 
@@ -121,9 +122,10 @@ class SharedMemoryArray(np.ndarray):
 
   @classmethod
   def enable_async_del(cls, num_threads: int = 1) -> None:
-    if not SharedMemoryArray._unlink_thread_pool:
-      SharedMemoryArray._unlink_thread_pool = pool.ThreadPool(num_threads)
-      SharedMemoryArray._unlink_semaphore = threading.Semaphore(num_threads)
+    with cls._lock:
+      if not SharedMemoryArray._unlink_thread_pool:
+        SharedMemoryArray._unlink_thread_pool = pool.ThreadPool(num_threads)
+        SharedMemoryArray._unlink_semaphore = threading.Semaphore(num_threads)
 
   def unlink_on_del(self) -> None:
     """Mark this object responsible for unlinking the shared memory."""
