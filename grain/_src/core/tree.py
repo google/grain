@@ -68,6 +68,9 @@ try:
   def flatten(structure):
     return tree_util.tree_flatten(structure)[0]
 
+  def flatten_with_path(structure):
+    return tree_util.tree_flatten_with_path(structure)[0]
+
   def unflatten_as(structure, flat_sequence):
     return tree_util.tree_unflatten(
         tree_util.tree_structure(structure), flat_sequence
@@ -132,6 +135,7 @@ except ImportError:
   map_structure_with_path = tree.map_structure_with_path
   assert_same_structure = tree.assert_same_structure
   flatten = tree.flatten
+  flatten_with_path = tree.flatten_with_path
   unflatten_as = tree.unflatten_as
 
   def spec_like(structure):

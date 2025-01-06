@@ -15,7 +15,6 @@ py_library(
     deps = [
         "//grain/_src/core:config",  # build_cleaner: keep
         "//grain/_src/core:constants",  # build_cleaner: keep
-        "//grain/_src/core:grain_random",  # build_cleaner: keep
         "//grain/_src/core:sharding",  # build_cleaner: keep
     ],
 )

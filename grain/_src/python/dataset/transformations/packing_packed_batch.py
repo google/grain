@@ -1,3 +1,16 @@
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 """This module provides a helper class for multi-bin first-fit packing.
 
 Example packing is a step in many input pipelines for sequence to sequence
@@ -20,10 +33,9 @@ import copy
 import dataclasses
 from typing import Generic, TypeVar
 
-import jax
+from grain._src.core import tree
 import jaxtyping as jt
 import numpy as np
-import tree
 
 
 _T = TypeVar("_T")
@@ -110,19 +122,19 @@ class PackedBatch(Generic[_T]):
           dtype=dtype,
       )
 
-    self._values = jax.tree.map(
+    self._values = tree.map_structure(
         make_packed_buffer, length_struct, element_for_shapes
     )
 
     def make_packed_aux_info(length: int):
       return zeros(shape=(num_packing_bins, length), dtype=np.int32)
 
-    self._segment_ids = jax.tree.map(make_packed_aux_info, length_struct)
-    self._positions = jax.tree.map(make_packed_aux_info, length_struct)
+    self._segment_ids = tree.map_structure(make_packed_aux_info, length_struct)
+    self._positions = tree.map_structure(make_packed_aux_info, length_struct)
 
     # Tracks the next empty position to insert an example for each row
     # in the batch, for each feature in features_to_pack.
-    self._first_free_cell_per_row = jax.tree.map(
+    self._first_free_cell_per_row = tree.map_structure(
         lambda _: zeros(num_packing_bins, dtype=np.int64), length_struct
     )
 
@@ -131,14 +143,17 @@ class PackedBatch(Generic[_T]):
     self._num_examples_per_row = [0 for _ in range(num_packing_bins)]
 
   def get_packed_batch(self):
+    """Returns the current packed batch."""
     rows_with_values = sum(x > 0 for x in self._num_examples_per_row)
     if rows_with_values < len(self._num_examples_per_row):
       # Partial batch, last rows don't have values.
-      self._values = jax.tree.map(lambda x: x[:rows_with_values], self._values)
-      self._segment_ids = jax.tree.map(
+      self._values = tree.map_structure(
+          lambda x: x[:rows_with_values], self._values
+      )
+      self._segment_ids = tree.map_structure(
           lambda x: x[:rows_with_values], self._segment_ids
       )
-      self._positions = jax.tree.map(
+      self._positions = tree.map_structure(
           lambda x: x[:rows_with_values], self._positions
       )
     return _extract_and_rekey_packed_batch(
@@ -163,7 +178,7 @@ class PackedBatch(Generic[_T]):
     """
     tree.assert_same_structure(element, self._length_struct)
 
-    element_feature_lengths = jax.tree.map(
+    element_feature_lengths = tree.map_structure(
         lambda x: 1 if np.ndim(x) == 0 else len(x), element
     )
 
@@ -191,7 +206,7 @@ class PackedBatch(Generic[_T]):
       return feature_length + first_free_cell <= max_length
 
     is_row_free_struct = tree.flatten_with_path(
-        jax.tree.map(
+        tree.map_structure(
             _feature_will_fit,
             element_feature_lengths,
             self._first_free_cell_per_row,

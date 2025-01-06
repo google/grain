@@ -40,6 +40,9 @@ class TreeImpl(Protocol):
   def flatten(self, structure):
     ...
 
+  def flatten_with_path(self, structure):
+    ...
+
   def unflatten_as(self, structure, flat_sequence):
     ...
 
@@ -84,6 +87,12 @@ class TreeTest(parameterized.TestCase):
 
   def test_flatten(self):
     self.assertEqual(tree.flatten({"A": "v2", "B": "v1"}), ["v2", "v1"])
+
+  def test_flatten_with_path(self):
+    result = tree.flatten_with_path({"A": "v2", "B": "v1"})
+    # Maybe extract keys from path elements.
+    result = tree.map_structure(lambda x: getattr(x, "key", x), result)
+    self.assertEqual(result, [(("A",), "v2"), (("B",), "v1")])
 
   def test_unflatten_as(self):
     self.assertEqual(

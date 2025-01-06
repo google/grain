@@ -20,7 +20,6 @@ from typing import Generic, Iterator, TypeVar, Union, cast
 from absl import logging
 from grain._src.core import tree
 from grain._src.python import record
-import jax
 import jaxtyping as jt
 import numpy as np
 
@@ -46,19 +45,21 @@ class _PackedBatch:
           dtype=input_arr.dtype,
       )
 
-    self._batch = jax.tree.map(
+    self._batch = tree.map_structure(
         make_packed_buffer, length_struct, element_for_shapes
     )
 
     def make_packed_aux_info(length: int):
       return np.zeros(shape=(batch_size, length), dtype=np.int32)
 
-    self._segmentations = jax.tree.map(make_packed_aux_info, length_struct)
-    self._positions = jax.tree.map(make_packed_aux_info, length_struct)
+    self._segmentations = tree.map_structure(
+        make_packed_aux_info, length_struct
+    )
+    self._positions = tree.map_structure(make_packed_aux_info, length_struct)
 
     # Tracks the next empty position to insert an example for each row
     # in the batch, for each feature in features_to_pack.
-    self._first_free_cell_per_row = jax.tree.map(
+    self._first_free_cell_per_row = tree.map_structure(
         lambda _: np.zeros(batch_size, dtype=np.int32), length_struct
     )
 
@@ -79,10 +80,10 @@ class _PackedBatch:
 
   def _can_add_at_row(self, element: jt.PyTree[np.ndarray]) -> int:
     """Returns the index of the first row which fits element, or -1 if none."""
-    element_feature_lengths = jax.tree.map(len, element)
+    element_feature_lengths = tree.map_structure(len, element)
 
     # Check no feature exceeds max length
-    length_exceeded = jax.tree.map(
+    length_exceeded = tree.map_structure(
         lambda feature_length, max_length: feature_length > max_length,
         element_feature_lengths,
         self._length_struct,
@@ -97,7 +98,7 @@ class _PackedBatch:
     def _feature_will_fit(feature_length, first_free_cell, max_length):
       return feature_length + first_free_cell <= max_length
 
-    is_row_free_struct = jax.tree.map(
+    is_row_free_struct = tree.map_structure(
         _feature_will_fit,
         element_feature_lengths,
         self._first_free_cell_per_row,
