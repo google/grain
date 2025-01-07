@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for visualize.py."""
+import re
 
 from absl.testing import absltest
 from grain._src.core import transforms
@@ -36,7 +36,7 @@ _MAP_DATASET_REPR = r"""RangeMapDataset
 "<class 'int'>[]"
 
   ││
-  ││  MapWithIndexMapDataset<map_fn=_add_dummy_metadata>
+  ││  MapWithIndexMapDataset<map_fn=_add_dummy_metadata in module __main__ on line XXX>
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -45,7 +45,7 @@ _MAP_DATASET_REPR = r"""RangeMapDataset
  'index': "<class 'int'>[]"}
 
   ││
-  ││  MapMapDataset<map_fn=_identity>
+  ││  MapMapDataset<map_fn=_identity in module __main__ on line XXX>
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -74,7 +74,7 @@ _ITER_DATASET_REPR = r"""RangeMapDataset
 "<class 'int'>[]"
 
   ││
-  ││  MapIterDataset<map_fn=<lambda>>
+  ││  MapIterDataset<map_fn=<lambda> in module __main__ on line XXX>
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -114,7 +114,7 @@ RangeMapDataset
 "<class 'int'>[]"
 
   ││
-  ││  MapMapDataset<map_fn=map>
+  ││  MapMapDataset<map_fn=_AddOne.map in module __main__ on line XXX>
   ││
   ╲╱
 "<class 'int'>[]"
@@ -134,7 +134,7 @@ _PREFETCH_DATASET_REPR = r"""RangeMapDataset
 "<class 'int'>[]"
 
   ││
-  ││  MapWithIndexMapDataset<map_fn=_add_dummy_metadata>
+  ││  MapWithIndexMapDataset<map_fn=_add_dummy_metadata in module __main__ on line XXX>
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -169,7 +169,7 @@ _SOURCE_DATASET_REPR = r"""SourceMapDataset<source=_ExpensiveSource>
 "<class 'bytes'>[]"
 
   ││
-  ││  MapMapDataset<map_fn=_identity>
+  ││  MapMapDataset<map_fn=_identity in module __main__ on line XXX>
   ││
   ╲╱
 "<class 'bytes'>[]"
@@ -212,6 +212,8 @@ class VisualizeTest(absltest.TestCase):
     original_result = list(ds)
     result = visualize._build_visualization_str(ds, None)
     print(result)
+    # Remove line number from the result to make test less brittle.
+    result = re.sub(r"on line \d+", "on line XXX", result)
     self.assertEqual(result, expected)
     repr_after_visualize = _deep_dataset_repr(ds)
     result_after_visualize = list(ds)
