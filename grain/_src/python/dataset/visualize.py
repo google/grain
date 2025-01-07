@@ -174,20 +174,20 @@ class _SpecTrackingDatasetIterator(dataset.DatasetIterator[T]):
       mock_output: Value to use as the output of the parent iterator. If None,
         the actual iterator output will be used.
     """
-    self._parent_iter = parent_iter
+    super().__init__(parent_iter)
     self._spec_update_fn = spec_update_fn
     self._mock_output = mock_output
 
   def __next__(self) -> T:
-    result = self._mock_output or self._parent_iter.__next__()
+    result = self._mock_output or self._parent.__next__()
     self._spec_update_fn(tree.spec_like(result))
     return result
 
   def set_state(self, state: dict[str, Any]) -> None:
-    self._parent_iter.set_state(state)
+    self._parent.set_state(state)
 
   def get_state(self) -> dict[str, Any]:
-    return self._parent_iter.get_state()
+    return self._parent.get_state()
 
 
 def _build_visualization_from_tracked_spec(

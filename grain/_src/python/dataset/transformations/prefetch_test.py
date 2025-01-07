@@ -24,6 +24,7 @@ from absl.testing import parameterized
 from grain._src.core import transforms
 import multiprocessing as mp
 from grain._src.python import options
+from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import filter as filter_lazy_dataset
 from grain._src.python.dataset.transformations import map as map_lazy_dataset
@@ -194,7 +195,7 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
         .filter(FilterAllElements())
         .to_iter_dataset()
     )
-    ds_options = dataset.DatasetOptions(filter_raise_threshold_ratio=0.9)
+    ds_options = base.DatasetOptions(filter_raise_threshold_ratio=0.9)
     ds = dataset.WithOptionsIterDataset(ds, ds_options)
     with self.assertRaisesRegex(
         ValueError,
@@ -211,7 +212,7 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
         .filter(FilterAllElements())
         .to_iter_dataset(allow_nones=True)
     )
-    ds_options = dataset.DatasetOptions(filter_raise_threshold_ratio=0.9)
+    ds_options = base.DatasetOptions(filter_raise_threshold_ratio=0.9)
     ds = dataset.WithOptionsIterDataset(ds, ds_options)
     self.assertEqual(list(ds), [None] * 1000)
 

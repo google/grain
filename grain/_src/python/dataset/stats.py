@@ -19,7 +19,6 @@ import abc
 from collections.abc import Sequence
 import contextlib
 import dataclasses
-import enum
 import pprint
 import sys
 import threading
@@ -31,6 +30,7 @@ from absl import logging
 from grain._src.core import config as grain_config
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import tree
+from grain._src.python.dataset import base
 
 from grain._src.core import monitoring
 
@@ -168,25 +168,6 @@ def _pretty_format_summary(
     tabular_summary.append(row_values)
   table = _Table(tabular_summary, col_widths=col_widths)
   return table.get_pretty_wrapped_summary()  # pylint: disable=protected-access
-
-
-@enum.unique
-class ExecutionTrackingMode(enum.Flag):
-  """Represents different modes for tracking execution statistics.
-
-  Available modes:
-    DISABLED:
-      No execution statistics are measured. This mode is the default.
-    STAGE_TIMING:
-      The time taken for each transformation stage to execute is measured and
-      recorded. This recorded time reflects the duration spent within the
-      specific transformation to return an element, excluding the time spent in
-      any parent transformations. The recorded time can be retrieved using
-      `grain.experimental.get_execution_summary` method.
-  """
-
-  DISABLED = enum.auto()
-  STAGE_TIMING = enum.auto()
 
 
 class _Table:
@@ -616,7 +597,9 @@ class _ExecutionStats(_VisualizationStats):
 def make_stats(
     config: StatsConfig,
     parents: Sequence[Stats],
-    execution_tracking_mode: ExecutionTrackingMode = ExecutionTrackingMode.DISABLED,
+    execution_tracking_mode: base.ExecutionTrackingMode = (
+        base.ExecutionTrackingMode.DISABLED
+    ),
 ) -> Stats:
   """Produces statistics instance according to the current execution mode."""
   return _NoopStats(config, parents=parents)

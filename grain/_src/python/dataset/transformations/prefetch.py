@@ -34,20 +34,13 @@ import multiprocessing as mp
 from grain._src.python import grain_pool
 from grain._src.python import options as grain_options
 from grain._src.python import shared_memory_array
+from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
 from grain._src.python.dataset.transformations import filter as filter_dataset
 import numpy as np
 
 T = TypeVar("T")
-
-# Index of the current worker process and total number of processes. If used
-# before multiprocess prefetch, must only be used during or after iterator
-# initialization.
-# TODO: Introduce context shared by all iterators and put these
-# variables there.
-worker_process_index = 0
-worker_process_count = 1
 
 
 @typing.runtime_checkable
@@ -116,7 +109,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   @functools.cached_property
   def _stats(self):
-    execution_tracking_mode = self._options_with_default.execution_tracking_mode
+    execution_tracking_mode = self._ctx.dataset_options.execution_tracking_mode
     parent_stats = self._map_parent._initialize_stats(  # pylint: disable=protected-access
         execution_tracking_mode
     )
@@ -136,8 +129,8 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     # here. The validator helps to detect if we discard too many elements.
     return filter_dataset.FilterThresholdChecker(
         transform_name=str(self),
-        warn_threshold=self._options_with_default.filter_warn_threshold_ratio,
-        raise_threshold=self._options_with_default.filter_raise_threshold_ratio,
+        warn_threshold=self._ctx.dataset_options.filter_warn_threshold_ratio,
+        raise_threshold=self._ctx.dataset_options.filter_raise_threshold_ratio,
     )
 
   def __next__(self) -> T:
@@ -382,12 +375,12 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
   def __call__(
       self, *, worker_index: int, worker_count: int
   ) -> Iterator[tuple[T, Optional[dict[str, Any]]]]:
-    global worker_process_index, worker_process_count
-    worker_process_index = worker_index
-    worker_process_count = worker_count
     if worker_count > 1:
       _set_slice(self._ds, slice(worker_index, None, worker_count))
     it = self._ds.__iter__()
+    it._ctx.mp_context = base.MultiprocessingContext(
+        process_index=worker_index, process_count=worker_count
+    )
     # Recover from the last recorded state for the given worker.
     worker_state = self._state[_WORKERS_STATE][str(worker_index)]
     if worker_state is not None:

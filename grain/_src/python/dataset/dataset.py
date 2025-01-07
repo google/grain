@@ -41,7 +41,6 @@ from __future__ import annotations
 import abc
 import builtins
 from collections.abc import Callable, Iterable, Iterator, Sequence
-import dataclasses
 import functools
 from typing import (
     Any,
@@ -88,6 +87,7 @@ class _Dataset:
   _MUTATES_ELEMENT_SPEC = True
 
   def __init__(self, parents: Sequence[_Dataset]):
+    super().__init__()
     # Seeds a `SeedSequence` used to generate default seeds for all
     # downstream transformations. Set by `_WithOptions{Map|Iter}Dataset`.
     self._seed_rng_seed = None
@@ -676,7 +676,7 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
     return self.to_iter_dataset().__iter__()
 
   def _initialize_stats(
-      self, execution_tracking_mode: dataset_stats.ExecutionTrackingMode
+      self, execution_tracking_mode: base.ExecutionTrackingMode
   ) -> dataset_stats.Stats:
     """Eagerly initializes the stats object with given execution tracking mode.
 
@@ -711,7 +711,7 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
   @functools.cached_property
   def _stats(self) -> dataset_stats.Stats:
     """Returns the Stats object for recording statistics about this dataset."""
-    return self._initialize_stats(dataset_stats.ExecutionTrackingMode.DISABLED)
+    return self._initialize_stats(base.ExecutionTrackingMode.DISABLED)
 
 
 class _IterDatasetMeta(abc.ABCMeta):
@@ -1071,31 +1071,24 @@ class DatasetIterator(Iterator[T], abc.ABC):
       self,
       parents: DatasetIterator | Sequence[DatasetIterator] = (),
   ):
+    super().__init__()
     if isinstance(parents, DatasetIterator):
       self._parents = (parents,)
     else:
       self._parents = tuple(parents)
-    # The options are set in `WithOptionsIterDataset`.
-    self._options: DatasetOptions | None = None
-    parent_options = []
-    for p in self._parents:
-      # Not all user iterators call super().__init__ and thus don't have the
-      # options set.
-      if (p_options := getattr(p, "_options", None)) is not None:
-        parent_options.append(p_options)
-    if parent_options:
-      self._options = functools.reduce(lambda x, y: x.merge(y), parent_options)
-
-  @property
-  def _options_with_default(self) -> DatasetOptions:
-    """Returns options for the pipeline including the given iterator.
-
-    WARNING: must be accessed after all iterators in the pipeline have been
-    initialized.
-    """
-    # TODO: Relax the requirement to access options after all iterators
-    # in the pipeline have been initialized.
-    return getattr(self, "_options", None) or DatasetOptions()
+    if self._parents:
+      self._ctx: base.IteratorContext = self._parents[0]._ctx
+      # Merge the context from all parents.
+      to_visit = list(self._parents[1:])
+      for parent in to_visit:
+        self._ctx.merge(parent._ctx)
+      # Update the context in the parent iterator trees.
+      while to_visit:
+        current = to_visit.pop()
+        current._ctx = self._ctx
+        to_visit.extend(current._parents)
+    else:
+      self._ctx: base.IteratorContext = base.IteratorContext()
 
   @property
   def _parent(self) -> DatasetIterator:
@@ -1145,19 +1138,16 @@ class DatasetIterator(Iterator[T], abc.ABC):
   @functools.cached_property
   def _stats(self):
     """Returns the Stats object for recording statistics about this iterator."""
-    # There may be parent `DatasetIterator` nodes introduced by users that did
-    # not call super init and thus don't have `_stats`.
-    parents_stats = []
-    if hasattr(self, "_parents"):
-      for p in self._parents:
-        parents_stats.append(p._stats)  # pylint: disable=protected-access
+    config = dataset_stats.StatsConfig(
+        name=str(self),
+        transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
+    )
     return dataset_stats.make_stats(
-        dataset_stats.StatsConfig(
-            name=str(self),
-            transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
+        config,
+        [p._stats for p in self._parents],  # pylint: disable=protected-access
+        execution_tracking_mode=(
+            self._ctx.dataset_options.execution_tracking_mode
         ),
-        parents_stats,
-        execution_tracking_mode=self._options_with_default.execution_tracking_mode,
     )
 
 
@@ -1196,80 +1186,6 @@ class _WithSeedIterDataset(IterDataset[T]):
     return "WithOptionsIterDataset"
 
 
-@dataclasses.dataclass(slots=True, frozen=True)
-class _Default(Generic[T]):
-  """Default options value holder."""
-
-  value: T
-
-
-@dataclasses.dataclass(kw_only=True, frozen=True)
-class DatasetOptions:
-  """Holds options used by dataset transformations.
-
-  Attributes:
-    filter_warn_threshold_ratio: If the ratio of filtered out elements is above
-      these thresholds, a warning will be issued. Value `None` disables the
-      check. The ratio is calculated on non-overlapping windows of 1000
-      elements. For instance, with `filter_warn_threshold_ratio=0.9` and 901
-      elements out of the first 1000 (or elements 1000...2000) filtered out, a
-      warning will be issued.
-    filter_raise_threshold_ratio: If the ratio of filtered out elements is above
-      these thresholds, an exception will be issued. Value `None` disables the
-      check.
-    execution_tracking_mode: The collection of execution statistics like total
-      processing time taken by each transformation, number of elements produced
-      etc. can be managed through various modes. If `DISABLED`, no statistics
-      are collected.If `STAGE_TIMING`, the time it takes to process each
-      transormation is collected. See `ExecutionTrackingMode` for more details.
-  """
-
-  filter_warn_threshold_ratio: float | None | _Default[float] = _Default(0.9)
-  filter_raise_threshold_ratio: float | None | _Default[None] = _Default(None)
-  execution_tracking_mode: (
-      dataset_stats.ExecutionTrackingMode
-      | _Default[dataset_stats.ExecutionTrackingMode]
-  ) = _Default(dataset_stats.ExecutionTrackingMode.DISABLED)
-
-  # Internal fields.
-
-  # Names of fields which were set by the user.
-  _user_set_fields: set[str] = dataclasses.field(
-      default_factory=set, init=False
-  )
-
-  def __post_init__(self):
-    # Replace default value objects with actual values.
-    for field in dataclasses.fields(DatasetOptions):
-      value = getattr(self, field.name)
-      if isinstance(value, _Default):
-        super().__setattr__(field.name, value.value)
-      elif field.init:
-        self._user_set_fields.add(field.name)
-
-  def merge(self, other: DatasetOptions | None) -> DatasetOptions:
-    """Merges these options with the other.
-
-    Explicitly set options in `self` take precedence over options in `other`.
-
-    Args:
-      other: Options to merge.
-
-    Returns:
-      Merged options.
-    """
-    if other is None:
-      return self
-
-    merged = {}
-    for field in dataclasses.fields(DatasetOptions):
-      if field.name in self._user_set_fields:
-        merged[field.name] = getattr(self, field.name)
-      elif field.name in other._user_set_fields:  # pylint: disable=protected-access
-        merged[field.name] = getattr(other, field.name)
-    return DatasetOptions(**merged)
-
-
 class WithOptionsIterDataset(IterDataset[T]):
   """Applies options to transformations in the pipeline.
 
@@ -1302,7 +1218,7 @@ class WithOptionsIterDataset(IterDataset[T]):
   ```
   """
 
-  def __init__(self, parent: IterDataset[T], options: DatasetOptions):
+  def __init__(self, parent: IterDataset[T], options: base.DatasetOptions):
     super().__init__(parent)
     self._options = options
 
@@ -1310,12 +1226,8 @@ class WithOptionsIterDataset(IterDataset[T]):
     result = self._parent.__iter__()
     # The parent iterator options are merged from the entire subtree. Merge
     # them with the latest options and update the subtree options.
-    options = self._options.merge(result._options)
-    to_visit = [result]
-    while to_visit:
-      current = to_visit.pop()
-      current._options = options
-      to_visit.extend(current._parents)
+    options = self._options.merge(result._ctx.dataset_options)
+    result._ctx.dataset_options = options
     return result
 
   def __str__(self):
