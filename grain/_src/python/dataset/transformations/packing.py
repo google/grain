@@ -288,6 +288,7 @@ class FirstFitPackIterDataset(dataset.IterDataset):
       length_struct: Any,
       num_packing_bins: int,
       shuffle_bins: bool = True,
+      shuffle_bins_group_by_feature: str | None = None,
       meta_features: Sequence[str] = (),
   ):
     """Creates a dataset that packs sequences from the parent dataset.
@@ -298,6 +299,12 @@ class FirstFitPackIterDataset(dataset.IterDataset):
       length_struct: Target sequence length for each feature.
       num_packing_bins: Number of bins to pack sequences into.
       shuffle_bins: Whether to shuffle bins after packing.
+      shuffle_bins_group_by_feature: No-op if shuffle_bins is False. When
+        shuffle_bins is True, if shuffle_bins_group_by_feature is set to
+        something non-None, we will group the bins by this feature name and
+        shuffle within each group. If None, the entire batch is shuffled without
+        regard to this feature. The primary use case for this is to only shuffle
+        within each epoch to avoid epoch leakage.
       meta_features: Meta features that do not need *_segment_ids and
         *_positions features.
     """
@@ -305,6 +312,7 @@ class FirstFitPackIterDataset(dataset.IterDataset):
     self._length_struct = length_struct
     self._num_packing_bins = num_packing_bins
     self._shuffle_bins = shuffle_bins
+    self._shuffle_bins_group_by_feature = shuffle_bins_group_by_feature
     self._meta_features = meta_features
 
   def __str__(self) -> str:
@@ -316,6 +324,7 @@ class FirstFitPackIterDataset(dataset.IterDataset):
         num_packing_bins=self._num_packing_bins,
         length_struct=self._length_struct,
         shuffle_bins=self._shuffle_bins,
+        shuffle_bins_group_by_feature=self._shuffle_bins_group_by_feature,
         meta_features=self._meta_features,
     )
 
@@ -330,12 +339,14 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
       num_packing_bins: int,
       length_struct: PyTree[Optional[int]],
       shuffle_bins: bool,
+      shuffle_bins_group_by_feature: str | None,
       meta_features: Sequence[str],
   ):
     super().__init__(parent)
     self._num_packing_bins = num_packing_bins
     self._length_struct = length_struct
     self._shuffle_bins = shuffle_bins
+    self._shuffle_bins_group_by_feature = shuffle_bins_group_by_feature
     self._meta_features = meta_features
     self._reset()
 
@@ -374,6 +385,28 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
     self._next_row = state["next_row"]
     self._counter = state["counter"]
 
+  def _generate_and_set_shuffled_rows(self):
+    seed = self._counter - self._next_row
+    self._shuffled_rows = np.random.default_rng(seed).permuted(
+        range(self._packed_batch_num_bins)
+    )
+    if self._shuffle_bins_group_by_feature is not None:
+      unique_groups_in_row = [
+          np.unique(row)
+          for row in self._packed_batch[self._shuffle_bins_group_by_feature]
+      ]
+      average_group_per_row = [
+          # nan_to_num is for the divide by zero case.
+          np.nan_to_num(np.sum(s) / np.count_nonzero(s), nan=0.0)
+          for s in unique_groups_in_row
+      ]
+      tuples_to_sort = [
+          (average_group_per_row[i], self._shuffled_rows[i], i)
+          for i in range(self._packed_batch_num_bins)
+      ]
+      # Sort by average group followed by original shuffle position.
+      self._shuffled_rows = [t[2] for t in sorted(tuples_to_sort)]
+
   def _finalize_current_batch(self, element_for_shapes):
     assert self._current_batch is not None
     assert self._current_batch_parent_state is not None
@@ -387,10 +420,7 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
     )
     assert self._packed_batch_num_bins <= self._num_packing_bins
     if self._shuffle_bins:
-      seed = self._counter - self._next_row
-      self._shuffled_rows = np.random.default_rng(seed).permuted(
-          range(self._packed_batch_num_bins)
-      )
+      self._generate_and_set_shuffled_rows()
 
     if element_for_shapes is None:
       self._current_batch = None
