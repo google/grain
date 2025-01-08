@@ -20,16 +20,6 @@
 # pylint: disable=wildcard-import
 # pylint: disable=g-import-not-at-top
 
-from etils import epy
-
-# `lazy_dataset` module is deprecated. It displays the deprecation message upon
-# import. We make the import lazy to only display the message when the module
-# is actually used.
-with epy.lazy_imports():
-  from grain import python_lazy_dataset as lazy_dataset
-
-del epy
-
 from ._src.python.dataset.base import (
     DatasetOptions,
     ExecutionTrackingMode,

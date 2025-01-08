@@ -49,23 +49,12 @@ py_library(
     srcs_version = "PY3",
     # Implicit build flag
     deps = [
-        ":python_lazy_dataset",  # build_cleaner: keep
         "//grain/_src/core:transforms",  # build_cleaner: keep
         "//grain/_src/python/dataset:visualize",  # build_cleaner: keep
-        "//grain/_src/python/dataset/transformations:interleave",  # build_cleaner: keep
-        "//grain/_src/python/experimental/example_packing:packing",  # build_cleaner: keep
-    ],
-)
-
-py_library(
-    name = "python_lazy_dataset",
-    srcs = ["python_lazy_dataset.py"],
-    srcs_version = "PY3",
-    # Implicit build flag
-    deps = [
-        "//grain/_src/python/dataset",  # build_cleaner: keep
         "//grain/_src/python/dataset/transformations:flatmap",  # build_cleaner: keep
+        "//grain/_src/python/dataset/transformations:interleave",  # build_cleaner: keep
         "//grain/_src/python/dataset/transformations:packing",  # build_cleaner: keep
         "//grain/_src/python/dataset/transformations:zip",  # build_cleaner: keep
+        "//grain/_src/python/experimental/example_packing:packing",  # build_cleaner: keep
     ],
 )
