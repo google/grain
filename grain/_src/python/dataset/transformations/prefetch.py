@@ -20,6 +20,7 @@ from collections.abc import Callable, Iterator
 import contextlib
 import copy
 import functools
+import math
 import queue
 import sys
 import threading
@@ -275,6 +276,7 @@ def _copy_leaf_to_shm(leaf: Any) -> Any:
       not isinstance(leaf, np.ndarray)
       or leaf.dtype.hasobject
       or not leaf.flags.c_contiguous
+      or math.prod(leaf.shape) == 0
   ):
     return leaf
 
