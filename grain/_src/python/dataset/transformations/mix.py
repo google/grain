@@ -144,9 +144,10 @@ class _MixedDatasetIterator(dataset.DatasetIterator[T]):
       # Although there may be elements available in some parent datasets, do not
       # sample once stop signal is turned on.
       raise StopIteration
-    input_index, _ = _dataset_and_key_of_next_element(
-        self._index, self._proportions
-    )
+    with self._stats.record_self_time():
+      input_index, _ = _dataset_and_key_of_next_element(
+          self._index, self._proportions
+      )
     self._index += 1
     try:
       elem = next(self._parents[input_index])
@@ -154,7 +155,7 @@ class _MixedDatasetIterator(dataset.DatasetIterator[T]):
       # Turn on stop signal as soon as the end of any dataset is reached.
       self._stop = True
       raise e
-    return elem
+    return self._stats.record_output_spec(elem)
 
   def get_state(self):
     return {
