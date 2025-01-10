@@ -135,10 +135,7 @@ class SharedMemoryArray(np.ndarray):
     """
     with SharedMemoryArray._lock:
       if not SharedMemoryArray._del_thread_pool:
-        if max_outstanding_requests < num_threads:
-          raise ValueError(
-              "max_outstanding_requests must be at least num_threads."
-          )
+        max_outstanding_requests = max(max_outstanding_requests, num_threads)
         SharedMemoryArray._del_thread_pool = pool.ThreadPool(num_threads)
         SharedMemoryArray._outstanding_del_requests = threading.Semaphore(
             max_outstanding_requests
