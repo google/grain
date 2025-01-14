@@ -13,7 +13,7 @@ You can create a virtual environment or conda environment and install the packag
 
 ```bash
 # Create a virtual environment
-python -m venv .venv
+python3 -m venv .venv
 # Activate the virtual environment
 source .venv/bin/activate
 # Install the requirements
@@ -28,7 +28,7 @@ conda create -n "grain-docs" python=3.12
 # Activate the conda environment
 conda activate grain-docs
 # Install the requirements
-python -m pip install -r docs/requirements.txt
+python3 -m pip install -r docs/requirements.txt
 ```
 
 ### Building the documentation locally
@@ -55,7 +55,7 @@ Note you will need to install `jupytext` to sync the notebooks with markdown fil
 
 ```bash
 # With pip
-python -m pip install jupytext
+python3 -m pip install jupytext
 
 # With conda
 conda install -c conda-forge jupytext
