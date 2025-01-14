@@ -114,6 +114,10 @@ def _pretty_format_summary(
   # the visualization graph.
   col_names.remove("output_spec")
   col_names.remove("is_output")
+  # TODO: Add a column for `is_prefetch` in the logged execution
+  # summary.
+  col_names.remove("wait_time_ratio")
+  col_names.remove("is_prefetch")
   # Insert the average processing time column after the max processing time
   # column.
   index = col_names.index("max_processing_time_ns")
@@ -273,6 +277,8 @@ class StatsConfig:
   # Whether this transformation mutates the element spec. This is used to
   # determine element spec of the current transformation.
   transform_mutates_spec: bool = True
+  # Whether this transformation is a prefetch transformation.
+  is_prefetch: bool = False
   # Whether to log the execution summary.
   log_summary: bool = False
 
@@ -539,6 +545,7 @@ class _ExecutionStats(_VisualizationStats):
     self._summary.name = self._config.name
     self._summary.output_spec = str(self.output_spec)
     self._summary.is_output = self._is_output
+    self._summary.is_prefetch = self._config.is_prefetch
     execution_summary.nodes.get_or_create(node_id)
     execution_summary.nodes[node_id].CopyFrom(self._summary)
     current_node_id = node_id

@@ -119,6 +119,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
         dataset_stats.StatsConfig(
             name=str(self),
             transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
+            is_prefetch=True,
         ),
         (parent_stats,),
         execution_tracking_mode,
@@ -451,6 +452,21 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         _ITERATIONS_TO_SKIP: iterations_to_skip,
         _LAST_WORKER_INDEX: -1,
     }
+
+  @functools.cached_property
+  def _stats(self):
+    config = dataset_stats.StatsConfig(
+        name=str(self),
+        transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
+        is_prefetch=True,
+    )
+    return dataset_stats.make_stats(
+        config,
+        [],
+        execution_tracking_mode=(
+            self._ctx.dataset_options.execution_tracking_mode
+        ),
+    )
 
   def __iter__(self) -> dataset.DatasetIterator[T]:
     return self
