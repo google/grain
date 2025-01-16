@@ -1,23 +1,25 @@
-#!/bin/bash
+#!/bin/sh
 # build wheel for python version specified in $PYTHON_VERSION
 
 set -e -x
 
-function main() {
+OUTPUT_DIR="${OUTPUT_DIR:-/tmp/grain}"
+
+main() {
   bazel clean
-  bazel build ... --action_env PYTHON_BIN_PATH="${PYTHON_BIN}" --action_env MACOSX_DEPLOYMENT_TARGET=11.0
+  bazel build ... --action_env PYTHON_BIN_PATH="${PYTHON_BIN}" --action_env MACOSX_DEPLOYMENT_TARGET='11.0'
   bazel test --verbose_failures --test_output=errors ... --action_env PYTHON_BIN_PATH="${PYTHON_BIN}"
 
-  DEST="/tmp/grain/all_dist"
+  DEST="${OUTPUT_DIR}"'/all_dist'
   mkdir -p "${DEST}"
 
-  echo "=== Destination directory: ${DEST}"
+  printf '=== Destination directory: %s\n' "${DEST}"
 
-  TMPDIR=$(mktemp -d -t tmp.XXXXXXXXXX)
+  TMPDIR="$(mktemp -d -t tmp.XXXXXXXXXX)"
 
-  echo $(date) : "=== Using tmpdir: ${TMPDIR}"
+  printf '%s : "=== Using tmpdir: %s\n' "$(date)" "${TMPDIR}"
 
-  echo "=== Copy grain files"
+  printf "=== Copy grain files\n"
 
   cp README.md "${TMPDIR}"
   cp setup.py "${TMPDIR}"
@@ -28,27 +30,28 @@ function main() {
     --exclude="*.runfiles" --exclude="*_obj" --include="*/" --exclude="*" \
     bazel-bin/grain "${TMPDIR}"
 
-  pushd ${TMPDIR}
-  echo $(date) : "=== Building wheel"
+  previous_wd="$(pwd)"
+  cd "${TMPDIR}"
+  printf '%s : "=== Building wheel\n' "$(date)"
   plat_name=""
-  if [[ "$(uname)" == "Darwin" ]]; then
+  if [ "$(uname)" = "Darwin" ]; then
     plat_name="--plat-name macosx_11_0_$(uname -m)"
   fi
 
-  $PYTHON_BIN setup.py bdist_wheel --python-tag py3${PYTHON_MINOR_VERSION} $plat_name
-  cp dist/*.whl "${DEST}"
+  "$PYTHON_BIN" setup.py bdist_wheel --python-tag py3"${PYTHON_MINOR_VERSION}" "$plat_name"
+  cp 'dist/'*.whl "${DEST}"
 
   if [ -n "${AUDITWHEEL_PLATFORM}" ]; then
-    echo $(date) : "=== Auditing wheel"
-    auditwheel repair --plat ${AUDITWHEEL_PLATFORM} -w dist dist/*.whl
+    printf '%s : "=== Auditing wheel\n' "$(date)"
+    auditwheel repair --plat "${AUDITWHEEL_PLATFORM}" -w dist dist/*.whl
   fi
 
-  echo $(date) : "=== Listing wheel"
-  ls -lrt dist/*.whl
-  cp dist/*.whl "${DEST}"
-  popd
+  printf '%s : "=== Listing wheel\n' "$(date)"
+  ls -lrt 'dist/'*.whl
+  cp 'dist/'*.whl "${DEST}"
+  cd "${previous_wd}"
 
-  echo $(date) : "=== Output wheel file is in: ${DEST}"
+  printf '%s : "=== Output wheel file is in: %s\n' "$(date)" "${DEST}"
 }
 
 main "$@"
