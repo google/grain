@@ -1,0 +1,45 @@
+# This workflow builds Grain wheels and uploads them as artifacts.
+# TODO: Add a step to publish the wheels to PyPI and automatically run this workflow
+# on project version change.
+
+name: Build & Publish
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: "Python ${{ matrix.python-version }} on ${{ matrix.os }}"
+    runs-on: "${{ matrix.os }}"
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+        os: [ubuntu-20.04, ubuntu-22.04-arm, macos-13, macos-14]
+
+    steps:
+      - uses: "actions/checkout@v3"
+      - name: Create directory
+        run: |
+          mkdir -p /tmp/grain
+          cp -r . /tmp/grain
+      - name: Build package
+        run: |
+          set -xe
+          export PYTHON_VERSION=${{ matrix.python-version }}
+          export PYTHON_MAJOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f1)
+          export PYTHON_MINOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f2)
+          export BAZEL_VERSION="5.4.0"
+          export OUTPUT_DIR="/tmp/grain"
+          export SOURCE_DIR="/tmp/grain"
+          . "${SOURCE_DIR}"'/grain/oss/runner_common.sh'
+          build_and_test_grain
+      - name: Upload Grain artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: built-grain-wheels-${{ matrix.os }}-${{ matrix.python-version }}
+          path: /tmp/grain/all_dist/**/*.whl

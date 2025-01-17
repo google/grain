@@ -34,8 +34,7 @@ main() {
   cd "${TMPDIR}"
   printf '%s : "=== Building wheel\n' "$(date)"
   if [ "$(uname)" = "Darwin" ]; then
-    plat_name="--plat-name macosx_11_0_$(uname -m)"
-    "$PYTHON_BIN" setup.py bdist_wheel --python-tag py3"${PYTHON_MINOR_VERSION}" "$plat_name"
+    "$PYTHON_BIN" setup.py bdist_wheel --python-tag py3"${PYTHON_MINOR_VERSION}" --plat-name macosx_11_0_"$(uname -m)"
   else
     "$PYTHON_BIN" setup.py bdist_wheel --python-tag py3"${PYTHON_MINOR_VERSION}"
   fi
