@@ -186,8 +186,9 @@ def _worker_loop(
   """Code to be run on each child process."""
   out_of_elements = False
   try:
+    worker_index_suffix = "" if worker_count == 1 else f" {worker_index}"
     grain_logging.set_process_identifier_prefix(
-        f"PyGrain Worker {worker_index}"
+        f"PyGrain Worker{worker_index_suffix}"
     )
     logging.info("Starting work.")
     element_producer = _initialize_and_get_element_producer(
