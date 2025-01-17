@@ -1,5 +1,5 @@
 diff --git a/oss/build_whl.sh b/oss/build_whl.sh
-index 275c868..f312188 100755
+index 275c868..27080a9 100755
 --- a/oss/build_whl.sh
 +++ b/oss/build_whl.sh
 @@ -27,11 +27,15 @@ function main() {
@@ -11,8 +11,7 @@ index 275c868..f312188 100755
    write_to_bazelrc "build --host_cxxopt=-std=c++17"
 -  write_to_bazelrc "build --linkopt=\"-lrt -lm\""
    write_to_bazelrc "build --experimental_repo_remote_exec"
--  write_to_bazelrc "build --python_path=\"${PYTHON_BIN}\""
-+  write_to_bazelrc "common --python_path=\"${PYTHON_BIN}\""
+   write_to_bazelrc "build --python_path=\"${PYTHON_BIN}\""
 +  PLATFORM="$(uname)"
 +  if [[ "$PLATFORM" != "Darwin" ]]; then
 +    write_to_bazelrc "build --linkopt=\"-lrt -lm\""
@@ -38,7 +37,7 @@ index 275c868..f312188 100755
 -  ${PYTHON_BIN} setup.py bdist_wheel --python-tag py3${PYTHON_MINOR_VERSION}
 +  plat_name=""
 +  if [[ "$(uname)" == "Darwin" ]]; then
-+    plat_name="--plat-name macosx_11_0_universal2"
++    plat_name="--plat-name macosx_11_0_$(uname -m)"
 +  fi
 +  ${PYTHON_BIN} setup.py bdist_wheel --python-tag py3${PYTHON_MINOR_VERSION} $plat_name
  
