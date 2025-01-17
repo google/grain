@@ -136,9 +136,11 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     )
 
   def __next__(self) -> T:
+    # The time recorded here is the time spent in prefetch node to return an
+    # element, including the time spent in parent node.
+    timer = dataset_stats.Timer()
     # We loop here to skip all None elements (in case the underlying dataset
     # is sparse), if self._allow_nones = False, else we return Nones too.
-    timer = dataset_stats.Timer()
     while True:
       if self._next_index == self._dataset_length:
         break
