@@ -1016,6 +1016,24 @@ class FirstFitPackIterDatasetTest(parameterized.TestCase):
       ):
         _ = next(iter(ld))
 
+  def test_first_row_to_pack_element(self):
+    element = {"a": 1, "b": 1}
+    num_packing_bins = 2
+    length_struct = {"a": 10, "b": 10}
+    first_free_cell_per_row = {
+        "a": np.zeros(num_packing_bins, dtype=np.int64),
+        "b": np.zeros(num_packing_bins, dtype=np.int64),
+    }
+    self.assertEqual(
+        packing.FirstFitPackIterDataset.first_row_to_pack_element(
+            element,
+            num_packing_bins,
+            length_struct,
+            first_free_cell_per_row,
+        ),
+        0,
+    )
+
 
 if __name__ == "__main__":
   absltest.main()
