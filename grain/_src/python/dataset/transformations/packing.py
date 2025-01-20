@@ -328,6 +328,35 @@ class FirstFitPackIterDataset(dataset.IterDataset):
         meta_features=self._meta_features,
     )
 
+  @classmethod
+  def first_row_to_pack_element(
+      cls,
+      element_feature_lengths: PyTree[int],
+      num_packing_bins: int,
+      length_struct: PyTree[int],
+      first_free_cell_per_row: PyTree[int],
+  ) -> int | None:
+    """Returns the first row to pack an element into or None if it can't fit.
+
+    The logic is the same as the one used in the packing iterator.
+
+    Args:
+      element_feature_lengths: The lengths of each feature in the element.
+      num_packing_bins: The number of packing bins.
+      length_struct: The max length of each feature.
+      first_free_cell_per_row: The first free cell per row.
+    """
+    row_or_failing_component = packing_packed_batch.PackedBatch.can_add_at_row(
+        element_feature_lengths,
+        num_packing_bins,
+        length_struct,
+        first_free_cell_per_row,
+    )
+    if row_or_failing_component.row is not None:
+      return row_or_failing_component.row
+    else:
+      return None
+
 
 class FirstFitPackDatasetIterator(dataset.DatasetIterator):
   """Iterator for the first-fit packing transformation."""
