@@ -42,7 +42,10 @@ from ._src.python.dataset.transformations.prefetch import (
     MultiprocessPrefetchIterDataset,
     ThreadPrefetchIterDataset,
 )
-from ._src.python.dataset.transformations.shuffle import WindowShuffleMapDataset
+from ._src.python.dataset.transformations.shuffle import (
+    WindowShuffleMapDataset,
+    WindowShuffleIterDataset,
+)
 from ._src.python.dataset.transformations.zip import ZipMapDataset
 from ._src.core.transforms import (
     FlatMapTransform,
