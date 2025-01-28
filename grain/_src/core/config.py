@@ -155,10 +155,11 @@ class Config:
     flag_name = f"grain_{name}"
     if any(f.name == flag_name for f in _GRAIN_FLAGS):
       value = getattr(flags.FLAGS, flag_name)
-      enrolled = int(
-          bool(value) if value is None or isinstance(value, str) else value
-      )
-      _grain_experiment_metric.Set(enrolled, flag_name)
+      if isinstance(value, int):
+        int_value = value
+      else:
+        int_value = int(value != flags.FLAGS[flag_name].default)
+      _grain_experiment_metric.Set(int_value, flag_name)
       return value
     raise ValueError(f"Unrecognized config option: {name}")
 
