@@ -114,7 +114,7 @@ class PackedBatch(Generic[_T]):
         shape = ()
         dtype = np.int64 if isinstance(x, int) else np.asarray(x).dtype
       else:
-        assert isinstance(x, np.ndarray)
+        assert isinstance(x, np.ndarray), type(x)
         shape = x.shape[1:]
         dtype = x.dtype
       return zeros(

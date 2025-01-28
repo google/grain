@@ -58,6 +58,17 @@ py_test(
 )
 
 py_library(
+    name = "testing_util",
+    testonly = 1,
+    srcs = ["testing_util.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":packing",
+        "//grain/_src/python/dataset",
+    ],
+)
+
+py_library(
     name = "flatmap",
     srcs = ["flatmap.py"],
     srcs_version = "PY3",
@@ -116,6 +127,7 @@ py_test(
     srcs_version = "PY3",
     deps = [
         ":packing",
+        ":testing_util",
         "//grain/_src/python/dataset",
     ],
 )
