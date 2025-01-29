@@ -54,7 +54,9 @@ py_test(
     name = "source_test",
     srcs = ["source_test.py"],
     srcs_version = "PY3",
-    deps = ["//grain/_src/python/dataset"],
+    deps = [
+        "//grain/_src/python/dataset",
+    ],
 )
 
 py_library(
