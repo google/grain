@@ -20,7 +20,7 @@ import inspect
 import pprint
 from typing import Any, Callable, Generator, TypeVar
 
-from grain._src.core import tree
+from grain._src.core import tree_lib
 from grain._src.python import options
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import filter as filter_dataset
@@ -107,7 +107,7 @@ class _SpecTrackingMapDataset(dataset.MapDataset[T]):
       result = self._mock_output
     else:
       result = self._parent.__getitem__(idx)
-    self.output_spec = tree.spec_like(result)
+    self.output_spec = tree_lib.spec_like(result)
     return result
 
   def to_iter_dataset(
@@ -180,7 +180,7 @@ class _SpecTrackingDatasetIterator(dataset.DatasetIterator[T]):
 
   def __next__(self) -> T:
     result = self._mock_output or self._parent.__next__()
-    self._spec_update_fn(tree.spec_like(result))
+    self._spec_update_fn(tree_lib.spec_like(result))
     return result
 
   def set_state(self, state: dict[str, Any]) -> None:

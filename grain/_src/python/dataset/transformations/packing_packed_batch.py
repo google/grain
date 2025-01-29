@@ -33,7 +33,7 @@ import copy
 import dataclasses
 from typing import Generic, TypeVar
 
-from grain._src.core import tree
+from grain._src.core import tree_lib
 import jaxtyping as jt
 import numpy as np
 
@@ -122,19 +122,23 @@ class PackedBatch(Generic[_T]):
           dtype=dtype,
       )
 
-    self._values = tree.map_structure(
+    self._values = tree_lib.map_structure(
         make_packed_buffer, length_struct, element_for_shapes
     )
 
     def make_packed_aux_info(length: int):
       return zeros(shape=(num_packing_bins, length), dtype=np.int32)
 
-    self._segment_ids = tree.map_structure(make_packed_aux_info, length_struct)
-    self._positions = tree.map_structure(make_packed_aux_info, length_struct)
+    self._segment_ids = tree_lib.map_structure(
+        make_packed_aux_info, length_struct
+    )
+    self._positions = tree_lib.map_structure(
+        make_packed_aux_info, length_struct
+    )
 
     # Tracks the next empty position to insert an example for each row
     # in the batch, for each feature in features_to_pack.
-    self._first_free_cell_per_row = tree.map_structure(
+    self._first_free_cell_per_row = tree_lib.map_structure(
         lambda _: zeros(num_packing_bins, dtype=np.int64), length_struct
     )
 
@@ -147,13 +151,13 @@ class PackedBatch(Generic[_T]):
     rows_with_values = sum(x > 0 for x in self._num_examples_per_row)
     if rows_with_values < len(self._num_examples_per_row):
       # Partial batch, last rows don't have values.
-      self._values = tree.map_structure(
+      self._values = tree_lib.map_structure(
           lambda x: x[:rows_with_values], self._values
       )
-      self._segment_ids = tree.map_structure(
+      self._segment_ids = tree_lib.map_structure(
           lambda x: x[:rows_with_values], self._segment_ids
       )
-      self._positions = tree.map_structure(
+      self._positions = tree_lib.map_structure(
           lambda x: x[:rows_with_values], self._positions
       )
     return _extract_and_rekey_packed_batch(
@@ -187,8 +191,8 @@ class PackedBatch(Generic[_T]):
     # Check no feature exceeds max length
     features_exceeding_max_length = []
     for (path, feature_length), (_, max_length) in zip(
-        tree.flatten_with_path(element_feature_lengths),
-        tree.flatten_with_path(length_struct),
+        tree_lib.flatten_with_path(element_feature_lengths),
+        tree_lib.flatten_with_path(length_struct),
         strict=True,
     ):
       if feature_length > max_length:
@@ -207,8 +211,8 @@ class PackedBatch(Generic[_T]):
     def _feature_will_fit(feature_length, first_free_cell, max_length):
       return feature_length + first_free_cell <= max_length
 
-    is_row_free_struct = tree.flatten_with_path(
-        tree.map_structure(
+    is_row_free_struct = tree_lib.flatten_with_path(
+        tree_lib.map_structure(
             _feature_will_fit,
             element_feature_lengths,
             first_free_cell_per_row,
@@ -249,11 +253,11 @@ class PackedBatch(Generic[_T]):
     """Adds element to current batch at the specified row."""
     # Apply updates to each feature.
     for per_feature_data in zip(
-        tree.flatten(element),
-        tree.flatten(self._values),
-        tree.flatten(self._segment_ids),
-        tree.flatten(self._positions),
-        tree.flatten(self._first_free_cell_per_row),
+        tree_lib.flatten(element),
+        tree_lib.flatten(self._values),
+        tree_lib.flatten(self._segment_ids),
+        tree_lib.flatten(self._positions),
+        tree_lib.flatten(self._first_free_cell_per_row),
     ):
       value, batch_value, segment_ids, positions, first_free_cell_per_row = (
           per_feature_data
@@ -281,9 +285,9 @@ class PackedBatch(Generic[_T]):
       could not be added, returns a list of strings indicating the components
       that failed.
     """
-    tree.assert_same_structure(element, self._length_struct)
+    tree_lib.assert_same_structure(element, self._length_struct)
 
-    element_feature_lengths = tree.map_structure(
+    element_feature_lengths = tree_lib.map_structure(
         lambda x: 1 if np.ndim(x) == 0 else len(x), element
     )
 

@@ -7,7 +7,7 @@ py_library(
     srcs = ["packing.py"],
     srcs_version = "PY3",
     deps = [
-        "//grain/_src/core:tree",
+        "//grain/_src/core:tree_lib",
         "//grain/_src/python:record",
     ],
 )
@@ -18,7 +18,7 @@ py_test(
     srcs_version = "PY3",
     deps = [
         ":packing",
-        "//grain/_src/core:tree",
+        "//grain/_src/core:tree_lib",
         "//grain/_src/python:record",
     ],
 )

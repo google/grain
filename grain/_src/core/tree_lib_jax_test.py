@@ -11,12 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Testes for tree.py with JAX dependency present."""
+"""Testes for tree_lib.py with JAX dependency present."""
 
 from absl.testing import absltest
 import attrs
-from grain._src.core import tree
-from grain._src.core import tree_test
+from grain._src.core import tree_lib
+from grain._src.core import tree_lib_test
 import jax
 import numpy as np
 
@@ -43,19 +43,19 @@ class MyAttrs:
   e: str
 
 
-class TreeJaxTest(tree_test.TreeTest):
+class TreeJaxTest(tree_lib_test.TreeTest):
 
   def test_map_custom_tree(self):
     jax.tree_util.register_pytree_node(
         MyTree, lambda t: ((t.a, t.b), None), lambda _, args: MyTree(*args)
     )
     self.assertEqual(
-        tree.map_structure(lambda x: x + 1, MyTree(1, 2)), MyTree(2, 3)
+        tree_lib.map_structure(lambda x: x + 1, MyTree(1, 2)), MyTree(2, 3)
     )
 
   def test_spec_like_with_class(self):
     self.assertEqual(
-        tree.spec_like({"B": 1232.4, "C": MyClass(1)}),
+        tree_lib.spec_like({"B": 1232.4, "C": MyClass(1)}),
         {
             "B": "<class 'float'>[]",
             "C": "<class '__main__.MyClass'>[]",
@@ -64,22 +64,22 @@ class TreeJaxTest(tree_test.TreeTest):
 
   def test_spec_like_with_list(self):
     self.assertEqual(
-        tree.spec_like({
+        tree_lib.spec_like({
             "B": 1232.4,
             "C": [
-                tree_test.TestClass(a=1, b="v2"),
-                tree_test.TestClass(a=2, b="v2"),
+                tree_lib_test.TestClass(a=1, b="v2"),
+                tree_lib_test.TestClass(a=2, b="v2"),
             ],
         }),
         {
             "B": "<class 'float'>[]",
-            "C": "list<grain._src.core.tree_test.TestClass>[2]",
+            "C": "list<grain._src.core.tree_lib_test.TestClass>[2]",
         },
     )
 
   def test_spec_like_with_unknown_shape(self):
     self.assertEqual(
-        tree.spec_like({
+        tree_lib.spec_like({
             "B": [np.zeros([2]), np.zeros([1])],
             "C": [],
         }),
@@ -88,14 +88,14 @@ class TreeJaxTest(tree_test.TreeTest):
 
   def test_spec_like_with_dataclass(self):
     self.assertEqual(
-        tree.spec_like(tree_test.TestClass(a=1, b="v2")),
-        "<class 'grain._src.core.tree_test.TestClass'>\n"
+        tree_lib.spec_like(tree_lib_test.TestClass(a=1, b="v2")),
+        "<class 'grain._src.core.tree_lib_test.TestClass'>\n"
         "{'a': \"<class 'int'>[]\", 'b': \"<class 'str'>[]\"}[]",
     )
 
   def test_spec_like_with_attrs(self):
     self.assertEqual(
-        tree.spec_like(MyAttrs(d=1, e="v2")),
+        tree_lib.spec_like(MyAttrs(d=1, e="v2")),
         "<class '__main__.MyAttrs'>\n"
         "{'d': \"<class 'int'>[]\", 'e': \"<class 'str'>[]\"}[]",
     )

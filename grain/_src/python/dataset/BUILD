@@ -34,7 +34,7 @@ py_library(
         "//grain/_src/core:exceptions",
         "//grain/_src/core:monitoring",
         "//grain/_src/core:transforms",
-        "//grain/_src/core:tree",
+        "//grain/_src/core:tree_lib",
         "//grain/_src/core:usage_logging",
         "//grain/_src/python:grain_pool",
         "//grain/_src/python:options",
@@ -61,7 +61,7 @@ py_library(
     srcs_version = "PY3",
     deps = [
         ":dataset",
-        "//grain/_src/core:tree",
+        "//grain/_src/core:tree_lib",
         "//grain/_src/python:options",
     ],
 )
@@ -86,7 +86,7 @@ py_library(
         ":base",
         "//grain/_src/core:config",
         "//grain/_src/core:monitoring",
-        "//grain/_src/core:tree",
+        "//grain/_src/core:tree_lib",
     ],
 )
 

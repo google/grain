@@ -1,7 +1,7 @@
 """Tests for packing.py."""
 
 from absl.testing import absltest
-from grain._src.core import tree
+from grain._src.core import tree_lib
 from grain._src.python import record
 from grain._src.python.experimental.example_packing import packing
 import numpy as np
@@ -63,7 +63,7 @@ def common_test_body(
     np.testing.assert_equal(
         actual_data.metadata.index, expected_data.metadata.index
     )
-    tree.map_structure_with_path(
+    tree_lib.map_structure_with_path(
         _check_equivalence, actual_data.data, expected_data.data
     )
 

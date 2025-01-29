@@ -11,17 +11,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Testes for tree.py.
+"""Testes for tree_lib.py.
 
-Since the tree.py only re-directs the actual implementations this test does not
-try to cover the actual functionality, but rather the re-direction correctness.
+Since the tree_lib.py only re-directs the actual implementations this test does
+not try to cover the actual functionality, but rather the re-direction
+correctness.
 """
 import dataclasses
 from typing import Protocol, runtime_checkable
 
 from absl.testing import absltest
 from absl.testing import parameterized
-from grain._src.core import tree
+from grain._src.core import tree_lib
 import numpy as np
 
 
@@ -51,7 +52,7 @@ class TreeImpl(Protocol):
 
 
 # Static check that the module implements the necessary functions.
-tree: TreeImpl = tree
+tree_lib: TreeImpl = tree_lib
 
 
 @dataclasses.dataclass
@@ -66,37 +67,39 @@ class TreeTest(parameterized.TestCase):
     # Run time check that the module implements the necessary functions.
     # The module impl branching happens at run time, so the static check does
     # not cover both branches.
-    self.assertIsInstance(tree, TreeImpl)
+    self.assertIsInstance(tree_lib, TreeImpl)
 
   def test_map_structure(self):
     self.assertEqual(
-        tree.map_structure(lambda x: x + 1, ({"B": 10, "A": 20}, [1, 2], 3)),
+        tree_lib.map_structure(
+            lambda x: x + 1, ({"B": 10, "A": 20}, [1, 2], 3)
+        ),
         ({"B": 11, "A": 21}, [2, 3], 4),
     )
 
   def test_map_structure_with_path(self):
     self.assertEqual(
-        tree.map_structure_with_path(
+        tree_lib.map_structure_with_path(
             lambda path, x: x if path else None, {"B": "v1", "A": "v2"}
         ),
         {"B": "v1", "A": "v2"},
     )
 
   def test_assert_same_structure(self):
-    tree.assert_same_structure({"B": "v1", "A": "v2"}, {"B": 10, "A": 20})
+    tree_lib.assert_same_structure({"B": "v1", "A": "v2"}, {"B": 10, "A": 20})
 
   def test_flatten(self):
-    self.assertEqual(tree.flatten({"A": "v2", "B": "v1"}), ["v2", "v1"])
+    self.assertEqual(tree_lib.flatten({"A": "v2", "B": "v1"}), ["v2", "v1"])
 
   def test_flatten_with_path(self):
-    result = tree.flatten_with_path({"A": "v2", "B": "v1"})
+    result = tree_lib.flatten_with_path({"A": "v2", "B": "v1"})
     # Maybe extract keys from path elements.
-    result = tree.map_structure(lambda x: getattr(x, "key", x), result)
+    result = tree_lib.map_structure(lambda x: getattr(x, "key", x), result)
     self.assertEqual(result, [(("A",), "v2"), (("B",), "v1")])
 
   def test_unflatten_as(self):
     self.assertEqual(
-        tree.unflatten_as({"A": "v2", "B": "v1"}, [1, 2]), {"A": 1, "B": 2}
+        tree_lib.unflatten_as({"A": "v2", "B": "v1"}, [1, 2]), {"A": 1, "B": 2}
     )
 
   @parameterized.named_parameters(
@@ -124,7 +127,7 @@ class TreeTest(parameterized.TestCase):
       ),
   )
   def test_spec_like(self, structure, expected_output):
-    self.assertEqual(tree.spec_like(structure), expected_output)
+    self.assertEqual(tree_lib.spec_like(structure), expected_output)
 
   # The two tests below exercise behavior only without a Jax dependency present.
   # The OSS testing runs with Jax always present so we skip them.

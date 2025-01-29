@@ -30,7 +30,7 @@ from typing import Any, Generic, Mapping, Optional, Protocol, TypeVar
 
 import cloudpickle
 from concurrent import futures
-from grain._src.core import tree
+from grain._src.core import tree_lib
 import multiprocessing as mp
 from grain._src.python import grain_pool
 from grain._src.python import options as grain_options
@@ -292,7 +292,7 @@ def _copy_leaf_to_shm(leaf: Any) -> Any:
 
 def _copy_struct_to_shm(struct: Any) -> Any:
   """Copies leaf ndarrays of the structure to shared memory."""
-  return tree.map_structure(_copy_leaf_to_shm, struct)
+  return tree_lib.map_structure(_copy_leaf_to_shm, struct)
 
 
 def _open_leaf_from_shm(leaf: Any) -> Any:
@@ -305,7 +305,7 @@ def _open_leaf_from_shm(leaf: Any) -> Any:
 
 def _open_struct_from_shm(struct: Any) -> Any:
   """Recovers leaf ndarrays of the structure from shared memory."""
-  return tree.map_structure(_open_leaf_from_shm, struct)
+  return tree_lib.map_structure(_open_leaf_from_shm, struct)
 
 
 def _set_slice(ds: dataset.IterDataset, sl: slice) -> None:

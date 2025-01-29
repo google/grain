@@ -21,7 +21,7 @@ import dataclasses
 from typing import Any, Callable, Generic, Iterator, Protocol, Sequence, TypeVar
 
 from absl import logging
-from grain._src.core import tree
+from grain._src.core import tree_lib
 from grain._src.python import record
 from grain._src.python.shared_memory_array import SharedMemoryArray
 import numpy as np
@@ -177,7 +177,7 @@ class BatchOperation(Generic[_IN, _OUT]):
     non_matching_records = []
     for index, input_record in enumerate(input_records[1:]):
       try:
-        tree.assert_same_structure(first_record, input_record)
+        tree_lib.assert_same_structure(first_record, input_record)
       except ValueError:
         non_matching_records_indices.append(index + 1)
         non_matching_records.append(input_record)
@@ -201,6 +201,6 @@ class BatchOperation(Generic[_IN, _OUT]):
         return np.stack(args)
       return np.stack(args, out=SharedMemoryArray(shape, dtype=dtype)).metadata
 
-    return tree.map_structure(
+    return tree_lib.map_structure(
         stacking_function, input_records[0], *input_records[1:]
     )

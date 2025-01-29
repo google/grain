@@ -85,9 +85,9 @@ py_test(
 )
 
 py_library(
-    name = "tree",
+    name = "tree_lib",
     srcs = [
-        "tree.py",
+        "tree_lib.py",
     ],
     srcs_version = "PY3",
 )
@@ -95,14 +95,14 @@ py_library(
 py_library(
     name = "tree_test_lib",
     testonly = 1,
-    srcs = ["tree_test.py"],
+    srcs = ["tree_lib_test.py"],
     srcs_version = "PY3",
-    deps = [":tree"],
+    deps = [":tree_lib"],
 )
 
 py_test(
-    name = "tree_test",
-    srcs = ["tree_test.py"],
+    name = "tree_lib_test",
+    srcs = ["tree_lib_test.py"],
     srcs_version = "PY3",
     deps = [
         ":tree_test_lib",
@@ -110,11 +110,11 @@ py_test(
 )
 
 py_test(
-    name = "tree_jax_test",
-    srcs = ["tree_jax_test.py"],
+    name = "tree_lib_jax_test",
+    srcs = ["tree_lib_jax_test.py"],
     srcs_version = "PY3",
     deps = [
-        ":tree",
+        ":tree_lib",
         ":tree_test_lib",
     ],
 )

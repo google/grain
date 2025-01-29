@@ -20,7 +20,7 @@ import math
 import pprint
 from typing import Callable, TypeVar
 
-from grain._src.core import tree
+from grain._src.core import tree_lib
 from grain._src.python.dataset import dataset
 import numpy as np
 
@@ -35,14 +35,14 @@ def _make_batch(values: Sequence[T]) -> T:
     raise ValueError("Cannot batch 0 values. Please file a bug.")
 
   try:
-    return tree.map_structure(lambda *xs: np.stack(xs), *values)
+    return tree_lib.map_structure(lambda *xs: np.stack(xs), *values)
 
   except ValueError as e:
     # NumPy error message doesn't include actual shapes and dtypes. Provide a
     # more helpful error message.
     raise ValueError(
         "Expected all input elements to have the same structure but got:\n"
-        f"{pprint.pformat(tree.spec_like(values))}"
+        f"{pprint.pformat(tree_lib.spec_like(values))}"
     ) from e
 
 

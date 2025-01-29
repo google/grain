@@ -32,7 +32,7 @@ from concurrent import futures
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import sharding
 from grain._src.core import transforms
-from grain._src.core import tree
+from grain._src.core import tree_lib
 from grain._src.core import usage_logging
 import multiprocessing as mp
 from grain._src.python import grain_pool
@@ -150,7 +150,7 @@ class CopyNumPyArrayToSharedMemory(transforms.MapTransform):
       np.copyto(shared_memory_arr, element, casting="no")
       return shared_memory_arr.metadata
 
-    return tree.map_structure(copy_if_applied, element)
+    return tree_lib.map_structure(copy_if_applied, element)
 
 
 class DataLoader:

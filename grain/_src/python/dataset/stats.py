@@ -29,7 +29,7 @@ from typing import Any, TypeVar
 from absl import logging
 from grain._src.core import config as grain_config
 from grain._src.core import monitoring as grain_monitoring
-from grain._src.core import tree
+from grain._src.core import tree_lib
 from grain._src.python.dataset import base
 
 from grain._src.core import monitoring
@@ -546,7 +546,7 @@ class _VisualizationStats(Stats):
   def record_output_spec(self, element: T) -> T:
     # Visualize the dataset graph once last node had seen a non-None element.
     if self._self_output_spec is None:
-      self._self_output_spec = tree.spec_like(element)
+      self._self_output_spec = tree_lib.spec_like(element)
       if self._is_output and not self._reported:
         # The check above with update without a lock is not atomic, need to
         # check again under a lock.

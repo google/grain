@@ -60,7 +60,7 @@ from typing import Any, Callable, Protocol, TypeVar, Union, runtime_checkable
 from absl import logging
 import cloudpickle
 from grain._src.core import parallel
-from grain._src.core import tree
+from grain._src.core import tree_lib
 import multiprocessing as mp
 from grain._src.python import grain_logging
 from grain._src.python import multiprocessing_common
@@ -265,7 +265,7 @@ def _unlink_shm_in_structure(structure: Any):
   if isinstance(structure, record.Record):
     _unlink_shm_in_structure(structure.data)
   else:
-    tree.map_structure(_unlink_shm_if_metadata, structure)
+    tree_lib.map_structure(_unlink_shm_if_metadata, structure)
 
 
 class GrainPool(Iterator[T]):
@@ -573,11 +573,11 @@ class MultiProcessIterator(Iterator[T]):
   @staticmethod
   def _open_shared_memory_for_structure(structure: Any) -> Any:
     if isinstance(structure, record.Record):
-      structure.data = tree.map_structure(
+      structure.data = tree_lib.map_structure(
           MultiProcessIterator._open_shared_memory_for_leaf, structure.data
       )
       return structure
-    return tree.map_structure(
+    return tree_lib.map_structure(
         MultiProcessIterator._open_shared_memory_for_leaf, structure
     )
 

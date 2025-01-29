@@ -18,7 +18,7 @@ import dataclasses
 from typing import Generic, Iterator, TypeVar, Union, cast
 
 from absl import logging
-from grain._src.core import tree
+from grain._src.core import tree_lib
 from grain._src.python import record
 import jaxtyping as jt
 import numpy as np
@@ -45,21 +45,23 @@ class _PackedBatch:
           dtype=input_arr.dtype,
       )
 
-    self._batch = tree.map_structure(
+    self._batch = tree_lib.map_structure(
         make_packed_buffer, length_struct, element_for_shapes
     )
 
     def make_packed_aux_info(length: int):
       return np.zeros(shape=(batch_size, length), dtype=np.int32)
 
-    self._segmentations = tree.map_structure(
+    self._segmentations = tree_lib.map_structure(
         make_packed_aux_info, length_struct
     )
-    self._positions = tree.map_structure(make_packed_aux_info, length_struct)
+    self._positions = tree_lib.map_structure(
+        make_packed_aux_info, length_struct
+    )
 
     # Tracks the next empty position to insert an example for each row
     # in the batch, for each feature in features_to_pack.
-    self._first_free_cell_per_row = tree.map_structure(
+    self._first_free_cell_per_row = tree_lib.map_structure(
         lambda _: np.zeros(batch_size, dtype=np.int32), length_struct
     )
 
@@ -80,15 +82,15 @@ class _PackedBatch:
 
   def _can_add_at_row(self, element: jt.PyTree[np.ndarray]) -> int:
     """Returns the index of the first row which fits element, or -1 if none."""
-    element_feature_lengths = tree.map_structure(len, element)
+    element_feature_lengths = tree_lib.map_structure(len, element)
 
     # Check no feature exceeds max length
-    length_exceeded = tree.map_structure(
+    length_exceeded = tree_lib.map_structure(
         lambda feature_length, max_length: feature_length > max_length,
         element_feature_lengths,
         self._length_struct,
     )
-    if any(tree.flatten(length_exceeded)):
+    if any(tree_lib.flatten(length_exceeded)):
       raise ValueError(
           "Inputs to PackAndBatchOperation must be truncated to max length."
       )
@@ -98,7 +100,7 @@ class _PackedBatch:
     def _feature_will_fit(feature_length, first_free_cell, max_length):
       return feature_length + first_free_cell <= max_length
 
-    is_row_free_struct = tree.map_structure(
+    is_row_free_struct = tree_lib.map_structure(
         _feature_will_fit,
         element_feature_lengths,
         self._first_free_cell_per_row,
@@ -108,7 +110,7 @@ class _PackedBatch:
     ## Pick first row (if exists) where element can be added.
     for i in range(self._batch_size):
       row_is_free_per_feature = [
-          free[i] for free in tree.flatten(is_row_free_struct)
+          free[i] for free in tree_lib.flatten(is_row_free_struct)
       ]
       if all(row_is_free_per_feature):
         return i
@@ -120,11 +122,11 @@ class _PackedBatch:
     """Adds element to current batch at the specified row."""
     # Apply updates to each feature.
     for per_feature_data in zip(
-        tree.flatten(element),
-        tree.flatten(self._batch),
-        tree.flatten(self._segmentations),
-        tree.flatten(self._positions),
-        tree.flatten(self._first_free_cell_per_row),
+        tree_lib.flatten(element),
+        tree_lib.flatten(self._batch),
+        tree_lib.flatten(self._segmentations),
+        tree_lib.flatten(self._positions),
+        tree_lib.flatten(self._first_free_cell_per_row),
     ):
       value, batch_value, segmentations, positions, first_free_cell_per_row = (
           per_feature_data
