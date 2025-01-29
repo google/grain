@@ -352,13 +352,19 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
 
   def _reset(self):
     self._current_batch = None  # Not yet fully packed.
-    self._current_batch_parent_state = self._parent.get_state()
+    # The parent state to restore to get back to our current state, i.e. the
+    # state that the parent was in after producing all elements used in the last
+    # fully emitted batch. We only advance this when we finish emitting a packed
+    # batch.
+    self._last_emitted_batch_parent_state = self._parent.get_state()
+    # The parent state after constructing the current completed packed batch,
+    # right before adding the element that failed to fit.
+    self._current_batch_parent_state = None
     # If available, fully packed but rows [:self._next_row] were already
     # emitted.
     self._packed_batch = None
     # The last packed batch can be partial and have few bins with elements.
     self._packed_batch_num_bins = None
-    self._packed_batch_parent_state = None
     # _next_row gets reset between batches.
     # _counter is a global counter for rows emitted, does not get reset.
     self._next_row = 0
@@ -366,15 +372,8 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
     self._shuffled_rows = None
 
   def get_state(self) -> dict[str, Any]:
-    if self._packed_batch_parent_state is None:
-      # If we haven't finished packing a batch or exausted the parent iterator
-      # packed_batch_parent_state will be None and current_batch_parent_state
-      # will point to the state before the first element in the current batch.
-      parent_state = self._current_batch_parent_state
-    else:
-      parent_state = self._packed_batch_parent_state
     return {
-        "parent": parent_state,
+        "parent": self._last_emitted_batch_parent_state,
         "next_row": self._next_row,
         "counter": self._counter,
     }
@@ -386,6 +385,7 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
     self._counter = state["counter"]
 
   def _generate_and_set_shuffled_rows(self):
+    assert self._packed_batch_num_bins is not None
     seed = self._counter - self._next_row
     self._shuffled_rows = np.random.default_rng(seed).permuted(
         range(self._packed_batch_num_bins)
@@ -409,9 +409,7 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
 
   def _finalize_current_batch(self, element_for_shapes):
     assert self._current_batch is not None
-    assert self._current_batch_parent_state is not None
     self._packed_batch = self._current_batch.get_packed_batch()
-    self._packed_batch_parent_state = self._current_batch_parent_state
     # Detect number of bins. The last batch can be partial.
     self._packed_batch_num_bins = max(
         tree.flatten(
@@ -445,7 +443,10 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
         self._counter += 1
         if self._next_row >= self._packed_batch_num_bins:
           self._packed_batch = None
-          self._packed_batch_parent_state = None
+          self._last_emitted_batch_parent_state = (
+              self._current_batch_parent_state
+          )
+          self._current_batch_parent_state = None
           self._next_row = 0
           self._shuffled_rows = None
         return self._stats.record_output_spec(element)
@@ -481,7 +482,6 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
               self._length_struct,
               meta_features=self._meta_features,
           )
-          self._current_batch_parent_state = prior_iterator_state
 
         # Try adding element to the current packed batch.
         failing_components = self._current_batch.try_add_to_batch(element)
