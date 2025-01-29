@@ -16,7 +16,6 @@ import collections
 from collections.abc import Sequence
 import copy
 from typing import Any, Optional
-from absl import logging
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
 from grain._src.python.dataset.transformations import packing_packed_batch
