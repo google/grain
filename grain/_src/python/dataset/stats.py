@@ -35,15 +35,15 @@ from grain._src.python.dataset import base
 from grain._src.core import monitoring
 
 
-_self_time_ms_histogram = monitoring.EventMetric(
-    "/grain/python/dataset/self_time_ms",
+_self_time_ns_histogram = monitoring.EventMetric(
+    "/grain/python/dataset/self_time_ns",
     metadata=monitoring.Metadata(
         description=(
             "Histogram of transformation self time. Each data point is the "
             "average value of self times/element produced during a monitoring "
             "interval."
         ),
-        units=monitoring.Units.MILLISECONDS,
+        units=monitoring.Units.NANOSECONDS,
     ),
     root=grain_monitoring.get_monitoring_root(),
     fields=[("name", str)],
@@ -699,7 +699,7 @@ class _ExecutionStats(_VisualizationStats):
           self._summary.max_processing_time_ns, self_time_ns
       )
       self._summary.total_processing_time_ns += self_time_ns
-      _self_time_ms_histogram.Record(self_time_ns, self._config.name)
+      _self_time_ns_histogram.Record(self_time_ns, self._config.name)
     for p in self._parents:
       p.report()
 
