@@ -44,5 +44,6 @@ py_library(
         "//grain/_src/python/dataset/transformations:zip",
         "//grain/_src/python/experimental/example_packing:packing",
         "//grain/_src/python/testing:experimental",
+        "//grain/python/stats:execution_summary_py_pb2",
     ],
 )

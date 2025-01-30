@@ -23,6 +23,7 @@ bazel_dep(name = "rules_python", version = "0.34.0")
 bazel_dep(name = "pybind11_bazel", version = "2.13.6")
 bazel_dep(name = "abseil-py", version = "2.1.0")
 bazel_dep(name = "abseil-cpp", version = "20240722.0")
+bazel_dep(name = "protobuf", version = "29.0", repo_name = "com_google_protobuf")
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 
