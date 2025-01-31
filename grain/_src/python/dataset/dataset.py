@@ -572,8 +572,12 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
     The seed can be either provided explicitly or set via `ds.seed(seed)`.
     Prefer the latter if you don't need to control the random map seed
     individually. It allows to pass a single seed to derive seeds for all
-    downstream random transformations in the pipeline. The geenrator is seeded
+    downstream random transformations in the pipeline. The generator is seeded
     by a combination of the seed and the index of the element in the dataset.
+
+    NOTE: Avoid using the provided RNG outside of the `transform` function
+    (e.g. by passing it to the next transformation along with the data).
+    The RNG is going to be reused.
 
     Example usage:
     ```
@@ -601,7 +605,7 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
         map as map_dataset,
     )
     # pylint: enable=g-import-not-at-top
-    return map_dataset.MapMapDataset(
+    return map_dataset.RandomMapMapDataset(
         parent=self, transform=transform, seed=seed
     )
 
@@ -961,6 +965,10 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
     by a combination of the seed and a counter of elements produced by the
     dataset.
 
+    NOTE: Avoid using the provided RNG outside of the `transform` function
+    (e.g. by passing it to the next transformation along with the data).
+    The RNG is going to be reused.
+
     Example usage:
     ```
     ds = MapDataset.range(5).to_iter_dataset()
@@ -987,7 +995,7 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
         map as map_dataset,
     )
     # pylint: enable=g-import-not-at-top
-    return map_dataset.MapIterDataset(
+    return map_dataset.RandomMapIterDataset(
         parent=self, transform=transform, seed=seed
     )
 

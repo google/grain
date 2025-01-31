@@ -15,19 +15,14 @@
 
 import functools
 import threading
-from typing import Any, Callable, Optional, TypeVar, Union
+from typing import Any, Callable, TypeVar
 
-from absl import logging
 from grain._src.core import transforms
 from grain._src.python.dataset import dataset
 import numpy as np
 
 
 T = TypeVar("T")  # pylint: disable=invalid-name
-
-_MapTransformType = Union[
-    transforms.MapTransform, transforms.RandomMapTransform, Callable[..., T]
-]
 
 
 # We need this little helper class to handle RNG generator for random map
@@ -75,71 +70,22 @@ class RngPool:
       self._generator_cache.append(rng)
 
 
-def _get_map_fn_and_seed(
-    transform: _MapTransformType, seed: Optional[int] = None
-) -> tuple[Callable[..., T], Optional[int]]:
-  """Extracts a map fn from `transform`.
-
-  If a seed is returned map fn requires a seed.
-
-  Args:
-    transform: A (random) map transform as object or callable.
-    seed: Seed for random transform. Don't pass a seed if the transform is not
-      random.
-
-  Returns:
-    Tuple of a callable and a seed. The callable expects the element to be
-    mapped as first argument. If seed is not None the callable expects a
-    second argument with a np.random.Generator.
-  """
-  if isinstance(transform, transforms.MapTransform):
-    if seed is not None:
-      logging.warning(
-          "Provided seed for MapTransform %s which doesn't need a seed.",
-          transform,
-      )
-    return transform.map, None
-  elif isinstance(transform, transforms.RandomMapTransform):
-    if seed is None:
-      raise ValueError(
-          "RandomMapTransform requires random seed. Please provide it with"
-          " `ds.seed(seed)`"
-      )
-    return transform.random_map, seed
-  elif isinstance(transform, transforms.TfRandomMapTransform):
-    if seed is None:
-      raise ValueError(
-          "RandomMapTransform requires random seed. Please provide it with"
-          " `ds.seed(seed)`"
-      )
-    return transform.np_random_map, seed
-  else:
-    # If a `seed` is provided we treat the Callable as RandomMapTransform
-    return transform, seed
-
-
 class MapMapDataset(dataset.MapDataset[T]):
-  """Map MapDataset."""
+  """Map transformation for MapDataset."""
 
   def __init__(
       self,
       parent: dataset.MapDataset,
-      transform: _MapTransformType,
-      seed: Optional[int] = None,
+      transform: transforms.MapTransform | Callable[[Any], T],
   ):
     super().__init__(parent)
-    if isinstance(
-        transform,
-        (transforms.RandomMapTransform, transforms.TfRandomMapTransform),
-    ):
-      seed = self._default_seed if seed is None else seed
+    if isinstance(transform, transforms.MapTransform):
       # Use the transform class name. The `cached_property` below will not
       # be called.
       self._transform_name = transform.__class__.__name__
-    if isinstance(transform, transforms.MapTransform):
-      self._transform_name = transform.__class__.__name__
-    self._map_fn, seed = _get_map_fn_and_seed(transform, seed)
-    self._rng_pool = None if seed is None else RngPool(seed)
+      self._map_fn = transform.map
+    else:
+      self._map_fn = transform
 
   def __len__(self) -> int:
     return len(self._parent)
@@ -158,24 +104,68 @@ class MapMapDataset(dataset.MapDataset[T]):
     with self._stats.record_self_time():
       if element is None:
         return None
-      if self._rng_pool:
-        rng = self._rng_pool.acquire_rng(index)
-        element = self._map_fn(element, rng)
-        self._rng_pool.release_rng(rng)
-      else:
-        element = self._map_fn(element)
-    return self._stats.record_output_spec(element)
+      return self._stats.record_output_spec(self._map_fn(element))
 
 
-class MapWithIndexMapDataset(dataset.MapDataset[T]):
-  """Map with index MapDataset."""
+class RandomMapMapDataset(dataset.MapDataset[T]):
+  """Random map transformation for MapDataset."""
 
   def __init__(
       self,
       parent: dataset.MapDataset,
-      transform: Union[
-          transforms.MapWithIndexTransform, Callable[[int, Any], T]
-      ],
+      transform: (
+          transforms.RandomMapTransform
+          | Callable[[Any, np.random.Generator], T]
+      ),
+      seed: int | None = None,
+  ):
+    super().__init__(parent)
+    if isinstance(transform, transforms.RandomMapTransform):
+      # Use the transform class name. The `cached_property` below will not
+      # be called.
+      self._transform_name = transform.__class__.__name__
+      self._map_fn = transform.random_map
+    else:
+      self._map_fn = transform
+    seed = self._default_seed if seed is None else seed
+    if seed is None:
+      raise ValueError(
+          "`random_map` requires a seed. Please either provide it with"
+          " `ds.seed(seed)` before any random transformations or pass it"
+          " directly with `ds.random_map(transform, seed=seed)`."
+      )
+    self._rng_pool = RngPool(seed)
+
+  def __len__(self) -> int:
+    return len(self._parent)
+
+  @functools.cached_property
+  def _transform_name(self):
+    return transforms.get_pretty_transform_name(self._map_fn)
+
+  def __str__(self) -> str:
+    return f"RandomMapMapDataset(transform={self._transform_name})"
+
+  def __getitem__(self, index):
+    if isinstance(index, slice):
+      return self.slice(index)
+    element = self._parent[index]
+    with self._stats.record_self_time():
+      if element is None:
+        return None
+      rng = self._rng_pool.acquire_rng(index)
+      element = self._map_fn(element, rng)
+      self._rng_pool.release_rng(rng)
+      return self._stats.record_output_spec(element)
+
+
+class MapWithIndexMapDataset(dataset.MapDataset[T]):
+  """Map with index transformation for MapDataset."""
+
+  def __init__(
+      self,
+      parent: dataset.MapDataset,
+      transform: transforms.MapWithIndexTransform | Callable[[int, Any], T],
   ):
     super().__init__(parent)
     if isinstance(transform, transforms.MapWithIndexTransform):
@@ -184,7 +174,6 @@ class MapWithIndexMapDataset(dataset.MapDataset[T]):
       # be called.
       self._transform_name = transform.__class__.__name__
     else:
-      # Expect Callable[[int, Any], T].
       self._map_fn = transform
 
   @functools.cached_property
@@ -198,10 +187,10 @@ class MapWithIndexMapDataset(dataset.MapDataset[T]):
     return f"MapWithIndexMapDataset(transform={self._transform_name})"
 
   def __getitem__(self, index):
+    if isinstance(index, slice):
+      return self.slice(index)
+    element = self._parent[index]
     with self._stats.record_self_time():
-      if isinstance(index, slice):
-        return self.slice(index)
-      element = self._parent[index]
       if element is None:
         return None
       return self._stats.record_output_spec(self._map_fn(index, element))
@@ -213,38 +202,24 @@ class _MapDatasetIterator(dataset.DatasetIterator[T]):
   def __init__(
       self,
       parent: dataset.DatasetIterator,
-      map_fn: Callable[..., T],
-      seed: Optional[int],
+      map_fn: Callable[[Any], T],
       transform_name: str,
   ):
     super().__init__(parent)
     self._map_fn = map_fn
-    self._index_for_rng = 0
-    self._seed = seed
-    self._rng = np.random.Generator(np.random.Philox(seed))
     self._transform_name = transform_name
+    # This only exists for backwards compatibility with the old implementation.
+    # Users rely on the specific value of the produced state (which is wrong,
+    # we do not guarantee the specific state value, but rather
+    # get_state / set_state compatibility).
+    # TODO: Move users away from this and remove.
+    self._index_for_rng = 0
 
   def __next__(self):
-    try:
-      element = next(self._parent)
-    except StopIteration as e:
-      raise e
-
+    element = next(self._parent)
     with self._stats.record_self_time():
       if element is not None:
-        if self._seed is not None:
-          # Shift index for the current worker process in case of multiprocess
-          # execution. The actual index value doesn't matter as long as it is
-          # unique for each process.
-          index_for_rng = (
-              self._ctx.mp_context.process_index
-              + self._index_for_rng * self._ctx.mp_context.process_count
-          )
-          _reset_rng_state(self._rng, op_seed=0, index=index_for_rng)
-          element = self._map_fn(element, self._rng)
-        else:
-          element = self._map_fn(element)
-
+        element = self._map_fn(element)
       self._index_for_rng += 1
       return self._stats.record_output_spec(element)
 
@@ -262,38 +237,123 @@ class _MapDatasetIterator(dataset.DatasetIterator[T]):
     return f"MapDatasetIterator(transform={self._transform_name})"
 
 
+class _RandomMapDatasetIterator(dataset.DatasetIterator[T]):
+  """Iterator that applies random map transformation to elements."""
+
+  def __init__(
+      self,
+      parent: dataset.DatasetIterator,
+      map_fn: Callable[[Any, np.random.Generator], T],
+      seed: int,
+      transform_name: str,
+  ):
+    super().__init__(parent)
+    self._map_fn = map_fn
+    self._index_for_rng = 0
+    self._seed = seed
+    self._rng = np.random.Generator(np.random.Philox(seed))
+    self._transform_name = transform_name
+
+  def __next__(self):
+    element = next(self._parent)
+    with self._stats.record_self_time():
+      if element is not None:
+        # Shift index for the current worker process in case of multiprocess
+        # execution. The actual index value doesn't matter as long as it is
+        # unique for each process.
+        index_for_rng = (
+            self._ctx.mp_context.process_index
+            + self._index_for_rng * self._ctx.mp_context.process_count
+        )
+        _reset_rng_state(self._rng, op_seed=0, index=index_for_rng)
+        element = self._map_fn(element, self._rng)
+
+      self._index_for_rng += 1
+      return self._stats.record_output_spec(element)
+
+  def get_state(self):
+    return {
+        "parent": self._parent.get_state(),
+        "index_for_rng": self._index_for_rng,
+    }
+
+  def set_state(self, state):
+    self._parent.set_state(state["parent"])
+    self._index_for_rng = state["index_for_rng"]
+
+  def __str__(self) -> str:
+    return f"RandomMapDatasetIterator(transform={self._transform_name})"
+
+
+class RandomMapIterDataset(dataset.IterDataset[T]):
+  """Random map transformation for IterDataset."""
+
+  def __init__(
+      self,
+      parent: dataset.IterDataset,
+      transform: (
+          transforms.RandomMapTransform
+          | Callable[[Any, np.random.Generator], T]
+      ),
+      seed: int | None = None,
+  ):
+    super().__init__(parent)
+    if isinstance(transform, transforms.RandomMapTransform):
+      # Use the transform class name. The `cached_property` below will not
+      # be called.
+      self._transform_name = transform.__class__.__name__
+      self._map_fn = transform.random_map
+    else:
+      self._map_fn = transform
+    self._seed = self._default_seed if seed is None else seed
+    if self._seed is None:
+      raise ValueError(
+          "`random_map` requires a seed. Please either provide it with"
+          " `ds.seed(seed)` before any random transformations or pass it"
+          " directly with `ds.random_map(transform, seed=seed)`."
+      )
+
+  @functools.cached_property
+  def _transform_name(self):
+    return transforms.get_pretty_transform_name(self._map_fn)
+
+  def __iter__(self) -> _RandomMapDatasetIterator[T]:
+    return _RandomMapDatasetIterator(
+        self._parent.__iter__(),
+        map_fn=self._map_fn,
+        seed=self._seed,
+        transform_name=self._transform_name,
+    )
+
+  def __str__(self) -> str:
+    return f"RandomMapIterDataset(transform={self._transform_name})"
+
+
 class MapIterDataset(dataset.IterDataset[T]):
   """Map transformation for IterDatasets."""
 
   def __init__(
       self,
       parent: dataset.IterDataset,
-      transform: _MapTransformType,
-      seed: Optional[int] = None,
+      transform: transforms.MapTransform | Callable[[Any], T],
   ):
     super().__init__(parent)
-    if isinstance(
-        transform,
-        (transforms.RandomMapTransform, transforms.TfRandomMapTransform),
-    ):
-      seed = self._default_seed if seed is None else seed
+    if isinstance(transform, transforms.MapTransform):
       # Use the transform class name. The `cached_property` below will not
       # be called.
       self._transform_name = transform.__class__.__name__
-    if isinstance(transform, transforms.MapTransform):
-      self._transform_name = transform.__class__.__name__
-    self._map_fn, self._seed = _get_map_fn_and_seed(transform, seed)
+      self._map_fn = transform.map
+    else:
+      self._map_fn = transform
 
   @functools.cached_property
   def _transform_name(self):
     return transforms.get_pretty_transform_name(self._map_fn)
 
   def __iter__(self) -> _MapDatasetIterator[T]:
-    parent_iter = self._parent.__iter__()
     return _MapDatasetIterator(
-        parent_iter,
+        self._parent.__iter__(),
         map_fn=self._map_fn,
-        seed=self._seed,
         transform_name=self._transform_name,
     )
 
