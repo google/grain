@@ -45,6 +45,7 @@ py_library(
 py_test(
     name = "dataset_test",
     srcs = ["dataset_test.py"],
+    shard_count = 10,
     srcs_version = "PY3",
     deps = [
         ":base",

@@ -27,7 +27,6 @@ from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import filter as filter_lazy_dataset
-from grain._src.python.dataset.transformations import map as map_lazy_dataset
 from grain._src.python.dataset.transformations import prefetch
 import numpy as np
 
@@ -75,8 +74,8 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
   def setUp(self):
     super().setUp()
     self.range_ds = dataset.MapDataset.range(20)
-    self.filtered_range_ds = filter_lazy_dataset.FilterMapDataset(
-        self.range_ds, FilterKeepingOddElementsOnly()
+    self.filtered_range_ds = self.range_ds.filter(
+        FilterKeepingOddElementsOnly()
     )
     self.prefetch_lazy_iter_ds = prefetch.PrefetchIterDataset(
         self.range_ds, read_options=options.ReadOptions()
@@ -224,9 +223,7 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
     super().setUp()
     ds = dataset.MapDataset.range(20)
     ds = prefetch.PrefetchIterDataset(ds, read_options=options.ReadOptions())
-    self.iter_ds = filter_lazy_dataset.FilterIterDataset(
-        ds, FilterKeepingOddElementsOnly()
-    )
+    self.iter_ds = ds.filter(FilterKeepingOddElementsOnly())
 
   @parameterized.named_parameters(
       dict(
@@ -526,7 +523,7 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
         return features
 
     ds = dataset.MapDataset.range(10)
-    ds = map_lazy_dataset.MapMapDataset(parent=ds, transform=_SleepTransform())
+    ds = ds.map(_SleepTransform())
     ds = prefetch.PrefetchIterDataset(ds, read_options=options.ReadOptions())
     ds = prefetch.MultiprocessPrefetchIterDataset(
         ds,
@@ -562,7 +559,7 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
         return features
 
     ds = dataset.MapDataset.range(10)
-    ds = map_lazy_dataset.MapMapDataset(parent=ds, transform=_SleepTransform())
+    ds = ds.map(_SleepTransform())
     ds = prefetch.PrefetchIterDataset(ds, read_options=options.ReadOptions())
     ds = prefetch.MultiprocessPrefetchIterDataset(
         ds,
@@ -614,9 +611,10 @@ class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.ds = filter_lazy_dataset.FilterIterDataset(
-        dataset.MapDataset.range(20).to_iter_dataset(),
-        FilterKeepingOddElementsOnly(),
+    self.ds = (
+        dataset.MapDataset.range(20)
+        .to_iter_dataset()
+        .filter(FilterKeepingOddElementsOnly())
     )
 
   @parameterized.named_parameters(

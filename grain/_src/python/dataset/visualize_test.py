@@ -22,7 +22,7 @@ from grain._src.python.dataset import visualize
 import numpy as np
 
 
-_MAP_DATASET_REPR = r"""RangeMapDataset
+_MAP_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
   ││
   ││  
   ││
@@ -36,7 +36,7 @@ _MAP_DATASET_REPR = r"""RangeMapDataset
 "<class 'int'>[]"
 
   ││
-  ││  MapWithIndexMapDataset<map_fn=_add_dummy_metadata in module __main__ on line XXX>
+  ││  MapWithIndexMapDataset(transform=_add_dummy_metadata @ .../python/dataset/visualize_test.py:XXX)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -45,7 +45,7 @@ _MAP_DATASET_REPR = r"""RangeMapDataset
  'index': "<class 'int'>[]"}
 
   ││
-  ││  MapMapDataset<map_fn=_identity in module __main__ on line XXX>
+  ││  MapMapDataset(transform=_identity @ .../python/dataset/visualize_test.py:XXX)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -54,7 +54,7 @@ _MAP_DATASET_REPR = r"""RangeMapDataset
  'index': "<class 'int'>[]"}
 """
 
-_ITER_DATASET_REPR = r"""RangeMapDataset
+_ITER_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
   ││
   ││  
   ││
@@ -68,13 +68,13 @@ _ITER_DATASET_REPR = r"""RangeMapDataset
 "<class 'int'>[]"
 
   ││
-  ││  PrefetchIterDataset
+  ││  PrefetchIterDataset(read_options=ReadOptions(num_threads=16, prefetch_buffer_size=500), allow_nones=False)
   ││
   ╲╱
 "<class 'int'>[]"
 
   ││
-  ││  MapIterDataset<map_fn=<lambda> in module __main__ on line XXX>
+  ││  MapIterDataset(transform=<lambda> @ .../python/dataset/visualize_test.py:XXX)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -83,7 +83,7 @@ _ITER_DATASET_REPR = r"""RangeMapDataset
  'index': "<class 'int'>[]"}
 
   ││
-  ││  BatchIterDataset
+  ││  BatchIterDataset(batch_size=2, drop_remainder=False)
   ││
   ╲╱
 {'data': 'int64[2]',
@@ -94,7 +94,7 @@ _ITER_DATASET_REPR = r"""RangeMapDataset
 
 _MIX_DATASET_REPR = r"""WARNING: Detected multi-parent datasets: MixedMapDataset[2 parents]. Only displaying the first parent.
 
-RangeMapDataset
+RangeMapDataset(start=0, stop=10, step=1)
   ││
   ││  
   ││
@@ -114,13 +114,13 @@ RangeMapDataset
 "<class 'int'>[]"
 
   ││
-  ││  MapMapDataset<map_fn=_AddOne.map in module __main__ on line XXX>
+  ││  MapMapDataset(transform=_AddOne)
   ││
   ╲╱
 "<class 'int'>[]"
 """
 
-_PREFETCH_DATASET_REPR = r"""RangeMapDataset
+_PREFETCH_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
   ││
   ││  
   ││
@@ -134,7 +134,7 @@ _PREFETCH_DATASET_REPR = r"""RangeMapDataset
 "<class 'int'>[]"
 
   ││
-  ││  MapWithIndexMapDataset<map_fn=_add_dummy_metadata in module __main__ on line XXX>
+  ││  MapWithIndexMapDataset(transform=_add_dummy_metadata @ .../python/dataset/visualize_test.py:XXX)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -143,7 +143,7 @@ _PREFETCH_DATASET_REPR = r"""RangeMapDataset
  'index': "<class 'int'>[]"}
 
   ││
-  ││  PrefetchIterDataset
+  ││  PrefetchIterDataset(read_options=ReadOptions(num_threads=16, prefetch_buffer_size=500), allow_nones=False)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -152,7 +152,7 @@ _PREFETCH_DATASET_REPR = r"""RangeMapDataset
  'index': "<class 'int'>[]"}
 
   ││
-  ││  MultiprocessPrefetchIterDataset
+  ││  MultiprocessPrefetchIterDataset(multiprocessing_options=MultiprocessingOptions(num_workers=1, per_worker_buffer_size=1, enable_profiling=False))
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -161,7 +161,7 @@ _PREFETCH_DATASET_REPR = r"""RangeMapDataset
  'index': "<class 'int'>[]"}
 """
 
-_SOURCE_DATASET_REPR = r"""SourceMapDataset<source=_ExpensiveSource>
+_SOURCE_DATASET_REPR = r"""SourceMapDataset(source=SourceMapDataset)
   ││
   ││  
   ││
@@ -169,7 +169,7 @@ _SOURCE_DATASET_REPR = r"""SourceMapDataset<source=_ExpensiveSource>
 "<class 'bytes'>[]"
 
   ││
-  ││  MapMapDataset<map_fn=_identity in module __main__ on line XXX>
+  ││  MapMapDataset(transform=_identity @ .../python/dataset/visualize_test.py:XXX)
   ││
   ╲╱
 "<class 'bytes'>[]"
@@ -213,7 +213,7 @@ class VisualizeTest(absltest.TestCase):
     result = visualize._build_visualization_str(ds, None)
     print(result)
     # Remove line number from the result to make test less brittle.
-    result = re.sub(r"on line \d+", "on line XXX", result)
+    result = re.sub(r".py:\d+", ".py:XXX", result)
     self.assertEqual(result, expected)
     repr_after_visualize = _deep_dataset_repr(ds)
     result_after_visualize = list(ds)

@@ -493,7 +493,7 @@ class DatasetTest(parameterized.TestCase):
     ds1 = initial_ds.seed(seed).random_map(AddRandomInteger())
     ds2 = initial_ds.seed(seed).random_map(AddRandomInteger())
     self.assertEqual(list(ds1), list(ds2))
-    ds3 = initial_ds.seed(seed + 1).map(AddRandomInteger())
+    ds3 = initial_ds.seed(seed + 1).random_map(AddRandomInteger())
     self.assertNotEqual(list(ds1), list(ds3))
 
   @parameterized.parameters(

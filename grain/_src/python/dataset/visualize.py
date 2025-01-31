@@ -16,17 +16,13 @@
 from __future__ import annotations
 
 import contextlib
-import inspect
 import pprint
 from typing import Any, Callable, Generator, TypeVar
 
 from grain._src.core import tree_lib
 from grain._src.python import options
 from grain._src.python.dataset import dataset
-from grain._src.python.dataset.transformations import filter as filter_dataset
-from grain._src.python.dataset.transformations import map as map_dataset
 from grain._src.python.dataset.transformations import prefetch
-from grain._src.python.dataset.transformations import source
 
 T = TypeVar('T')
 
@@ -37,45 +33,6 @@ _EDGE_TEMPLATE = r"""{input_spec}
   ╲╱
 {output_spec}
 """
-
-
-def _function_repr(fn: Callable[..., Any]) -> str:
-  """Produces a human-readable string representation of a function."""
-  fn_name = fn.__name__
-  if inspect.ismethod(fn):
-    # Function is defined as a method in a class. Prepend the class name.
-    class_name = fn.__self__.__class__.__name__
-    fn_name = f'{class_name}.{fn_name}'
-  fn_module = inspect.getmodule(fn).__name__
-  _, line_number = inspect.getsourcelines(fn)
-  return f'{fn_name} in module {fn_module} on line {line_number}'
-
-
-# TODO: Move this to the specific transformations' `__repr__`. Note that
-# in that case it could also be used for checkpoint validation and will become
-# available to users.
-def _dataset_repr(ds: dataset.MapDataset | dataset.IterDataset) -> str:
-  """Produces a human-readable string representation of a dataset."""
-  result = ds.__class__.__name__
-  # pylint: disable=protected-access
-  if isinstance(ds, source.SourceMapDataset):
-    result += f'<source={ds._source.__class__.__name__}>'
-  elif isinstance(
-      ds,
-      (
-          map_dataset.MapMapDataset,
-          map_dataset.MapWithIndexMapDataset,
-          map_dataset.MapIterDataset,
-      ),
-  ):
-    result += f'<map_fn={_function_repr(ds._map_fn)}>'
-  elif isinstance(ds, filter_dataset.FilterMapDataset):
-    result += f'<filter_fn={_function_repr(ds._filter_fn)}>'
-  # pylint: enable=protected-access
-  # Display the number of parents for datasets with multiple parents.
-  if (num_parents := len(ds.parents)) > 1:
-    result += f'[{num_parents} parents]'
-  return result
 
 
 class _SpecTrackingMapDataset(dataset.MapDataset[T]):
@@ -208,10 +165,10 @@ def _build_visualization_from_tracked_spec(
     # first parent. This is true for `mix`, but is not necessarily true for
     # `select_from_datasets`.
     parent_vis = _build_visualization_from_tracked_spec(tracked_ds.parents[0])
-    transform_repr = _dataset_repr(tracked_ds)
+    transform_repr = str(tracked_ds)
   else:
     # This dataset tracks the source output.
-    parent_vis = _dataset_repr(tracked_ds)
+    parent_vis = str(tracked_ds)
     transform_repr = ''
   return _EDGE_TEMPLATE.format(
       input_spec=parent_vis,
@@ -245,7 +202,7 @@ def _patch_dataset_with_spec_tracking(
 
   def _patch(ds):
     if len(ds.parents) > 1:
-      multiparent_datasets.append(_dataset_repr(ds))
+      multiparent_datasets.append(str(ds))
     ds._parents = [_patch(p) for p in ds.parents]  # pylint: disable=protected-access
     if isinstance(ds, dataset.MapDataset):
       return _SpecTrackingMapDataset(ds, mock_source_output)
