@@ -1,20 +1,23 @@
---------------------------------------------------------------------------------
-
-jupytext: formats: ipynb,md:myst text_representation: extension: .md
-format_name: myst format_version: 0.13 jupytext_version: 1.16.6 kernelspec:
-display_name: Python 3
-
-## name: python3
+---
+jupytext:
+  formats: ipynb,md:myst
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.16.6
+kernelspec:
+  display_name: Python 3
+  name: python3
+---
 
 +++ {"id": "9ufbgPooUPJr"}
 
 # Advanced `Dataset` usage
 
-If you decided to use `Dataset` APIs, there's a good chance you want to do one
-or more processing steps described in this section, especially if working on
-data ingestion for generative model training.
+If you decided to use `Dataset` APIs, there's a good chance you want to do one or more processing steps described in this section, especially if working on data ingestion for generative model training.
 
-``` {code-cell}
+```{code-cell}
 :id: OFw1tjvkP3wb
 
 # @test {"output": "ignore"}
@@ -23,14 +26,16 @@ data ingestion for generative model training.
 !pip install tensorflow_datasets
 ```
 
-``` {code-cell}
-:id: 8uUXhV-njM7U
+```{code-cell}
+:id: fwvOt8-cqcQn
 
+import pprint
 import grain.python as grain
+import numpy as np
 import tensorflow_datasets as tfds
 ```
 
-+++ {"id": "Qm0Ob5ATHhhL"}
++++ {"id": "0ur4szH9l5_H"}
 
 ## Checkpointing
 
@@ -40,8 +45,8 @@ We provide `GrainCheckpoint{Save|Restore}` to checkpoint the
 both, input pipeline and model, and handles the edge cases for distributed
 training.
 
-``` {code-cell}
-:id: dvVPaXTUHhhL
+```{code-cell}
+:id: Tf-4Ljd2l5_H
 
 ds = (
     grain.MapDataset.source(tfds.data_source("mnist", split="train"))
@@ -59,14 +64,15 @@ for i in range(num_steps):
   print(i, x["label"])
 ```
 
-``` {code-cell}
-:id: lg9BViluLQ3d
+```{code-cell}
+:id: Wb2y5VoTl5_H
 
+# @test {"output": "ignore"}
 !pip install orbax
 ```
 
-``` {code-cell}
-:id: SUX9L1IMHhhL
+```{code-cell}
+:id: PGn-eSYil5_H
 
 import orbax.checkpoint as ocp
 
@@ -85,14 +91,14 @@ mngr.wait_until_finished()
 !ls -R /tmp/orbax
 ```
 
-``` {code-cell}
-:id: c8DJCPZgLQ3d
+```{code-cell}
+:id: F012QoCJl5_H
 
 !cat /tmp/orbax/*/*/*.json
 ```
 
-``` {code-cell}
-:id: Zb5TrmjrHhhL
+```{code-cell}
+:id: HURK2viXl5_H
 
 # Read more elements and advance the iterator.
 for i in range(4, 8):
@@ -100,8 +106,8 @@ for i in range(4, 8):
   print(i, x["label"])
 ```
 
-``` {code-cell}
-:id: 1PA1rpnwHhhL
+```{code-cell}
+:id: u92Vkn1Hl5_H
 
 # Restore iterator from the previously saved checkpoint.
 mngr.restore(num_steps, args=grain.GrainCheckpointRestore(ds_iter))
@@ -115,20 +121,9 @@ for i in range(4, 8):
 
 ## Mixing datasets
 
-`Dataset` allows mixing multiple data sources with potentially different
-transformations. There's two different ways of mixing `Dataset`s:
-`MapDataset.mix` and `IterDataset.mix`. If the mixed `Datasets` are sparse (e.g.
-one of the mixture components needs to be filtered) use `IterDataset.mix`,
-otherwise use `MapDataset.mix`.
+`Dataset` allows mixing multiple data sources with potentially different transformations. There's two different ways of mixing `Dataset`s: `MapDataset.mix` and `IterDataset.mix`. If the mixed `Datasets` are sparse (e.g. one of the mixture components needs to be filtered) use `IterDataset.mix`, otherwise use `MapDataset.mix`.
 
-``` {code-cell}
-:id: fwvOt8-cqcQn
-
-import pprint
-import numpy as np
-```
-
-``` {code-cell}
+```{code-cell}
 :id: e8ROZXhtwOx3
 
 tfds.core.DatasetInfo.file_format = (
@@ -149,7 +144,7 @@ pprint.pprint(np.shape(ds[0]))
 
 If filtering inputs to the mixture, use `IterDataset.mix`.
 
-``` {code-cell}
+```{code-cell}
 :id: DTmUbvK4r8T8
 
 source1 = tfds.data_source(name="pneumonia_mnist", split="train")
