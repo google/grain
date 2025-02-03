@@ -21,14 +21,8 @@ if [ -n "${BUILD_ARRAY_RECORD}" ]; then
   git clone https://github.com/google/array_record "${ARRAY_RECORD_OUTPUT_DIR}"
   previous_wd="$(pwd)"
   cd "${ARRAY_RECORD_OUTPUT_DIR}"
-  # Use ArrayRecord commit when build was still working.
-  git reset --hard ef9be1b9de19e9e9ca5c272490a2fca4afb3c4ec
-  git apply "${OUTPUT_DIR}"'/grain/oss/array_record/WORKSPACE.patch'
-  git apply "${OUTPUT_DIR}"'/grain/oss/array_record/build_whl.patch'
-  git apply "${OUTPUT_DIR}"'/grain/oss/array_record/runner_common.patch'
-  git apply "${OUTPUT_DIR}"'/grain/oss/array_record/Dockerfile.patch'
-  git apply "${OUTPUT_DIR}"'/grain/oss/array_record/setup.patch'
-  git apply "${OUTPUT_DIR}"'/grain/oss/array_record/array_record_reader.patch'
+  # Broke on a previous commit, so taking care to pin to a working one:
+  git reset --hard 7e299eae0db0d7bfc20f7c1e1548bf86cdbfef5e
 
   . "${ARRAY_RECORD_OUTPUT_DIR}"'/oss/runner_common.sh'
   PLATFORM="$(uname)"
