@@ -88,6 +88,7 @@ assert mngr.save(
 # finished before examining checkpoint.
 mngr.wait_until_finished()
 
+# @test {"output": "ignore"}
 !ls -R /tmp/orbax
 ```
 
@@ -164,4 +165,25 @@ ds = grain.IterDataset.mix([ds1, ds2], weights=[0.7, 0.3]).map(
     lambda features: features["image"]
 )
 pprint.pprint(np.shape(next(iter(ds))))
+```
+
++++ {"id": "8TKInCDc6GUH"}
+
+### Multi-epoch training
+
+Mixed dataset length is determined by a combination of the length of the shortest input dataset and mixing weights. This means that once the shortest component is exhausted the new epoch will begin and the remainder of other datasets is going to be discarded. This can be avoided by repeating inputs to the mixture.
+
+```{code-cell}
+:id: JqetaYR36GUH
+
+source1 = tfds.data_source(name="pneumonia_mnist", split="train")
+source2 = tfds.data_source(name="mnist", split="train")
+ds1 = grain.MapDataset.source(source1).repeat()
+ds2 = grain.MapDataset.source(source2).repeat()
+
+ds = grain.MapDataset.mix([ds1, ds2], weights=[1, 2])
+print(f"Mixed dataset length = {len(ds1)}")  # sys.maxsize
+print(f"Mixed dataset length = {len(ds2)}")  # sys.maxsize
+# Ds1 and ds2 are repeated to fill out the sys.maxsize with respect to weights.
+print(f"Mixed dataset length = {len(ds)}")  # sys.maxsize
 ```
