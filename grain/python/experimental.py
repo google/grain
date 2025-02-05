@@ -1,4 +1,4 @@
-# Copyright 2023 Google LLC
+# Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,39 +17,41 @@
 # pylint: disable=g-bad-import-order
 # pylint: disable=g-multiple-import
 # pylint: disable=unused-import
-# pylint: disable=wildcard-import
-# pylint: disable=g-import-not-at-top
 
-from ._src.python.dataset.base import (
+from grain._src.python.dataset.base import (
     DatasetOptions,
     ExecutionTrackingMode,
 )
-from ._src.python.dataset.dataset import (
+from grain._src.python.dataset.dataset import (
     apply_transformations,
     WithOptionsIterDataset,
 )
-from ._src.python.dataset.transformations.flatmap import (
+from grain._src.python.dataset.transformations.flatmap import (
     FlatMapMapDataset,
     FlatMapIterDataset,
 )
-from ._src.python.dataset.transformations.interleave import (
+from grain._src.python.dataset.transformations.interleave import (
     InterleaveIterDataset,
 )
-from ._src.python.dataset.transformations.map import RngPool
-from ._src.python.dataset.transformations.mix import ConcatenateMapDataset
-from ._src.python.dataset.transformations.packing import FirstFitPackIterDataset
-from ._src.python.dataset.transformations.prefetch import (
+from grain._src.python.dataset.transformations.map import RngPool
+from grain._src.python.dataset.transformations.mix import ConcatenateMapDataset
+from grain._src.python.dataset.transformations.packing import FirstFitPackIterDataset
+from grain._src.python.dataset.transformations.prefetch import (
     MultiprocessPrefetchIterDataset,
     ThreadPrefetchIterDataset,
 )
-from ._src.python.dataset.transformations.shuffle import (
+from grain._src.python.dataset.transformations.shuffle import (
     WindowShuffleMapDataset,
     WindowShuffleIterDataset,
 )
-from ._src.python.dataset.transformations.zip import ZipMapDataset
-from ._src.core.transforms import (
+from grain._src.python.dataset.transformations.zip import ZipMapDataset
+from grain._src.core.transforms import (
     FlatMapTransform,
     MapWithIndexTransform,
 )
-from ._src.python.experimental.example_packing.packing import PackAndBatchOperation
-from ._src.python.experimental.index_shuffle.python.index_shuffle_module import index_shuffle
+from grain._src.python.experimental.example_packing.packing import PackAndBatchOperation
+
+# This should evetually live under grain.testing.
+from grain._src.python.testing.experimental import assert_equal_output_after_checkpoint
+
+from grain._src.python.experimental.index_shuffle.python.index_shuffle_module import index_shuffle

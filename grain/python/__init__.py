@@ -14,17 +14,23 @@
 """APIs for Grain Python backend."""
 
 # pylint: disable=g-importing-member
+# pylint: disable=g-import-not-at-top
 # pylint: disable=g-multiple-import
 # pylint: disable=unused-import
-# pylint: disable=wildcard-import
 
-from . import python_experimental as experimental
-from . import python_testing as testing
 
-from ._src.core.config import config
-from ._src.core.constants import DATASET_INDEX, EPOCH, INDEX, META_FEATURES, RECORD, RECORD_KEY, SEED
-from ._src.core.sharding import NoSharding, ShardByJaxProcess, ShardOptions
-from ._src.core.transforms import (
+from grain._src.core.config import config
+from grain._src.core.constants import (
+    DATASET_INDEX,
+    EPOCH,
+    INDEX,
+    META_FEATURES,
+    RECORD,
+    RECORD_KEY,
+    SEED,
+)
+from grain._src.core.sharding import NoSharding, ShardByJaxProcess, ShardOptions
+from grain._src.core.transforms import (
     BatchTransform as Batch,
     FilterTransform,
     MapTransform,
@@ -34,43 +40,47 @@ from ._src.core.transforms import (
     Transformations,
 )
 
-from ._src.python.checkpoint_handlers import PyGrainCheckpointHandler
-from ._src.python.data_loader import (
+from grain._src.python.checkpoint_handlers import PyGrainCheckpointHandler
+from grain._src.python.data_loader import (
     DataLoader,
     PyGrainDatasetIterator,
 )
-from ._src.python.data_sources import (
+from grain._src.python.data_sources import (
     ArrayRecordDataSource,
     InMemoryDataSource,
     RandomAccessDataSource,
     RangeDataSource,
 )
-from ._src.python.dataset.base import DatasetSelectionMap
-from ._src.python.dataset.dataset import (
+from grain._src.python.dataset.base import DatasetSelectionMap
+from grain._src.python.dataset.dataset import (
     MapDataset,
     IterDataset,
     DatasetIterator,
 )
 
-from ._src.python.load import load
-from ._src.python.operations import (
+from grain._src.python.load import load
+from grain._src.python.operations import (
     BatchOperation,
     FilterOperation,
     MapOperation,
     Operation,
     RandomMapOperation,
 )
-from ._src.python.options import ReadOptions, MultiprocessingOptions
-from ._src.python.record import (Record, RecordMetadata)
-from ._src.python.samplers import (
+from grain._src.python.options import ReadOptions, MultiprocessingOptions
+from grain._src.python.record import (Record, RecordMetadata)
+from grain._src.python.samplers import (
     IndexSampler,
     Sampler,
     SequentialSampler,
 )
-from ._src.python.shared_memory_array import SharedMemoryArray
+from grain._src.python.shared_memory_array import SharedMemoryArray
+from grain.python import experimental, fast_proto
 
 # These are imported only if Orbax is present.
 try:
-  from ._src.python.checkpoint_handlers import PyGrainCheckpointSave, PyGrainCheckpointRestore  # pylint: disable=g-import-not-at-top
+  from grain._src.python.checkpoint_handlers import (
+      PyGrainCheckpointSave,
+      PyGrainCheckpointRestore,
+  )
 except ImportError:
   pass
