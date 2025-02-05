@@ -28,6 +28,7 @@ py_library(
     deps = [
         ":core",  # build_cleaner: keep
         ":python_experimental",  # build_cleaner: keep
+        ":python_testing",  # build_cleaner: keep
         "//grain/_src/core:constants",  # build_cleaner: keep
         "//grain/_src/core:monitoring",  # build_cleaner: keep
         "//grain/_src/core:transforms",  # build_cleaner: keep
@@ -56,5 +57,25 @@ py_library(
         "//grain/_src/python/dataset/transformations:packing",  # build_cleaner: keep
         "//grain/_src/python/dataset/transformations:zip",  # build_cleaner: keep
         "//grain/_src/python/experimental/example_packing:packing",  # build_cleaner: keep
+    ],
+)
+
+py_library(
+    name = "python_testing",
+    srcs = ["python_testing.py"],
+    srcs_version = "PY3",
+    # Implicit build flag
+    deps = [
+        ":python_testing_experimental",  # build_cleaner: keep
+    ],
+)
+
+py_library(
+    name = "python_testing_experimental",
+    srcs = ["python_testing_experimental.py"],
+    srcs_version = "PY3",
+    # Implicit build flag
+    deps = [
+        "//grain/_src/python/testing:experimental",  # build_cleaner: keep
     ],
 )

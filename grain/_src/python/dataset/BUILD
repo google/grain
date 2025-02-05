@@ -53,6 +53,7 @@ py_test(
         ":stats",
         "//grain/_src/core:transforms",
         "//grain/_src/python:options",
+        "//grain/_src/python/testing:experimental",
     ],
 )
 

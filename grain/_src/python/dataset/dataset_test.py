@@ -30,6 +30,7 @@ from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
+import grain._src.python.testing.experimental as test_util
 import numpy as np
 from typing_extensions import override
 
@@ -745,6 +746,21 @@ class DatasetTest(parameterized.TestCase):
     gc.collect()
     gc.enable()
     self.assertEmpty(forbidden_garbage)
+
+  def test_iterator_restore_with_numeric_elements(self):
+    ds = dataset.MapDataset.range(10)
+    ds = ds.map(lambda x: x + 1).seed(42)
+    ds = ds.shuffle(42)
+    ds = ds.random_map(AddRandomInteger())
+    ds = ds.to_iter_dataset()
+    test_util.assert_equal_output_after_checkpoint(ds)
+
+  def test_iterator_restore_with_dictionary_elements(self):
+    ds = dataset.MapDataset.range(10)
+    ds = ds.map(lambda x: {"key": x})
+    ds = ds.shuffle(24)
+    ds = ds.to_iter_dataset()
+    test_util.assert_equal_output_after_checkpoint(ds)
 
 
 class TfRandomMapAlwaysAddingOne(transforms.TfRandomMapTransform):
