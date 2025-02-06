@@ -22,6 +22,7 @@ from typing import Callable, TypeVar
 
 from grain._src.core import tree_lib
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset import stats
 import numpy as np
 
 T = TypeVar("T")
@@ -61,6 +62,7 @@ class _BatchDatasetIterator(dataset.DatasetIterator[T]):
     self._drop_remainder = drop_remainder
     self._batch_fn = batch_fn
 
+  @stats.record_next_duration_if_output
   def __next__(self) -> T:
     values = []
     for _ in range(self._batch_size):

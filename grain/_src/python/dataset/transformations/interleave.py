@@ -17,6 +17,7 @@ from collections.abc import Sequence
 from typing import TypeVar
 
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset import stats
 from grain._src.python.dataset.transformations import prefetch
 
 T = TypeVar("T")
@@ -53,6 +54,7 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
         None
     ] * self._cycle_length
 
+  @stats.record_next_duration_if_output
   def __next__(self) -> T:
     while True:
       if iterator_to_use := self._iterators_in_use[self._next_index_in_cycle]:
