@@ -187,3 +187,27 @@ print(f"Mixed dataset length = {len(ds2)}")  # sys.maxsize
 # Ds1 and ds2 are repeated to fill out the sys.maxsize with respect to weights.
 print(f"Mixed dataset length = {len(ds)}")  # sys.maxsize
 ```
+
++++ {"id": "aulM2cVQlneY"}
+
+### Shuffling
+
+If you need to globally shuffle the mixed data prefer shuffling individual
+`Dataset`s before mixing. This will ensure that the actual weights of the mixed
+`Dataset`s are stable and as close as possible to the provided weights.
+
+Additionally, make sure to provide different seeds to different mixture
+components. This way there's no chance of introducing a seed dependency between
+the components if the random transformations overlap.
+
+``` {code-cell}
+:id: M0kB6nUQlneY
+
+source1 = tfds.data_source(name="pneumonia_mnist", split="train")
+source2 = tfds.data_source(name="mnist", split="train")
+ds1 = grain.MapDataset.source(source1).seed(42).shuffle().repeat()
+ds2 = grain.MapDataset.source(source2).seed(43).shuffle().repeat()
+
+ds = grain.MapDataset.mix([ds1, ds2], weights=[1, 2])
+print(f"Mixed dataset length = {len(ds1)}")  # sys.maxsize
+```
