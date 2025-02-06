@@ -1,3 +1,5 @@
+load("@rules_python//python:pip.bzl", "compile_pip_requirements")
+
 package(default_visibility = ["//grain:__subpackages__"])
 
 licenses(["notice"])
@@ -23,7 +25,13 @@ py_test(
     name = "batch_test",
     srcs = ["batch_test.py"],
     srcs_version = "PY3",
-    deps = ["//grain/_src/python/dataset"],
+    deps = [
+        "//grain/_src/python/dataset",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+        "@pypi//dm_tree:pkg",
+        "@pypi//numpy:pkg",
+    ],
 )
 
 py_test(
@@ -34,6 +42,7 @@ py_test(
         "//grain/_src/core:transforms",
         "//grain/_src/python/dataset",
         "//grain/_src/python/dataset:base",
+        "@abseil-py//absl/testing:absltest",
     ],
 )
 
@@ -48,6 +57,10 @@ py_test(
         "//grain/_src/python:options",
         "//grain/_src/python/dataset",
         "//grain/_src/python/dataset:base",
+        "@abseil-py//absl/logging",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+        "@pypi//numpy:pkg",
     ],
 )
 
@@ -57,6 +70,7 @@ py_test(
     srcs_version = "PY3",
     deps = [
         "//grain/_src/python/dataset",
+        "@abseil-py//absl/testing:absltest",
     ],
 )
 
@@ -68,6 +82,11 @@ py_library(
     deps = [
         ":packing",
         "//grain/_src/python/dataset",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+        "@pypi//dm_tree:pkg",
+        "@pypi//jax:pkg",
+        "@pypi//numpy:pkg",
     ],
 )
 
@@ -90,6 +109,7 @@ py_test(
         ":flatmap",
         "//grain/_src/core:transforms",
         "//grain/_src/python/dataset",
+        "@abseil-py//absl/testing:absltest",
     ],
 )
 
@@ -100,6 +120,10 @@ py_test(
     deps = [
         "//grain/_src/core:transforms",
         "//grain/_src/python/dataset",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+        "@pypi//cloudpickle:pkg",
+        "@pypi//numpy:pkg",
     ],
 )
 
@@ -110,6 +134,8 @@ py_test(
     deps = [
         "//grain/_src/python/dataset",
         "//grain/_src/python/dataset:base",
+        "@abseil-py//absl/testing:absltest",
+        "@pypi//numpy:pkg",
     ],
 )
 
@@ -121,6 +147,10 @@ py_library(
         ":packing_packed_batch",
         "//grain/_src/python/dataset",
         "//grain/_src/python/dataset:stats",
+        "@pypi//jax:pkg",
+        "@pypi//jaxtyping:pkg",
+        "@pypi//numpy:pkg",
+        "@pypi//dm_tree:pkg",
     ],
 )
 
@@ -132,6 +162,10 @@ py_test(
         ":packing",
         ":testing_util",
         "//grain/_src/python/dataset",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+        "@pypi//dm_tree:pkg",
+        "@pypi//numpy:pkg",
     ],
 )
 
@@ -141,6 +175,9 @@ py_library(
     srcs_version = "PY3",
     deps = [
         "//grain/_src/core:tree_lib",
+        "@pypi//dm_tree:pkg",
+        "@pypi//jaxtyping:pkg",
+        "@pypi//numpy:pkg",
     ],
 )
 
@@ -148,21 +185,34 @@ py_test(
     name = "slice_test",
     srcs = ["slice_test.py"],
     srcs_version = "PY3",
-    deps = ["//grain/_src/python/dataset"],
+    deps = [
+        "//grain/_src/python/dataset",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+        "@pypi//typing_extensions:pkg",
+    ],
 )
 
 py_test(
     name = "shuffle_test",
     srcs = ["shuffle_test.py"],
     srcs_version = "PY3",
-    deps = ["//grain/_src/python/dataset"],
+    deps = [
+        "//grain/_src/python/dataset",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+    ],
 )
 
 py_test(
     name = "repeat_test",
     srcs = ["repeat_test.py"],
     srcs_version = "PY3",
-    deps = ["//grain/_src/python/dataset"],
+    deps = [
+        "//grain/_src/python/dataset",
+        "@abseil-py//absl/testing:absltest",
+        "@pypi//typing_extensions:pkg",
+    ],
 )
 
 py_library(
@@ -179,6 +229,8 @@ py_test(
     deps = [
         ":zip",
         "//grain/_src/python/dataset",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
     ],
 )
 
@@ -197,5 +249,7 @@ py_test(
         ":interleave",
         "//grain/_src/python:options",
         "//grain/_src/python/dataset",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
     ],
 )

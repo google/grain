@@ -1,3 +1,5 @@
+load("@rules_python//python:pip.bzl", "compile_pip_requirements")
+
 package(default_visibility = ["//grain:__subpackages__"])
 
 licenses(["notice"])
@@ -17,6 +19,8 @@ py_test(
     deps = [
         ":base",
         "//grain/_src/python:data_sources",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
     ],
 )
 
@@ -39,6 +43,10 @@ py_library(
         "//grain/_src/python:grain_pool",
         "//grain/_src/python:options",
         "//grain/_src/python:shared_memory_array",
+        "@abseil-py//absl/logging",
+        "@pypi//cloudpickle:pkg",
+        "@pypi//numpy:pkg",
+        "@pypi//typing_extensions:pkg",
     ],
 )
 
@@ -54,6 +62,12 @@ py_test(
         "//grain/_src/core:transforms",
         "//grain/_src/python:options",
         "//grain/_src/python/testing:experimental",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:flagsaver",
+        "@abseil-py//absl/testing:parameterized",
+        "@pypi//cloudpickle:pkg",
+        "@pypi//numpy:pkg",
+        "@pypi//typing_extensions:pkg",
     ],
 )
 
@@ -77,6 +91,8 @@ py_test(
         ":visualize",
         "//grain/_src/core:transforms",
         "//grain/_src/python:options",
+        "@abseil-py//absl/testing:absltest",
+        "@pypi//numpy:pkg",
     ],
 )
 
@@ -89,6 +105,7 @@ py_library(
         "//grain/_src/core:config",
         "//grain/_src/core:monitoring",
         "//grain/_src/core:tree_lib",
+        "@abseil-py//absl/logging",
     ],
 )
 
@@ -100,5 +117,8 @@ py_test(
         ":dataset",
         ":stats",
         "//grain/_src/core:transforms",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:flagsaver",
+        "@pypi//cloudpickle:pkg",
     ],
 )

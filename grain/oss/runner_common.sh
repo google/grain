@@ -16,7 +16,7 @@ build_and_test_grain_linux() {
 
   # Using a previous version of Blaze to avoid:
   # https://github.com/bazelbuild/bazel/issues/8622
-  export BAZEL_VERSION='5.4.0'
+  export BAZEL_VERSION='8.0.0'
 
   # Build wheels for multiple Python minor versions.
   PYTHON_MAJOR_VERSION=3
@@ -91,22 +91,7 @@ update_bazel_macos() {
 install_grain_deps() {
   AR_DIR="$SOURCE_DIR"'/grain/oss/array_record'
   "$PYTHON_BIN" -m pip install -U --find-links="$AR_DIR" array_record --no-cache-dir;
-  "$PYTHON_BIN" -m pip install -U \
-    absl-py \
-    build \
-    cloudpickle \
-    dm-tree \
-    'etils[epath,epy]' \
-    jaxtyping \
-    more-itertools>=9.1.0 \
-    numpy \
-    attrs \
-    auditwheel \
-    dill \
-    jax \
-    jaxlib \
-    tensorflow \
-    tensorflow-datasets;
+  "$PYTHON_BIN" -m pip install -r "$SOURCE_DIR"'/test_requirements.in'
 }
 
 build_and_test_grain_macos() {
@@ -115,7 +100,7 @@ build_and_test_grain_macos() {
   if [ ! -n "${BUILD_ARRAY_RECORD}" ]; then
     # Using a previous version of Bazel to avoid:
     # https://github.com/bazelbuild/bazel/issues/8622
-    export BAZEL_VERSION='5.4.0'
+    export BAZEL_VERSION='8.0.0'
     update_bazel_macos "${BAZEL_VERSION}"
     bazel --version
   fi

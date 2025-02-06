@@ -8,6 +8,7 @@ py_library(
     srcs_version = "PY3",
     deps = [
         ":monitoring",
+        "@abseil-py//absl/flags",
     ],
 )
 
@@ -43,26 +44,42 @@ py_test(
     name = "parallel_test",
     srcs = ["parallel_test.py"],
     srcs_version = "PY3",
-    deps = [":parallel"],
+    deps = [
+        ":parallel",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+    ],
 )
 
 py_library(
     name = "grain_random",
     srcs = ["grain_random.py"],
     srcs_version = "PY3",
+    deps = [
+        "@abseil-py//absl/logging",
+        "@pypi//jax:pkg",
+        "@pypi//numpy:pkg",
+    ],
 )
 
 py_library(
     name = "sharding",
     srcs = ["sharding.py"],
     srcs_version = "PY3",
+    deps = [
+        "@abseil-py//absl/logging",
+    ],
 )
 
 py_test(
     name = "sharding_test",
     srcs = ["sharding_test.py"],
     srcs_version = "PY3",
-    deps = [":sharding"],
+    deps = [
+        ":sharding",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+    ],
 )
 
 py_library(
@@ -75,13 +92,20 @@ py_library(
     name = "transforms",
     srcs = ["transforms.py"],
     srcs_version = "PY3",
+    deps = [
+        "@pypi//numpy:pkg",
+    ],
 )
 
 py_test(
     name = "transforms_test",
     srcs = ["transforms_test.py"],
     srcs_version = "PY3",
-    deps = [":transforms"],
+    deps = [
+        ":transforms",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+    ],
 )
 
 py_library(
@@ -90,6 +114,10 @@ py_library(
         "tree_lib.py",
     ],
     srcs_version = "PY3",
+    deps = [
+        "@pypi//dm_tree:pkg",
+        "@pypi//numpy:pkg",
+    ],
 )
 
 py_library(
@@ -97,7 +125,12 @@ py_library(
     testonly = 1,
     srcs = ["tree_lib_test.py"],
     srcs_version = "PY3",
-    deps = [":tree_lib"],
+    deps = [
+        ":tree_lib",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+        "@pypi//numpy:pkg",
+    ],
 )
 
 py_test(
@@ -116,5 +149,9 @@ py_test(
     deps = [
         ":tree_lib",
         ":tree_test_lib",
+        "@abseil-py//absl/testing:absltest",
+        "@pypi//attrs:pkg",
+        "@pypi//jax:pkg",
+        "@pypi//numpy:pkg",
     ],
 )

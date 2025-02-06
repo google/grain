@@ -1,3 +1,5 @@
+load("@rules_python//python:pip.bzl", "compile_pip_requirements")
+
 package(default_visibility = ["//grain:__subpackages__"])
 
 licenses(["notice"])
@@ -11,6 +13,8 @@ py_library(
     deps = [
         "//grain/_src/core:monitoring",
         "//grain/_src/core:usage_logging",
+        "@abseil-py//absl/logging",
+        "@pypi//array_record:pkg",
     ],
 )
 
@@ -27,6 +31,9 @@ py_test(
     srcs_version = "PY3",
     deps = [
         ":data_sources",
+        "@abseil-py//absl/flags",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
     ],
 )
 
@@ -36,6 +43,9 @@ py_library(
         "record.py",
     ],
     srcs_version = "PY3",
+    deps = [
+        "@pypi//numpy:pkg",
+    ],
 )
 
 py_test(
@@ -44,7 +54,11 @@ py_test(
         "record_test.py",
     ],
     srcs_version = "PY3",
-    deps = [":record"],
+    deps = [
+        ":record",
+        "@abseil-py//absl/testing:absltest",
+        "@pypi//numpy:pkg",
+    ],
 )
 
 py_library(
@@ -61,7 +75,10 @@ py_test(
         "multiprocessing_common_test.py",
     ],
     srcs_version = "PY3",
-    deps = [":multiprocessing_common"],
+    deps = [
+        ":multiprocessing_common",
+        "@abseil-py//absl/testing:absltest",
+    ],
 )
 
 py_library(
@@ -74,6 +91,8 @@ py_library(
         ":record",
         ":shared_memory_array",
         "//grain/_src/core:tree_lib",
+        "@abseil-py//absl/logging",
+        "@pypi//numpy:pkg",
     ],
 )
 
@@ -86,6 +105,9 @@ py_test(
     deps = [
         ":operations",
         ":record",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+        "@pypi//numpy:pkg",
     ],
 )
 
@@ -100,6 +122,7 @@ py_library(
         "//grain/_src/core:monitoring",
         "//grain/_src/core:sharding",
         "//grain/_src/python/dataset",
+        "@pypi//numpy:pkg",
     ],
 )
 
@@ -113,6 +136,8 @@ py_test(
         ":record",
         ":samplers",
         "//grain/_src/core:sharding",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
     ],
 )
 
@@ -135,6 +160,8 @@ py_library(
         "//grain/_src/core:transforms",
         "//grain/_src/core:tree_lib",
         "//grain/_src/core:usage_logging",
+        "@abseil-py//absl/logging",
+        "@pypi//numpy:pkg",
     ],
 )
 
@@ -159,6 +186,10 @@ py_test(
         ":shared_memory_array",
         "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
+        "@abseil-py//absl/flags",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+        "@pypi//numpy:pkg",
     ],
 )
 
@@ -174,6 +205,8 @@ py_library(
         ":shared_memory_array",
         "//grain/_src/core:parallel",
         "//grain/_src/core:tree_lib",
+        "@abseil-py//absl/logging",
+        "@pypi//cloudpickle:pkg",
     ],
 )
 
@@ -189,6 +222,8 @@ py_test(
         ":options",
         ":record",
         "//grain/_src/core:config",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
     ],
 )
 
@@ -226,6 +261,10 @@ py_test(
         ":data_sources",
         ":load",
         "//grain/_src/core:transforms",
+        "@abseil-py//absl/flags",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+        "@pypi//numpy:pkg",
     ],
 )
 
@@ -239,19 +278,25 @@ py_library(
     name = "grain_logging",
     srcs = ["grain_logging.py"],
     srcs_version = "PY3",
+    deps = ["@abseil-py//absl/logging"],
 )
 
 py_test(
     name = "grain_logging_test",
     srcs = ["grain_logging_test.py"],
     srcs_version = "PY3",
-    deps = [":grain_logging"],
+    deps = [
+        ":grain_logging",
+        "@abseil-py//absl/logging",
+        "@abseil-py//absl/testing:absltest",
+    ],
 )
 
 py_library(
     name = "shared_memory_array",
     srcs = ["shared_memory_array.py"],
     srcs_version = "PY3",
+    deps = ["@pypi//numpy:pkg"],
 )
 
 py_test(
@@ -262,5 +307,10 @@ py_test(
         ":operations",
         ":record",
         ":shared_memory_array",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+        "@pypi//jax:pkg",
+        "@pypi//numpy:pkg",
+        "@pypi//tensorflow:pkg",
     ],
 )

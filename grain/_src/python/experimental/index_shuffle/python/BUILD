@@ -1,3 +1,5 @@
+load("@rules_python//python:pip.bzl", "compile_pip_requirements")
+
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 
 package(default_visibility = ["//grain:__subpackages__"])
@@ -17,4 +19,5 @@ py_test(
     srcs = ["index_shuffle_test.py"],
     data = [":index_shuffle_module.so"],
     srcs_version = "PY3",
+    deps = ["@abseil-py//absl/testing:absltest"],
 )

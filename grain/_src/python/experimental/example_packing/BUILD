@@ -1,5 +1,7 @@
 # Experimental transformation for example packing in PyGrain.
 
+load("@rules_python//python:pip.bzl", "compile_pip_requirements")
+
 package(default_visibility = ["//grain:__subpackages__"])
 
 py_library(
@@ -9,6 +11,9 @@ py_library(
     deps = [
         "//grain/_src/core:tree_lib",
         "//grain/_src/python:record",
+        "@abseil-py//absl/logging",
+        "@pypi//jaxtyping:pkg",
+        "@pypi//numpy:pkg",
     ],
 )
 
@@ -20,5 +25,9 @@ py_test(
         ":packing",
         "//grain/_src/core:tree_lib",
         "//grain/_src/python:record",
+        "@abseil-py//absl/testing:absltest",
+        "@pypi//jax:pkg",
+        "@pypi//numpy:pkg",
+        "@pypi//tensorflow:pkg",
     ],
 )
