@@ -1,23 +1,28 @@
 """API to test checkpointing."""
 
+import itertools
+
 from grain._src.core import tree_lib
 from grain._src.python.dataset import dataset
 import numpy as np
 
 
-# TODO: Introduce `LimitIterDataset(ds, max_steps)` and modify this
-# test to use that.
 def assert_equal_output_after_checkpoint(
     ds: dataset.IterDataset,
-    max_steps: int = 5,
 ):
-  """Tests restoring an iterator to various checkpointed states.."""
+  """Tests restoring an iterator to various checkpointed states.
+
+  Args:
+    ds: The dataset to test.  It is recommended to use a small dataset,
+      potentially created using `grain.python.experimental.LimitIterDataset`, to
+      restrict the number of steps being tested.
+  """
 
   iterator = ds.__iter__()
   checkpoints = []
-  values = []
+  expected_values = []
   state_spec = None
-  for i in range(max_steps):
+  for i in itertools.count():
     current_state = iterator.get_state()
     if state_spec is None:
       state_spec = tree_lib.spec_like(current_state)
@@ -29,8 +34,14 @@ def assert_equal_output_after_checkpoint(
           f" Expected: {state_spec},"
           f" Actual: {tree_lib.spec_like(current_state)}",
       )
+    try:
+      value = next(iterator)
+    except StopIteration:
+      break
     checkpoints.append(current_state)
-    values.append(next(iterator))
+    expected_values.append(value)
+
+  assert expected_values, "Dataset did not produce any elements."
 
   # Restore the iterator at every state, and compare the values.
   for i, state in enumerate(checkpoints):
@@ -44,10 +55,10 @@ def assert_equal_output_after_checkpoint(
     )
 
     # Test the values at the current state.
-    new_values = [next(new_iterator) for _ in range(min(max_steps - i, 3))]
+    new_values = list(new_iterator)
     np.testing.assert_equal(
         new_values,
-        values[i : i + 3],
+        expected_values[i:],
         f"Restored values mismatch at step {i} for state {state}."
-        f" \nExpected: {values[i:i+3]}, \nActual: {new_values}",
+        f" \nExpected: {expected_values[i:]}, \nActual: {new_values}",
     )
