@@ -39,6 +39,7 @@ py_library(
         "//grain/_src/python/dataset:visualize",
         "//grain/_src/python/dataset/transformations:flatmap",
         "//grain/_src/python/dataset/transformations:interleave",
+        "//grain/_src/python/dataset/transformations:limit",
         "//grain/_src/python/dataset/transformations:packing",
         "//grain/_src/python/dataset/transformations:zip",
         "//grain/_src/python/experimental/example_packing:packing",

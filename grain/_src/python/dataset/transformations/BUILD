@@ -253,3 +253,23 @@ py_test(
         "@abseil-py//absl/testing:parameterized",
     ],
 )
+
+py_library(
+    name = "limit",
+    srcs = ["limit.py"],
+    srcs_version = "PY3",
+    deps = ["//grain/_src/python/dataset"],
+)
+
+py_test(
+    name = "limit_test",
+    srcs = ["limit_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":limit",
+        "//grain/_src/python/dataset",
+        "//grain/_src/python/testing:experimental",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+    ],
+)
