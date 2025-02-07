@@ -1228,18 +1228,18 @@ class WithOptionsIterDataset(IterDataset[T]):
 
   def __init__(self, parent: IterDataset[T], options: base.DatasetOptions):
     super().__init__(parent)
-    self._options = options
+    self.options = options
 
   def __iter__(self) -> DatasetIterator[T]:
     result = self._parent.__iter__()
     # The parent iterator options are merged from the entire subtree. Merge
     # them with the latest options and update the subtree options.
-    options = self._options.merge(result._ctx.dataset_options)
+    options = self.options.merge(result._ctx.dataset_options)
     result._ctx.dataset_options = options
     return result
 
   def __str__(self):
-    return f"WithOptionsIterDataset(options={self._options})"
+    return f"WithOptionsIterDataset(options={self.options})"
 
 
 _ConsistentDatasetType = TypeVar(

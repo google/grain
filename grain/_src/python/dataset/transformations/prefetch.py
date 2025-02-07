@@ -423,6 +423,17 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
       raise e
 
 
+def _get_dataset_options(ds: dataset.IterDataset) -> base.DatasetOptions:
+  result = base.DatasetOptions()
+  to_visit = [ds]
+  while to_visit:
+    parent = to_visit.pop()
+    if isinstance(parent, dataset.WithOptionsIterDataset):
+      result = result.merge(parent.options)
+    to_visit.extend(parent.parents)
+  return result
+
+
 class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   """Iterator that performs prefetching using a multiprocessing pool."""
 
@@ -433,6 +444,10 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   ):
     super().__init__()
     self._iter_parent = parent
+    # Since the parent iterator is going to be created in each subprocess, and
+    # the options are propagated during iterator creation, we need to manually
+    # propagate them.
+    self._ctx.dataset_options = _get_dataset_options(parent)
     self._multiprocessing_options = multiprocessing_options
     # The underlying iterator producing elements and workers state.
     self._iterator = None
@@ -526,10 +541,12 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   def _create_iterator_context(self) -> grain_pool.MultiProcessIterator[T]:
     """Creates a `MultiProcessIterator`."""
-
-    get_element_producer_fn = GetElementProducerFn(
-        self._state, self._iter_parent
+    # Apply the latest options to the subprocess dataset. We delay this until
+    # starting subprocesses because child iterators may update them.
+    ds = dataset.WithOptionsIterDataset(
+        self._iter_parent, self._ctx.dataset_options
     )
+    get_element_producer_fn = GetElementProducerFn(self._state, ds)
 
     return grain_pool.MultiProcessIterator(
         get_element_producer_fn,

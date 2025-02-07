@@ -606,6 +606,26 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
     for it in iters:
       _ = next(it)
 
+  def test_options_before_prefetch(self):
+    ds = dataset.MapDataset.source([1, 2, 3]).repeat(1000)
+    ds = ds.to_iter_dataset()
+    ds_options = base.DatasetOptions(filter_raise_threshold_ratio=0.1)
+    ds = dataset.WithOptionsIterDataset(ds, ds_options)
+    ds = ds.mp_prefetch(options.MultiprocessingOptions(num_workers=1))
+    ds = ds.filter(lambda x: x > 2)
+    with self.assertRaises(Exception):
+      list(ds)
+
+  def test_options_after_prefetch(self):
+    ds = dataset.MapDataset.source([1, 2, 3]).repeat(1000)
+    ds = ds.filter(lambda x: x > 2)
+    ds = ds.to_iter_dataset()
+    ds = ds.mp_prefetch(options.MultiprocessingOptions(num_workers=1))
+    ds_options = base.DatasetOptions(filter_raise_threshold_ratio=0.1)
+    ds = dataset.WithOptionsIterDataset(ds, ds_options)
+    with self.assertRaises(Exception):
+      list(ds)
+
 
 class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
 
