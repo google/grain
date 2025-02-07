@@ -11,13 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for GrainPool."""
 
 from collections.abc import Iterator
 import multiprocessing
 import os
 import signal
 import sys
+import threading
 from typing import Any
 
 from absl.testing import absltest
@@ -55,6 +55,7 @@ class GrainPoolTest(absltest.TestCase):
     with gp.GrainPool(
         ctx=mp.get_context("spawn"),
         get_element_producer_fn=get_element_producer_fn,
+        termination_event=threading.Event(),
         options=MultiprocessingOptions(num_workers=4, per_worker_buffer_size=1),
     ) as grain_pool:
       for element in grain_pool:
@@ -85,6 +86,7 @@ class GrainPoolTest(absltest.TestCase):
     with gp.GrainPool(
         ctx=ctx,
         get_element_producer_fn=get_element_producer_fn,
+        termination_event=threading.Event(),
         options=options,
     ) as grain_pool:
       for element in grain_pool:
@@ -118,6 +120,7 @@ class GrainPoolTest(absltest.TestCase):
     with gp.GrainPool(
         ctx=ctx,
         get_element_producer_fn=get_element_producer_fn,
+        termination_event=threading.Event(),
         options=options,
     ) as grain_pool:
       for element in grain_pool:
@@ -147,6 +150,7 @@ class GrainPoolTest(absltest.TestCase):
     with gp.GrainPool(
         ctx=ctx,
         get_element_producer_fn=get_element_producer_fn,
+        termination_event=threading.Event(),
         options=options,
     ) as grain_pool:
       child_pid = grain_pool.processes[0].pid
@@ -177,6 +181,7 @@ class GrainPoolTest(absltest.TestCase):
     grain_pool = gp.GrainPool(
         ctx=ctx,
         get_element_producer_fn=get_element_producer_fn,
+        termination_event=threading.Event(),
         options=options,
     )
 
