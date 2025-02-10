@@ -31,6 +31,7 @@ from grain._src.core import config as grain_config
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import tree_lib
 from grain._src.python.dataset import base
+from grain.python.stats import execution_summary_pb2
 
 from grain._src.core import monitoring
 
@@ -712,4 +713,20 @@ def make_stats(
     ),
 ) -> Stats:
   """Produces statistics instance according to the current execution mode."""
+  vis_output_dir = grain_config.config.py_dataset_visualization_output_dir
+  # Only None and "" are supported.
+  if vis_output_dir:
+    raise NotImplementedError(
+        "Saving the dataset graph to a file is not supported yet. Set"
+        " `grain_py_dataset_visualization_output_dir` to empty string to"
+        " produce visualization in the logs."
+    )
+  if grain_config.config.py_debug_mode:
+    # In debug mode, we always log the execution summary.
+    config = dataclasses.replace(config, log_summary=True)
+    return _ExecutionStats(config, parents=parents)
+  if execution_tracking_mode == base.ExecutionTrackingMode.STAGE_TIMING:
+    return _ExecutionStats(config, parents=parents)
+  if vis_output_dir is not None:
+    return _VisualizationStats(config, parents=parents)
   return _NoopStats(config, parents=parents)

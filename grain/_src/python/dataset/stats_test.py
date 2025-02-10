@@ -23,6 +23,7 @@ import cloudpickle
 from grain._src.core import transforms
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
+from grain.python.stats import execution_summary_pb2
 
 from absl.testing import absltest
 
@@ -100,7 +101,7 @@ _ITER_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
 "<class 'int'>[]"
 
   ││
-  ││  MapDatasetIterator(transform=<lambda> @ .../python/dataset/stats_test.py:525)
+  ││  MapDatasetIterator(transform=<lambda> @ .../python/dataset/stats_test.py:524)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -231,6 +232,348 @@ class NoopStatsTest(absltest.TestCase):
     s.report()
     s = s._parents[0]
     s.report()
+
+
+class DebugModeStatsTest(absltest.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    self.enter_context(flagsaver.flagsaver(grain_py_debug_mode=True))
+
+  @mock.patch.object(stats, "_REPORTING_PERIOD_SEC", 0.05)
+  def test_record_stats(self):
+    s = _make_stats_tree(stats.make_stats)
+    self.assertIsInstance(s, stats._ExecutionStats)
+    flat_stats = []
+    to_visit = [s]
+    while to_visit:
+      node = to_visit.pop(0)
+      flat_stats.append(node)
+      to_visit.extend(node._parents)
+
+    reported_self_times = collections.defaultdict(int)
+
+    def mock_report(node):
+      while node._self_times_buffer:
+        reported_self_times[id(node)] += node._self_times_buffer.pop()
+      for p in node._parents:
+        p.report()
+
+    for node in flat_stats:
+      node.report = functools.partial(mock_report, node)
+    for node in flat_stats:
+      with node.record_self_time(offset_ns=10**9):
+        time.sleep(0.5)
+    time.sleep(0.05)
+    self_times = list(reported_self_times.values())
+    self.assertLen(self_times, len(flat_stats))
+    for self_time in self_times:
+      self.assertGreaterEqual(self_time, 1.05 * 10**9)
+
+  @mock.patch.object(stats, "_REPORTING_PERIOD_SEC", 0.05)
+  def test_record_stats_thread_safe(self):
+    s = stats.make_stats(stats.StatsConfig(name="test_stats"), ())
+    reported_self_time = 0
+
+    def mock_report(node):
+      while node._self_times_buffer:
+        nonlocal reported_self_time
+        reported_self_time += node._self_times_buffer.pop()
+      for p in node._parents:
+        p.report()
+
+    s.report = functools.partial(mock_report, s)
+
+    def record_self_time():
+      with s.record_self_time():
+        # Sleep releases GIL, so this will actually execute concurrently.
+        time.sleep(1)
+
+    n_threads = 100
+    recording_threads = []
+    for _ in range(n_threads):
+      t = threading.Thread(target=record_self_time)
+      t.start()
+      recording_threads.append(t)
+    for t in recording_threads:
+      t.join()
+    time.sleep(0.05)
+    self.assertGreaterEqual(reported_self_time, n_threads)
+
+  def test_picklable(self):
+    s = stats.make_stats(stats.StatsConfig(name="test_stats"), ())
+    self.assertIsInstance(s, stats._ExecutionStats)
+    s = cloudpickle.loads(cloudpickle.dumps(s))
+    self.assertIsInstance(s, stats._ExecutionStats)
+    with s.record_self_time():
+      time.sleep(0.5)
+    s = cloudpickle.loads(cloudpickle.dumps(s))
+    self.assertIsInstance(s, stats._ExecutionStats)
+
+  def test_dataset_visualization(self):
+    ds = (
+        dataset.MapDataset.range(10)
+        .seed(42)
+        .shuffle()
+        .slice(slice(1, None, 3))
+        .map_with_index(_add_dummy_metadata)
+        .map(_identity)
+        .repeat(2)
+    )
+    # Visualization graph is constructed while iterating through pipeline.
+    _ = list(ds)
+    self.assertIsInstance(ds._stats, stats._ExecutionStats)
+    self.assertEqual(ds._stats._visualize_dataset_graph(), _MAP_DATASET_REPR)
+
+  def test_pretty_print_execution_summary(self):
+    dummy_summary = execution_summary_pb2.ExecutionSummary()
+    dummy_summary.nodes[0].CopyFrom(
+        execution_summary_pb2.ExecutionSummary.Node(
+            id=0,
+            name="MapDatasetIterator(transform=_MapFnFromPreprocessingBuilder(preprocessing_builder=NextTokenAsTargetTextPreprocessingBuilder))",
+            inputs=[1],
+            wait_time_ratio=0.5,
+            total_processing_time_ns=0,
+            min_processing_time_ns=400_000,
+            max_processing_time_ns=0,
+            num_produced_elements=0,
+            output_spec="<class 'int'>[]",
+        )
+    )
+    dummy_summary.nodes[1].CopyFrom(
+        execution_summary_pb2.ExecutionSummary.Node(
+            id=1,
+            name="PrefetchDatasetIterator",
+            inputs=[2],
+            wait_time_ratio=0.5,
+            total_processing_time_ns=400_000,
+            min_processing_time_ns=400,
+            max_processing_time_ns=40000,
+            num_produced_elements=10,
+            output_spec="<class 'int'>[]",
+            is_output=True,
+            is_prefetch=True,
+        )
+    )
+    dummy_summary.nodes[2].CopyFrom(
+        execution_summary_pb2.ExecutionSummary.Node(
+            id=2,
+            name="MapMapDataset",
+            inputs=[3, 4],
+            wait_time_ratio=0.375,
+            total_processing_time_ns=400_000_000,
+            min_processing_time_ns=4000,
+            max_processing_time_ns=40_000_000,
+            num_produced_elements=10,
+            output_spec="<class 'int'>[]",
+        )
+    )
+    dummy_summary.nodes[3].CopyFrom(
+        execution_summary_pb2.ExecutionSummary.Node(
+            id=3,
+            name="RangeMapDataset",
+            wait_time_ratio=0.125,
+            total_processing_time_ns=4000_000_000,
+            min_processing_time_ns=400_000,
+            max_processing_time_ns=400_000_000,
+            num_produced_elements=10,
+            inputs=[],
+            output_spec="<class 'int'>[]",
+        )
+    )
+    dummy_summary.nodes[4].CopyFrom(
+        execution_summary_pb2.ExecutionSummary.Node(
+            id=4,
+            name="RangeMapDataset",
+            total_processing_time_ns=0,
+            wait_time_ratio=0,
+            min_processing_time_ns=400_000,
+            max_processing_time_ns=0,
+            num_produced_elements=0,
+            inputs=[],
+            output_spec="<class 'int'>[]",
+        )
+    )
+
+    expected_result = """
+|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| id | name                           | inputs | percent wait time | total processing time | min processing time | max processing time | avg processing time | num produced elements |
+|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 4  | RangeMapDataset                | []     | 0.00%             | N/A                   | N/A                 | N/A                 | N/A                 | N/A                   |
+|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 3  | RangeMapDataset                | []     | 12.50%            | 4.00s                 | 400.00us            | 400.00ms            | 400.00ms            | 10                    |
+|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 2  | MapMapDataset                  | [3, 4] | 37.50%            | 400.00ms              | 4.00us              | 40.00ms             | 40.00ms             | 10                    |
+|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1  | PrefetchDatasetIterator        | [2]    | N/A               | 400.00us              | 400ns               | 40.00us             | 40.00us             | 10                    |
+|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 0  | MapDatasetIterator(transform=_ | [1]    | 50.00%            | N/A                   | N/A                 | N/A                 | N/A                 | N/A                   |
+|    | MapFnFromPreprocessingBuilder( |        |                   |                       |                     |                     |                     |                       |
+|    | preprocessing_builder=NextToke |        |                   |                       |                     |                     |                     |                       |
+|    | nAsTargetTextPreprocessingBuil |        |                   |                       |                     |                     |                     |                       |
+|    | der))                          |        |                   |                       |                     |                     |                     |                       |
+|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+"""
+    self.assertEqual(
+        expected_result,
+        "\n" + stats._pretty_format_summary(dummy_summary),
+    )
+
+  def test_compute_iterator_wait_time_ratio(self):
+    dummy_summary = execution_summary_pb2.ExecutionSummary()
+    dummy_summary.nodes[0].CopyFrom(
+        execution_summary_pb2.ExecutionSummary.Node(
+            id=0,
+            name="MapDatasetIterator",
+            inputs=[1],
+            total_processing_time_ns=4000_000_000,
+            min_processing_time_ns=400,
+            max_processing_time_ns=40000,
+            num_produced_elements=10,
+            output_spec="<class 'int'>[]",
+            is_output=True,
+        )
+    )
+    dummy_summary.nodes[1].CopyFrom(
+        execution_summary_pb2.ExecutionSummary.Node(
+            id=1,
+            name="PrefetchDatasetIterator",
+            inputs=[2],
+            total_processing_time_ns=4000_000_000,
+            min_processing_time_ns=4000,
+            max_processing_time_ns=40_000_000,
+            num_produced_elements=10,
+            output_spec="<class 'int'>[]",
+            is_prefetch=True,
+        )
+    )
+    dummy_summary.nodes[2].CopyFrom(
+        execution_summary_pb2.ExecutionSummary.Node(
+            id=2,
+            name="MapMapDataset",
+            inputs=[3],
+            total_processing_time_ns=1000_000_000,
+            min_processing_time_ns=400_000,
+            max_processing_time_ns=400_000_000,
+            num_produced_elements=10,
+            output_spec="<class 'int'>[]",
+        )
+    )
+    dummy_summary.nodes[3].CopyFrom(
+        execution_summary_pb2.ExecutionSummary.Node(
+            id=3,
+            name="RangeMapDataset",
+            total_processing_time_ns=3000_000_000,
+            min_processing_time_ns=400_000,
+            max_processing_time_ns=4000_000,
+            num_produced_elements=10,
+            inputs=[],
+            output_spec="<class 'int'>[]",
+        )
+    )
+    stats._populate_wait_time_ratio(dummy_summary)
+    self.assertEqual(dummy_summary.nodes[0].wait_time_ratio, 0.5)
+    self.assertEqual(dummy_summary.nodes[1].wait_time_ratio, 0)
+    self.assertEqual(dummy_summary.nodes[2].wait_time_ratio, 0.125)
+    self.assertEqual(dummy_summary.nodes[3].wait_time_ratio, 0.375)
+
+  @flagsaver.flagsaver(grain_py_dataset_visualization_output_dir="TEST_DIR")
+  def test_dataset_visualization_with_output_dir(self):
+    ds = (
+        dataset.MapDataset.range(10)
+        .shuffle(42)
+        .map_with_index(_add_dummy_metadata)
+        .map(_identity)
+    )
+    with self.assertRaisesRegex(
+        NotImplementedError,
+        "Saving the dataset graph to a file is not supported yet.",
+    ):
+      _ = list(ds)
+
+
+class GraphModeStatsTest(absltest.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    self.enter_context(
+        flagsaver.flagsaver(grain_py_dataset_visualization_output_dir="")
+    )
+
+  def test_visualize_map(self):
+    ds = (
+        dataset.MapDataset.range(10)
+        .seed(42)
+        .shuffle()
+        .slice(slice(1, None, 3))
+        .map_with_index(_add_dummy_metadata)
+        .map(_identity)
+        .repeat(2)
+    )
+    # Visualization graph is constructed while iterating through pipeline.
+    _ = list(ds)
+    self.assertIsInstance(ds._stats, stats._VisualizationStats)
+    self.assertEqual(ds._stats._visualize_dataset_graph(), _MAP_DATASET_REPR)
+
+  def test_visualize_iter(self):
+    ds = (
+        dataset.MapDataset.range(10)
+        .shuffle(42)
+        .to_iter_dataset()
+        .seed(42)
+        .map(lambda x: _add_dummy_metadata(2, x))
+        .batch(2)
+    )
+    # Visualization graph is constructed while iterating through pipeline.
+    it = ds.__iter__()
+    _ = list(it)
+    self.assertIsInstance(it._stats, stats._VisualizationStats)
+    self.assertEqual(it._stats._visualize_dataset_graph(), _ITER_DATASET_REPR)
+
+  def test_visualize_with_mix(self):
+    ds1 = dataset.MapDataset.range(10).shuffle(42)
+    ds2 = dataset.MapDataset.range(10).shuffle(43)
+    ds = dataset.MapDataset.mix([ds1, ds2]).map(_AddOne())
+    # Visualization graph is constructed while iterating through pipeline.
+    _ = list(ds)
+    self.assertIsInstance(ds._stats, stats._VisualizationStats)
+    self.assertEqual(ds._stats._visualize_dataset_graph(), _MIX_DATASET_REPR)
+
+  @flagsaver.flagsaver(grain_py_dataset_visualization_output_dir="TEST_DIR")
+  def test_dataset_visualization_with_output_dir(self):
+    ds = (
+        dataset.MapDataset.range(10)
+        .shuffle(42)
+        .map_with_index(_add_dummy_metadata)
+        .map(_identity)
+    )
+    with self.assertRaisesRegex(
+        NotImplementedError,
+        "Saving the dataset graph to a file is not supported yet.",
+    ):
+      _ = list(ds)
+
+  def test_picklable(self):
+    ds = (
+        dataset.MapDataset.range(10)
+        .seed(42)
+        .shuffle()
+        .slice(slice(1, None, 3))
+        .map_with_index(_add_dummy_metadata)
+        .map(_identity)
+        .repeat(2)
+    )
+    ds = cloudpickle.loads(cloudpickle.dumps(ds))
+    # Visualization graph is constructed while iterating through pipeline.
+    _ = list(ds)
+    self.assertIsInstance(ds._stats, stats._VisualizationStats)
+    self.assertEqual(ds._stats._visualize_dataset_graph(), _MAP_DATASET_REPR)
+
+  @flagsaver.flagsaver(grain_py_dataset_visualization_output_dir=None)
+  def test_dataset_visualization_with_output_dir_none(self):
+    s = stats.make_stats(stats.StatsConfig(name="test_stats"), ())
+    self.assertIsInstance(s, stats._NoopStats)
+
 
 if __name__ == "__main__":
   absltest.main()
