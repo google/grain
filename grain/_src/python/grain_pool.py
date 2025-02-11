@@ -61,7 +61,6 @@ from absl import logging
 import cloudpickle
 from grain._src.core import parallel
 from grain._src.core import tree_lib
-from grain._src.core.config import config
 import multiprocessing as mp
 from grain._src.python import grain_logging
 from grain._src.python import multiprocessing_common
@@ -154,35 +153,12 @@ class GetElementProducerFn(Protocol[T]):
 
     return obj
 
-def parse_debug_flags(debug_flags: dict[str, Any]):
-  """Parses debug flags."""
-  from absl import flags
-  flags.FLAGS["grain_py_debug_mode"].present = True
-  flags.FLAGS["grain_py_dataset_visualization_output_dir"].present = True
-  config.update("py_debug_mode", debug_flags["grain_py_debug_mode"])
-  config.update(
-      "py_dataset_visualization_output_dir",
-      debug_flags["grain_py_dataset_visualization_output_dir"],
-  )
-
 
 def _initialize_and_get_element_producer(
-    args_queue: queues.Queue,
-    *,
-    debug_flags: dict[str, Any],
-    worker_index: int,
-    worker_count: int,
+    args_queue: queues.Queue, *, worker_index: int, worker_count: int
 ) -> Iterator[Any]:
   """Unpickles the element producer from the args queue and closes the queue."""
-  (
-      serialized_flag_parse_fn,
-      serialized_init_fn,
-      serialized_element_producer_fn,
-  ) = args_queue.get()
-  flag_parse_fn: Callable[[Any], None] = cloudpickle.loads(
-      serialized_flag_parse_fn
-  )
-  flag_parse_fn(debug_flags)
+  serialized_init_fn, serialized_element_producer_fn = args_queue.get()
   init_fn: Callable[[], None] = cloudpickle.loads(serialized_init_fn)
   init_fn()
   element_producer_fn: GetElementProducerFn[Any] = (
@@ -206,7 +182,6 @@ def _worker_loop(
     worker_index: int,
     worker_count: int,
     enable_profiling: bool,
-    debug_flags: dict[str, Any],
 ):
   """Code to be run on each child process."""
   out_of_elements = False
@@ -217,10 +192,7 @@ def _worker_loop(
     )
     logging.info("Starting work.")
     element_producer = _initialize_and_get_element_producer(
-        args_queue,
-        debug_flags=debug_flags,
-        worker_index=worker_index,
-        worker_count=worker_count,
+        args_queue, worker_index=worker_index, worker_count=worker_count
     )
     profiling_enabled = enable_profiling and worker_index == 0
     if profiling_enabled:
@@ -351,24 +323,14 @@ class GrainPool(Iterator[T]):
           "worker_index": worker_index,
           "worker_count": options.num_workers,
           "enable_profiling": options.enable_profiling,
-          "debug_flags": {
-              "grain_py_debug_mode": config.py_debug_mode,
-              "grain_py_dataset_visualization_output_dir": (
-                  config.py_dataset_visualization_output_dir
-              ),
-          },
       }
       # The process kwargs must all be pickable and will be unpickle before
       # absl.app.run() is called. We send arguments via a queue to ensure that
       # they are unpickled after absl.app.run() was called in the child
       # processes.
       worker_init_fn = lambda: None
-      parse_debug_flags_fn = parse_debug_flags
       worker_init_fn = cloudpickle.dumps(worker_init_fn)
-      parse_debug_flags_fn = cloudpickle.dumps(parse_debug_flags_fn)
-      worker_args_queue.put(
-          (parse_debug_flags_fn, worker_init_fn, get_element_producer_fn)
-      )
+      worker_args_queue.put((worker_init_fn, get_element_producer_fn))
       process = ctx.Process(  # pytype: disable=attribute-error  # re-none
           target=_worker_loop, kwargs=process_kwargs, daemon=True
       )

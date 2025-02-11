@@ -16,7 +16,6 @@ py_library(
         "python/experimental.py",
         "python/fast_proto.py",
     ],
-    data = ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
     srcs_version = "PY3",
     # Implicit build flag
     visibility = ["//visibility:public"],
@@ -45,6 +44,5 @@ py_library(
         "//grain/_src/python/dataset/transformations:zip",
         "//grain/_src/python/experimental/example_packing:packing",
         "//grain/_src/python/testing:experimental",
-        "//grain/python/stats:execution_summary_py_pb2",
     ],
 )

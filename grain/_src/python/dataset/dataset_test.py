@@ -31,7 +31,6 @@ from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
 import grain._src.python.testing.experimental as test_util
-from grain.python.stats import execution_summary_pb2
 import numpy as np
 from typing_extensions import override
 
@@ -906,55 +905,6 @@ class WithOptionsIterDatasetTest(parameterized.TestCase):
             filter_raise_threshold_ratio=0.4,
         ),
     )
-
-
-class GetExecutionSummaryTest(parameterized.TestCase):
-
-  def test_get_execution_summary_without_collection(self):
-    ds = dataset.MapDataset.range(10).shuffle(42)
-    ds = ds.to_iter_dataset()
-    it = ds.__iter__()
-    with self.assertRaisesRegex(
-        ValueError,
-        "Set `grain_py_debug_mode` or set `execution_tracking_mode` in grain"
-        " options to `STAGE_TIMING` to enable execution statistics collection.",
-    ):
-      dataset.get_execution_summary(it)
-
-  @mock.patch.object(dataset_stats, "_REPORTING_PERIOD_SEC", 0.05)
-  @mock.patch.object(dataset_stats, "_LOG_EXECUTION_SUMMARY_PERIOD_SEC", 0.06)
-  @flagsaver.flagsaver(grain_py_debug_mode=True)
-  def test_execution_summary_with_logging(self):
-    with self.assertLogs(level="INFO") as logs:
-      ds = dataset.MapDataset.range(10).shuffle(42)
-      ds = ds.map(MapTransformAddingOne())
-      ds = ds.to_iter_dataset()
-      it = ds.__iter__()
-      # Get execution summary after iterating through the dataset.
-      _ = list(it)
-      # reporting stats after 0.05 seconds.
-      time.sleep(0.1)
-    log_value = "Grain Dataset Execution Summary"
-    self.assertRegex("".join(logs.output), log_value)
-
-  @mock.patch.object(dataset_stats, "_REPORTING_PERIOD_SEC", 0.05)
-  @mock.patch.object(dataset_stats, "_LOG_EXECUTION_SUMMARY_PERIOD_SEC", 0.06)
-  def test_execution_summary_with_no_logging(self):
-    with self.assertNoLogs(level="INFO"):
-      ds = dataset.MapDataset.range(10).shuffle(42)
-      ds = ds.map(MapTransformAddingOne())
-      ds = ds.to_iter_dataset()
-      ds = dataset.WithOptionsIterDataset(
-          ds,
-          base.DatasetOptions(
-              execution_tracking_mode=base.ExecutionTrackingMode.STAGE_TIMING
-          ),
-      )
-      it = ds.__iter__()
-      # Get execution summary after iterating through the dataset.
-      _ = list(it)
-      # reporting stats after 0.05 seconds.
-      time.sleep(0.1)
 
 
 if __name__ == "__main__":

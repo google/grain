@@ -58,7 +58,6 @@ from grain._src.core import usage_logging
 from grain._src.python import options as grain_options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import stats as dataset_stats
-from grain.python.stats import execution_summary_pb2
 import numpy as np
 
 from grain._src.core import monitoring
@@ -1288,18 +1287,3 @@ def apply_transformations(
             f"Transformation type: {transformation} is not supported."
         )
   return ds
-
-
-def get_execution_summary(
-    ds: DatasetIterator,
-) -> execution_summary_pb2.ExecutionSummary:
-  """Returns the execution summary for the dataset."""
-  # pylint: disable=protected-access
-  execution_stats = ds._stats
-  if not isinstance(execution_stats, dataset_stats._ExecutionStats):
-    raise ValueError(
-        "Set `grain_py_debug_mode` or set `execution_tracking_mode` in grain"
-        " options to `STAGE_TIMING` to enable execution statistics collection."
-    )
-  return execution_stats._get_execution_summary()
-  # pylint: enable=protected-access
