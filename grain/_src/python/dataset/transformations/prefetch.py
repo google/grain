@@ -180,7 +180,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
       self._threshold_checker.check(return_element)
       if return_element:
         with self._stats.record_self_time(offset_ns=timer.value()):
-          return element
+          return self._stats.record_output_spec(element)
     raise StopIteration
 
   def get_state(self):
