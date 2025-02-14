@@ -113,6 +113,21 @@ class _Dataset:
     seed_sequence = np.random.SeedSequence(aggregated_seed)
     return seed_sequence.generate_state(1, dtype=np.uint32)[0]
 
+  # TODO: Define a more precise type signature for this method,
+  # once pytype supports Concatenate and ParamSpec.
+  def pipe(self, func: Callable[..., T], /, *args, **kwargs) -> T:
+    """Syntactic sugar for applying a callable to this dataset.
+
+    Args:
+      func: The callable to apply to this dataset.
+      *args: Additional positional arguments to pass to the callable.
+      **kwargs: Keyword arguments to pass to the callable.
+
+    Returns:
+      The result of calling `func(self, *args, **kwargs)`.
+    """
+    return func(self, *args, **kwargs)
+
 
 class _MapDatasetMeta(abc.ABCMeta):
   """Metaclass for `MapDataset` containing factory transfromations."""

@@ -763,6 +763,11 @@ class DatasetTest(parameterized.TestCase):
     ds = ds.to_iter_dataset()
     test_util.assert_equal_output_after_checkpoint(ds)
 
+  def test_pipe(self):
+    ds = dataset.MapDataset.range(10)
+    outputs = ds.pipe(lambda self, *args, **kwargs: (args, kwargs), 1, 2, x=3)
+    self.assertEqual(outputs, ((1, 2), {"x": 3}))
+
 
 class TfRandomMapAlwaysAddingOne(transforms.TfRandomMapTransform):
 
