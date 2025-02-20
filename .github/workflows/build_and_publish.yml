@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
-        os: [ubuntu-20.04, ubuntu-22.04-arm, macos-13, macos-14]
+        os: [ubuntu-20.04, ubuntu-22.04-arm, macos-14]
 
     steps:
       - uses: "actions/checkout@v3"
@@ -39,7 +39,7 @@ jobs:
           . "${SOURCE_DIR}"'/grain/oss/runner_common.sh'
           build_and_test_grain
       - name: Upload Grain artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: built-grain-wheels-${{ matrix.os }}-${{ matrix.python-version }}
           path: /tmp/grain/all_dist/**/*.whl
