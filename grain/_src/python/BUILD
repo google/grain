@@ -297,7 +297,9 @@ py_library(
     name = "shared_memory_array",
     srcs = ["shared_memory_array.py"],
     srcs_version = "PY3",
-    deps = ["@pypi//numpy:pkg"],
+    deps = [
+        "@pypi//numpy:pkg",
+    ],
 )
 
 py_test(
