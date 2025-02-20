@@ -207,11 +207,11 @@ class TimerTest(absltest.TestCase):
     self.assertEqual(timer.value(), 0)
 
 
-class NoopStatsTest(absltest.TestCase):
+class DefaultStatsTest(absltest.TestCase):
 
-  def test_assert_is_noop(self):
+  def test_assert_is_default(self):
     s = _make_stats_tree(stats.make_stats)
-    self.assertIsInstance(s, stats._NoopStats)
+    self.assertIsInstance(s, stats._DefaultStats)
 
   def test_record_self_time(self):
     s = _make_stats_tree(stats.make_stats)
@@ -572,7 +572,7 @@ class GraphModeStatsTest(absltest.TestCase):
   @flagsaver.flagsaver(grain_py_dataset_visualization_output_dir=None)
   def test_dataset_visualization_with_output_dir_none(self):
     s = stats.make_stats(stats.StatsConfig(name="test_stats"), ())
-    self.assertIsInstance(s, stats._NoopStats)
+    self.assertIsInstance(s, stats._DefaultStats)
 
 
 if __name__ == "__main__":

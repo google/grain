@@ -515,7 +515,7 @@ def _running_in_colab() -> bool:
   return "google.colab" in sys.modules
 
 
-class _NoopStats(Stats):
+class _DefaultStats(Stats):
   """Default implementation for statistics collection that does nothing."""
 
   @contextlib.contextmanager
@@ -729,4 +729,4 @@ def make_stats(
     return _ExecutionStats(config, parents=parents)
   if vis_output_dir is not None:
     return _VisualizationStats(config, parents=parents)
-  return _NoopStats(config, parents=parents)
+  return _DefaultStats(config, parents=parents)
