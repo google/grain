@@ -273,13 +273,14 @@ _LAST_WORKER_INDEX = "last_worker_index"
 _RECORD_STATE_INTERVAL_S = 3
 
 
-def _copy_leaf_to_shm(leaf: Any) -> Any:
-  """Copies `leaf` to shared memory if it's a numpy array."""
+def _copy_leaf_to_shm(leaf: Any, min_size: int = 0) -> Any:
+  """Copies `leaf` to shared memory if it's a big enough numpy array."""
   if (
       not isinstance(leaf, np.ndarray)
       or leaf.dtype.hasobject
       or not leaf.flags.c_contiguous
       or math.prod(leaf.shape) == 0
+      or leaf.nbytes < min_size
   ):
     return leaf
 
@@ -290,9 +291,11 @@ def _copy_leaf_to_shm(leaf: Any) -> Any:
   return shared_memory_arr.metadata
 
 
-def _copy_struct_to_shm(struct: Any) -> Any:
+def _copy_struct_to_shm(struct: Any, min_size: int = 0) -> Any:
   """Copies leaf ndarrays of the structure to shared memory."""
-  return tree_lib.map_structure(_copy_leaf_to_shm, struct)
+  return tree_lib.map_structure(
+      functools.partial(_copy_leaf_to_shm, min_size=min_size), struct
+  )
 
 
 def _open_leaf_from_shm(leaf: Any) -> Any:
@@ -386,6 +389,7 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
     it._ctx.mp_context = base.MultiprocessingContext(
         process_index=worker_index, process_count=worker_count
     )
+    min_shm_size = it._ctx.dataset_options.min_shm_size
     # Recover from the last recorded state for the given worker.
     worker_state = self._state[_WORKERS_STATE][str(worker_index)]
     if worker_state is not None:
@@ -396,7 +400,7 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
     last_recorded_state_time = time.time()
     for element in it:
       now = time.time()
-      element = _copy_struct_to_shm(element)
+      element = _copy_struct_to_shm(element, min_size=min_shm_size)
       if now - last_recorded_state_time >= _RECORD_STATE_INTERVAL_S:
         last_recorded_state_time = now
         yield (element, it.get_state())  # pytype: disable=attribute-error

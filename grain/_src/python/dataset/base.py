@@ -101,6 +101,9 @@ class DatasetOptions:
       etc. can be managed through various modes. If `DISABLED`, no statistics
       are collected.If `STAGE_TIMING`, the time it takes to process each
       transormation is collected. See `ExecutionTrackingMode` for more details.
+    min_shm_size: The minimum size below which numpy arrays will copied between
+      processes rather than passed via shared memory. For smaller arrays, the
+      overhead of using shared memory can be higher than the cost of copying.
   """
 
   filter_warn_threshold_ratio: float | None | _Default[float] = _Default(0.9)
@@ -108,6 +111,7 @@ class DatasetOptions:
   execution_tracking_mode: (
       ExecutionTrackingMode | _Default[ExecutionTrackingMode]
   ) = _Default(ExecutionTrackingMode.DISABLED)
+  min_shm_size: int | _Default[int] = _Default(0)
 
   # Internal fields.
 
