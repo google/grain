@@ -551,16 +551,31 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
     if not start_prefetch_calls:
       self.assertGreater(time_to_fetch, 1)
 
-  @parameterized.parameters(0, 0.5, 30)
-  def test_prefetch_but_no_read(self, sleep_s):
-    ds = dataset.MapDataset.source([1, 2, 3]).repeat()
-    ds = ds.filter(lambda x: x > 3)
-    ds = ds.to_iter_dataset()
-    ds = ds.mp_prefetch()
-    it = ds.__iter__()
+  def test_prefetch_but_no_read(self):
+    class _SleepTransform(transforms.MapTransform):
+
+      def map(self, features):
+        time.sleep(1)
+        return features
+
+    ds = dataset.MapDataset.range(10)
+    ds = ds.map(_SleepTransform())
+    ds = prefetch.PrefetchIterDataset(ds, read_options=options.ReadOptions())
+    ds = prefetch.MultiprocessPrefetchIterDataset(
+        ds,
+        options.MultiprocessingOptions(
+            num_workers=3, per_worker_buffer_size=20
+        ),
+    )
+
+    # Makes sure the iterator cleans up gracefully if it is prefetched but no
+    # elements are read.
+    it = iter(ds)
+    assert isinstance(it, prefetch.MultiprocessPrefetchDatasetIterator)
     it.start_prefetch()
-    time.sleep(sleep_s)
-    del it
+    # Waits for the processes to actually read some elements and put them into
+    # buffers.
+    time.sleep(30)
 
   def test_prefetch_with_random_map(self):
     ds = dataset.MapDataset.source([0]).repeat(100).to_iter_dataset()
