@@ -12,8 +12,6 @@ py_library(
         "//grain/_src/core:tree_lib",
         "//grain/_src/python:record",
         "@abseil-py//absl/logging",
-        "@pypi//jax:pkg",
-        "@pypi//jaxtyping:pkg",
         "@pypi//numpy:pkg",
     ],
 )
