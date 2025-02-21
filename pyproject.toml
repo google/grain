@@ -16,7 +16,6 @@ dependencies = [
     'cloudpickle',
     'dm-tree',
     'etils[epath,epy]',
-    'jaxtyping',
     'more-itertools>=9.1.0',
     'numpy',
 ]
@@ -35,6 +34,7 @@ testing = [
     'dill',
     'jax',
     'jaxlib',
+    'jaxtyping',
     'tensorflow',
     'tensorflow-datasets',
 ]

@@ -31,10 +31,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 import copy
 import dataclasses
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from grain._src.core import tree_lib
-import jaxtyping as jt
 import numpy as np
 
 
@@ -98,9 +97,9 @@ class PackedBatch(Generic[_T]):
 
   def __init__(
       self,
-      element_for_shapes: jt.PyTree[np.ndarray],
+      element_for_shapes: Any,  # PyTree[np.ndarray]
       num_packing_bins: int,
-      length_struct: jt.PyTree[int],
+      length_struct: Any,  # PyTree[int]
       meta_features: Sequence[str] = (),
   ):
     self._num_packing_bins = num_packing_bins
@@ -170,10 +169,10 @@ class PackedBatch(Generic[_T]):
   @classmethod
   def can_add_at_row(
       cls,
-      element_feature_lengths: jt.PyTree[int],
+      element_feature_lengths: Any,  # PyTree[int]
       num_packing_bins: int,
-      length_struct: jt.PyTree[int],
-      first_free_cell_per_row: jt.PyTree[int],
+      length_struct: Any,  # PyTree[int]
+      first_free_cell_per_row: Any,  # PyTree[int]
   ) -> SuccessfulRowOrFailingComponents:
     """Checks whether the element can be added in any of the rows.
 
@@ -248,7 +247,9 @@ class PackedBatch(Generic[_T]):
     )
 
   def add_element_to_batch(
-      self, element: jt.PyTree[np.ndarray], row: int
+      self,
+      element: Any,  # PyTree[np.ndarray]
+      row: int,
   ) -> None:
     """Adds element to current batch at the specified row."""
     # Apply updates to each feature.

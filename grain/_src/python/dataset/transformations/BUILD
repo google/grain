@@ -147,10 +147,8 @@ py_library(
         ":packing_packed_batch",
         "//grain/_src/python/dataset",
         "//grain/_src/python/dataset:stats",
-        "@pypi//jax:pkg",
-        "@pypi//jaxtyping:pkg",
-        "@pypi//numpy:pkg",
         "@pypi//dm_tree:pkg",
+        "@pypi//numpy:pkg",
     ],
 )
 
@@ -159,13 +157,8 @@ py_test(
     srcs = ["packing_test.py"],
     srcs_version = "PY3",
     deps = [
-        ":packing",
         ":testing_util",
-        "//grain/_src/python/dataset",
         "@abseil-py//absl/testing:absltest",
-        "@abseil-py//absl/testing:parameterized",
-        "@pypi//dm_tree:pkg",
-        "@pypi//numpy:pkg",
     ],
 )
 
@@ -175,8 +168,6 @@ py_library(
     srcs_version = "PY3",
     deps = [
         "//grain/_src/core:tree_lib",
-        "@pypi//dm_tree:pkg",
-        "@pypi//jaxtyping:pkg",
         "@pypi//numpy:pkg",
     ],
 )
