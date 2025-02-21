@@ -323,7 +323,9 @@ jaxlib==0.5.0 \
     --hash=sha256:7d9b17a7ea19355d45ecdb2ff0db5d707a86f0c5a862d94b89b4568d6c45311a \
     --hash=sha256:ed18ea7161d03aa8fd4d1b55494882f21420efdfea68e5f298c4aebcf2ac3f34 \
     --hash=sha256:f980c733e98c998a8da87c9a8cc61b6726d0be667a58bd664c1d717b4b4eae75
-    # via jax
+    # via
+    #   -r test_requirements.in
+    #   jax
 jaxtyping==0.2.37 \
     --hash=sha256:519f694ce569ba5000a1f8823e742df2d86e6da3956d2218769b6bdc5ad2d23a \
     --hash=sha256:ae8c124abbea61b8c56455fb8b42f1183ab63353572aedfb1de355bb5b40e951
