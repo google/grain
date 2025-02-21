@@ -21,8 +21,8 @@ absl-py
 dm-tree
 etils[epath,epy]
 cloudpickle
-jax
-jaxtyping
+jax>0.4.36
+jaxtyping>0.4.36
 numpy<2.0
 attrs
 tensorflow==2.18.0
