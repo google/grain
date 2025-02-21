@@ -22,6 +22,7 @@ dm-tree
 etils[epath,epy]
 cloudpickle
 jax>0.4.36
+jaxlib>0.4.36
 jaxtyping
 numpy<2.0
 attrs
