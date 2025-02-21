@@ -47,13 +47,6 @@ RUN --mount=type=cache,target=/root/.cache \
 
 # Install dependencies needed for grain tests
 RUN --mount=type=cache,target=/root/.cache \
-  $PYTHON_BIN -m pip install -U \
-    attrs \
-    auditwheel \
-    dill \
-    jax \
-    jaxlib \
-    tensorflow \
-    tensorflow-datasets;
+  $PYTHON_BIN -m pip install -r "$SOURCE_DIR"'/test_requirements.in'
 
 WORKDIR "/tmp/grain"
