@@ -15,12 +15,11 @@ can't be added, we construct a new batch to which the element is added.
 """
 
 import dataclasses
-from typing import Generic, Iterator, TypeVar, Union, cast
+from typing import Any, Generic, Iterator, TypeVar, Union, cast
 
 from absl import logging
 from grain._src.core import tree_lib
 from grain._src.python import record
-import jaxtyping as jt
 import numpy as np
 
 _T = TypeVar("_T")
@@ -31,9 +30,9 @@ class _PackedBatch:
 
   def __init__(
       self,
-      element_for_shapes: jt.PyTree[np.ndarray],
+      element_for_shapes: Any,  # PyTree[np.ndarray]
       batch_size: int,
-      length_struct: jt.PyTree[int],
+      length_struct: Any,  # PyTree[int]
   ):
     self._batch_size = batch_size
     self._length_struct = length_struct
@@ -80,7 +79,10 @@ class _PackedBatch:
         data=(self._batch, self._segmentations, self._positions),
     )
 
-  def _can_add_at_row(self, element: jt.PyTree[np.ndarray]) -> int:
+  def _can_add_at_row(
+      self,
+      element: Any,  # PyTree[np.ndarray]
+  ) -> int:
     """Returns the index of the first row which fits element, or -1 if none."""
     element_feature_lengths = tree_lib.map_structure(len, element)
 
@@ -117,7 +119,9 @@ class _PackedBatch:
     return -1
 
   def add_element_to_batch(
-      self, element: jt.PyTree[np.ndarray], row: int
+      self,
+      element: Any,  # PyTree[np.ndarray]
+      row: int,
   ) -> None:
     """Adds element to current batch at the specified row."""
     # Apply updates to each feature.
@@ -187,7 +191,7 @@ class PackAndBatchOperation(Generic[_T]):
       embeddings.
   """
 
-  length_struct: jt.PyTree[int]
+  length_struct: Any  # PyTree[int]
   batch_size: int
   # We don't know input shapes and corresponding buffer shapes until __call__.
   _cur_batch: Union[_PackedBatch, None] = None
