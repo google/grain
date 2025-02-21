@@ -21,8 +21,8 @@ absl-py
 dm-tree
 etils[epath,epy]
 cloudpickle
+jaxlib>=0.5.0
 jax>0.4.36
-jaxlib>0.4.36
 jaxtyping
 numpy<2.0
 attrs
