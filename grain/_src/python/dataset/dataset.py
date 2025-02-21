@@ -113,6 +113,61 @@ class _Dataset:
     seed_sequence = np.random.SeedSequence(aggregated_seed)
     return seed_sequence.generate_state(1, dtype=np.uint32)[0]
 
+  # TODO: Define a more precise type signature for this method,
+  # once pytype fully supports Concatenate and ParamSpec
+  # (b/217789659, https://github.com/google/pytype/issues/786):
+  # P = ParamSpec("P")
+  # def pipe(
+  #     self,
+  #     func: Callable[Concatenate[Self, P], T],
+  #     /,
+  #     *args: P.args,
+  #     **kwargs: P.kwargs,
+  # ) -> T:
+  def pipe(self, func: Callable[..., T], /, *args, **kwargs) -> T:
+    """Syntactic sugar for applying a callable to this dataset.
+
+    The `pipe` method, borrowed from `pandas.DataFrame`, is convenient because
+    it allows for using method chaining syntax in an extensible fashion, with
+    transformations that are not built-in methods on `Dataset`.
+
+    For example, suppose you want to shuffle a dataset within a window.
+    Functionality for this is available in `WindowShuffleMapDataset`, but not as
+    a method on `MapDataset`, e.g.,
+    ```
+    dataset = (
+        grain.experimental.WindowShuffleMapDataset(
+            grain.MapDataset.range(1000),
+            window_size=128,
+            seed=0,
+        )
+        .batch(16)
+    )
+
+    This solution suffers from readability, because the shuffle transformation
+    appears out of order from the data flow.
+
+    In contrast, with `pipe` you can write:
+    ```
+    dataset = (
+        grain.MapDataset.range(1000)
+        .pipe(
+            grain.experimental.WindowShuffleMapDataset, window_size=128, seed=0
+        )
+        .batch(16)
+    )
+    ```
+
+    Args:
+      func: The callable to apply to this dataset.
+      *args: Additional positional arguments to pass to the callable.
+      **kwargs: Keyword arguments to pass to the callable.
+
+    Returns:
+      The result of calling `func(self, *args, **kwargs)`.
+    """
+    return func(self, *args, **kwargs)
+
 
 class _MapDatasetMeta(abc.ABCMeta):
   """Metaclass for `MapDataset` containing factory transfromations."""
