@@ -13,6 +13,7 @@ py_library(
         "//grain/_src/python:record",
         "@abseil-py//absl/logging",
         "@pypi//jaxtyping:pkg",
+        "@pypi//jax:pkg",
         "@pypi//numpy:pkg",
     ],
 )
