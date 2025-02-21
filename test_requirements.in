@@ -22,7 +22,7 @@ dm-tree
 etils[epath,epy]
 cloudpickle
 jax>0.4.36
-jaxtyping>0.4.36
+jaxtyping
 numpy<2.0
 attrs
 tensorflow==2.18.0
