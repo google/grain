@@ -227,6 +227,51 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
         num_packing_bins=3,
     )
 
+  def test_missing_length_struct_feature(self):
+    input_elements = [
+        {
+            "a": np.asarray([1, 2, 3]),
+            # This feature is not in the length struct so it should be ignored.
+            "b": np.asarray([1, 2, 3]),
+        },
+    ]
+    length_struct = {"a": 3}
+
+    ld = packing.FirstFitPackIterDataset(
+        source.SourceMapDataset(input_elements).to_iter_dataset(),
+        num_packing_bins=1,
+        length_struct=length_struct,
+        **self.kwargs,
+    )
+    result = next(iter(ld))
+    np.testing.assert_array_equal(result["a"], np.asarray([1, 2, 3]))
+    np.testing.assert_array_equal(
+        result["a_segment_ids"], np.asarray([1, 1, 1])
+    )
+    np.testing.assert_array_equal(result["a_positions"], np.asarray([0, 1, 2]))
+
+  def test_variable_key_features(self):
+    input_elements = [
+        {
+            "a": np.asarray([1, 2, 3]),
+            "b": np.asarray([1, 2, 3]),
+        },
+        # This element is missing the "b" feature, so we should raise an error.
+        {
+            "a": np.asarray([1, 2, 3]),
+        },
+    ]
+
+    length_struct = {"a": 3, "b": 3}
+    ld = packing.FirstFitPackIterDataset(
+        source.SourceMapDataset(input_elements).to_iter_dataset(),
+        num_packing_bins=1,
+        length_struct=length_struct,
+        **self.kwargs,
+    )
+    with self.assertRaisesRegex(Exception, "'b'"):
+      next(iter(ld))
+
   @parameterized.parameters(
       {"num_packing_bins": 3},
       {"num_packing_bins": 5},
