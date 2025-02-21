@@ -9,9 +9,10 @@ py_library(
     srcs = ["packing.py"],
     srcs_version = "PY3",
     deps = [
+        "@abseil-py//absl/logging",
         "//grain/_src/core:tree_lib",
         "//grain/_src/python:record",
-        "@abseil-py//absl/logging",
+        "@pypi//jax:pkg",
         "@pypi//jaxtyping:pkg",
         "@pypi//numpy:pkg",
     ],
