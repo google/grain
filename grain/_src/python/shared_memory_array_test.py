@@ -24,6 +24,7 @@ from grain._src.python.operations import BatchOperation
 from grain._src.python.shared_memory_array import SharedMemoryArray
 from grain._src.python.shared_memory_array import SharedMemoryArrayMetadata
 import jax
+print("ANOOSHABDEUG:",jax.__version__)
 import numpy as np
 import tensorflow as tf
 
