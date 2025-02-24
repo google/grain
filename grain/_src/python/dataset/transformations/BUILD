@@ -287,6 +287,7 @@ py_test(
         "//grain/_src/python/testing:experimental",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
+        "@pypi//dm_tree:pkg",
         "@pypi//numpy:pkg",
     ],
 )

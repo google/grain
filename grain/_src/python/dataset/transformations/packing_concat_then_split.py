@@ -68,7 +68,7 @@ from collections.abc import Collection, Mapping, Sequence
 import dataclasses
 import datetime
 import enum
-from typing import Any
+from typing import Any, TypedDict
 
 from absl import logging
 from grain._src.core import exceptions
@@ -101,6 +101,7 @@ class _CtsConfig:
   bos_handling: BOSHandling
   bos_features: Collection[str]
   bos_token_id: int | None
+  pack_structure: bool
 
   def __post_init__(self):
     if self.bos_handling == BOSHandling.DO_NOTHING and (
@@ -153,11 +154,18 @@ class _CtsElement:
     features: Features as returned by calling __next__() on the parent iterator.
     slices: If set then maps the feature name to the `slice` object for the
       split features.
+    index: The index of the element in the parent iterator. This is a valuable
+      information when packing lengths only. This allows to reconstruct the
+      packed elements if the parent is a MapDataset.
+    pack_structure: Whether to pack metadata features. See
+      ConcatThenSplitIterDataset for more details.
   """
 
   parent_state: dict[str, Any]
   features: Mapping[str, Any]
   slices: Mapping[str, tuple[int, int]]
+  index: int
+  pack_structure: bool
 
   def split(
       self, split_points: Mapping[str, int]
@@ -173,15 +181,14 @@ class _CtsElement:
       if sl != _EMPTY_SLICE:
         start, stop = sl
       else:
-        feature = self.features[key]
-        start, stop = 0, (1 if np.ndim(feature) == 0 else len(feature))
+        start, stop = 0, self.get_sliced_feature_length(key)
       left_slices[key] = (start, p)
       right_slices[key] = (p, stop)
     left = dataclasses.replace(self, slices=left_slices)
     right = dataclasses.replace(self, slices=right_slices)
     return left, right
 
-  def get_sliced_features(self, key: str) -> Mapping[str, Any]:
+  def get_sliced_feature(self, key: str) -> Any:
     feature = self.features[key]
     if np.ndim(feature) != 0 and key in self.slices:
       sl = self.slices[key]
@@ -189,6 +196,24 @@ class _CtsElement:
         start, stop = self.slices[key]
         return feature[start:stop]
     return feature
+
+  def get_sliced_feature_length(self, key: str) -> int:
+    """Retrieves the length for the sliced feature `key`."""
+    if self.slices:
+      sl = self.slices.get(key)
+      if sl and sl != _EMPTY_SLICE:
+        start, stop = sl
+        return stop - start
+    if self.pack_structure:
+      sequence_length = self.features[key]
+      if not isinstance(sequence_length, int):
+        raise ValueError(
+            "When packing metadata, the input should be a Mapping[str, int]."
+            f" Got {type(sequence_length)} for feature '{key}'."
+        )
+      return sequence_length
+    feature = self.get_sliced_feature(key)
+    return 1 if np.ndim(feature) == 0 else len(feature)
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -204,19 +229,34 @@ class _CtsState:
       slices may contain the whole element or only an actual slice of it.
     elements_from_buffer_after_checkpoint: Number of elements from the buffer
       that were returned after the last checkpoint.
+    current_index: The index of the current element in the parent iterator.
   """  # fmt: skip
 
   parent_state: dict[str, Any]
   remainder_slices: Mapping[str, tuple[int, int]]
   elements_from_buffer_after_checkpoint: int
+  current_index: int
 
-  @property
-  def has_remainder(self) -> bool:
-    """Whether there is a remainder element."""
-    for sl in self.remainder_slices.values():
-      if sl != _EMPTY_SLICE:
-        return True
-    return False
+
+def _has_remainder(slices: Mapping[str, tuple[int, int]]) -> bool:
+  """Whether there is a remainder element."""
+  for sl in slices.values():
+    if sl != _EMPTY_SLICE:
+      return True
+  return False
+
+
+class _CtsPackedStructure(TypedDict):
+  """Metadata about the structure of the packed elements (pack_structure=True).
+
+  Attributes:
+    index: The index of the element in the parent iterator.
+    slices: If set then maps the feature name to the `slice` object describing
+      the slice of the feature to include in the current pack.
+  """
+
+  index: int
+  slices: Mapping[str, tuple[int, int]] | None
 
 
 class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
@@ -252,6 +292,7 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
     # Potential element that is not yet packed.
     self._remainder_element: _CtsElement | None = None
 
+    self._current_index = -1
     self._stop_iteration = False
     self._state = self._checkpoint()
 
@@ -265,8 +306,7 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
   def _is_fully_packed(self, element: _CtsElement) -> bool:
     """Returns True if at least one features has its target sequence length."""
     for key, target_sequence_length in self._config.length_struct.items():
-      feature = element.get_sliced_features(key)
-      sequence_length = 1 if np.ndim(feature) == 0 else len(feature)
+      sequence_length = element.get_sliced_feature_length(key)
       if sequence_length < target_sequence_length:
         continue
       if sequence_length == target_sequence_length:
@@ -280,10 +320,18 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
 
   def _pack_elements(
       self, elements: Sequence[_CtsElement]
-  ) -> Mapping[str, Any]:
+  ) -> Mapping[str, Any] | Sequence[_CtsPackedStructure]:
     """Packs the given elements into a single element."""
     if not elements:
       raise exceptions.PyGrainInternalError(f"No elements to pack in {self}.")
+    if self._config.pack_structure:
+      return [
+          _CtsPackedStructure(
+              index=element.index,
+              slices=element.slices if _has_remainder(element.slices) else None,
+          )
+          for element in elements
+      ]
     packed_element = {}
     for key, sequence_length in self._config.length_struct.items():
       is_meta_feature = key in self._config.meta_features
@@ -301,8 +349,8 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
       for segment_id, element in enumerate(elements, 1):
         # Insert `sequence` into `values[start:end]`.
         # For non-meta features also handle segment_ids and positions.
-        sequence = element.get_sliced_features(key)
-        sequence_length = 1 if np.ndim(sequence) == 0 else len(sequence)
+        sequence = element.get_sliced_feature(key)
+        sequence_length = element.get_sliced_feature_length(key)
         replace_with_bos = (
             self._config.bos_handling
             == BOSHandling.REPLACE_FIRST_TOKEN_WITH_BOS
@@ -360,8 +408,7 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
 
     for key, target_sequence_length in self._config.length_struct.items():
       is_meta_feature = key in self._config.meta_features
-      sequence = element.get_sliced_features(key)
-      sequence_length = 1 if np.ndim(sequence) == 0 else len(sequence)
+      sequence_length = element.get_sliced_feature_length(key)
       new_tokens_in_buffer[key] = sequence_length
       assert target_sequence_length >= tokens_in_buffer[key]
       available_tokens = target_sequence_length - tokens_in_buffer[key]
@@ -436,6 +483,7 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
         self._stop_iteration = True
         break
 
+      self._current_index += 1
       element_spec = tree_lib.spec_like(features)
       if not isinstance(element_spec, Mapping):
         raise ValueError(
@@ -453,6 +501,8 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
           parent_state=parent_state,
           features=features,
           slices=self._empty_slices(),
+          index=self._current_index,
+          pack_structure=self._config.pack_structure,
       )
       is_fully_packed = self._is_fully_packed(current_element)
       if self._config.packed_elements_go_first and is_fully_packed:
@@ -506,6 +556,7 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
         parent_state=parent_state,
         remainder_slices=remainder_slices,
         elements_from_buffer_after_checkpoint=0,
+        current_index=self._current_index,
     )
 
   def _empty_slices(self) -> Mapping[str, tuple[int, int]]:
@@ -527,7 +578,8 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
     self._stop_iteration = False
 
     self._parent.set_state(state.parent_state)
-    has_remainder = state.has_remainder
+    self._current_index = state.current_index
+    has_remainder = _has_remainder(state.remainder_slices)
     if not has_remainder:
       self._remainder_element = None
     else:
@@ -542,6 +594,8 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
           parent_state=state.parent_state,
           features=features,
           slices=state.remainder_slices,
+          index=self._current_index,
+          pack_structure=self._config.pack_structure,
       )
 
     self._state = self._checkpoint()
@@ -610,6 +664,7 @@ class ConcatThenSplitIterDataset(dataset.IterDataset):
       bos_handling: BOSHandling = BOSHandling.DO_NOTHING,
       bos_features: Collection[str] = (),
       bos_token_id: int | None = None,
+      pack_structure: bool = False,
   ):
     """Creates a dataset that concat-then-splits sequences from the parent.
 
@@ -629,6 +684,15 @@ class ConcatThenSplitIterDataset(dataset.IterDataset):
       bos_features: The features to which BOS handling is applied in case BOS is
         used.
       bos_token_id: The token indicating BOS in case BOS is used.
+      pack_structure: Whether to pack the structure of the elements rather than
+        the elements themselves. Packing cannot be easily parallelizable, so it
+        is sometimes handy to pack the structure of the elements. When
+        pack_elements=True, the input must be a Mapping[str, int] (mapping the
+        feature to its length). The output is a dictionary with the following
+        following keys: a) index (the index of the element in the parent
+        iterator) and b) slices. `slices` is either None if the whole element is
+        added to a pack, or a mapping Mapping[str, slice] from the feature to
+        the slice of the feature to include in the pack.
     """
     super().__init__(parent)
     self._config = _CtsConfig(
@@ -638,6 +702,7 @@ class ConcatThenSplitIterDataset(dataset.IterDataset):
         bos_handling=bos_handling,
         bos_token_id=bos_token_id,
         bos_features=bos_features,
+        pack_structure=pack_structure,
     )
 
   def __iter__(self) -> dataset.DatasetIterator:

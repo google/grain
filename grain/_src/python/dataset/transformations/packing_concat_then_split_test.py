@@ -54,6 +54,18 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
         .to_iter_dataset()
     )
 
+  def dummy_metadata_iter_dataset(
+      self, *, num_observations: int
+  ) -> dataset.IterDataset:
+    return (
+        source.RangeMapDataset(1, 7)
+        .repeat()
+        .map(lambda value: {"observation": value, "index": 1})[
+            :num_observations
+        ]
+        .to_iter_dataset()
+    )
+
   def test_meta_features_not_restricting_without_packed_elements_go_first(self):
     # Pack 9 elements.
     ds = packing_concat_then_split.ConcatThenSplitIterDataset(
@@ -145,6 +157,41 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
                 "observation_positions": np.asarray([0, 1, 2, 0, 0, 0]),
                 "index": np.asarray([9, 0, 0, 0, 0, 0]),
             },
+        ],
+    )
+
+  def test_pack_structure_with_meta_features_not_restricting(self):
+    ds = packing_concat_then_split.ConcatThenSplitIterDataset(
+        self.dummy_metadata_iter_dataset(num_observations=9),
+        length_struct={"observation": 6, "index": 6},
+        meta_features={"index"},
+        packed_elements_go_first=True,
+        pack_structure=True,
+    )
+    actual_elements = list(ds)
+    np.testing.assert_equal(
+        actual_elements,
+        [
+            [
+                {"index": 0, "slices": None},
+                {"index": 1, "slices": None},
+                {"index": 2, "slices": None},
+            ],
+            [
+                {"index": 3, "slices": None},
+                {"index": 4, "slices": {"observation": (0, 2)}},
+            ],
+            [
+                {"index": 5, "slices": None},
+            ],
+            [
+                {"index": 4, "slices": {"observation": (2, 5)}},
+                {"index": 6, "slices": None},
+                {"index": 7, "slices": None},
+            ],
+            [
+                {"index": 8, "slices": None},
+            ],
         ],
     )
 
@@ -344,19 +391,28 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
       num_observations=list(range(12)),
       recreate_iter=[True, False],
       packed_elements_go_first=[True, False],
+      pack_structure=[True, False],
   )
   def test_checkpointing_after_stop_iteration(
       self,
       num_observations: int,
       recreate_iter: bool,
       packed_elements_go_first: bool,
+      pack_structure: bool,
   ):
+    iter_dataset = (
+        self.dummy_metadata_iter_dataset
+        if pack_structure
+        else self.dummy_iter_dataset
+    )
+
     def _create_iter(state: dict[str, Any] | None):
       ds = packing_concat_then_split.ConcatThenSplitIterDataset(
-          self.dummy_iter_dataset(num_observations=num_observations),
+          iter_dataset(num_observations=num_observations),
           length_struct={"observation": 8, "index": 6},
           meta_features={"index"},
           packed_elements_go_first=packed_elements_go_first,
+          pack_structure=pack_structure,
       )
       ds_iter = ds.__iter__()
       if state is not None:
