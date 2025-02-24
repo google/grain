@@ -604,7 +604,7 @@ class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
       parent_iter.start_prefetch = lambda: None
       return parent_iter
     return _ThreadPrefetchDatasetIterator(
-        parent_iter, self._prefetch_buffer_size, str(self)
+        parent_iter, self._prefetch_buffer_size
     )
 
 
@@ -625,12 +625,10 @@ class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       self,
       parent: dataset.DatasetIterator[T],
       prefetch_buffer_size: int,
-      parent_transform_name: str,
   ):
     super().__init__(parent)
     assert prefetch_buffer_size > 0, prefetch_buffer_size
     self._prefetch_buffer_size = prefetch_buffer_size
-    self._parent_transform_name = parent_transform_name
     self._state: StateT | None = None
 
     self._work_queue = queue.Queue[Callable[[], Any]]()
@@ -659,7 +657,7 @@ class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       self._work_thread = threading.Thread(
           target=self._work_loop,
           daemon=True,
-          name=f"Prefetch-{self._parent_transform_name}",
+          name=f"worker-thread-{str(self)}",
       )
       self._work_thread.start()
 
