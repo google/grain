@@ -185,7 +185,9 @@ dm-tree==0.1.8 \
 etils[epath,epy]==1.11.0 \
     --hash=sha256:a394cf3476bcec51c221426a70c39cd1006e889456ba41e4d7f12fd6814be7a5 \
     --hash=sha256:aff3278a3be7fddf302dfd80335e9f924244666c71239cd91e836f3d055f1c4a
-    # via array-record
+    # via
+    #   -r test_requirements.in
+    #   array-record
 flatbuffers==25.1.24 \
     --hash=sha256:1abfebaf4083117225d0723087ea909896a34e3fec933beedb490d595ba24145 \
     --hash=sha256:e0f7b7d806c0abdf166275492663130af40c11f89445045fbef0aa3c9a8643ad
