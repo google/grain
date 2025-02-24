@@ -181,7 +181,7 @@ class IndexSampler:
           f"RecordMetadata object index is out of bounds; Got index {index},"
           f" allowed indices should be in [0, {self._max_index}]"
       )
-    record_key = self._record_keys[int(index / self._shard_options.shard_count)]
+    record_key = self._record_keys[index // self._shard_options.shard_count]
     rng = None
     if self._seed is not None:
       rng = np.random.Generator(np.random.Philox(key=self._seed + index))
