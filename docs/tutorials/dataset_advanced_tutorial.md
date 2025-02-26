@@ -5,7 +5,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.6
+    jupytext_version: 1.16.7
 kernelspec:
   display_name: Python 3
   name: python3
@@ -14,6 +14,8 @@ kernelspec:
 +++ {"id": "9ufbgPooUPJr"}
 
 # Advanced `Dataset` usage
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/google/grain/blob/main/docs/tutorials/dataset_advanced_tutorial.ipynb)
 
 If you decided to use `Dataset` APIs, there's a good chance you want to do one or more processing steps described in this section, especially if working on data ingestion for generative model training.
 
@@ -200,8 +202,8 @@ Additionally, make sure to provide different seeds to different mixture
 components. This way there's no chance of introducing a seed dependency between
 the components if the random transformations overlap.
 
-``` {code-cell}
-:id: M0kB6nUQlneY
+```{code-cell}
+:id: OTveP3UQE7xv
 
 source1 = tfds.data_source(name="pneumonia_mnist", split="train")
 source2 = tfds.data_source(name="mnist", split="train")
