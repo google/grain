@@ -13,11 +13,11 @@
 # limitations under the License.
 from concurrent import futures
 import dataclasses
+import logging as std_logging
 import sys
 import time
 from typing import TypeVar, cast
 from unittest import mock
-
 from absl import logging
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -530,8 +530,7 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
         options.MultiprocessingOptions(num_workers, per_worker_buffer_size),
     )
 
-    it = iter(ds)
-    assert isinstance(it, prefetch.MultiprocessPrefetchDatasetIterator)
+    it = ds.__iter__()
     for _ in range(start_prefetch_calls):
       it.start_prefetch()
 
@@ -610,6 +609,41 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
     ds = dataset.WithOptionsIterDataset(ds, ds_options)
     with self.assertRaises(Exception):
       list(ds)
+
+  def test_worker_init_fn(self):
+    def set_worker_index_and_count(worker_index: int, worker_count: int):
+      log_formatter = std_logging.Formatter(
+          f'[Worker {worker_index} out of {worker_count}] %(message)s'
+      )
+      logging.get_absl_handler().setFormatter(log_formatter)
+
+    def map_fn(x):
+      # absl logging from workers is not propagated to the main process in unit
+      # tests. Therefore, we manually pass the formatted log message.
+      record = logging.get_absl_logger().makeRecord(
+          'grain',
+          logging.INFO,
+          'grain_pool_test',
+          123,
+          f'processing element {x}',
+          (),
+          None,
+      )
+      return logging.get_absl_handler().format(record)
+
+    ds = dataset.MapDataset.range(2).map(map_fn)
+    ds = ds.to_iter_dataset()
+    ds = ds.mp_prefetch(
+        options.MultiprocessingOptions(num_workers=2),
+        worker_init_fn=set_worker_index_and_count,
+    )
+    self.assertEqual(
+        list(ds),
+        [
+            '[Worker 0 out of 2] processing element 0',
+            '[Worker 1 out of 2] processing element 1',
+        ],
+    )
 
 
 class ThreadPrefetchIterDatasetTest(parameterized.TestCase):

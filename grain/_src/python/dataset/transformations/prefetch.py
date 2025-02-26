@@ -222,6 +222,7 @@ class MultiprocessPrefetchIterDataset(dataset.IterDataset[T]):
       self,
       parent: dataset.IterDataset[T],
       multiprocessing_options: grain_options.MultiprocessingOptions,
+      worker_init_fn: Callable[[int, int], None] | None = None,
   ):
     if multiprocessing_options.num_workers < 0:
       raise ValueError(
@@ -230,6 +231,7 @@ class MultiprocessPrefetchIterDataset(dataset.IterDataset[T]):
       )
     super().__init__(parent)
     self._multiprocessing_options = multiprocessing_options
+    self._worker_init_fn = worker_init_fn
     self._validate_parent_dataset()
 
   def __str__(self) -> str:
@@ -253,8 +255,8 @@ class MultiprocessPrefetchIterDataset(dataset.IterDataset[T]):
   def __iter__(self) -> dataset.DatasetIterator[T]:
     if self._multiprocessing_options.num_workers == 0:
       return self._parent.__iter__()
-    return MultiprocessPrefetchDatasetIterator(
-        self._parent, self._multiprocessing_options
+    return _MultiprocessPrefetchDatasetIterator(
+        self._parent, self._multiprocessing_options, self._worker_init_fn
     )
 
 
@@ -370,7 +372,7 @@ def _check_picklable(
 class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
   """Implements `GetElementProducerFn` for `grain_pool.MultiProcessIterator`.
 
-  This class implements `GetElementProducerFn` with `serialize` being overriden
+  This class implements `GetElementProducerFn` with `serialize` being overridden
   to generate better error messages if user-provided dataset is not pickle-able.
   """
 
@@ -438,13 +440,14 @@ def _get_dataset_options(ds: dataset.IterDataset) -> base.DatasetOptions:
   return result
 
 
-class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
+class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   """Iterator that performs prefetching using a multiprocessing pool."""
 
   def __init__(
       self,
       parent: dataset.IterDataset[T],
       multiprocessing_options: grain_options.MultiprocessingOptions,
+      worker_init_fn: Callable[[int, int], None] | None = None,
   ):
     super().__init__()
     self._iter_parent = parent
@@ -453,6 +456,7 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     # propagate them.
     self._ctx.dataset_options = _get_dataset_options(parent)
     self._multiprocessing_options = multiprocessing_options
+    self._worker_init_fn = worker_init_fn
     # The underlying iterator producing elements and workers state.
     self._iterator = None
     # Raw reference to the underlying iterator that can be used to determine the
@@ -557,6 +561,7 @@ class MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         self._multiprocessing_options,
         (self._state[_LAST_WORKER_INDEX] + 1)
         % self._multiprocessing_options.num_workers,
+        self._worker_init_fn,
     )
 
   def __str__(self) -> str:

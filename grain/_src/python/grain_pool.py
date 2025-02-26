@@ -14,7 +14,7 @@
 """This module provides a way to distribute processing across multiple workers.
 
 In the context of Grain we use the term "process" similar to JAX, where usually
-each machine runs one Python process (identified by `jax.proccess_index()`).
+each machine runs one Python process (identified by `jax.process_index()`).
 In Grain each "process" can create additional Python child processes that we
 call "workers".
 
@@ -32,8 +32,8 @@ Shutdown logic considerations:
 * Child processes are launched as Daemon processes. In case of (unexpected)
   parent termination, child processes will be terminated by OS.
 * System uses a multiprocessing event ("termination_event") for termination.
-  Parent and child processes continously check if the "termination_event" and if
-  set, they break from what they are doing.
+  Parent and child processes continuously check if the "termination_event" and
+  if set, they break from what they are doing.
 * We never block indefinitely when calling get() or put() on a queue. This
   ensures parent and child processes continue to check the termination_event.
 
@@ -176,15 +176,18 @@ def _initialize_and_get_element_producer(
   """Unpickles the element producer from the args queue and closes the queue."""
   (
       serialized_flag_parse_fn,
-      serialized_init_fn,
+      serialized_init_fns,
       serialized_element_producer_fn,
   ) = args_queue.get()
   flag_parse_fn: Callable[[Any], None] = cloudpickle.loads(
       serialized_flag_parse_fn
   )
   flag_parse_fn(debug_flags)
-  init_fn: Callable[[], None] = cloudpickle.loads(serialized_init_fn)
-  init_fn()
+  init_fns: list[Callable[[int, int], None]] = cloudpickle.loads(
+      serialized_init_fns
+  )
+  for init_fn in init_fns:
+    init_fn(worker_index, worker_count)
   element_producer_fn: GetElementProducerFn[Any] = (
       GetElementProducerFn.deserialize(serialized_element_producer_fn)
   )
@@ -307,6 +310,7 @@ class GrainPool(Iterator[T]):
       worker_index_to_start_reading: int = 0,
       termination_event: threading.Event | None = None,
       options: MultiprocessingOptions,
+      worker_init_fn: Callable[[int, int], None] | None = None,
   ):
     """Initialise a Grain Pool.
 
@@ -320,6 +324,9 @@ class GrainPool(Iterator[T]):
         the pool will terminate when either one of the workers failed or when
         all workers are done processing data. GrainPool will not set this event.
       options: Options for multiprocessing. See MultiprocessingOptions.
+      worker_init_fn: Function to run in each worker process before the element
+        producer. The function takes two arguments: the current worker index and
+        the total worker count.
     """
     self.num_processes = options.num_workers
     logging.info("Grain pool will use %i processes.", self.num_processes)
@@ -333,6 +340,7 @@ class GrainPool(Iterator[T]):
     # separate events.
     self._reader_termination_event = termination_event or threading.Event()
     self._workers_termination_event = ctx.Event()
+    self._worker_init_fn = worker_init_fn
     self.completed_processes = set()
     # Queue to propagate errors from child processes to the parent. Note that
     # this queue is shared by all child processes.
@@ -372,12 +380,12 @@ class GrainPool(Iterator[T]):
       # absl.app.run() is called. We send arguments via a queue to ensure that
       # they are unpickled after absl.app.run() was called in the child
       # processes.
-      worker_init_fn = lambda: None
+      worker_init_fns = [self._worker_init_fn] if self._worker_init_fn else []
       parse_debug_flags_fn = parse_debug_flags
-      worker_init_fn = cloudpickle.dumps(worker_init_fn)
+      worker_init_fns = cloudpickle.dumps(worker_init_fns)
       parse_debug_flags_fn = cloudpickle.dumps(parse_debug_flags_fn)
       worker_args_queue.put(
-          (parse_debug_flags_fn, worker_init_fn, get_element_producer_fn)
+          (parse_debug_flags_fn, worker_init_fns, get_element_producer_fn)
       )
       process = ctx.Process(  # pytype: disable=attribute-error  # re-none
           target=_worker_loop, kwargs=process_kwargs, daemon=True
@@ -561,6 +569,7 @@ def _process_elements_in_grain_pool(
     thread_pool: pool.ThreadPool,
     termination_event: threading.Event,
     worker_index_to_start_reading: int,
+    worker_init_fn: Callable[[int, int], None] | None,
 ) -> None:
   """Processes elements in grain worker pool asynchronously."""
 
@@ -576,6 +585,7 @@ def _process_elements_in_grain_pool(
         worker_index_to_start_reading=worker_index_to_start_reading,
         termination_event=termination_event,
         options=multiprocessing_options,
+        worker_init_fn=worker_init_fn,
     ) as g_pool:
       for element in g_pool:
         if read_thread_should_stop():
@@ -628,6 +638,7 @@ class MultiProcessIterator(Iterator[T]):
       get_element_producer_fn: GetElementProducerFn,
       multiprocessing_options: MultiprocessingOptions,
       worker_index_to_start_reading: int,
+      worker_init_fn: Callable[[int, int], None] | None = None,
   ):
     """Initializes MultiProcessIterator.
 
@@ -637,10 +648,14 @@ class MultiProcessIterator(Iterator[T]):
       multiprocessing_options: options for distributing the record iterators.
       worker_index_to_start_reading: Index of the next worker to read from. This
         is useful for recovering from a checkpoint.
+      worker_init_fn: Function to run in each worker process before the element
+        producer. The function takes two arguments: the current worker index and
+        the total worker count.
     """
     self._get_element_producer_fn = get_element_producer_fn
     self._multiprocessing_options = multiprocessing_options
     self._last_worker_index = worker_index_to_start_reading - 1
+    self._worker_init_fn = worker_init_fn
     self._reader_queue = None
     self._reader_thread_pool = None
     self._termination_event = None
@@ -673,6 +688,7 @@ class MultiProcessIterator(Iterator[T]):
             thread_pool=self._reader_thread_pool,
             termination_event=self._termination_event,
             worker_index_to_start_reading=self._last_worker_index + 1,
+            worker_init_fn=self._worker_init_fn,
         ),
     )
     self._reader_thread.start()

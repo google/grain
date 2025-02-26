@@ -1082,6 +1082,7 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
   def mp_prefetch(
       self,
       options: grain_options.MultiprocessingOptions | None = None,
+      worker_init_fn: Callable[[int, int], None] | None = None,
   ) -> IterDataset[T]:
     """Returns a dataset prefetching elements in multiple processes.
 
@@ -1101,6 +1102,9 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
         be greater than or equal to 0. If `options.num_workers` is 0,
         `mp_prefetch` has no effect. Defaults to
         `MultiprocessingOptions(num_workers=10)`.
+      worker_init_fn: A function that is called in each worker process before
+        the data is processed. The function takes two arguments: the current
+        worker index and the total worker count.
 
     Returns:
       A dataset prefetching input elements in separate processes.
@@ -1113,6 +1117,7 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
     return prefetch.MultiprocessPrefetchIterDataset(
         self,
         multiprocessing_options=options,
+        worker_init_fn=worker_init_fn,
     )
 
   @abc.abstractmethod

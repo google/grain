@@ -420,6 +420,28 @@ class MultiProcessIteratorTest(parameterized.TestCase):
       with self.assertRaisesRegex(ValueError, error_msg):
         list(iterator)
 
+  def test_worker_init_fn(self):
+
+    def _set_worker_index_and_count(worker_index: int, worker_count: int):
+      gp.monkey_patched_index_and_count = (worker_index, worker_count)
+
+    class GetElementProducerFnReturningGlobal(gp.GetElementProducerFn):
+
+      def __call__(
+          self, *, worker_index: int, worker_count: int
+      ) -> Iterator[tuple[int, int]]:
+        del self, worker_index, worker_count
+        yield gp.monkey_patched_index_and_count  # pytype: disable=module-attr
+
+    with gp.MultiProcessIterator(
+        GetElementProducerFnReturningGlobal(),
+        MultiprocessingOptions(num_workers=2),
+        0,
+        worker_init_fn=_set_worker_index_and_count,
+    ) as iterator:
+      result = list(iterator)
+    self.assertEqual(result, [(0, 2), (1, 2)])
+
 
 if __name__ == "__main__":
   absltest.main()
