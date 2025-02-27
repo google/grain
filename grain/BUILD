@@ -14,7 +14,6 @@ py_library(
         "_src/__init__.py",
         "python/__init__.py",
         "python/experimental.py",
-        "python/fast_proto.py",
     ],
     data = ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
     srcs_version = "PY3",

@@ -74,7 +74,7 @@ from grain._src.python.samplers import (
     SequentialSampler,
 )
 from grain._src.python.shared_memory_array import SharedMemoryArray
-from grain.python import experimental, fast_proto
+from grain.python import experimental
 
 # These are imported only if Orbax is present.
 try:

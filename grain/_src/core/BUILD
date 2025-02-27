@@ -161,6 +161,7 @@ py_test(
     srcs = ["version_test.py"],
     srcs_version = "PY3",
     deps = [
+        "//grain:python",
         "@abseil-py//absl/testing:absltest",
     ],
 )
