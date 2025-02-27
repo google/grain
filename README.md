@@ -42,8 +42,8 @@ within Grain will be done on the CPU by default.
 
 |         |  Linux  |   Mac   | Windows |
 |---------|---------|---------|---------|
-| x86_64  | yes     | WIP     | no      |
-| aarch64 | yes     | WIP     | n/a     |
+| x86_64  | yes     | no      | no      |
+| aarch64 | yes     | yes     | n/a     |
 
 ## Quickstart
 
