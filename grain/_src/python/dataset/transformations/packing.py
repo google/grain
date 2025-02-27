@@ -193,6 +193,7 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
           meta_features=self._meta_features,
       )
 
+  @dataset_stats.record_next_duration_if_output
   def __next__(self):
     timer = dataset_stats.Timer()
     if self._packed_batch is not None:

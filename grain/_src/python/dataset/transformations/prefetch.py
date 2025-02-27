@@ -135,6 +135,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
         raise_threshold=self._ctx.dataset_options.filter_raise_threshold_ratio,
     )
 
+  @dataset_stats.record_next_duration_if_output
   def __next__(self) -> T:
     # The time recorded here is the time spent in prefetch node to return an
     # element, including the time spent in parent node.
@@ -496,6 +497,7 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   def __iter__(self) -> dataset.DatasetIterator[T]:
     return self
 
+  @dataset_stats.record_next_duration_if_output
   def __next__(self) -> T:
     self._ensure_iterator_initialized()
     result, state = next(self._iterator)
@@ -714,6 +716,7 @@ class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     except Exception as e:  # pylint: disable=broad-except
       output_buffer.put((None, None, e))
 
+  @dataset_stats.record_next_duration_if_output
   def __next__(self):
     self.start_prefetch()
     assert self._buffer is not None

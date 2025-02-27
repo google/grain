@@ -227,7 +227,10 @@ py_library(
     name = "interleave",
     srcs = ["interleave.py"],
     srcs_version = "PY3",
-    deps = ["//grain/_src/python/dataset"],
+    deps = [
+        "//grain/_src/python/dataset",
+        "//grain/_src/python/dataset:stats",
+    ],
 )
 
 py_test(
@@ -247,7 +250,10 @@ py_library(
     name = "limit",
     srcs = ["limit.py"],
     srcs_version = "PY3",
-    deps = ["//grain/_src/python/dataset"],
+    deps = [
+        "//grain/_src/python/dataset",
+        "//grain/_src/python/dataset:stats",
+    ],
 )
 
 py_test(
