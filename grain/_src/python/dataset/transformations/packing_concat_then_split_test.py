@@ -54,6 +54,18 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
         .to_iter_dataset()
     )
 
+  def dummy_metadata_iter_dataset(
+      self, *, num_observations: int
+  ) -> dataset.IterDataset:
+    return (
+        source.RangeMapDataset(1, 7)
+        .repeat()
+        .map(lambda value: {"observation": value, "index": 1})[
+            :num_observations
+        ]
+        .to_iter_dataset()
+    )
+
   def test_meta_features_not_restricting_without_packed_elements_go_first(self):
     # Pack 9 elements.
     ds = packing_concat_then_split.ConcatThenSplitIterDataset(
@@ -125,18 +137,18 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
                 "observation_positions": np.asarray([0, 1, 2, 3, 0, 1]),
                 "index": np.asarray([4, 5, 0, 0, 0, 0]),
             },
-            # Fully packed comes first before element 5 continues.
-            {
-                "observation": np.asarray([6, 6, 6, 6, 6, 6]),
-                "observation_segment_ids": np.asarray([1, 1, 1, 1, 1, 1]),
-                "observation_positions": np.asarray([0, 1, 2, 3, 4, 5]),
-                "index": np.asarray([6, 0, 0, 0, 0, 0]),
-            },
             {
                 "observation": np.asarray([5, 5, 5, 1, 2, 2]),
                 "observation_segment_ids": np.asarray([1, 1, 1, 2, 3, 3]),
                 "observation_positions": np.asarray([0, 1, 2, 0, 0, 1]),
                 "index": np.asarray([5, 7, 8, 0, 0, 0]),
+            },
+            # Fully packed example comes without being split.
+            {
+                "observation": np.asarray([6, 6, 6, 6, 6, 6]),
+                "observation_segment_ids": np.asarray([1, 1, 1, 1, 1, 1]),
+                "observation_positions": np.asarray([0, 1, 2, 3, 4, 5]),
+                "index": np.asarray([6, 0, 0, 0, 0, 0]),
             },
             # Reached end.
             {
@@ -145,6 +157,41 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
                 "observation_positions": np.asarray([0, 1, 2, 0, 0, 0]),
                 "index": np.asarray([9, 0, 0, 0, 0, 0]),
             },
+        ],
+    )
+
+  def test_pack_structure_with_meta_features_not_restricting(self):
+    ds = packing_concat_then_split.ConcatThenSplitIterDataset(
+        self.dummy_metadata_iter_dataset(num_observations=9),
+        length_struct={"observation": 6, "index": 6},
+        meta_features={"index"},
+        packed_elements_go_first=True,
+        pack_structure=True,
+    )
+    actual_elements = list(ds)
+    np.testing.assert_equal(
+        actual_elements,
+        [
+            [
+                {"index": 0, "slices": None},
+                {"index": 1, "slices": None},
+                {"index": 2, "slices": None},
+            ],
+            [
+                {"index": 3, "slices": None},
+                {"index": 4, "slices": {"observation": (0, 2)}},
+            ],
+            [
+                {"index": 4, "slices": {"observation": (2, 5)}},
+                {"index": 6, "slices": None},
+                {"index": 7, "slices": None},
+            ],
+            [
+                {"index": 5, "slices": None},
+            ],
+            [
+                {"index": 8, "slices": None},
+            ],
         ],
     )
 
@@ -173,16 +220,16 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
                 "index": np.asarray([3, 4]),
             },
             {
-                "observation": np.asarray([6, 6, 6, 6, 6, 6]),
-                "observation_segment_ids": np.asarray([1, 1, 1, 1, 1, 1]),
-                "observation_positions": np.asarray([0, 1, 2, 3, 4, 5]),
-                "index": np.asarray([6, 0]),
-            },
-            {
                 "observation": np.asarray([4, 5, 5, 5, 5, 5]),
                 "observation_segment_ids": np.asarray([1, 2, 2, 2, 2, 2]),
                 "observation_positions": np.asarray([0, 0, 1, 2, 3, 4]),
                 "index": np.asarray([4, 5]),
+            },
+            {
+                "observation": np.asarray([6, 6, 6, 6, 6, 6]),
+                "observation_segment_ids": np.asarray([1, 1, 1, 1, 1, 1]),
+                "observation_positions": np.asarray([0, 1, 2, 3, 4, 5]),
+                "index": np.asarray([6, 0]),
             },
             {
                 "observation": np.asarray([1, 2, 2, 0, 0, 0]),
@@ -226,18 +273,18 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
                 "observation_positions": np.asarray([0, 1, 2, 3, 0, 1]),
                 "index": np.asarray([4, 5, 0, 0, 0, 0]),
             },
-            # Fully packed comes first before element 5 continues.
-            {
-                "observation": np.asarray([1000, 6, 6, 6, 6, 6]),
-                "observation_segment_ids": np.asarray([1, 1, 1, 1, 1, 1]),
-                "observation_positions": np.asarray([0, 1, 2, 3, 4, 5]),
-                "index": np.asarray([6, 0, 0, 0, 0, 0]),
-            },
             {
                 "observation": np.asarray([1000, 5, 5, 1000, 1000, 2]),
                 "observation_segment_ids": np.asarray([1, 1, 1, 2, 3, 3]),
                 "observation_positions": np.asarray([0, 1, 2, 0, 0, 1]),
                 "index": np.asarray([5, 7, 8, 0, 0, 0]),
+            },
+            # Fully packed example comes without being split.
+            {
+                "observation": np.asarray([1000, 6, 6, 6, 6, 6]),
+                "observation_segment_ids": np.asarray([1, 1, 1, 1, 1, 1]),
+                "observation_positions": np.asarray([0, 1, 2, 3, 4, 5]),
+                "index": np.asarray([6, 0, 0, 0, 0, 0]),
             },
             # Reached end.
             {
@@ -344,19 +391,28 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
       num_observations=list(range(12)),
       recreate_iter=[True, False],
       packed_elements_go_first=[True, False],
+      pack_structure=[True, False],
   )
   def test_checkpointing_after_stop_iteration(
       self,
       num_observations: int,
       recreate_iter: bool,
       packed_elements_go_first: bool,
+      pack_structure: bool,
   ):
+    iter_dataset = (
+        self.dummy_metadata_iter_dataset
+        if pack_structure
+        else self.dummy_iter_dataset
+    )
+
     def _create_iter(state: dict[str, Any] | None):
       ds = packing_concat_then_split.ConcatThenSplitIterDataset(
-          self.dummy_iter_dataset(num_observations=num_observations),
+          iter_dataset(num_observations=num_observations),
           length_struct={"observation": 8, "index": 6},
           meta_features={"index"},
           packed_elements_go_first=packed_elements_go_first,
+          pack_structure=pack_structure,
       )
       ds_iter = ds.__iter__()
       if state is not None:

@@ -273,6 +273,7 @@ py_library(
         "//grain/_src/python/dataset",
         "//grain/_src/python/dataset:stats",
         "@abseil-py//absl/logging",
+        "@pypi//dm_tree:pkg",
         "@pypi//numpy:pkg",
     ],
 )
