@@ -155,3 +155,12 @@ py_test(
         "@pypi//numpy:pkg",
     ],
 )
+
+py_test(
+    name = "version_test",
+    srcs = ["version_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        "@abseil-py//absl/testing:absltest",
+    ],
+)

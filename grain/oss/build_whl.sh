@@ -5,7 +5,19 @@ set -e -x
 
 OUTPUT_DIR="${OUTPUT_DIR:-/tmp/grain}"
 
+function write_to_bazelrc() {
+  echo "$1" >> .bazelrc
+}
+
 main() {
+  # Remove .bazelrc if it already exists
+  [ -e .bazelrc ] && rm .bazelrc
+
+  write_to_bazelrc "build --@rules_python//python/config_settings:python_version=${PYTHON_VERSION}"
+  write_to_bazelrc "test --@rules_python//python/config_settings:python_version=${PYTHON_VERSION}"
+  write_to_bazelrc "test --action_env PYTHON_VERSION=${PYTHON_VERSION}"
+  write_to_bazelrc "test --test_timeout=300"
+
   bazel clean
   bazel build ... --action_env PYTHON_BIN_PATH="${PYTHON_BIN}" --action_env MACOSX_DEPLOYMENT_TARGET='11.0'
   bazel test --verbose_failures --test_output=errors ... --action_env PYTHON_BIN_PATH="${PYTHON_BIN}"

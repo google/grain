@@ -1,4 +1,6 @@
-load("@rules_python//python:pip.bzl", "compile_pip_requirements")
+load("@python//3.10:defs.bzl", compile_pip_requirements_3_10 = "compile_pip_requirements")
+load("@python//3.11:defs.bzl", compile_pip_requirements_3_11 = "compile_pip_requirements")
+load("@python//3.12:defs.bzl", compile_pip_requirements_3_12 = "compile_pip_requirements")
 
 py_library(
     name = "setup",
@@ -6,8 +8,20 @@ py_library(
     srcs_version = "PY3",
 )
 
-compile_pip_requirements(
-    name = "requirements",
+compile_pip_requirements_3_10(
+    name = "requirements_3_10",
     requirements_in = "test_requirements.in",
-    requirements_txt = "test_requirements_lock.txt",
+    requirements_txt = "test_requirements_lock_3_10.txt",
+)
+
+compile_pip_requirements_3_11(
+    name = "requirements_3_11",
+    requirements_in = "test_requirements.in",
+    requirements_txt = "test_requirements_lock_3_11.txt",
+)
+
+compile_pip_requirements_3_12(
+    name = "requirements_3_12",
+    requirements_in = "test_requirements.in",
+    requirements_txt = "test_requirements_lock_3_12.txt",
 )

@@ -1,7 +1,5 @@
 # Experimental transformation for example packing in PyGrain.
 
-load("@rules_python//python:pip.bzl", "compile_pip_requirements")
-
 package(default_visibility = ["//grain:__subpackages__"])
 
 py_library(
