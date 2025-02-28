@@ -32,7 +32,7 @@ checkpoint and then advance packing until the state is restored.
 
 An example of running this algorithm for the inputs of given sizes:
 
-r1: 3 r2: 6 r3: 2 r4: 5 r5: 6 r6: 4 - with packed_elements_go_first=True
+r1: 3 r2: 6 r3: 2 r4: 5 r5: 6 r6: 4 - with split_full_length_features=False
 
 --------------------------------------------------------------------------------
 step:     init buffer           add r1 to buffer      add r2 to output
@@ -97,7 +97,7 @@ class _CtsConfig:
 
   length_struct: Mapping[str, int]
   meta_features: Collection[str]
-  packed_elements_go_first: bool
+  split_full_length_features: bool
   bos_handling: BOSHandling
   bos_features: Collection[str]
   bos_token_id: int | None
@@ -262,7 +262,7 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
     )
     self._arange.flags.writeable = False
 
-  def _is_fully_packed(self, element: _CtsElement) -> bool:
+  def _has_full_length_feature(self, element: _CtsElement) -> bool:
     """Returns True if at least one features has its target sequence length."""
     for key, target_sequence_length in self._config.length_struct.items():
       feature = element.get_sliced_features(key)
@@ -454,10 +454,12 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
           features=features,
           slices=self._empty_slices(),
       )
-      is_fully_packed = self._is_fully_packed(current_element)
-      if self._config.packed_elements_go_first and is_fully_packed:
-        self._packed_elements.append(self._pack_elements([current_element]))
-        continue
+      if not self._config.split_full_length_features:
+        if self._has_full_length_feature(current_element):
+          # The element has a full-length feature, so it's considered already
+          # packed because split_full_length_features=False.
+          self._packed_elements.append(self._pack_elements([current_element]))
+          continue
       self._remainder_element = self._maybe_add_to_buffer(
           current_element, buffer=buffer, tokens_in_buffer=tokens_in_buffer
       )
@@ -606,7 +608,7 @@ class ConcatThenSplitIterDataset(dataset.IterDataset):
       *,
       length_struct: Mapping[str, int],
       meta_features: Collection[str] = (),
-      packed_elements_go_first: bool = False,
+      split_full_length_features: bool = True,
       bos_handling: BOSHandling = BOSHandling.DO_NOTHING,
       bos_features: Collection[str] = (),
       bos_token_id: int | None = None,
@@ -621,9 +623,11 @@ class ConcatThenSplitIterDataset(dataset.IterDataset):
         of the same element are split. Otherwise, meta features are packed
         normally (they have their own sequence length). No *_positions and
         *_segment_ids features are created for meta features.
-      packed_elements_go_first: An optimization where elements that are already
-        packed are passed through in priority. This option is not used by
-        default.
+      split_full_length_features: Whether full-length features are split, or
+        they are considered packed and passed through in priority. Setting
+        split_full_length_features=False is an optimization when some sequences
+        already have the target length, and you don't want them to be split.
+        This optimization is not used by default.
       bos_handling: The instructions for handling BOS tokens (by default, no BOS
         token is added).
       bos_features: The features to which BOS handling is applied in case BOS is
@@ -634,7 +638,7 @@ class ConcatThenSplitIterDataset(dataset.IterDataset):
     self._config = _CtsConfig(
         length_struct=length_struct,
         meta_features=meta_features,
-        packed_elements_go_first=packed_elements_go_first,
+        split_full_length_features=split_full_length_features,
         bos_handling=bos_handling,
         bos_token_id=bos_token_id,
         bos_features=bos_features,
