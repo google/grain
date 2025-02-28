@@ -35,30 +35,19 @@ An example of running this algorithm for the inputs of given sizes:
 r1: 3 r2: 6 r3: 2 r4: 5 r5: 6 r6: 4 - with packed_elements_go_first=True
 
 --------------------------------------------------------------------------------
-step:     init buffer           add r1 to buffer      add r2 to output
-buffer:   [0, 0, 0, 0, 0, 0]    [1, 1, 1, 0, 0, 0]    [1, 1, 1, 0, 0, 0]
-output:           -                     -             [2, 2, 2, 2, 2, 2]
-                  -          ->         -          ->         -
+step:     add r1 to buffer      add r2 to output      add r3 to buffer
+output:   [1, 1, 1, 0, 0, 0] -> [1, 1, 1, 0, 0, 0] -> [1, 1, 1, 3, 3, 0]
+                  -             [2, 2, 2, 2, 2, 2]    [2, 2, 2, 2, 2, 2]
                   -                     -                     -
                   -                     -                     -
                   -                     -                     -
 --------------------------------------------------------------------------------
-step:     add r3 to buffer      split r4 (size 5)     add r5 (size 6)
-buffer:   [1, 1, 1, 3, 3, 0]    [4, 4, 4, 4, 0, 0]    [4, 4, 4, 4, 0, 0]
-output:   [2, 2, 2, 2, 2, 2]    [2, 2, 2, 2, 2, 2]    [2, 2, 2, 2, 2, 2]
-                  -          -> [1, 1, 1, 3, 3, 4] -> [1, 1, 1, 3, 3, 4]
-                  -                     -             [5, 5, 5, 5, 5, 5]
-                  -                     -                     -
-                  -                     -                     -
---------------------------------------------------------------------------------
-step:     split r6 (size 4)     empty buffer
-buffer:   [6, 6, 0, 0, 0, 0]    [0, 0, 0, 0, 0, 0]
-output:   [2, 2, 2, 2, 2, 2]    [2, 2, 2, 2, 2, 2]
-          [1, 1, 1, 3, 3, 4] -> [1, 1, 1, 3, 3, 4]
-          [5, 5, 5, 5, 5, 5]    [5, 5, 5, 5, 5, 5]
-          [4, 4, 4, 4, 6, 6]    [4, 4, 4, 4, 6, 6]
-                  -             [6, 6, 0, 0, 0, 0]
---------------------------------------------------------------------------------
+step:     split r4 (size 5)     add r5 (size 6)       split r6 (size 4)
+output:   [1, 1, 1, 3, 3, 4] -> [1, 1, 1, 3, 3, 4] -> [1, 1, 1, 3, 3, 4]
+          [2, 2, 2, 2, 2, 2]    [2, 2, 2, 2, 2, 2]    [2, 2, 2, 2, 2, 2]
+          [4, 4, 4, 4, 0, 0]    [4, 4, 4, 4, 0, 0]    [4, 4, 4, 4, 6, 6]
+                  -             [5, 5, 5, 5, 5, 5]    [5, 5, 5, 5, 5, 5]
+                  -                     -             [6, 6, 0, 0, 0, 0]
 """
 
 from __future__ import annotations
@@ -465,7 +454,8 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
         break
 
     if buffer:
-      self._packed_elements.append(self._pack_elements(buffer))
+      # The buffer is always the priority, so it's put at the left of the queue.
+      self._packed_elements.appendleft(self._pack_elements(buffer))
     if self._stop_iteration:
       # Pack the remainder element if we have one.
       if self._remainder_element is not None:
