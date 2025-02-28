@@ -19,7 +19,7 @@ import os
 import signal
 import sys
 from typing import Any
-
+from absl import flags
 from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.core import config
@@ -37,6 +37,23 @@ class GrainPoolTest(absltest.TestCase):
     # finalize and update the exitcode.
     process.join(timeout=gp._PROCESS_JOIN_TIMEOUT)
     self.assertIn(process.exitcode, {0, -signal.SIGTERM})
+
+  def test_pool_with_flags_not_parsed(self):
+    class GetElementProducerFn(gp.GetElementProducerFn):
+
+      def __call__(self, *, worker_index: int, worker_count: int):
+        del self
+        return iter(range(worker_index, 14, worker_count))
+
+    get_element_producer_fn = GetElementProducerFn()
+    # unparse the flags explicitly
+    flags.FLAGS.unparse_flags()
+
+    _ = gp.GrainPool(
+        ctx=mp.get_context("spawn"),
+        get_element_producer_fn=get_element_producer_fn,
+        options=MultiprocessingOptions(num_workers=4, per_worker_buffer_size=1),
+    )
 
   def test_pool_equal_split_in_memory_data_source(self):
     in_memory_ds = data_sources.InMemoryDataSource(range(12))
