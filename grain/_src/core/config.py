@@ -154,7 +154,10 @@ class Config:
   def __getattr__(self, name: str) -> Any:
     flag_name = f"grain_{name}"
     if any(f.name == flag_name for f in _GRAIN_FLAGS):
-      value = getattr(flags.FLAGS, flag_name)
+      value = flags.FLAGS[flag_name].default
+      # check if flags are parsed before accessing the flag value.
+      if flags.FLAGS.is_parsed():
+        value = getattr(flags.FLAGS, flag_name)
       if isinstance(value, int):
         int_value = value
       else:
