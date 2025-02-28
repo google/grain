@@ -97,4 +97,5 @@ nb_execution_excludepatterns = [
     'tutorials/dataset_advanced_tutorial.ipynb',
     'tutorials/dataset_basic_tutorial.ipynb',
     'tutorials/data_loader_tutorial.ipynb',
+    'tutorials/dataset_debugging_tutorial.ipynb',
 ]

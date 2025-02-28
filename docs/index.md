@@ -65,6 +65,7 @@ data_loader/transformations
 tutorials/data_loader_tutorial
 tutorials/dataset_basic_tutorial
 tutorials/dataset_advanced_tutorial
+tutorials/dataset_debugging_tutorial
 ```
 
 <!-- Automatically generated documentation from docstrings -->
