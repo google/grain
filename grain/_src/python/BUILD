@@ -13,6 +13,7 @@ py_library(
         "//grain/_src/core:usage_logging",
         "@abseil-py//absl/logging",
         "@pypi//array_record:pkg",
+        "@pypi//tensorflow:pkg",
     ],
 )
 
