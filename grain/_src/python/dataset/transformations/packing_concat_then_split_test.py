@@ -125,18 +125,18 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
                 "observation_positions": np.asarray([0, 1, 2, 3, 0, 1]),
                 "index": np.asarray([4, 5, 0, 0, 0, 0]),
             },
-            # Fully packed comes first before element 5 continues.
-            {
-                "observation": np.asarray([6, 6, 6, 6, 6, 6]),
-                "observation_segment_ids": np.asarray([1, 1, 1, 1, 1, 1]),
-                "observation_positions": np.asarray([0, 1, 2, 3, 4, 5]),
-                "index": np.asarray([6, 0, 0, 0, 0, 0]),
-            },
             {
                 "observation": np.asarray([5, 5, 5, 1, 2, 2]),
                 "observation_segment_ids": np.asarray([1, 1, 1, 2, 3, 3]),
                 "observation_positions": np.asarray([0, 1, 2, 0, 0, 1]),
                 "index": np.asarray([5, 7, 8, 0, 0, 0]),
+            },
+            # Fully packed example comes without being split.
+            {
+                "observation": np.asarray([6, 6, 6, 6, 6, 6]),
+                "observation_segment_ids": np.asarray([1, 1, 1, 1, 1, 1]),
+                "observation_positions": np.asarray([0, 1, 2, 3, 4, 5]),
+                "index": np.asarray([6, 0, 0, 0, 0, 0]),
             },
             # Reached end.
             {
@@ -173,16 +173,16 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
                 "index": np.asarray([3, 4]),
             },
             {
-                "observation": np.asarray([6, 6, 6, 6, 6, 6]),
-                "observation_segment_ids": np.asarray([1, 1, 1, 1, 1, 1]),
-                "observation_positions": np.asarray([0, 1, 2, 3, 4, 5]),
-                "index": np.asarray([6, 0]),
-            },
-            {
                 "observation": np.asarray([4, 5, 5, 5, 5, 5]),
                 "observation_segment_ids": np.asarray([1, 2, 2, 2, 2, 2]),
                 "observation_positions": np.asarray([0, 0, 1, 2, 3, 4]),
                 "index": np.asarray([4, 5]),
+            },
+            {
+                "observation": np.asarray([6, 6, 6, 6, 6, 6]),
+                "observation_segment_ids": np.asarray([1, 1, 1, 1, 1, 1]),
+                "observation_positions": np.asarray([0, 1, 2, 3, 4, 5]),
+                "index": np.asarray([6, 0]),
             },
             {
                 "observation": np.asarray([1, 2, 2, 0, 0, 0]),
@@ -226,18 +226,18 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
                 "observation_positions": np.asarray([0, 1, 2, 3, 0, 1]),
                 "index": np.asarray([4, 5, 0, 0, 0, 0]),
             },
-            # Fully packed comes first before element 5 continues.
-            {
-                "observation": np.asarray([1000, 6, 6, 6, 6, 6]),
-                "observation_segment_ids": np.asarray([1, 1, 1, 1, 1, 1]),
-                "observation_positions": np.asarray([0, 1, 2, 3, 4, 5]),
-                "index": np.asarray([6, 0, 0, 0, 0, 0]),
-            },
             {
                 "observation": np.asarray([1000, 5, 5, 1000, 1000, 2]),
                 "observation_segment_ids": np.asarray([1, 1, 1, 2, 3, 3]),
                 "observation_positions": np.asarray([0, 1, 2, 0, 0, 1]),
                 "index": np.asarray([5, 7, 8, 0, 0, 0]),
+            },
+            # Fully packed example comes without being split.
+            {
+                "observation": np.asarray([1000, 6, 6, 6, 6, 6]),
+                "observation_segment_ids": np.asarray([1, 1, 1, 1, 1, 1]),
+                "observation_positions": np.asarray([0, 1, 2, 3, 4, 5]),
+                "index": np.asarray([6, 0, 0, 0, 0, 0]),
             },
             # Reached end.
             {
