@@ -18,6 +18,7 @@ dependencies = [
     'etils[epath,epy]',
     'more-itertools>=9.1.0',
     'numpy',
+    'protobuf~=5.26',
 ]
 readme = "README.md"
 license = { file = "LICENSE" }
