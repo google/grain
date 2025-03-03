@@ -54,13 +54,15 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
         .to_iter_dataset()
     )
 
-  def test_meta_features_not_restricting_without_packed_elements_go_first(self):
+  def test_meta_features_not_restricting_when_splitting_full_length_features(
+      self,
+  ):
     # Pack 9 elements.
     ds = packing_concat_then_split.ConcatThenSplitIterDataset(
         self.dummy_iter_dataset(num_observations=9),
         length_struct={"observation": 6, "index": 6},
         meta_features={"index"},
-        packed_elements_go_first=False,
+        split_full_length_features=True,
     )
     actual_elements = list(ds)
     self.assert_equal_elements(
@@ -107,7 +109,7 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
         self.dummy_iter_dataset(num_observations=9),
         length_struct={"observation": 6, "index": 6},
         meta_features={"index"},
-        packed_elements_go_first=True,
+        split_full_length_features=False,
     )
     actual_elements = list(ds)
     self.assert_equal_elements(
@@ -154,7 +156,7 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
         self.dummy_iter_dataset(num_observations=9),
         length_struct={"observation": 6, "index": 2},
         meta_features={"index"},
-        packed_elements_go_first=True,
+        split_full_length_features=False,
     )
     actual_elements = list(ds)
     self.assert_equal_elements(
@@ -205,7 +207,7 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
         self.dummy_iter_dataset(num_observations=9),
         length_struct={"observation": 6, "index": 6},
         meta_features={"index"},
-        packed_elements_go_first=True,
+        split_full_length_features=False,
         bos_handling=packing_concat_then_split.BOSHandling.REPLACE_FIRST_TOKEN_WITH_BOS,
         bos_token_id=1000,
         bos_features={"observation"},
@@ -273,17 +275,17 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
 
   @parameterized.product(
       checkpoint_steps=[{}, {2}, {0, 3}, {0, 1, 2, 3, 4, 5}],
-      packed_elements_go_first=[True, False],
+      split_full_length_features=[True, False],
   )
   def test_checkpointing(
-      self, checkpoint_steps: set[int], packed_elements_go_first: bool
+      self, checkpoint_steps: set[int], split_full_length_features: bool
   ):
     def _create_iter(state: dict[str, Any] | None):
       ds = packing_concat_then_split.ConcatThenSplitIterDataset(
           self.dummy_iter_dataset(num_observations=12),
           length_struct={"observation": 8, "index": 6},
           meta_features={"index"},
-          packed_elements_go_first=packed_elements_go_first,
+          split_full_length_features=split_full_length_features,
       )
       ds_iter = ds.__iter__()
       if state is not None:
@@ -343,20 +345,20 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
   @parameterized.product(
       num_observations=list(range(12)),
       recreate_iter=[True, False],
-      packed_elements_go_first=[True, False],
+      split_full_length_features=[True, False],
   )
   def test_checkpointing_after_stop_iteration(
       self,
       num_observations: int,
       recreate_iter: bool,
-      packed_elements_go_first: bool,
+      split_full_length_features: bool,
   ):
     def _create_iter(state: dict[str, Any] | None):
       ds = packing_concat_then_split.ConcatThenSplitIterDataset(
           self.dummy_iter_dataset(num_observations=num_observations),
           length_struct={"observation": 8, "index": 6},
           meta_features={"index"},
-          packed_elements_go_first=packed_elements_go_first,
+          split_full_length_features=split_full_length_features,
       )
       ds_iter = ds.__iter__()
       if state is not None:
@@ -384,19 +386,19 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
 
   @parameterized.product(
       num_observations=list(range(1, 12)),
-      packed_elements_go_first=[True, False],
+      split_full_length_features=[True, False],
   )
   def test_checkpointing_using_grain_built_in_tools(
       self,
       num_observations: int,
-      packed_elements_go_first: bool,
+      split_full_length_features: bool,
   ):
     experimental.assert_equal_output_after_checkpoint(
         packing_concat_then_split.ConcatThenSplitIterDataset(
             self.dummy_iter_dataset(num_observations=num_observations),
             length_struct={"observation": 8, "index": 6},
             meta_features={"index"},
-            packed_elements_go_first=packed_elements_go_first,
+            split_full_length_features=split_full_length_features,
         )
     )
 
