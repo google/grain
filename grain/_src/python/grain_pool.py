@@ -370,9 +370,9 @@ class GrainPool(Iterator[T]):
           worker_count=options.num_workers,
           enable_profiling=options.enable_profiling,
           debug_flags=dict(
-              grain_py_debug_mode=config.py_debug_mode,
+              grain_py_debug_mode=config.get_or_default("py_debug_mode"),
               grain_py_dataset_visualization_output_dir=(
-                  config.py_dataset_visualization_output_dir
+                  config.get_or_default("py_dataset_visualization_output_dir")
               ),
           ),
       )

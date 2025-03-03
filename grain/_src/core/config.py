@@ -163,6 +163,14 @@ class Config:
       return value
     raise ValueError(f"Unrecognized config option: {name}")
 
+  def get_or_default(self, name: str) -> Any:
+    """Returns the value if flags are parsed or the default value."""
+    try:
+      return self.__getattr__(name)
+    except flags.UnparsedFlagAccessError:
+      flag_name = f"grain_{name}"
+      return flags.FLAGS[flag_name].default
+
   def __setattr__(self, name: str, value: Any):
     raise ValueError("Please use update().")
 
