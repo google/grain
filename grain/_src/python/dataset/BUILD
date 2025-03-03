@@ -119,6 +119,7 @@ py_test(
         ":stats",
         "//grain/_src/core:transforms",
         "//grain/proto:execution_summary_py_pb2",
+        "@abseil-py//absl/flags",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:flagsaver",
         "@pypi//cloudpickle:pkg",

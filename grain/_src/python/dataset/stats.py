@@ -713,7 +713,9 @@ def make_stats(
     ),
 ) -> Stats:
   """Produces statistics instance according to the current execution mode."""
-  vis_output_dir = grain_config.config.py_dataset_visualization_output_dir
+  vis_output_dir = grain_config.config.get_or_default(
+      "py_dataset_visualization_output_dir"
+  )
   # Only None and "" are supported.
   if vis_output_dir:
     raise NotImplementedError(
@@ -721,7 +723,7 @@ def make_stats(
         " `grain_py_dataset_visualization_output_dir` to empty string to"
         " produce visualization in the logs."
     )
-  if grain_config.config.py_debug_mode:
+  if grain_config.config.get_or_default("py_debug_mode"):
     # In debug mode, we always log the execution summary.
     config = dataclasses.replace(config, log_summary=True)
     return _ExecutionStats(config, parents=parents)

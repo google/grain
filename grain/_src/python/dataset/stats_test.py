@@ -13,11 +13,14 @@
 # limitations under the License.
 
 import collections
+import contextlib
 import functools
+import sys
 import threading
 import time
 from unittest import mock
 
+from absl import flags
 from absl.testing import flagsaver
 import cloudpickle
 from grain._src.core import transforms
@@ -54,7 +57,7 @@ _MAP_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
 "<class 'int'>[]"
 
   ││
-  ││  MapWithIndexMapDataset(transform=_add_dummy_metadata @ .../python/dataset/stats_test.py:151)
+  ││  MapWithIndexMapDataset(transform=_add_dummy_metadata @ .../python/dataset/stats_test.py:154)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -63,7 +66,7 @@ _MAP_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
  'index': "<class 'int'>[]"}
 
   ││
-  ││  MapMapDataset(transform=_identity @ .../python/dataset/stats_test.py:155)
+  ││  MapMapDataset(transform=_identity @ .../python/dataset/stats_test.py:158)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -101,7 +104,7 @@ _ITER_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
 "<class 'int'>[]"
 
   ││
-  ││  MapDatasetIterator(transform=<lambda> @ .../python/dataset/stats_test.py:524)
+  ││  MapDatasetIterator(transform=<lambda> @ .../python/dataset/stats_test.py:543)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -192,6 +195,16 @@ def _for_each_node(fn, nodes):
     to_visit.extend(node._parents)
 
 
+@contextlib.contextmanager
+def _unparse_flags():
+  argv = sys.argv
+  flags.FLAGS.unparse_flags()
+  try:
+    yield
+  finally:
+    flags.FLAGS(argv)
+
+
 class TimerTest(absltest.TestCase):
 
   def test_basic(self):
@@ -212,6 +225,12 @@ class DefaultStatsTest(absltest.TestCase):
   def test_assert_is_default(self):
     s = _make_stats_tree(stats.make_stats)
     self.assertIsInstance(s, stats._DefaultStats)
+
+  def test_with_flags_not_parsed(self):
+    # unparse the debug flags explicitly
+    with _unparse_flags():
+      s = stats.make_stats(stats.StatsConfig(name="test_stats"), ())
+      self.assertIsInstance(s, stats._DefaultStats)
 
   def test_record_self_time(self):
     s = _make_stats_tree(stats.make_stats)
