@@ -19,6 +19,7 @@ import copy
 from typing import TypeVar
 
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset import stats
 from grain._src.python.experimental.index_shuffle.python import index_shuffle_module as index_shuffle
 
 
@@ -188,6 +189,7 @@ class _WindowShuffleDatasetIterator(dataset.DatasetIterator[T]):
         seed=self._global_seed + self._window_index, window=self._window
     )
 
+  @stats.record_next_duration_if_output
   def __next__(self):
     # Window is empty, fill up the next window.
     if not self._window:

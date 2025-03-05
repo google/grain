@@ -19,6 +19,7 @@ from typing import Any, Callable, TypeVar
 
 from grain._src.core import transforms
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset import stats
 import numpy as np
 
 
@@ -215,6 +216,7 @@ class _MapDatasetIterator(dataset.DatasetIterator[T]):
     # TODO: Move users away from this and remove.
     self._index_for_rng = 0
 
+  @stats.record_next_duration_if_output
   def __next__(self):
     element = next(self._parent)
     with self._stats.record_self_time():
@@ -254,6 +256,7 @@ class _RandomMapDatasetIterator(dataset.DatasetIterator[T]):
     self._rng = np.random.Generator(np.random.Philox(seed))
     self._transform_name = transform_name
 
+  @stats.record_next_duration_if_output
   def __next__(self):
     element = next(self._parent)
     with self._stats.record_self_time():

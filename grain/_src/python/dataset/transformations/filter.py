@@ -147,6 +147,7 @@ class _FilterDatasetIterator(dataset.DatasetIterator[T]):
         raise_threshold=self._ctx.dataset_options.filter_raise_threshold_ratio,
     )
 
+  @dataset_stats.record_next_duration_if_output
   def __next__(self):
     value = None
     passed_filter = False

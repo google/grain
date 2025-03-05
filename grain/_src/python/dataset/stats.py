@@ -19,6 +19,7 @@ import abc
 from collections.abc import Sequence
 import contextlib
 import dataclasses
+import functools
 import pprint
 import sys
 import threading
@@ -48,6 +49,20 @@ _self_time_ns_histogram = monitoring.EventMetric(
     ),
     root=grain_monitoring.get_monitoring_root(),
     fields=[("name", str)],
+    bucketer=monitoring.Bucketer.PowersOf(2.0),
+)
+
+_next_duration_ns_histogram = monitoring.EventMetric(
+    "/grain/python/dataset/next_duration_ns",
+    metadata=monitoring.Metadata(
+        description=(
+            "Histogram of durations of every `__next__` call on the output"
+            " iterator. Each data point is the duration value of `__next__`"
+            " call."
+        ),
+        units=monitoring.Units.NANOSECONDS,
+    ),
+    root=grain_monitoring.get_monitoring_root(),
     bucketer=monitoring.Bucketer.PowersOf(2.0),
 )
 
@@ -265,6 +280,38 @@ def _pretty_format_summary(
     tabular_summary.append(row_values)
   table = _Table(tabular_summary, col_widths=col_widths)
   return table.get_pretty_wrapped_summary()  # pylint: disable=protected-access
+
+
+def record_next_duration_if_output(next_fn):
+  """Records the duration of the `__next__` call on the output iterator node.
+
+  Expected to be used as follows:
+  ```
+  class MyMapDatasetIterator(DatasetIterator):
+    ...
+    @stats.record_next_duration_if_output
+    def __next__(self):
+      ...
+  ```
+
+  Args:
+    next_fn: The `__next__` function to wrap.
+
+  Returns:
+    The wrapped `next_fn`.
+  """
+
+  @functools.wraps(next_fn)
+  def wrapper(iterator):
+    start_time = time.perf_counter_ns()
+    result = next_fn(iterator)
+
+    if iterator._stats._is_output:  # pylint:disable=protected-access
+      next_duration_ns = time.perf_counter_ns() - start_time
+      _next_duration_ns_histogram.Record(next_duration_ns)
+    return result
+
+  return wrapper
 
 
 class _Table:

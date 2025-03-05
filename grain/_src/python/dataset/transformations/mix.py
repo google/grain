@@ -24,6 +24,7 @@ from typing import Any, TypeVar, overload
 from grain._src.core import exceptions
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset import stats
 from typing_extensions import override
 
 Element = Any
@@ -139,6 +140,7 @@ class _MixedDatasetIterator(dataset.DatasetIterator[T]):
     self._index = 0
     self._stop = False
 
+  @stats.record_next_duration_if_output
   def __next__(self):
     if self._stop:
       # Although there may be elements available in some parent datasets, do not

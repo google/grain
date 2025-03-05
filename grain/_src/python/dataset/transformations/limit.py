@@ -16,6 +16,7 @@
 from typing import Any, TypeVar
 
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset import stats
 
 Element = Any
 T = TypeVar("T")  # pylint: disable=invalid-name
@@ -33,6 +34,7 @@ class _LimitDatasetIterator(dataset.DatasetIterator[T]):
     self._count = count
     self._count_elements_read = 0
 
+  @stats.record_next_duration_if_output
   def __next__(self):
     if self._count_elements_read >= self._count:
       raise StopIteration
