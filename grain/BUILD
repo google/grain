@@ -7,13 +7,28 @@ licenses(["notice"])
 
 exports_files(["LICENSE"])
 
-py_library(
+# Backwards compatibility alias.
+alias(
     name = "python",
+    actual = ":grain",
+    visibility = ["//visibility:public"],
+)
+
+py_library(
+    name = "grain",
     srcs = [
         "__init__.py",
         "_src/__init__.py",
+        "checkpoint.py",
+        "constants.py",
+        "experimental.py",
+        "multiprocessing.py",
         "python/__init__.py",
         "python/experimental.py",
+        "samplers.py",
+        "sharding.py",
+        "sources.py",
+        "transforms.py",
     ],
     data = ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
     srcs_version = "PY3",
