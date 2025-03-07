@@ -39,6 +39,9 @@ testing = [
     'tensorflow',
     'tensorflow-datasets',
 ]
+parquet = [
+    'pyarrow',
+]
 
 [project.urls]
 homepage = "https://github.com/google/grain"
