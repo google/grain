@@ -11,12 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Grain is a library for loading and processing data for training and evaluation."""
+"""Checks that OSS Grain Package works end-to-end."""
+from typing import Sequence
+from absl import app
+import grain
 
-# Allow `import grain` for PyGrain.`import grain.python as grain` will still be
-# working for backwards compatibility.
 
-try:
-  from grain.python import *  # pylint: disable=g-import-not-at-top
-except ImportError:
-  pass
+def main(argv: Sequence[str]) -> None:
+  del argv
+  ds = grain.MapDataset.source(range(10)).map(lambda x: x + 1)
+
+  for e in ds:
+    print(f"iindyk: {e}")
+
+
+if __name__ == "__main__":
+  app.run(main)

@@ -165,3 +165,14 @@ py_test(
         "@abseil-py//absl/testing:absltest",
     ],
 )
+
+py_binary(
+    name = "smoke_test",
+    srcs = ["smoke_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        "//grain:python",
+        "@abseil-py//absl:app",
+        "@abseil-py//absl/testing:absltest",
+    ],
+)
