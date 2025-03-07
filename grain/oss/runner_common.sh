@@ -16,7 +16,7 @@ build_and_test_grain_linux() {
 
   # Using a previous version of Blaze to avoid:
   # https://github.com/bazelbuild/bazel/issues/8622
-  export BAZEL_VERSION='8.0.0'
+  export BAZEL_VERSION='7.1.1'
 
   # Build wheels for multiple Python minor versions.
   PYTHON_MAJOR_VERSION=3
@@ -88,19 +88,13 @@ update_bazel_macos() {
   export PATH
 }
 
-install_grain_deps() {
-  AR_DIR="$SOURCE_DIR"'/grain/oss/array_record'
-  "$PYTHON_BIN" -m pip install -U --find-links="$AR_DIR" array_record --no-cache-dir;
-  "$PYTHON_BIN" -m pip install -r "$SOURCE_DIR"'/test_requirements.in'
-}
-
 build_and_test_grain_macos() {
   SOURCE_DIR="$1"
   # Set up Bazel only if not set up for Array Record build.
   if [ ! -n "${BUILD_ARRAY_RECORD}" ]; then
     # Using a previous version of Bazel to avoid:
     # https://github.com/bazelbuild/bazel/issues/8622
-    export BAZEL_VERSION='8.0.0'
+    export BAZEL_VERSION='7.1.1'
     update_bazel_macos "${BAZEL_VERSION}"
     bazel --version
   fi
@@ -113,7 +107,6 @@ build_and_test_grain_macos() {
     printf 'Creating Grain wheel for Python Version %s\n' "$PYTHON_VERSION"
     setup_env_vars_py "$PYTHON_MAJOR_VERSION" "$PYTHON_MINOR_VERSION"
     install_and_init_pyenv "${PYENV_ROOT}"
-    install_grain_deps
 
     sh "${SOURCE_DIR}/grain/oss/build_whl.sh"
   done
@@ -129,7 +122,6 @@ build_and_test_grain() {
     bazel --version
     setup_env_vars_py "$PYTHON_MAJOR_VERSION" "$PYTHON_MINOR_VERSION"
     install_and_init_pyenv "${PYENV_ROOT}"
-    install_grain_deps
     sh "${SOURCE_DIR}"'/grain/oss/build_whl.sh'
   else
     # Automatically decide which platform to build for by checking on which

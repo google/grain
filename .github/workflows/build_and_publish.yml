@@ -33,7 +33,7 @@ jobs:
           export PYTHON_VERSION=${{ matrix.python-version }}
           export PYTHON_MAJOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f1)
           export PYTHON_MINOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f2)
-          export BAZEL_VERSION="8.0.0"
+          export BAZEL_VERSION="7.1.1"
           export OUTPUT_DIR="/tmp/grain"
           export SOURCE_DIR="/tmp/grain"
           . "${SOURCE_DIR}"'/grain/oss/runner_common.sh'

@@ -36,24 +36,7 @@ RUN --mount=type=cache,target=/root/.cache \
 # Install dependencies needed for grain.
 RUN --mount=type=cache,target=/root/.cache \
   $PYTHON_BIN -m pip install -U \
-    absl-py \
-    build \
-    cloudpickle \
-    dm-tree \
-    etils[epath,epy] \
-    jaxtyping \
-    more-itertools>=9.1.0 \
-    numpy;
+    setuptools;
 
-# Install dependencies needed for grain tests
-RUN --mount=type=cache,target=/root/.cache \
-  $PYTHON_BIN -m pip install -U \
-    attrs \
-    auditwheel \
-    dill \
-    jax \
-    jaxlib \
-    tensorflow \
-    tensorflow-datasets;
 
 WORKDIR "/tmp/grain"
