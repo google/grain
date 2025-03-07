@@ -69,6 +69,9 @@ main() {
   cd "${previous_wd}"
 
   printf '%s : "=== Output wheel file is in: %s\n' "$(date)" "${DEST}"
+
+  $PYTHON_BIN -m pip install --find-links=/tmp/grain/all_dist grain
+  $PYTHON_BIN grain/_src/core/smoke_test.py
 }
 
 main "$@"
