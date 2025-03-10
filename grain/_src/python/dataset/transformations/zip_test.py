@@ -55,5 +55,49 @@ class ZipMapDatasetTest(parameterized.TestCase):
       self.assertEqual(ds[i], tuple(i + ds_idx for ds_idx in ds_idx_list))
 
 
+class ZipIterDatasetTest(parameterized.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    self.ds_list = [
+        dataset.MapDataset.range(0, 20),
+        dataset.MapDataset.range(1, 21),
+        dataset.MapDataset.range(2, 22),
+    ]
+
+  @parameterized.parameters(
+      {"ds_idx_list": x}
+      for x in list(itertools.combinations(range(3), 3))
+      + list(itertools.combinations(range(3), 2))
+      + list(itertools.combinations(range(3), 1))
+  )
+  def test_iter(self, ds_idx_list):
+    ds = zip_ds.ZipIterDataset(
+        parents=[self.ds_list[i].to_iter_dataset() for i in ds_idx_list]
+    )
+    out = list(ds)
+    for i in range(20):
+      self.assertEqual(out[i], tuple(i + ds_idx for ds_idx in ds_idx_list))
+
+  def test_checkpointing(self):
+    ds = zip_ds.ZipIterDataset(
+        parents=[p.to_iter_dataset() for p in self.ds_list]
+    )
+    ds_iter = iter(ds)
+
+    max_steps = 10
+    values_without_interruption = []
+    checkpoints = []
+
+    for _ in range(max_steps):
+      checkpoints.append(ds_iter.get_state())  # pytype: disable=attribute-error
+      values_without_interruption.append(next(ds_iter))
+
+    for starting_step in [0, 1, 5, 8]:
+      ds_iter.set_state(checkpoints[starting_step])  # pytype: disable=attribute-error
+      for i in range(starting_step, max_steps):
+        self.assertEqual(next(ds_iter), values_without_interruption[i])
+
+
 if __name__ == "__main__":
   absltest.main()
