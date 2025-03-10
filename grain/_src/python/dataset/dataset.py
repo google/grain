@@ -78,7 +78,7 @@ S = TypeVar("S")
 
 
 class _Dataset:
-  """Node of a dataset tree structure that represents data transfromation.
+  """Node of a dataset tree structure that represents data transformation.
 
   Supports generating default seed for random transformations.
   """
@@ -170,7 +170,7 @@ class _Dataset:
 
 
 class _MapDatasetMeta(abc.ABCMeta):
-  """Metaclass for `MapDataset` containing factory transfromations."""
+  """Metaclass for `MapDataset` containing factory transformations."""
 
   def source(
       cls, source: Sequence[T] | base.RandomAccessDataSource[T]
@@ -1316,7 +1316,7 @@ def apply_transformations(
 
   Args:
     ds: `MapDataset` or `IterDataset` to apply the transformations to.
-    transformations: one or more transfromations to apply.
+    transformations: one or more transformations to apply.
 
   Returns:
     Dataset of the same type with transformations applied.
