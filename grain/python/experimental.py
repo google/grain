@@ -49,7 +49,10 @@ from grain._src.python.dataset.transformations.shuffle import (
     WindowShuffleMapDataset,
     WindowShuffleIterDataset,
 )
-from grain._src.python.dataset.transformations.zip import ZipMapDataset
+from grain._src.python.dataset.transformations.zip import (
+    ZipMapDataset,
+    ZipIterDataset,
+)
 from grain._src.core.transforms import (
     FlatMapTransform,
     MapWithIndexTransform,
