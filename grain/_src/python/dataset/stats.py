@@ -113,16 +113,12 @@ def _pretty_format_ns(value: int) -> str:
 
 
 def _get_avg_processing_time_ns(
-    summary: execution_summary_pb2.ExecutionSummary,
-    node_id: int,
+    node: execution_summary_pb2.ExecutionSummary.Node,
 ) -> int:
   """Returns the average processing time in nanoseconds for the given node."""
-  if summary.nodes[node_id].num_produced_elements == 0:
+  if node.num_produced_elements == 0:
     return 0
-  return int(
-      summary.nodes[node_id].total_processing_time_ns
-      / summary.nodes[node_id].num_produced_elements
-  )
+  return int(node.total_processing_time_ns / node.num_produced_elements)
 
 
 def _get_nodes_before_prefetch(
@@ -208,7 +204,44 @@ def _populate_wait_time_ratio(
   _compute_wait_time_ratio(summary, 0, aggregated_wait_time_ns)
 
 
-def _pretty_format_summary(
+def _get_col_value(
+    name: str, node: execution_summary_pb2.ExecutionSummary.Node
+) -> str:
+  """Returns the string representation of the value of a column for the given node."""
+  if name == _AVG_PROCESSING_TIME_COLUMN_NAME:
+    value = _get_avg_processing_time_ns(node)
+  else:
+    value = getattr(node, name)
+
+  if name == "wait_time_ratio":
+    if node.is_prefetch:
+      # The iterator wait time of the prefetch node is distributed across
+      # its child nodes.
+      return "N/A"
+    else:
+      return _format_ratio_as_percent(value)
+
+  elif name in (
+      "min_processing_time_ns",
+      "max_processing_time_ns",
+      "total_processing_time_ns",
+      _AVG_PROCESSING_TIME_COLUMN_NAME,
+      "num_produced_elements",
+  ):
+    # If the total processing time is zero, the pipeline has not yet
+    # produced an element and processing times & num_produced_elements are
+    # not yet meaningful.
+    if node.total_processing_time_ns == 0:
+      return "N/A"
+    elif name != "num_produced_elements":
+      return _pretty_format_ns(value)
+    else:
+      return str(value)
+  else:
+    return str(value)
+
+
+def pretty_format_summary(
     summary: execution_summary_pb2.ExecutionSummary,
 ) -> str:
   """Returns Execution Stats Summary for the dataset pipeline in tabular format."""
@@ -232,54 +265,16 @@ def _pretty_format_summary(
   col_widths = []
   for name in col_names:
     max_width = len(_COLUMN_NAME_OVERRIDES.get(name, name))
-    for node_id in summary.nodes:
-      if name == _AVG_PROCESSING_TIME_COLUMN_NAME:
-        value = _get_avg_processing_time_ns(summary, node_id)
-      else:
-        value = getattr(summary.nodes[node_id], name)
-      max_width = max(len(str(value)), max_width)
+    for node in summary.nodes.values():
+      max_width = max(len(_get_col_value(name, node)), max_width)
     col_widths.append(max_width)
 
   for node_id in sorted(summary.nodes, reverse=True):
-    row_values = []
     node = summary.nodes[node_id]
-    for name in col_names:
-      is_total_processing_time_zero = node.total_processing_time_ns == 0
-      if name == _AVG_PROCESSING_TIME_COLUMN_NAME:
-        value = _get_avg_processing_time_ns(summary, node_id)
-      else:
-        value = getattr(summary.nodes[node_id], name)
-
-      if name == "wait_time_ratio":
-        if node.is_prefetch:
-          # The iterator wait time of the prefetch node is distributed across
-          # its child nodes.
-          col_value = "N/A"
-        else:
-          col_value = _format_ratio_as_percent(value)
-
-      elif name in (
-          "min_processing_time_ns",
-          "max_processing_time_ns",
-          "total_processing_time_ns",
-          _AVG_PROCESSING_TIME_COLUMN_NAME,
-          "num_produced_elements",
-      ):
-        # If the total processing time is zero, the pipeline has not yet
-        # produced an element and processing times & num_produced_elements are
-        # not yet meaningful.
-        if is_total_processing_time_zero:
-          col_value = "N/A"
-        elif name != "num_produced_elements":
-          col_value = _pretty_format_ns(value)
-        else:
-          col_value = str(value)
-      else:
-        col_value = str(value)
-      row_values.append(col_value)
+    row_values = [_get_col_value(name, node) for name in col_names]
     tabular_summary.append(row_values)
   table = _Table(tabular_summary, col_widths=col_widths)
-  return table.get_pretty_wrapped_summary()  # pylint: disable=protected-access
+  return table.get_pretty_wrapped_summary()
 
 
 def record_next_duration_if_output(next_fn):
@@ -667,7 +662,7 @@ class _ExecutionStats(_VisualizationStats):
             " the `PrefetchDatasetIterator` node indicates it is a bottleneck."
             " The `MapDataset` nodes are executed in multiple threads and thus,"
             " should not be compared to the `total_processing_time` of"
-            f" `DatasetIterator` nodes.\n\n{_pretty_format_summary(summary)}"
+            f" `DatasetIterator` nodes.\n\n{pretty_format_summary(summary)}"
         )
         logging.info(msg)
         if _running_in_colab():

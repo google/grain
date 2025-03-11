@@ -36,6 +36,7 @@ py_library(
         "//grain/_src/python:shared_memory_array",
         "//grain/_src/python/dataset",
         "//grain/_src/python/dataset:base",
+        "//grain/_src/python/dataset:stats",
         "//grain/_src/python/dataset:visualize",
         "//grain/_src/python/dataset/transformations:flatmap",
         "//grain/_src/python/dataset/transformations:interleave",

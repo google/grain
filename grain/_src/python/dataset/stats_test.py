@@ -435,7 +435,7 @@ class DebugModeStatsTest(absltest.TestCase):
 """
     self.assertEqual(
         expected_result,
-        "\n" + stats._pretty_format_summary(dummy_summary),
+        "\n" + stats.pretty_format_summary(dummy_summary),
     )
 
   def test_compute_iterator_wait_time_ratio(self):
