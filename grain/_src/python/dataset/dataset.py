@@ -1361,5 +1361,5 @@ def get_execution_summary(
         "Set `grain_py_debug_mode` or set `execution_tracking_mode` in grain"
         " options to `STAGE_TIMING` to enable execution statistics collection."
     )
-  return execution_stats._get_execution_summary()
+  return execution_stats._get_aggregated_summary()
   # pylint: enable=protected-access

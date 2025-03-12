@@ -204,6 +204,7 @@ py_library(
         "//grain/_src/core:config",
         "//grain/_src/core:parallel",
         "//grain/_src/core:tree_lib",
+        "//grain/proto:execution_summary_py_pb2",
         "@abseil-py//absl/logging",
         "@pypi//cloudpickle:pkg",
     ],

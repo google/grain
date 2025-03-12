@@ -380,7 +380,12 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn):
     self._read_and_transform_data = read_and_transform_data
 
   def __call__(
-      self, *, worker_index: int, worker_count: int
+      self,
+      *,
+      worker_index: int,
+      worker_count: int,
+      stats_queue=None,
+      termination_event=None,
   ) -> Iterator[record.Record]:
     del worker_count
     last_seen_index = self._state[_LAST_SEEN_INDICES].get(str(worker_index))
