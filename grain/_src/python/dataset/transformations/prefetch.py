@@ -21,6 +21,8 @@ import contextlib
 import copy
 import functools
 import math
+from multiprocessing import queues
+from multiprocessing import synchronize
 import queue
 import sys
 import threading
@@ -39,6 +41,7 @@ from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
 from grain._src.python.dataset.transformations import filter as filter_dataset
+from grain.proto import execution_summary_pb2
 import numpy as np
 
 T = TypeVar("T")
@@ -378,13 +381,22 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
   """
 
   def __init__(
-      self, state: dict[str, dict[str, Any] | int], ds: dataset.IterDataset[T]
+      self,
+      state: dict[str, dict[str, Any] | int],
+      ds: dataset.IterDataset[T],
   ):
     self._state = state
     self._ds = ds
 
   def __call__(
-      self, *, worker_index: int, worker_count: int
+      self,
+      *,
+      worker_index: int,
+      worker_count: int,
+      stats_queue: (
+          queues.Queue[execution_summary_pb2.ExecutionSummary] | None
+      ) = None,
+      termination_event: synchronize.Event | None = None,
   ) -> Iterator[tuple[T, Optional[dict[str, Any]]]]:
     if worker_count > 1:
       _set_slice(self._ds, slice(worker_index, None, worker_count))
@@ -472,6 +484,9 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     workers_state: dict[str, Any] = {
         str(i): None for i in range(multiprocessing_options.num_workers)
     }
+    self._stats_queue = mp.get_context("spawn").Queue(
+        maxsize=multiprocessing_options.num_workers
+    )
 
     self._state: dict[str, dict[str, Any] | int] = {
         _WORKERS_STATE: workers_state,
@@ -556,6 +571,10 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     ds = dataset.WithOptionsIterDataset(
         self._iter_parent, self._ctx.dataset_options
     )
+    # pylint: disable=protected-access
+    self._stats._config.stats_queue = self._stats_queue
+    self._stats._config.num_workers = self._multiprocessing_options.num_workers
+    # pylint: enable=protected-access
     get_element_producer_fn = GetElementProducerFn(self._state, ds)
 
     return grain_pool.MultiProcessIterator(
@@ -564,6 +583,7 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         (self._state[_LAST_WORKER_INDEX] + 1)
         % self._multiprocessing_options.num_workers,
         self._worker_init_fn,
+        self._stats_queue,
     )
 
   def __str__(self) -> str:
