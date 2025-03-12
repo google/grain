@@ -102,11 +102,33 @@ py_library(
     srcs_version = "PY3",
     deps = [
         ":base",
+        ":stats_utils",
         "//grain/_src/core:config",
         "//grain/_src/core:monitoring",
         "//grain/_src/core:tree_lib",
+        "//grain/_src/python:multiprocessing_common",
         "//grain/proto:execution_summary_py_pb2",
         "@abseil-py//absl/logging",
+    ],
+)
+
+py_library(
+    name = "stats_utils",
+    srcs = ["stats_utils.py"],
+    srcs_version = "PY3",
+    deps = [
+        "//grain/proto:execution_summary_py_pb2",
+    ],
+)
+
+py_test(
+    name = "stats_utils_test",
+    srcs = ["stats_utils_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":stats_utils",
+        "//grain/proto:execution_summary_py_pb2",
+        "@abseil-py//absl/testing:absltest",
     ],
 )
 

@@ -21,6 +21,7 @@ import contextlib
 import copy
 import functools
 import math
+from multiprocessing import queues
 import queue
 import sys
 import threading
@@ -379,13 +380,19 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
   """
 
   def __init__(
-      self, state: dict[str, dict[str, Any] | int], ds: dataset.IterDataset[T]
+      self,
+      state: dict[str, dict[str, Any] | int],
+      ds: dataset.IterDataset[T],
   ):
     self._state = state
     self._ds = ds
 
   def __call__(
-      self, *, worker_index: int, worker_count: int
+      self,
+      *,
+      worker_index: int,
+      worker_count: int,
+      stats_out_queue: queues.Queue | None = None,
   ) -> Iterator[tuple[T, Optional[dict[str, Any]]]]:
     if worker_count > 1:
       _set_slice(self._ds, slice(worker_index, None, worker_count))
@@ -473,6 +480,10 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     workers_state: dict[str, Any] = {
         str(i): None for i in range(multiprocessing_options.num_workers)
     }
+    self._stats_in_queues = tuple(
+        mp.get_context("spawn").Queue(maxsize=5)
+        for _ in range(multiprocessing_options.num_workers)
+    )
 
     self._state: dict[str, dict[str, Any] | int] = {
         _WORKERS_STATE: workers_state,
@@ -486,6 +497,7 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         name=str(self),
         transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
         is_prefetch=True,
+        stats_in_queues=self._stats_in_queues,
     )
     return dataset_stats.make_stats(
         config,
@@ -568,6 +580,7 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         (self._state[_LAST_WORKER_INDEX] + 1)
         % self._multiprocessing_options.num_workers,
         self._worker_init_fn,
+        self._stats_in_queues,
     )
 
   def __str__(self) -> str:

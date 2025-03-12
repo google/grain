@@ -125,7 +125,13 @@ def _print_profile(preamble: str, profile: cProfile.Profile):
 class GetElementProducerFn(Protocol[T]):
   """A callable class able to generate elements with serialization support."""
 
-  def __call__(self, *, worker_index: int, worker_count: int) -> Iterator[T]:
+  def __call__(
+      self,
+      *,
+      worker_index: int,
+      worker_count: int,
+      stats_out_queue: queues.Queue | None = None,
+  ) -> Iterator[T]:
     """Returns a generator of elements."""
 
   def serialize(self) -> bytes:
@@ -172,6 +178,7 @@ def _initialize_and_get_element_producer(
     debug_flags: dict[str, Any],
     worker_index: int,
     worker_count: int,
+    stats_out_queue: queues.Queue,
 ) -> Iterator[Any]:
   """Unpickles the element producer from the args queue and closes the queue."""
   (
@@ -193,7 +200,9 @@ def _initialize_and_get_element_producer(
   )
 
   element_producer = element_producer_fn(
-      worker_index=worker_index, worker_count=worker_count
+      worker_index=worker_index,
+      worker_count=worker_count,
+      stats_out_queue=stats_out_queue,
   )
   # args_queue has only a single argument and thus can be safely closed.
   args_queue.close()
@@ -210,6 +219,7 @@ def _worker_loop(
     worker_count: int,
     enable_profiling: bool,
     debug_flags: dict[str, Any],
+    stats_out_queue: queues.Queue,
 ):
   """Code to be run on each child process."""
   out_of_elements = False
@@ -224,6 +234,7 @@ def _worker_loop(
         debug_flags=debug_flags,
         worker_index=worker_index,
         worker_count=worker_count,
+        stats_out_queue=stats_out_queue,
     )
     profiling_enabled = enable_profiling and worker_index == 0
     if profiling_enabled:
@@ -311,6 +322,7 @@ class GrainPool(Iterator[T]):
       termination_event: threading.Event | None = None,
       options: MultiprocessingOptions,
       worker_init_fn: Callable[[int, int], None] | None = None,
+      stats_in_queues: tuple[queues.Queue, ...] | None = None,
   ):
     """Initialise a Grain Pool.
 
@@ -327,6 +339,8 @@ class GrainPool(Iterator[T]):
       worker_init_fn: Function to run in each worker process before the element
         producer. The function takes two arguments: the current worker index and
         the total worker count.
+      stats_in_queues: Queue to propagate execution summary from child processes
+        to the parent.
     """
     self.num_processes = options.num_workers
     logging.info("Grain pool will use %i processes.", self.num_processes)
@@ -345,6 +359,7 @@ class GrainPool(Iterator[T]):
     # Queue to propagate errors from child processes to the parent. Note that
     # this queue is shared by all child processes.
     self.worker_error_queue = ctx.Queue(self.num_processes)
+    self.stats_in_queues = stats_in_queues
 
     try:
       get_element_producer_fn = get_element_producer_fn.serialize()
@@ -365,6 +380,11 @@ class GrainPool(Iterator[T]):
           args_queue=worker_args_queue,
           errors_queue=self.worker_error_queue,
           output_queue=worker_output_queue,
+          stats_out_queue=(
+              self.stats_in_queues[worker_index]
+              if self.stats_in_queues
+              else None
+          ),
           termination_event=self._workers_termination_event,
           worker_index=worker_index,
           worker_count=options.num_workers,
@@ -570,6 +590,7 @@ def _process_elements_in_grain_pool(
     termination_event: threading.Event,
     worker_index_to_start_reading: int,
     worker_init_fn: Callable[[int, int], None] | None,
+    stats_in_queues: tuple[queues.Queue, ...] | None,
 ) -> None:
   """Processes elements in grain worker pool asynchronously."""
 
@@ -586,6 +607,7 @@ def _process_elements_in_grain_pool(
         termination_event=termination_event,
         options=multiprocessing_options,
         worker_init_fn=worker_init_fn,
+        stats_in_queues=stats_in_queues,
     ) as g_pool:
       for element in g_pool:
         if read_thread_should_stop():
@@ -639,6 +661,7 @@ class MultiProcessIterator(Iterator[T]):
       multiprocessing_options: MultiprocessingOptions,
       worker_index_to_start_reading: int,
       worker_init_fn: Callable[[int, int], None] | None = None,
+      stats_in_queues: tuple[queues.Queue, ...] | None = None,
   ):
     """Initializes MultiProcessIterator.
 
@@ -651,6 +674,8 @@ class MultiProcessIterator(Iterator[T]):
       worker_init_fn: Function to run in each worker process before the element
         producer. The function takes two arguments: the current worker index and
         the total worker count.
+      stats_in_queues: Queues to send execution summaries from worker processes
+        to the main process.
     """
     self._get_element_producer_fn = get_element_producer_fn
     self._multiprocessing_options = multiprocessing_options
@@ -660,6 +685,7 @@ class MultiProcessIterator(Iterator[T]):
     self._reader_thread_pool = None
     self._termination_event = None
     self._reader_thread = None
+    self._stats_in_queues = stats_in_queues
 
   def __del__(self):
     if self._reader_thread:
@@ -689,6 +715,7 @@ class MultiProcessIterator(Iterator[T]):
             termination_event=self._termination_event,
             worker_index_to_start_reading=self._last_worker_index + 1,
             worker_init_fn=self._worker_init_fn,
+            stats_in_queues=self._stats_in_queues,
         ),
     )
     self._reader_thread.start()
