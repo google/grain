@@ -94,14 +94,11 @@ install_grain_deps() {
 
 build_and_test_grain_macos() {
   SOURCE_DIR="$1"
-  # Set up Bazel only if not set up for Array Record build.
-  if [ ! -n "${BUILD_ARRAY_RECORD}" ]; then
-    # Using a previous version of Bazel to avoid:
-    # https://github.com/bazelbuild/bazel/issues/8622
-    export BAZEL_VERSION='7.1.1'
-    update_bazel_macos "${BAZEL_VERSION}"
-    bazel --version
-  fi
+  # Using a previous version of Bazel to avoid:
+  # https://github.com/bazelbuild/bazel/issues/8622
+  export BAZEL_VERSION='7.1.1'
+  update_bazel_macos "${BAZEL_VERSION}"
+  bazel --version
 
   PYTHON_MAJOR_VERSION=3
   for PYTHON_MINOR_VERSION in 10 11 12
