@@ -13,6 +13,11 @@ main() {
   # Remove .bazelrc if it already exists
   [ -e .bazelrc ] && rm .bazelrc
 
+  # Only use __init__.py files that are present in the source. Without this,
+  # Bazel will create empty __init__.py files for all subdirectories,
+  # occasionally(!) overriding the source __init__.py files.
+  write_to_bazelrc "build --incompatible_default_to_explicit_init_py"
+
   # Enable host OS specific configs. For instance, "build:linux" will be used
   # automatically when building on Linux.
   write_to_bazelrc "build --enable_platform_specific_config"
