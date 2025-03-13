@@ -84,6 +84,12 @@ main() {
   cd "${previous_wd}"
 
   printf '%s : "=== Output wheel file is in: %s\n' "$(date)" "${DEST}"
+
+  # Install grain from the wheel and run smoke tests.
+  $PYTHON_BIN -m pip install --find-links=/tmp/grain/all_dist grain
+  $PYTHON_BIN -m pip install tensorflow jax
+  $PYTHON_BIN grain/_src/core/smoke_test_with_tf.py
+  $PYTHON_BIN grain/_src/core/smoke_test_with_jax.py
 }
 
 main "$@"
