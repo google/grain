@@ -34,6 +34,7 @@ from grain._src.core.transforms import (
     BatchTransform as Batch,
     FilterTransform,
     MapTransform,
+    FlatMapTransform,
     MapWithIndexTransform,
     RandomMapTransform,
     Transformation,
