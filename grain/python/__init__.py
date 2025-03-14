@@ -11,7 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""APIs for Grain Python backend."""
+"""Public API for Grain.
+
+Backwards compatibility re-import. Prefer adding new APIs to top-level modules.
+"""
 
 # pylint: disable=g-importing-member
 # pylint: disable=g-import-not-at-top

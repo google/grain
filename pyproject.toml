@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "grain"
-version = "0.2.5"
-description = "Grain: A library for loading and transforming data for neural network training."
+version = "0.2.6"
+description = "Grain: A library for loading and transforming data for ML training."
 keywords = []
 authors = [
     {name = "Grain team", email = "grain-dev@google.com"},
