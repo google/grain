@@ -19,15 +19,18 @@ import dataclasses
 class ReadOptions:
   """Options for reading data from the DataSource.
 
-  These settings are per-worker. Each worker uses separate threads and buffer
-  for reading and processing data.
-  Example: With ReadOptions.num_threads=8 and WorkerOptions.num_workers=10 there
-  will be 80 threads reading data.
+  These settings configure a single Python process. Each process uses separate
+  threads and buffer for reading and processing data.
+
+  Example: With ReadOptions.num_threads=8 and
+  MultiprocessingOptions.num_workers=10 there will be 80 threads reading the
+  data (8 threads in each of 10 Python processes).
 
   Attributes:
     num_threads: Number of threads reading from the DataSource in parallel.
-    prefetch_buffer_size: Size of the buffer for reading elements. This helps
-      when reading from a distributed file system.
+    prefetch_buffer_size: Size of the buffer for reading elements per Python
+      process (not per thread). Useful when reading from a distributed file
+      system.
   """
 
   # The current default values where chosen by running a few selected
