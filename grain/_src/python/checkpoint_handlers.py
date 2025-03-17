@@ -24,6 +24,8 @@ IteratorType = TypeVar(
     "IteratorType", data_loader.PyGrainDatasetIterator, dataset.DatasetIterator
 )
 
+checkpointable_iterator = "CheckpointableIterator"
+
 
 def _get_process_index_and_count():
   try:
@@ -48,7 +50,9 @@ class PyGrainCheckpointHandler:
   ):
     """Saves the given iterator to the checkpoint in `directory`."""
     item = item or args.item  # pytype:disable=attribute-error
-    if isinstance(item, dataset.DatasetIterator):
+    if isinstance(
+        item, dataset.DatasetIterator
+    ) or checkpointable_iterator in str(item):
       state = json.dumps(item.get_state(), indent=4)
     else:
       state = item.get_state().decode()
@@ -69,7 +73,9 @@ class PyGrainCheckpointHandler:
     if not filename.exists():
       raise ValueError(f"File {filename} does not exist.")
     state = filename.read_text()
-    if isinstance(item, dataset.DatasetIterator):
+    if isinstance(
+        item, dataset.DatasetIterator
+    ) or checkpointable_iterator in str(item):
       state = json.loads(state)
     else:
       state = state.encode()
