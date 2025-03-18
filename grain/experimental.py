@@ -11,16 +11,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Experimental Grain APIs.
+"""Experimental Grain APIs."""
 
-Backwards compatibility re-import. Prefer adding new APIs to top-level
-`experimental.py` file.
-"""
 
 # pylint: disable=g-importing-member
 # pylint: disable=g-bad-import-order
 # pylint: disable=g-multiple-import
 # pylint: disable=unused-import
+
+from grain._src.core.transforms import (
+    FlatMapTransform,
+    MapWithIndexTransform,
+)
 
 from grain._src.python.dataset.base import (
     DatasetOptions,
@@ -40,7 +42,9 @@ from grain._src.python.dataset.transformations.interleave import (
 from grain._src.python.dataset.transformations.limit import LimitIterDataset
 from grain._src.python.dataset.transformations.map import RngPool
 from grain._src.python.dataset.transformations.mix import ConcatenateMapDataset
-from grain._src.python.dataset.transformations.packing import FirstFitPackIterDataset
+from grain._src.python.dataset.transformations.packing import (
+    FirstFitPackIterDataset,
+)
 from grain._src.python.dataset.transformations.packing_concat_then_split import (
     BOSHandling,
     ConcatThenSplitIterDataset,
@@ -57,13 +61,14 @@ from grain._src.python.dataset.transformations.zip import (
     ZipMapDataset,
     ZipIterDataset,
 )
-from grain._src.core.transforms import (
-    FlatMapTransform,
-    MapWithIndexTransform,
+from grain._src.python.experimental.example_packing.packing import (
+    PackAndBatchOperation,
 )
-from grain._src.python.experimental.example_packing.packing import PackAndBatchOperation
+from grain._src.python.experimental.index_shuffle.python.index_shuffle_module import (
+    index_shuffle,
+)
 
-# This should evetually live under grain.testing.
-from grain._src.python.testing.experimental import assert_equal_output_after_checkpoint
-
-from grain._src.python.experimental.index_shuffle.python.index_shuffle_module import index_shuffle
+# This should eventually live under grain.testing.
+from grain._src.python.testing.experimental import (
+    assert_equal_output_after_checkpoint,
+)

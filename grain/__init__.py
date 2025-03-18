@@ -11,8 +11,36 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""Public API for Grain."""
 
-# Allow `import grain` in OSS.
-# `import grain.python as grain` will still be working for backwards
-# compatibility.
-from grain.python import *
+
+# pylint: disable=g-importing-member
+# pylint: disable=unused-import
+# pylint: disable=g-multiple-import
+# pylint: disable=g-import-not-at-top
+
+# We import all public modules here to enable the use of `grain.foo.Bar`
+# instead of forcing users to write `from grain import foo as grain_foo`.
+from grain import (
+    experimental,
+    checkpoint,
+    constants,
+    multiprocessing,
+    samplers,
+    sharding,
+    sources,
+    transforms,
+)
+
+from grain._src.core.config import config
+from grain._src.python.data_loader import (
+    DataLoader,
+    PyGrainDatasetIterator as DataLoaderIterator,
+)
+from grain._src.python.dataset.dataset import (
+    DatasetIterator,
+    IterDataset,
+    MapDataset,
+)
+from grain._src.python.load import load
+from grain._src.python.record import Record, RecordMetadata
