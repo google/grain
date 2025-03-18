@@ -53,6 +53,7 @@ py_library(
         "//grain/_src/python/dataset:base",
         "//grain/_src/python/dataset:stats",
         "//grain/_src/python/dataset:visualize",
+        "//grain/_src/python/dataset/sources:parquet_dataset",
         "//grain/_src/python/dataset/transformations:flatmap",
         "//grain/_src/python/dataset/transformations:interleave",
         "//grain/_src/python/dataset/transformations:limit",

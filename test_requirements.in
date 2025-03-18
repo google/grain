@@ -26,3 +26,4 @@ jaxtyping
 numpy<2.0
 attrs
 tensorflow==2.19.0rc0
+pyarrow

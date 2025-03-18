@@ -36,8 +36,12 @@ testing = [
     'jax',
     'jaxlib',
     'jaxtyping',
+    'pyarrow',
     'tensorflow',
     'tensorflow-datasets',
+]
+parquet = [
+    'pyarrow',
 ]
 
 [project.urls]
