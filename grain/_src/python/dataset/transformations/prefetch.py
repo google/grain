@@ -500,8 +500,10 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   @dataset_stats.record_next_duration_if_output
   def __next__(self) -> T:
     self._ensure_iterator_initialized()
-    result, state = next(self._iterator)
+    # The time recorded here is the time spent in prefetch node to return an
+    # element, including the time spent in parent node.
     with self._stats.record_self_time():
+      result, state = next(self._iterator)
       worker_index = self._raw_iterator.get_last_worker_index()  # pytype: disable=attribute-error
 
       # pytype: disable=annotation-type-mismatch
