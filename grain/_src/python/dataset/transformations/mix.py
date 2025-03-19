@@ -153,9 +153,13 @@ class _MixedDatasetIterator(dataset.DatasetIterator[T]):
     self._index += 1
     try:
       elem = next(self._parents[input_index])
-    except StopIteration as e:
+    except Exception as e:
       # Turn on stop signal as soon as the end of any dataset is reached.
       self._stop = True
+      if sys.version_info >= (3, 11):
+        e.add_note(
+            f"Exception caught while processing dataset @ {input_index=}"
+        )
       raise e
     return self._stats.record_output_spec(elem)
 
