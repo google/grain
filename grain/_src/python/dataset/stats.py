@@ -20,7 +20,10 @@ from collections.abc import Sequence
 import contextlib
 import dataclasses
 import functools
+from multiprocessing import queues
+from multiprocessing import synchronize
 import pprint
+import queue
 import sys
 import threading
 import time
@@ -277,6 +280,35 @@ def pretty_format_summary(
   return table.get_pretty_wrapped_summary()
 
 
+def _merge_execution_summaries(
+    from_s: execution_summary_pb2.ExecutionSummary,
+    to_s: execution_summary_pb2.ExecutionSummary,
+):
+  """Merges the `from_s` execution summary into the `to_s` execution summary."""
+  # we cannot use MergeFrom here because singular fields like
+  # `max_processing_time_ns` will be overriden.
+  for node_id in from_s.nodes:
+    to_node = to_s.nodes[node_id]
+    from_node = from_s.nodes[node_id]
+    to_node.id = from_s.nodes[node_id].id
+    to_node.name = from_node.name
+    to_node.output_spec = from_node.output_spec
+    to_node.is_output = from_node.is_output
+    to_node.ClearField("inputs")
+    to_node.inputs.extend(from_node.inputs)
+    to_node.min_processing_time_ns = min(
+        to_node.min_processing_time_ns,
+        from_node.min_processing_time_ns,
+    )
+    to_node.max_processing_time_ns = max(
+        to_node.max_processing_time_ns,
+        from_node.max_processing_time_ns,
+    )
+    to_node.total_processing_time_ns += from_node.total_processing_time_ns
+    to_node.num_produced_elements += from_node.num_produced_elements
+  return to_s
+
+
 def record_next_duration_if_output(next_fn):
   """Records the duration of the `__next__` call on the output iterator node.
 
@@ -307,6 +339,71 @@ def record_next_duration_if_output(next_fn):
     return result
 
   return wrapper
+
+
+class _StatsSummary:
+  """Helper class to update the main process summary with the workers summary."""
+
+  def __init__(
+      self,
+      main_summary: execution_summary_pb2.ExecutionSummary,
+      workers_summary: execution_summary_pb2.ExecutionSummary,
+      num_nodes_in_main: int,
+  ):
+    self._main_summary = main_summary
+    self._workers_summary = workers_summary
+    self._num_nodes_in_main = num_nodes_in_main
+
+  def get_updated_node_id(self, node_id: int) -> int:
+    """Returns the updated node ID for the given node ID."""
+    return node_id + self._num_nodes_in_main
+
+  def update_node_ids_in_workers_summary(self):
+    """Updates the node IDs in the workers summary."""
+    for node in self._workers_summary.nodes.values():
+      node.id = self.get_updated_node_id(node.id)
+      current_input_ids = node.inputs
+      node.ClearField("inputs")
+      node.inputs.extend(
+          [self.get_updated_node_id(input_id) for input_id in current_input_ids]
+      )
+
+  def get_root_node_id_in_main(self) -> int:
+    """Returns the root node ID in the main process summary."""
+    return self._num_nodes_in_main - 1
+
+  def get_output_nodes_in_worker_summary(
+      self,
+  ) -> list[execution_summary_pb2.ExecutionSummary.Node]:
+    """Returns the output node ID in the workers summary."""
+    output_nodes = []
+    for node in self._workers_summary.nodes.values():
+      if getattr(node, "is_output"):
+        output_nodes.append(node)
+    return output_nodes
+
+  def get_complete_summary(self):
+    """Updates the nodes in the main summary with workers summary nodes."""
+    # The pipeline's output node within the workers becomes the input for the
+    # root node in the main process. Therefore, the node IDs (and thus input
+    # IDs) in the worker summary should be updated before merging it with the
+    # main process's summary.
+    # self.update_node_ids_in_workers_summary()
+    # The output nodes in workers summary are the inputs to the main process.
+    output_node_ids = [
+        node.id for node in self.get_output_nodes_in_worker_summary()
+    ]
+    for node in self.get_output_nodes_in_worker_summary():
+      node.is_output = False
+    logging.info("root node in main: %s", self.get_root_node_id_in_main())
+    root_id = self.get_root_node_id_in_main()
+    self._main_summary.nodes[root_id].inputs.extend(output_node_ids)
+
+    # Merge the workers summary into the main summary.
+    for node in self._workers_summary.nodes.values():
+      self._main_summary.nodes[node.id].CopyFrom(node)
+
+    return self._main_summary
 
 
 class _Table:
@@ -402,7 +499,7 @@ class Timer:
     self._last = 0
 
 
-@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+@dataclasses.dataclass(slots=True, kw_only=True)
 class StatsConfig:
   """Statistics recording condiguration."""
 
@@ -416,6 +513,15 @@ class StatsConfig:
   is_prefetch: bool = False
   # Whether to log the execution summary.
   log_summary: bool = False
+  stats_queue: queues.Queue[execution_summary_pb2.ExecutionSummary] | None = (
+      None
+  )
+  # whether the stats should be sent to the main process. This will be set
+  # to `True`` only for the worker processess and when set to `True`, each
+  # worker will put its summary to the `stats_queue`.
+  send_stats_to_main_process: bool = False
+  num_workers: int = 0
+  termination_event: synchronize.Event | None = None
 
 
 class Stats(abc.ABC):
@@ -627,6 +733,7 @@ class _ExecutionStats(_VisualizationStats):
     )
     self._last_update_time = 0
     self._last_report_time = 0
+    self._merged_summary_from_workers = execution_summary_pb2.ExecutionSummary()
 
   def __reduce__(self):
     return _ExecutionStats, (self._config, self._parents)
@@ -643,6 +750,39 @@ class _ExecutionStats(_VisualizationStats):
       if not self._is_output:
         return
       self.report()
+
+  def _send_stats_to_main_process_loop(self):
+    """Puts the execution summary into the main process queue periodically."""
+    stats_queue = self._config.stats_queue
+    while not self._config.termination_event.is_set():  # pytype: disable=attribute-error
+      time.sleep(_LOG_EXECUTION_SUMMARY_PERIOD_SEC)
+      try:
+        stats_queue.put(self._get_execution_summary())  # pytype: disable=attribute-error
+      except queue.Full:
+        logging.info(
+            "Couldn't send execution summary from child process. Queue full"
+        )
+        pass
+    stats_queue.close()  # pytype: disable=attribute-error
+    stats_queue.join_thread()  # pytype: disable=attribute-error
+
+  def _get_merged_summary_from_workers(self):
+    """Calculates the aggregated execution summary from all workers."""
+    aggregated_summary_from_workers = execution_summary_pb2.ExecutionSummary()
+    stats_queue = self._config.stats_queue
+    for _ in range(self._config.num_workers):
+      try:
+        summary_from_worker = stats_queue.get(timeout=2)  # pytype: disable=attribute-error
+        # Combine the summary from all workers into a single summary.
+        aggregated_summary_from_workers = _merge_execution_summaries(
+            aggregated_summary_from_workers, summary_from_worker
+        )
+      except queue.Empty:
+        logging.info("Couldn't get execution summary from all child process.")
+        return self._merged_summary_from_workers
+    self._merged_summary_from_workers = aggregated_summary_from_workers
+    print(self._merged_summary_from_workers)
+    return self._merged_summary_from_workers
 
   def _logging_execution_summary_loop(self):
     """Logs the execution summary periodically."""
@@ -684,6 +824,15 @@ class _ExecutionStats(_VisualizationStats):
     execution_summary.nodes.get_or_create(node_id)
     execution_summary.nodes[node_id].CopyFrom(self._summary)
     current_node_id = node_id
+    if "MultiprocessPrefetch" in self._config.name:
+      combined_summary_from_workers = execution_summary_pb2.ExecutionSummary()
+      combined_summary_from_workers.CopyFrom(
+          self._get_merged_summary_from_workers()
+      )
+      stats_summary = _StatsSummary(
+          execution_summary, combined_summary_from_workers, current_node_id + 1
+      )
+      execution_summary = stats_summary.get_complete_summary()
     for p in self._parents:
       node_id += 1
       execution_summary.nodes[current_node_id].inputs.append(node_id)
@@ -724,9 +873,14 @@ class _ExecutionStats(_VisualizationStats):
         if self._config.log_summary and self._logging_thread is None:
           with self._logging_thread_init_lock:
             if self._logging_thread is None:
-              self._logging_thread = threading.Thread(
-                  target=self._logging_execution_summary_loop, daemon=True
-              )
+              if self._config.send_stats_to_main_process:
+                self._logging_thread = threading.Thread(
+                    target=self._send_stats_to_main_process_loop, daemon=True
+                )
+              else:
+                self._logging_thread = threading.Thread(
+                    target=self._logging_execution_summary_loop, daemon=True
+                )
               self._logging_thread.start()
 
   def report(self):
