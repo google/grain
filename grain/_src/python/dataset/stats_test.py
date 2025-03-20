@@ -283,7 +283,7 @@ class DebugModeStatsTest(absltest.TestCase):
     for node in flat_stats:
       with node.record_self_time(offset_ns=10**9):
         time.sleep(0.5)
-    time.sleep(0.05)
+    time.sleep(1)
     self_times = list(reported_self_times.values())
     self.assertLen(self_times, len(flat_stats))
     for self_time in self_times:
@@ -316,7 +316,7 @@ class DebugModeStatsTest(absltest.TestCase):
       recording_threads.append(t)
     for t in recording_threads:
       t.join()
-    time.sleep(0.05)
+    time.sleep(1)
     self.assertGreaterEqual(reported_self_time, n_threads)
 
   def test_picklable(self):

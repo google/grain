@@ -938,7 +938,7 @@ class GetExecutionSummaryTest(parameterized.TestCase):
       # Get execution summary after iterating through the dataset.
       _ = list(it)
       # reporting stats after 0.05 seconds.
-      time.sleep(0.1)
+      time.sleep(1)
     log_value = "Grain Dataset Execution Summary"
     self.assertRegex("".join(logs.output), log_value)
 
