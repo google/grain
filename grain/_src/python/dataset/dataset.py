@@ -11,29 +11,31 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Dataset base classes.
+"""Dataset classes.
 
-There are 3 main classes:
-- `MapDataset` define a dataset that supports efficient random access. It
-  has 3 important properties:
-  - `__len__()` returns the length of a single epoch over the dataset.
-  - `__getitem__()` will return the element at any given (positive) index. The
-    "true" length of a `MapDataset` is infinite. Many implementations will
-    simply loop but exceptions exists (e.g. `ShuffleMapDataset` will loop
-    with a different order).
-  - The individual dataset elements are only evaluated when calling
-    `__getitem__()`. `MapDatasets`s are stateless and will not hold
+* ``MapDataset`` defines a dataset that supports efficient random access. It
+  has 3 important methods:
+
+  * ``__len__()`` returns the length of a single epoch over the dataset.
+
+  * ``__getitem__()`` returns an element at the given positive index. The
+    "true" length of a ``MapDataset`` is infinite.
+
+  * Individual dataset elements are only evaluated when calling
+    ``__getitem__()``. ``MapDatasets`` s are stateless and will not hold
     elements.
-- `IterDataset` defines a dataset that does not support efficient random
-  access. It can still be iterated over. A `MapDataset` can be turned into
-  a `IterDataset` but going from `IterDataset` to `MapDataset` might
-  be as expensive as materializing the whole dataset.
-- `DatasetIterator` defines a stateful iterator over `IterDataset`. The
+
+* ``IterDataset`` defines a dataset that does not support efficient random
+  access but can be iterated over. A ``MapDataset`` can be turned into
+  a ``IterDataset`` but going from ``IterDataset`` to ``MapDataset`` is
+  as expensive as materializing the whole dataset.
+
+* ``DatasetIterator`` defines a stateful iterator of ``IterDataset``. The
   state of the iterator can be saved and restored.
 
-Using the interfaces defined in `collections.abc` you can think of
-MapDataset as (infinite) Sequence, IterDataset as Iterable and
-DatasetIterator as Iterator.
+Using the interfaces defined in ``collections.abc`` you can think of
+``MapDataset`` as (infinite) ``Sequence``, ``IterDataset`` as ``Iterable`` and
+``DatasetIterator`` as ``Iterator``.
 """
 
 from __future__ import annotations
@@ -169,7 +171,7 @@ class _Dataset:
     return func(self, *args, **kwargs)
 
 
-class _MapDatasetMeta(abc.ABCMeta):
+class MapDatasetMeta(abc.ABCMeta):
   """Metaclass for `MapDataset` containing factory transfromations."""
 
   def source(
@@ -309,7 +311,7 @@ class _MapDatasetMeta(abc.ABCMeta):
     return mix.ConcatenateMapDataset(parents=datasets)
 
 
-class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
+class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
   """Represents a dataset with transformations that support random access.
 
   Transformations do not mutate the dataset object. Instead, they return a new
@@ -796,7 +798,7 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
     return self._initialize_stats(base.ExecutionTrackingMode.DISABLED)
 
 
-class _IterDatasetMeta(abc.ABCMeta):
+class IterDatasetMeta(abc.ABCMeta):
   """Metaclass for `IterDataset` containing factory transformations."""
 
   def mix(
@@ -833,7 +835,7 @@ class _IterDatasetMeta(abc.ABCMeta):
     return mix.MixedIterDataset(parents=datasets, proportions=weights)
 
 
-class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
+class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
   """Represents a dataset with transformations that support Iterable interface.
 
   Transformations do not mutate the dataset object. Instead, they return a new
@@ -1286,27 +1288,30 @@ class WithOptionsIterDataset(IterDataset[T]):
   times, the latest value takes precedence.
 
   Example:
-  ```
-  ds = MapDataset.range(5).to_iter_dataset()
-  ds = WithOptionsIterDataset(
-         ds,
-         DatasetOptions(
-             filter_warn_threshold_ratio=0.6,
-             filter_raise_threshold_ratio=0.8,
-         ),
-       )
-  ds = ds.filter(...)
-  ds = WithOptionsIterDataset(
-         ds,
-         DatasetOptions(filter_warn_threshold_ratio=0.7),
-       )
-  ds = ds.filter(...)
-  ```
+
+  .. code-block:: python
+
+    ds = MapDataset.range(5).to_iter_dataset()
+    ds = WithOptionsIterDataset(
+          ds,
+          DatasetOptions(
+              filter_warn_threshold_ratio=0.6,
+              filter_raise_threshold_ratio=0.8,
+          ),
+        )
+    ds = ds.filter(...)
+    ds = WithOptionsIterDataset(
+          ds,
+          DatasetOptions(filter_warn_threshold_ratio=0.7),
+        )
+    ds = ds.filter(...)
+
   In this case, the options will be:
-  ```
-  filter_warn_threshold_ratio=0.7
-  filter_raise_threshold_ratio=0.8
-  ```
+
+  .. code-block:: python
+
+    filter_warn_threshold_ratio=0.7
+    filter_raise_threshold_ratio=0.8
   """
 
   def __init__(self, parent: IterDataset[T], options: base.DatasetOptions):
