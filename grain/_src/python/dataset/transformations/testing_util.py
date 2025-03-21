@@ -39,6 +39,7 @@ def _common_test_body(
     meta_features: Sequence[str] = (),
     convert_input_to_np: bool = True,
     kwargs: dict[str, Any] | None = None,
+    iter_dataset=packing.FirstFitPackIterDataset,
 ):
   """Factor out common test operations in a separate function."""
   if convert_input_to_np:
@@ -48,7 +49,8 @@ def _common_test_body(
   expected_elements = [
       {k: np.asarray(v) for k, v in d.items()} for d in expected_elements
   ]
-  ld = packing.FirstFitPackIterDataset(
+
+  ld = iter_dataset(
       source.SourceMapDataset(input_elements).to_iter_dataset(),
       num_packing_bins=num_packing_bins,
       length_struct=length_struct,
