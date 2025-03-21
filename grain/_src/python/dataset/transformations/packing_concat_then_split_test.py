@@ -17,11 +17,15 @@ from typing import Any
 
 from absl.testing import absltest
 from absl.testing import parameterized
+from grain._src.core import exceptions
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import packing_concat_then_split
 from grain._src.python.dataset.transformations import source
 from grain._src.python.testing import experimental
 import numpy as np
+
+
+BOSHandling = packing_concat_then_split.BOSHandling
 
 
 # Pretty print elements for debugging.
@@ -208,7 +212,7 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
         length_struct={"observation": 6, "index": 6},
         meta_features={"index"},
         split_full_length_features=False,
-        bos_handling=packing_concat_then_split.BOSHandling.REPLACE_FIRST_TOKEN_WITH_BOS,
+        bos_handling=BOSHandling.REPLACE_FIRST_TOKEN_WITH_BOS,
         bos_token_id=1000,
         bos_features={"observation"},
     )
@@ -401,6 +405,34 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
             split_full_length_features=split_full_length_features,
         )
     )
+
+  @parameterized.product(
+      bos_handling=list(BOSHandling),
+  )
+  def test_pack_sequence_longer_than_sequence_length(self, bos_handling):
+    sequence_length = 10
+    if bos_handling == BOSHandling.REPLACE_FIRST_TOKEN_WITH_BOS:
+      bos_token_id = 1000
+      bos_features = {"observation"}
+    else:
+      bos_token_id = None
+      bos_features = {}
+    ds = dataset.MapDataset.source([
+        {"observation": np.repeat(1, 100)},  # 100 > sequence_length
+    ]).to_iter_dataset()
+    ds = packing_concat_then_split.ConcatThenSplitIterDataset(
+        ds,
+        length_struct={"observation": sequence_length},
+        split_full_length_features=False,
+        bos_handling=bos_handling,
+        bos_token_id=bos_token_id,
+        bos_features=bos_features,
+    )
+    with self.assertRaisesWithPredicateMatch(
+        exceptions.PyGrainInternalError,
+        lambda _: "Feature 'observation' has 100 tokens",
+    ):
+      next(iter(ds))
 
   def assert_equal_elements(
       self,
