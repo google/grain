@@ -9,10 +9,12 @@ https://www.sphinx-doc.org/en/master/usage/configuration.html
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
+import os
 import pathlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path('..', 'grain').resolve()))
+sys.path.insert(0, os.path.abspath('..'))
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
@@ -28,7 +30,9 @@ extensions = [
     'myst_nb',
     'sphinx_copybutton',
     'sphinx_design',
-    'autoapi.extension',
+    'sphinx.ext.autodoc',
+    'sphinx.ext.autosummary',
+    'sphinx.ext.napoleon',
 ]
 
 templates_path = ['_templates']
@@ -69,16 +73,20 @@ html_theme_options = {
 }
 
 # Autodoc settings
-# Should be relative to the source of the documentation
-autoapi_dirs = [
-    '../grain/_src/core',
-    '../grain/_src/python',
-]
-
-autoapi_ignore = [
-    '*_test.py',
-    'testdata/*',
-    '*/dataset/stats.py',
+autosummary_generate = True
+autodoc_typehints = 'description'
+# We mock dependencies and internal modules that require building to be able to
+# import the python symbols for extracting docstrings.
+autodoc_mock_imports = [
+    'grain.proto.execution_summary_pb2',
+    'grain._src.python.experimental.index_shuffle.python.index_shuffle_module',
+    'cloudpickle',
+    'numpy',
+    'orbax',
+    'tree',
+    'absl',
+    'absl.logging',
+    'array_record',
 ]
 
 # -- Myst configurations -------------------------------------------------

@@ -11,29 +11,36 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Dataset base classes.
+"""Dataset classes.
 
-There are 3 main classes:
-- `MapDataset` define a dataset that supports efficient random access. It
-  has 3 important properties:
-  - `__len__()` returns the length of a single epoch over the dataset.
-  - `__getitem__()` will return the element at any given (positive) index. The
-    "true" length of a `MapDataset` is infinite. Many implementations will
-    simply loop but exceptions exists (e.g. `ShuffleMapDataset` will loop
-    with a different order).
-  - The individual dataset elements are only evaluated when calling
-    `__getitem__()`. `MapDatasets`s are stateless and will not hold
+* ``MapDataset`` defines a dataset that supports efficient random access. It
+  has 3 important methods:
+
+  * ``__len__()`` returns the length of a single epoch over the dataset.
+
+  * ``__getitem__()`` returns an element at the given positive index. The
+    "true" length of a ``MapDataset`` is infinite.
+
+  * Individual dataset elements are only evaluated when calling
+    ``__getitem__()``. ``MapDataset`` s are stateless and will not hold
     elements.
-- `IterDataset` defines a dataset that does not support efficient random
-  access. It can still be iterated over. A `MapDataset` can be turned into
-  a `IterDataset` but going from `IterDataset` to `MapDataset` might
-  be as expensive as materializing the whole dataset.
-- `DatasetIterator` defines a stateful iterator over `IterDataset`. The
+
+* ``IterDataset`` defines a dataset that does not support efficient random
+  access but can be iterated over. A ``MapDataset`` can be turned into
+  a ``IterDataset`` but going from ``IterDataset`` to ``MapDataset`` is
+  as expensive as materializing the whole dataset.
+
+* ``DatasetIterator`` defines a stateful iterator of ``IterDataset``. The
   state of the iterator can be saved and restored.
 
-Using the interfaces defined in `collections.abc` you can think of
-MapDataset as (infinite) Sequence, IterDataset as Iterable and
-DatasetIterator as Iterator.
+Using the interfaces defined in ``collections.abc`` you can think of
+``MapDataset`` as (infinite) ``Sequence``, ``IterDataset`` as ``Iterable`` and
+``DatasetIterator`` as ``Iterator``.
+
+``MapDataset`` is typically created by one of the factory methods in
+``MapDatasetMeta`` (e.g. ``MapDataset.range(5)``). ``IterDataset`` is either
+created by calling ``to_iter_dataset()`` on a ``MapDataset`` or by one of the
+factory methods in ``IterDatasetMeta`` (e.g. ``IterDataset.mix([...])``).
 """
 
 from __future__ import annotations
@@ -127,36 +134,37 @@ class _Dataset:
   def pipe(self, func: Callable[..., T], /, *args, **kwargs) -> T:
     """Syntactic sugar for applying a callable to this dataset.
 
-    The `pipe` method, borrowed from `pandas.DataFrame`, is convenient because
-    it allows for using method chaining syntax in an extensible fashion, with
-    transformations that are not built-in methods on `Dataset`.
+    The ``pipe`` method, borrowed from ``pandas.DataFrame``, is convenient
+    because it allows for using method chaining syntax in an extensible fashion,
+    with transformations that are not built-in methods on ``Dataset``.
 
     For example, suppose you want to shuffle a dataset within a window.
-    Functionality for this is available in `WindowShuffleMapDataset`, but not as
-    a method on `MapDataset`, e.g.,
-    ```
-    dataset = (
-        grain.experimental.WindowShuffleMapDataset(
-            grain.MapDataset.range(1000),
-            window_size=128,
-            seed=0,
-        )
-        .batch(16)
-    )
+    Functionality for this is available in ``WindowShuffleMapDataset``, but not
+    as a method on ``MapDataset``, e.g.::
+
+      dataset = (
+          grain.experimental.WindowShuffleMapDataset(
+              grain.MapDataset.range(1000),
+              window_size=128,
+              seed=0,
+          )
+          .batch(16)
+      )
 
     This solution suffers from readability, because the shuffle transformation
     appears out of order from the data flow.
 
-    In contrast, with `pipe` you can write:
-    ```
-    dataset = (
-        grain.MapDataset.range(1000)
-        .pipe(
-            grain.experimental.WindowShuffleMapDataset, window_size=128, seed=0
-        )
-        .batch(16)
-    )
-    ```
+    In contrast, with ``pipe`` you can write::
+
+      dataset = (
+          grain.MapDataset.range(1000)
+          .pipe(
+              grain.experimental.WindowShuffleMapDataset,
+              window_size=128,
+              seed=0
+          )
+          .batch(16)
+      )
 
     Args:
       func: The callable to apply to this dataset.
@@ -164,23 +172,26 @@ class _Dataset:
       **kwargs: Keyword arguments to pass to the callable.
 
     Returns:
-      The result of calling `func(self, *args, **kwargs)`.
+      The result of calling ``func(self, *args, **kwargs)``.
     """
     return func(self, *args, **kwargs)
 
 
-class _MapDatasetMeta(abc.ABCMeta):
-  """Metaclass for `MapDataset` containing factory transfromations."""
+class MapDatasetMeta(abc.ABCMeta):
+  """Metaclass for ``MapDataset`` containing factory transfromations."""
 
   def source(
       cls, source: Sequence[T] | base.RandomAccessDataSource[T]
   ) -> MapDataset[T]:
     """Returns a dataset that wraps a data source supporting random access.
 
-    Example usage: `ds = MapDataset.source(ArrayRecordDataSource(paths))`.
+    Example::
 
-    Works with Sequence inputs as well:
-    `list(MapDataset.source([1, 2, 3, 4, 5])) == [1, 2, 3, 4, 5]`.
+      ds = MapDataset.source(ArrayRecordDataSource(paths))
+
+    Works with Sequence inputs as well::
+
+      list(MapDataset.source([1, 2, 3, 4, 5])) == [1, 2, 3, 4, 5]
 
     Args:
       source: Data source supporting efficient random access.
@@ -202,12 +213,15 @@ class _MapDatasetMeta(abc.ABCMeta):
   ) -> MapDataset[int]:
     """Returns a dataset with a range of integers.
 
-    Input arguments are interpreted the same way as in Python built-in `range`:
-      - `range(n)` => start=0, stop=n, step=1
-      - `range(m, n)` => start=m, stop=n, step=1
-      - `range(m, n, p)` => start=m, stop=n, step=p
+    Input arguments are interpreted the same way as in Python built-in
+    ``range``:
+      - ``range(n)`` => start=0, stop=n, step=1
+      - ``range(m, n)`` => start=m, stop=n, step=1
+      - ``range(m, n, p)`` => start=m, stop=n, step=p
 
-    `list(MapDataset.range(...)) == list(range(...))`.
+    The produced values are consistent with the built-in `range` function::
+
+      list(MapDataset.range(...)) == list(range(...))
 
     Args:
       start: The start of the range.
@@ -239,12 +253,11 @@ class _MapDatasetMeta(abc.ABCMeta):
     If you need to shuffle the mixed dataset while preserving the correct
     proportions, you should shuffle the input datasets before mixing.
 
-    Example usage:
-    ```
-    ds1 = MapDataset.range(5)
-    ds2 = MapDataset.range(7, 10)
-    list(MapDataset.mix([ds1, ds2])) == [0, 7, 1, 8, 2, 9]
-    ```
+    Example usage::
+
+      ds1 = MapDataset.range(5)
+      ds2 = MapDataset.range(7, 10)
+      list(MapDataset.mix([ds1, ds2])) == [0, 7, 1, 8, 2, 9]
 
     Args:
       datasets: The datasets to mix.
@@ -268,13 +281,13 @@ class _MapDatasetMeta(abc.ABCMeta):
   ) -> MapDataset[T]:
     """Returns a dataset selected from the inputs accoridng to the given map.
 
-    Allows more general types of dataset mixing than `mix`.
+    Allows more general types of dataset mixing than ``mix``.
 
     Args:
       datasets: The datasets to select from.
       selection_map: Mapping from index within the mixed dataset to a selected
         dataset index and index within that dataset. Length of the resulting
-        dataset will be determined by the length of the `selection_map`.
+        dataset will be determined by the length of the ``selection_map``.
 
     Returns:
       A MapDataset that represents a mixture of the input datasets according
@@ -289,18 +302,17 @@ class _MapDatasetMeta(abc.ABCMeta):
   def concatenate(cls, datasets: Sequence[MapDataset[T]]) -> MapDataset[T]:
     """Returns a dataset of elements from all input datasets.
 
-    Example usage:
-    ```
-    ds1 = MapDataset.range(3)
-    ds2 = MapDataset.range(3, 8)
-    list(MapDataset.concatenate([ds1, ds2])) == [0, 1, 2, 3, 4, 5, 6, 7]
-    ```
+    Example usage::
+
+      ds1 = MapDataset.range(3)
+      ds2 = MapDataset.range(3, 8)
+      list(MapDataset.concatenate([ds1, ds2])) == [0, 1, 2, 3, 4, 5, 6, 7]
 
     Args:
       datasets: The datasets to concatenate.
 
     Returns:
-      A MapDataset that represents a concatenation of the input datasets.
+      A ``MapDataset`` that represents a concatenation of the input datasets.
     """
     # Loaded lazily due to a circular dependency (dataset <-> mix).
     # pylint: disable=g-import-not-at-top
@@ -309,19 +321,19 @@ class _MapDatasetMeta(abc.ABCMeta):
     return mix.ConcatenateMapDataset(parents=datasets)
 
 
-class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
+class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
   """Represents a dataset with transformations that support random access.
 
   Transformations do not mutate the dataset object. Instead, they return a new
-  dataset. From the perspective of public APIs, `MapDataset` is immutable.
+  dataset. ``MapDataset`` is immutable.
 
   NOTE:
-    `MapDataset` transformations such as `.filter()` use `None` to indicate
-    absence of an element. Generally, the implementation of `MapDataset`
-    transformations already handle `None` as a special case (e.g. by returning
-    `None` as soon as `__getitem__` sees `None`). This means the user-defined
-    functions passed to the `MapDataset` transformations do not need to
-    explicitly handle `None`s.
+    ``MapDataset`` transformations such as ``.filter()`` use ``None`` to
+    indicate absence of an element. Generally, the implementation of
+    ``MapDataset`` transformations already handle `None` as a special case
+    (e.g. by returning ``None`` as soon as ``__getitem__`` sees ``None``). This
+    means the user-defined functions passed to the ``MapDataset``
+    transformations do not need to explicitly handle ``None`` s.
   """
 
   # Whether this transformation mutates parent elements. This does not affect
@@ -374,12 +386,11 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
 
     Dataset elements are expected to be PyTrees.
 
-    Example usage:
-    ```
-    ds = MapDataset.range(5)
-    ds = ds.batch(batch_size=2)
-    list(ds) == [np.ndarray([0, 1]), np.ndarray([2, 3]), np.ndarray([4])]
-    ```
+    Example usage::
+
+      ds = MapDataset.range(5)
+      ds = ds.batch(batch_size=2)
+      list(ds) == [np.ndarray([0, 1]), np.ndarray([2, 3]), np.ndarray([4])]
 
     Args:
       batch_size: The number of elements to batch together.
@@ -408,39 +419,40 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
   ) -> MapDataset[T]:
     """Returns a dataset containing only the elements that match the filter.
 
-    Accessing an element of the returned dataset using subscription (`ds[i]`)
+    Accessing an element of the returned dataset using subscription (``ds[i]``)
     returns:
 
-    - `None` if `transform` returned `False`
-    - the element if `transform` returned `True`
+    * ``None`` if ``transform`` returned ``False``
+    * the element if ``transform`` returned ``True``
 
-    Iterating over a filtered dataset skips `None` elements by default.
+    Iterating over a filtered dataset skips ``None`` elements by default.
 
-    Example usage:
-    ```
-    ds = MapDataset.range(5)
-    ds = ds.filter(lambda x: x % 2 == 0)
-    ds[2] == 2
-    ds[1] == None
-    list(ds) == [0, 2, 4]
-    ```
-    NOTE: `list(ds)` converts the dataset to an `IterDataset` with
-    `to_iter_dataset()` under the hood which by default skips `None` elements.
+    Example usage::
 
-    `to_iter_dataset` produces a warning when iterating through a filtered
+      ds = MapDataset.range(5)
+      ds = ds.filter(lambda x: x % 2 == 0)
+      ds[2] == 2
+      ds[1] == None
+      list(ds) == [0, 2, 4]
+
+    NOTE: ``list(ds)`` converts the dataset to an ``IterDataset`` with
+    ``to_iter_dataset()`` under the hood which by default skips ``None``
+    elements.
+
+    ``to_iter_dataset`` produces a warning when iterating through a filtered
     dataset if the filter removes more than 90% of the elements.
     You can adjust the threshold through
-    `grain.experimental.DatasetOptions.filter_warn_threshold_ratio` used in
-    `WithOptionsIterDataset`. In order to produce an exception in such case use
-    `filter_raise_threshold_ratio`.
+    ``grain.experimental.DatasetOptions.filter_warn_threshold_ratio`` used in
+    ``WithOptionsIterDataset``. In order to produce an exception in such case
+    use ``filter_raise_threshold_ratio``.
 
     Args:
-      transform: Either a `FilterTransform` containing the `filter` method or a
-        callable that takes an element and returns a boolean.
+      transform: Either a ``FilterTransform`` containing the ``filter`` method
+        or a callable that takes an element and returns a boolean.
 
     Returns:
       A dataset of the same type containing only the elements for which the
-      filter transform returns `True`.
+      filter transform returns ``True``.
     """
     # Loaded lazily due to a circular dependency (dataset <-> filter).
     # pylint: disable=g-import-not-at-top
@@ -453,22 +465,21 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
   def map(
       self, transform: transforms.MapTransform | Callable[[T], S]
   ) -> MapDataset[S]:
-    """Returns a dataset containing the elements transformed by `transform`.
+    """Returns a dataset containing the elements transformed by ``transform``.
 
-    Example usage:
-    ```
-    ds = MapDataset.range(5)
-    ds = ds.map(lambda x: x + 10)
-    list(ds) == [10, 11, 12, 13, 14]
-    ```
+    Example usage::
+
+      ds = MapDataset.range(5)
+      ds = ds.map(lambda x: x + 10)
+      list(ds) == [10, 11, 12, 13, 14]
 
     Args:
-      transform: Either a `MapTransform` containing the `map` method or a
+      transform: Either a ``MapTransform`` containing the ``map`` method or a
         callable that takes an element and returns a new element.
 
     Returns:
       A dataset containing the elements of the original dataset transformed by
-      `transform`.
+      ``transform``.
     """
     # Loaded lazily due to a circular dependency (dataset <-> map).
     # pylint: disable=g-import-not-at-top
@@ -482,26 +493,25 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
       self,
       transform: transforms.MapWithIndexTransform | Callable[[int, T], S],
   ) -> MapDataset[S]:
-    """Returns a dataset containing the elements transformed by `transform`.
+    """Returns a dataset containing the elements transformed by ``transform``.
 
     The transform is called with the index of the element within the dataset
     and the element itself.
 
-    Example usage:
-    ```
-    ds = MapDataset.source(["a", "b", "c", "d"])
-    ds = ds.map_with_index(lambda i, x: x + str(i))
-    list(ds) == ["a0", "b1", "c2", "d3"]
-    ```
+    Example usage::
+
+      ds = MapDataset.source(["a", "b", "c", "d"])
+      ds = ds.map_with_index(lambda i, x: x + str(i))
+      list(ds) == ["a0", "b1", "c2", "d3"]
 
     Args:
-      transform: Either a `MapWithIndexTransform` containing the
-        `map_with_index` method or a callable that takes an index and an element
-        and returns a new element.
+      transform: Either a ``MapWithIndexTransform`` containing the
+        ``map_with_index`` method or a callable that takes an index and an
+        element and returns a new element.
 
     Returns:
       A dataset containing the elements of the original dataset transformed by
-      `transform`.
+      ``transform``.
     """
     # Loaded lazily due to a circular dependency (dataset <-> map).
     # pylint: disable=g-import-not-at-top
@@ -514,50 +524,64 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
   def seed(self, seed: int) -> MapDataset[T]:
     """Returns a dataset that uses the seed for default seed generation.
 
-    When default seed generation is enabled by calling `ds.seed`, every
+    When default seed generation is enabled by calling ``ds.seed``, every
     downstream random transformation will be automatically seeded with a unique
     seed by default. This simplifies seed management, making it easier to avoid:
      - Having to provide a seed in multiple transformations.
      - Accidentally reusing the same seed across transformations.
 
-    It is recommended to call this right after the source. `ds.seed` has to be
-    called before any random transformations (such as `shuffle` or `random_map`
-    that rely on default seed generation to control their seeding). Given the
-    same seed, the pipeline is guaranteed to always use the same seeds for each
-    transformation.
+    It is recommended to call this right after the source. ``ds.seed`` has to be
+    called before any random transformations (such as ``shuffle`` or
+    ``random_map`` that rely on default seed generation to control their
+    seeding). Given the same seed, the pipeline is guaranteed to always use the
+    same seeds for each transformation.
 
     Note about custom dataset implementations: the default seed generation is
-    available through `_default_seed`, but the private API is not guaranteed to
-    be stable.
+    available through ``_default_seed``, but the private API is not guaranteed
+    to be stable.
 
-    Example usage:
-    `ds = ds.seed(seed).shuffle()`.
-    `shuffle` will automatically derive its own seed (different from `seed`).
+    Example 1::
 
-    `ds = ds.seed(seed).shuffle().random_map(...)`.
-    `shuffle` and `random_map` will each derive their own seed and the seeds are
-    going to be different.
+      ds = ds.seed(seed).shuffle()
 
-    `ds = ds.seed(seed).random_map(transform, seed=seed1)`.
-    `random_map` will use `seed1` and will not be affected by `seed`. This
+    ``shuffle`` will automatically derive its own seed (different from
+    ``seed``).
+
+    Example 2::
+
+      ds = ds.seed(seed).shuffle().random_map(...)
+
+    ``shuffle`` and ``random_map`` will each derive their own seed and the seeds
+    are going to be different.
+
+    Example 3::
+
+      ds = ds.seed(seed).random_map(transform, seed=seed1)
+
+    ``random_map`` will use ``seed1`` and will not be affected by ``seed``. This
     can be used to control individual transformation seeding independently from
     the rest of the pipeline.
 
-    `ds = ds.seed(seed1).shuffle().seed(seed2).random_map(...)`.
-    `ds.seed` only affects the downstream transformations and can be overridden
-    by a subsequent `seed` call.
-    `shuffle` will derive its seed from `seed1`, `random_map` - from `seed2` and
-    will not be affected by `seed1`. This can be used to control your
-    transformation seeding even if you don't own the first part of the pipeline.
+    Example 4::
 
-    ```
-    ds1 = ds.source(...).seed(seed1).shuffle()
-    ds2 = ds.source(...).seed(seed2).shuffle()
-    ds = MapDataset.mix([ds1, ds2], ...).random_map(...)
-    ```
-    Each `shuffle` will derive its own seed from `seed1` or `seed2`
-    respectively. `random_map` will derive its seed from both `seed1` and
-    `seed2`.
+      ds = ds.seed(seed1).shuffle().seed(seed2).random_map(...)
+
+    ``ds.seed`` only affects the downstream transformations and can be
+    overridden by a subsequent ``seed`` call.
+    ``shuffle`` will derive its seed from ``seed1``, ``random_map`` - from
+    ``seed2`` and will not be affected by ``seed1``. This can be used to control
+    your transformation seeding even if you don't own the first part of the
+    pipeline.
+
+    Example 5::
+
+      ds1 = ds.source(...).seed(seed1).shuffle()
+      ds2 = ds.source(...).seed(seed2).shuffle()
+      ds = MapDataset.mix([ds1, ds2], ...).random_map(...)
+
+    Each ``shuffle`` will derive its own seed from ``seed1`` or ``seed2``
+    respectively. ``random_map`` will derive its seed from both ``seed1`` and
+    ``seed2``.
 
     Args:
       seed: Seed to use.
@@ -572,26 +596,27 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
 
     The shuffle is deterministic and will always produce the same result given
     the same seed. The seed can be either provided explicitly or set via
-    `ds.seed(seed)`. Prefer the latter if you don't need to control the shuffle
-    seed individually. It allows to pass a single seed to derive seeds for all
-    downstream random transformations in the pipeline.
+    ``ds.seed(seed)``. Prefer the latter if you don't need to control the
+    shuffle seed individually. It allows to pass a single seed to derive seeds
+    for all downstream random transformations in the pipeline.
 
     In multi-epoch training each epoch will be shuffled differently (i.e. the
     seed is combined with epoch number). In such case it is recommended to
-    `shuffle` before `repeat` to avoid mixing elements from different epochs.
+    ``shuffle`` before ``repeat`` to avoid mixing elements from different
+    epochs.
 
-    Example usage:
-    ```
-    ds = MapDataset.range(5).shuffle()
-    set(ds) == {0, 1, 2, 3, 4}
-    list(ds) != [0, 1, 2, 3, 4]  # With probability (1 - 1/5!).
-    ```
+    Example usage::
+
+      ds = MapDataset.range(5).shuffle()
+      set(ds) == {0, 1, 2, 3, 4}
+      list(ds) != [0, 1, 2, 3, 4]  # With probability (1 - 1/5!).
+
 
     Args:
       seed: An optional integer between 0 and 2**32-1 representing the seed used
         by the shuffling algorithm. If you don't need to control the shuffle
         seed individually, prefer setting the pipeline-level seed with
-        `ds.seed(seed)` instead.
+        ``ds.seed(seed)`` instead.
 
     Returns:
       A dataset containing the same elements but in a shuffled order.
@@ -603,29 +628,29 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
     return shuffle.ShuffleMapDataset(parent=self, seed=seed)
 
   def slice(self, sl: builtins.slice) -> MapDataset[T]:
-    """Returns a dataset containing only the elements with indices in `sl`.
+    """Returns a dataset containing only the elements with indices in ``sl``.
 
-    For most implementations of `MapDataset` slicing is also available through
-    subscript operator: `list(ds.slice(slice(1, 10, 2))) == ds[1:10:2]`.
+    For most implementations of ``MapDataset`` slicing is also available through
+    subscript operator: ``list(ds.slice(slice(1, 10, 2))) == ds[1:10:2]``.
 
-    Example usage:
-    ```
-    ds = MapDataset.range(5)
-    list(ds.slice(slice(1, 3))) == [1, 2]
-    list(ds.slice(slice(1, None, 2))) == [1, 3]
-    ```
+    Example usage::
+
+      ds = MapDataset.range(5)
+      list(ds.slice(slice(1, 3))) == [1, 2]
+      list(ds.slice(slice(1, None, 2))) == [1, 3]
+
 
     Commonly used for sharding:
-    `ds = ds.slice(slice(shard_index, None, shard_count))`, or, equivalently,
-    `ds = ds[shard_index::shard_count]`.
+    ``ds = ds.slice(slice(shard_index, None, shard_count))``, or, equivalently,
+    ``ds = ds[shard_index::shard_count]``.
 
     Args:
-      sl: A `slice` object
+      sl: A ``slice`` object
         (https://docs.python.org/3/library/functions.html#slice) representing
         the slice of elements to that should constitute the returned dataset.
 
     Returns:
-      A dataset containing only the elements with indices in the `sl` slice.
+      A dataset containing only the elements with indices in the ``sl`` slice.
     """
     # Loaded lazily due to a circular dependency (dataset <-> slice).
     # pylint: disable=g-import-not-at-top
@@ -643,39 +668,40 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
       *,
       seed: int | None = None,
   ) -> MapDataset[S]:
-    """Returns a dataset containing the elements transformed by `transform`.
+    """Returns a dataset containing the elements transformed by ``transform``.
 
-    The `transform` is called with the element and a `np.random.Generator`
-    instance that should be used inside the `transform` to preserve determinism.
-    The seed can be either provided explicitly or set via `ds.seed(seed)`.
-    Prefer the latter if you don't need to control the random map seed
-    individually. It allows to pass a single seed to derive seeds for all
-    downstream random transformations in the pipeline. The generator is seeded
-    by a combination of the seed and the index of the element in the dataset.
+    The ``transform`` is called with the element and a ``np.random.Generator``
+    instance that should be used inside the ``transform`` to preserve
+    determinism. The seed can be either provided explicitly or set via
+    ``ds.seed(seed)``. Prefer the latter if you don't need to control the random
+    map seed individually. It allows to pass a single seed to derive seeds for
+    all downstream random transformations in the pipeline. The generator is
+    seeded by a combination of the seed and the index of the element in the
+    dataset.
 
-    NOTE: Avoid using the provided RNG outside of the `transform` function
+    NOTE: Avoid using the provided RNG outside of the ``transform`` function
     (e.g. by passing it to the next transformation along with the data).
     The RNG is going to be reused.
 
-    Example usage:
-    ```
-    ds = MapDataset.range(5)
-    ds = ds.random_map(lambda x, rng: x + rng.integers(5, 10))
-    set(ds).issubset(set(range(5, 15)))
-    ```
+    Example usage::
+
+      ds = MapDataset.range(5)
+      ds = ds.random_map(lambda x, rng: x + rng.integers(5, 10))
+      set(ds).issubset(set(range(5, 15)))
+
 
     Args:
-      transform: Either a `RandomMapTransform` containing the `random_map`
+      transform: Either a ``RandomMapTransform`` containing the ``random_map``
         method or a callable that takes an element and a np.random.Generator and
         returns a new element.
       seed: An optional integer between 0 and 2**32-1 representing the seed used
-        to initialize the random number generator used by `transform`. If you
+        to initialize the random number generator used by ``transform``. If you
         don't need to control the shuffle seed individually, prefer setting the
-        pipeline-level seed with`ds.seed(seed)` instead.
+        pipeline-level seed with``ds.seed(seed)`` instead.
 
     Returns:
       A dataset containing the elements of the original dataset transformed by
-      `transform`.
+      ``transform``.
     """
     # Loaded lazily due to a circular dependency (dataset <-> map).
     # pylint: disable=g-import-not-at-top
@@ -690,26 +716,26 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
   def repeat(self, num_epochs: int | None = None) -> MapDataset[T]:
     """Returns a dataset repeating the elements of this dataset multiple times.
 
-    Specifying `None` for `num_epochs` will repeat the dataset infinitely, and
-    causes `len(ds)` to return `sys.maxsize`.
+    Specifying ``None`` for ``num_epochs`` will repeat the dataset infinitely,
+    and causes ``len(ds)`` to return ``sys.maxsize``.
 
-    Since `MapDataset`s allow accessing elements past `len(ds) - 1` anyway
-    (and use the index modulo `len(ds)`), this transformation effectively only
-    changes the length of the dataset.
+    Since ``MapDataset`` allows accessing elements past ``len(ds) - 1`` anyway
+    (and uses the index modulo ``len(ds)``), this transformation effectively
+    only changes the length of the dataset.
 
     Can not be called on an infinite dataset.
 
-    Example usage:
-    ```
-    list(MapDataset.range(5).repeat(2)) == [0, 1, 2, 3, 4, 0, 1, 2, 3, 4]
-    ds = MapDataset.range(5).repeat()
-    len(ds) == sys.maxsize
-    ds[11111] == 1
-    ```
+    Example usage::
+
+      list(MapDataset.range(5).repeat(2)) == [0, 1, 2, 3, 4, 0, 1, 2, 3, 4]
+      ds = MapDataset.range(5).repeat()
+      len(ds) == sys.maxsize
+      ds[11111] == 1
+
 
     Args:
       num_epochs: Either a positive integer representing the number of times
-        this dataset should be repeated or `None` to repeat infinitely.
+        this dataset should be repeated or ``None`` to repeat infinitely.
 
     Returns:
       A dataset repeating the elements of this dataset multiple times.
@@ -726,23 +752,23 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
       *,
       allow_nones: bool = False,
   ) -> IterDataset[T]:
-    """Converts this dataset to an `IterDataset`.
+    """Converts this dataset to an ``IterDataset``.
 
     Elements from this dataset may be processed in multiple threads.
 
-    Note that some of the transformations are not available on `IterDataset`.
+    Note that some of the transformations are not available on ``IterDataset``.
     These are roughly transformations operating on element index such as
-    `shuffle`, `map_with_index`, `slice` and `repeat`.
+    ``shuffle``, ``map_with_index``, ``slice`` and ``repeat``.
 
     Args:
       read_options: Controls multithreading when reading the data and applying
         transformations in this dataset.
-      allow_nones: Whether to allow `None` values in the dataset (e.g. produced
-        by `filter`). If `False` (the default), `None` values will be filtered
-        out.
+      allow_nones: Whether to allow ``None`` values in the dataset (e.g.
+        produced by ``filter``). If ``False`` (the default), ``None`` values
+        will be filtered out.
 
     Returns:
-      An `IterDataset` with the same non-`None` elements as this dataset.
+      An ``IterDataset`` with the same non- ``None`` elements as this dataset.
     """
     # Loaded lazily due to a circular dependency (dataset <-> prefetch).
     # pylint: disable=g-import-not-at-top
@@ -796,8 +822,8 @@ class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
     return self._initialize_stats(base.ExecutionTrackingMode.DISABLED)
 
 
-class _IterDatasetMeta(abc.ABCMeta):
-  """Metaclass for `IterDataset` containing factory transformations."""
+class IterDatasetMeta(abc.ABCMeta):
+  """Metaclass for ``IterDataset`` containing factory transformations."""
 
   def mix(
       cls,
@@ -810,12 +836,12 @@ class _IterDatasetMeta(abc.ABCMeta):
     you need an infinite mixed dateset consider repeating the input datasets
     before mixing.
 
-    Example usage:
-    ```
-    ds1 = MapDataset.range(5).to_iter_dataset()
-    ds2 = MapDataset.range(7, 10).to_iter_dataset()
-    list(IterDataset.mix([ds1, ds2])) == [0, 7, 1, 8, 2, 9, 3]
-    ```
+    Example usage::
+
+      ds1 = MapDataset.range(5).to_iter_dataset()
+      ds2 = MapDataset.range(7, 10).to_iter_dataset()
+      list(IterDataset.mix([ds1, ds2])) == [0, 7, 1, 8, 2, 9, 3]
+
 
     Args:
       datasets: The datasets to mix.
@@ -833,11 +859,11 @@ class _IterDatasetMeta(abc.ABCMeta):
     return mix.MixedIterDataset(parents=datasets, proportions=weights)
 
 
-class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
+class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
   """Represents a dataset with transformations that support Iterable interface.
 
   Transformations do not mutate the dataset object. Instead, they return a new
-  dataset. From the perspective of public APIs, `IterDataset` is immutable.
+  dataset. ``IterDataset`` is immutable.
   """
 
   def __init__(
@@ -877,12 +903,12 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
 
     Dataset elements are expected to be PyTrees.
 
-    Example usage:
-    ```
-    ds = MapDataset.range(5).to_iter_dataset()
-    ds = ds.batch(batch_size=2)
-    list(ds) == [np.ndarray([0, 1]), np.ndarray([2, 3]), np.ndarray([4])]
-    ```
+    Example usage::
+
+      ds = MapDataset.range(5).to_iter_dataset()
+      ds = ds.batch(batch_size=2)
+      list(ds) == [np.ndarray([0, 1]), np.ndarray([2, 3]), np.ndarray([4])]
+
 
     Args:
       batch_size: The number of elements to batch together.
@@ -909,50 +935,64 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
   def seed(self, seed: int) -> IterDataset[T]:
     """Returns a dataset that uses the seed for default seed generation.
 
-    When default seed generation is enabled by calling `ds.seed`, every
+    When default seed generation is enabled by calling ``ds.seed``, every
     downstream random transformation will be automatically seeded with a unique
     seed by default. This simplifies seed management, making it easier to avoid:
      - Having to provide a seed in multiple transformations.
      - Accidentally reusing the same seed across transformations.
 
-    It is recommended to call this right after the source. `ds.seed` has to be
-    called before any random transformations (such as `random_map` that rely on
-    default seed generation to control their seeding). Given the same seed, the
-    pipeline is guaranteed to always use the same seeds for each transformation.
+    It is recommended to call this right after the source. ``ds.seed`` has to be
+    called before any random transformations (such as ``random_map`` that rely
+    on default seed generation to control their seeding). Given the same seed,
+    the pipeline is guaranteed to always use the same seeds for each
+    transformation.
 
     Note about custom dataset implementations: the default seed generation is
-    available through `_default_seed`, but the private API is not guaranteed to
-    be stable.
+    available through ``_default_seed``, but the private API is not guaranteed
+    to be stable.
 
-    Example usage:
-    `ds = ds.seed(seed).random_map(...)`.
-    `random_map` will automatically derive its own seed (different from `seed`).
+    Example 1::
 
-    `ds = ds.seed(seed).random_map().random_map(...)`.
-    The first and second `random_map`s will each derive their own seed and the
-    seeds are going to be different.
+      ds = ds.seed(seed).random_map(...)
 
-    `ds = ds.seed(seed).random_map(transform, seed=seed1)`.
-    `random_map` will use `seed1` and will not be affected by `seed`. This
+    ``random_map`` will automatically derive its own seed (different from
+    ``seed``).
+
+    Example 2::
+
+      ds = ds.seed(seed).random_map().random_map(...)
+
+    The first and second ``random_map`` s will each derive their own seed and
+    the seeds are going to be different.
+
+    Example 3::
+
+      ds = ds.seed(seed).random_map(transform, seed=seed1)
+
+    ``random_map`` will use ``seed1`` and will not be affected by ``seed``. This
     can be used to control individual transformation seeding independently from
     the rest of the pipeline.
 
-    `ds = ds.seed(seed1).random_map(...).seed(seed2).random_map(...)`.
-    `ds.seed` only affects the downstream transformations and can be overridden
-    by a subsequent `seed` call.
-    The first `random_map` will derive its seed from `seed1`, the second - from
-    `seed2` and will not be affected by `seed1`. This can be used to control
-    your
-    transformation seeding even if you don't own the first part of the pipeline.
+    Example 4::
 
-    ```
-    ds1 = ds.source(...).seed(seed2).shuffle().to_iter_dataset()
-    ds2 = ds.source(...).seed(seed2).shuffle().to_iter_dataset()
-    ds = IterDataset.mix([ds1, ds2], ...).random_map(...)
-    ```
-    Each `shuffle` will derive its own seed from `seed1` or `seed2`
-    respectively. `random_map` will derive its seed from both `seed1` and
-    `seed2`.
+      ds = ds.seed(seed1).random_map(...).seed(seed2).random_map(...)
+
+    ``ds.seed`` only affects the downstream transformations and can be
+    overridden by a subsequent ``seed`` call.
+    The first ``random_map`` will derive its seed from ``seed1``, the second
+    - from ``seed2`` and will not be affected by ``seed1``. This can be used to
+    control your transformation seeding even if you don't own the first part of
+    the pipeline.
+
+    Example 5::
+
+      ds1 = ds.source(...).seed(seed2).shuffle().to_iter_dataset()
+      ds2 = ds.source(...).seed(seed2).shuffle().to_iter_dataset()
+      ds = IterDataset.mix([ds1, ds2], ...).random_map(...)
+
+    Each ``shuffle`` will derive its own seed from ``seed1`` or ``seed2``
+    respectively. ``random_map`` will derive its seed from both ``seed1`` and
+    ``seed2``.
 
     Args:
       seed: Seed to use.
@@ -967,26 +1007,26 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
   ) -> IterDataset[T]:
     """Returns a dataset containing only the elements that match the filter.
 
-    Example usage:
-    ```
-    ds = MapDataset.range(5).to_iter_dataset()
-    ds = ds.filter(lambda x: x % 2 == 0)
-    list(ds) == [0, 2, 4]
-    ```
+    Example usage::
+
+      ds = MapDataset.range(5).to_iter_dataset()
+      ds = ds.filter(lambda x: x % 2 == 0)
+      list(ds) == [0, 2, 4]
+
 
     Produces a warning if the filter removes more than 90% of the elements.
     You can adjust the threshold through
-    `grain.experimental.DatasetOptions.filter_warn_threshold_ratio` used in
-    `WithOptionsIterDataset`. In order to produce an exception in such case use
-    `filter_raise_threshold_ratio`.
+    ``grain.experimental.DatasetOptions.filter_warn_threshold_ratio`` used in
+    ``WithOptionsIterDataset``. In order to produce an exception in such case
+    use ``filter_raise_threshold_ratio``.
 
     Args:
-      transform: Either a `FilterTransform` containing the `filter` method or a
-        callable that takes an element and returns a boolean.
+      transform: Either a ``FilterTransform`` containing the ``filter`` method
+        or a callable that takes an element and returns a boolean.
 
     Returns:
       A dataset of the same type containing only the elements for which the
-      filter transform returns `True`.
+      filter transform returns ``True`` .
     """
     # Loaded lazily due to a circular dependency (dataset <-> filter).
     # pylint: disable=g-import-not-at-top
@@ -999,22 +1039,21 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
   def map(
       self, transform: transforms.MapTransform | Callable[[T], S]
   ) -> IterDataset[S]:
-    """Returns a dataset containing the elements transformed by `transform`.
+    """Returns a dataset containing the elements transformed by ``transform``.
 
-    Example usage:
-    ```
-    ds = MapDataset.range(5).to_iter_dataset()
-    ds = ds.map(lambda x: x + 10)
-    list(ds) == [10, 11, 12, 13, 14]
-    ```
+    Example usage::
+
+      ds = MapDataset.range(5).to_iter_dataset()
+      ds = ds.map(lambda x: x + 10)
+      list(ds) == [10, 11, 12, 13, 14]
 
     Args:
-      transform: Either a `MapTransform` containing the `map` method or a
+      transform: Either a ``MapTransform`` containing the ``map`` method or a
         callable that takes an element and returns a new element.
 
     Returns:
       A dataset containing the elements of the original dataset transformed by
-      `transform`.
+      ``transform``.
     """
     # Loaded lazily due to a circular dependency (dataset <-> map).
     # pylint: disable=g-import-not-at-top
@@ -1032,40 +1071,41 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
       *,
       seed: int | None = None,
   ) -> IterDataset[S]:
-    """Returns a dataset containing the elements transformed by `transform`.
+    """Returns a dataset containing the elements transformed by ``transform``.
 
-    The `transform` is called with the element and a `np.random.Generator`
-    instance that should be used inside the `transform` to preserve determinism.
-    The seed can be either provided explicitly or set via `ds.seed(seed)`.
+    The ``transform`` is called with the element and a ``np.random.Generator``
+    instance that should be used inside the ``transform`` to preserve
+    determinism.
+    The seed can be either provided explicitly or set via ``ds.seed(seed)``.
     Prefer the latter if you don't need to control the random map seed
     individually. It allows to pass a single seed to derive seeds for all
     downstream random transformations in the pipeline. The geenrator is seeded
     by a combination of the seed and a counter of elements produced by the
     dataset.
 
-    NOTE: Avoid using the provided RNG outside of the `transform` function
+    NOTE: Avoid using the provided RNG outside of the ``transform`` function
     (e.g. by passing it to the next transformation along with the data).
     The RNG is going to be reused.
 
-    Example usage:
-    ```
-    ds = MapDataset.range(5).to_iter_dataset()
-    ds = ds.random_map(lambda x, rng: x + rng.integers(5, 10))
-    set(ds).issubset(set(range(5, 15)))
-    ```
+    Example usage::
+
+      ds = MapDataset.range(5).to_iter_dataset()
+      ds = ds.random_map(lambda x, rng: x + rng.integers(5, 10))
+      set(ds).issubset(set(range(5, 15)))
+
 
     Args:
-      transform: Either a `RandomMapTransform` containing the `random_map`
+      transform: Either a ``RandomMapTransform`` containing the ``random_map``
         method or a callable that takes an element and a np.random.Generator and
         returns a new element.
       seed: An integer between 0 and 2**32-1 representing the seed used to
-        initialize the random number generator used by `transform`. If you don't
-        need to control the transformation seed individually, prefer setting the
-        pipeline-level seed with`ds.seed(seed)` instead.
+        initialize the random number generator used by ``transform``. If you
+        don't need to control the transformation seed individually, prefer
+        setting the pipeline-level seed with ``ds.seed(seed)`` instead.
 
     Returns:
       A dataset containing the elements of the original dataset transformed by
-      `transform`.
+      ``transform``.
     """
     # Loaded lazily due to a circular dependency (dataset <-> map).
     # pylint: disable=g-import-not-at-top
@@ -1080,20 +1120,20 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
   def prefetch(
       self, multiprocessing_options: grain_options.MultiprocessingOptions
   ) -> IterDataset[T]:
-    """Deprecated, use `mp_prefetch` instead.
+    """Deprecated, use ``mp_prefetch`` instead.
 
     Returns a dataset prefetching the elements in multiple processes.
 
     Each of the processes will process a slice of the dataset after all
-    `MapDataset` transformations.
+    ``MapDataset`` transformations.
 
     WARNING: If the dataset contains many-to-one transformations (such as
-    `batch`), output of prefetch may change if you change the number of workers.
-    However, it is still going to be determisitic.
+    ``batch``), output of prefetch may change if you change the number of
+    workers. However, it is still going to be determisitic.
 
     Args:
       multiprocessing_options: options for the prefetching processes.
-        `num_workers` must be greater than 0.
+        ``num_workers`` must be greater than 0.
 
     Returns:
       A dataset prefetching input elements concurrently.
@@ -1109,21 +1149,21 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
     """Returns a dataset prefetching elements in multiple processes.
 
     Each of the processes works on a slice of the dataset. The slicing happens
-    after all `MapDataset` transformations (right before `to_iter_dataset`).
+    after all ``MapDataset`` transformations (right before ``to_iter_dataset``).
 
     WARNING: If the dataset contains many-to-one transformations (such as
-    `filter`) or stateful transformations (such as packing), output of
-    `mp_prefetch` may change if `num_workers` is changed. However, it is still
-    going to be determisitic. If you need elasticity in the number of prefetch
-    workers, consider moving many-to-one and stateful transformations to after
-    `mp_prefetch` or outside of the Grain pipeline.
+    ``filter``) or stateful transformations (such as packing), output of
+    ``mp_prefetch`` may change if ``num_workers`` is changed. However, it is
+    still going to be determisitic. If you need elasticity in the number of
+    prefetch workers, consider moving many-to-one and stateful transformations
+    to after ``mp_prefetch`` or outside of the Grain pipeline.
 
 
     Args:
-      options: options for the prefetching processes. `options.num_workers` must
-        be greater than or equal to 0. If `options.num_workers` is 0,
-        `mp_prefetch` has no effect. Defaults to
-        `MultiprocessingOptions(num_workers=10)`.
+      options: options for the prefetching processes. ``options.num_workers``
+        must be greater than or equal to 0. If ``options.num_workers`` is 0,
+        ``mp_prefetch`` has no effect. Defaults to
+        ``MultiprocessingOptions(num_workers=10)``.
       worker_init_fn: A function that is called in each worker process before
         the data is processed. The function takes two arguments: the current
         worker index and the total worker count.
@@ -1148,10 +1188,10 @@ class IterDataset(_Dataset, Iterable[T], metaclass=_IterDatasetMeta):
 
 
 class DatasetIterator(Iterator[T], abc.ABC):
-  """`IterDataset` iterator.
+  """``IterDataset`` iterator.
 
   NOTE: The methods are assumed to be thread-unsafe. Please ensure only a single
-  thread can access a `DatasetIterator` instance.
+  thread can access a ``DatasetIterator`` instance.
   """
 
   # Whether this transformation mutates parent elements. This does not affect
@@ -1203,9 +1243,9 @@ class DatasetIterator(Iterator[T], abc.ABC):
     produce states with the same shapes and types throughout the lifetime of the
     iterator. Some frameworks rely on this property to perform checkpointing,
     and all standard library iterators are compliant. It is also recommended to
-    produce state values that support shapes and types, e.g. using `np.int64`
-    instead of `int`. The standard library iterators are not currently compliant
-    with this recommendation.
+    produce state values that support shapes and types, e.g. using ``np.int64``
+    instead of ``int``. The standard library iterators are not currently
+    compliant with this recommendation.
     """
 
   @abc.abstractmethod
@@ -1219,8 +1259,8 @@ class DatasetIterator(Iterator[T], abc.ABC):
 
     Can be useful when the iterator can be created in advance but the elements
     are not needed immediately. For instance, when recovering iterator and model
-    from a checkpoint, recover the iterator first, call `start_prefech` and then
-    recover the model. This way the time to get the first batch from the
+    from a checkpoint, recover the iterator first, call ``start_prefech`` and
+    then recover the model. This way the time to get the first batch from the
     iterator will be partially or fully hidden behind the time it takes to
     recover the model.
     """
@@ -1285,28 +1325,27 @@ class WithOptionsIterDataset(IterDataset[T]):
   pipeline, in which case they are merged. If the same option is set multiple
   times, the latest value takes precedence.
 
-  Example:
-  ```
-  ds = MapDataset.range(5).to_iter_dataset()
-  ds = WithOptionsIterDataset(
-         ds,
-         DatasetOptions(
-             filter_warn_threshold_ratio=0.6,
-             filter_raise_threshold_ratio=0.8,
-         ),
-       )
-  ds = ds.filter(...)
-  ds = WithOptionsIterDataset(
-         ds,
-         DatasetOptions(filter_warn_threshold_ratio=0.7),
-       )
-  ds = ds.filter(...)
-  ```
-  In this case, the options will be:
-  ```
-  filter_warn_threshold_ratio=0.7
-  filter_raise_threshold_ratio=0.8
-  ```
+  Example::
+
+    ds = MapDataset.range(5).to_iter_dataset()
+    ds = WithOptionsIterDataset(
+          ds,
+          DatasetOptions(
+              filter_warn_threshold_ratio=0.6,
+              filter_raise_threshold_ratio=0.8,
+          ),
+        )
+    ds = ds.filter(...)
+    ds = WithOptionsIterDataset(
+          ds,
+          DatasetOptions(filter_warn_threshold_ratio=0.7),
+        )
+    ds = ds.filter(...)
+
+  In this case, the options will be::
+
+    filter_warn_threshold_ratio=0.7
+    filter_raise_threshold_ratio=0.8
   """
 
   def __init__(self, parent: IterDataset[T], options: base.DatasetOptions):

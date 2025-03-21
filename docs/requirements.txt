@@ -11,3 +11,6 @@ pydata-sphinx-theme<0.16.0
 # To generate API documentation.
 sphinx-autoapi
 sphinx-autodoc2
+# To import the Grain package. We mock all other dependencies, but this one has
+# context managers that are tricky to mock.
+etils[epath,epy]

@@ -129,19 +129,17 @@ class InterleaveIterDataset(dataset.IterDataset[T]):
   with equal proportions. If `cycle_length` is 1, the datasets are chained.
 
   Can be used with `mp_prefetch` to parallelize reading from sources that do not
-  support random access and are implemented as `IterDataset`:
+  support random access and are implemented as `IterDataset`::
 
-  ```
-  def make_source(filename: str) -> grain.IterDataset:
-    ...
+    def make_source(filename: str) -> grain.IterDataset:
+      ...
 
-  ds = grain.MapDataset.source(filenames).shuffle(seed=42).map(make_source)
-  ds = grain.experimental.InterleaveIterDataset(ds, cycle_length=4)
-  ds = ...
-  ds = ds.mp_prefetch(ds, 2)
-  for element in ds:
-    ...
-  ```
+    ds = grain.MapDataset.source(filenames).shuffle(seed=42).map(make_source)
+    ds = grain.experimental.InterleaveIterDataset(ds, cycle_length=4)
+    ds = ...
+    ds = ds.mp_prefetch(ds, 2)
+    for element in ds:
+      ...
   """
 
   def __init__(
