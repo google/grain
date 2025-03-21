@@ -332,9 +332,9 @@ jaxtyping==0.2.37 \
     --hash=sha256:519f694ce569ba5000a1f8823e742df2d86e6da3956d2218769b6bdc5ad2d23a \
     --hash=sha256:ae8c124abbea61b8c56455fb8b42f1183ab63353572aedfb1de355bb5b40e951
     # via -r test_requirements.in
-keras==3.8.0 \
-    --hash=sha256:6289006e6f6cb2b68a563b58cf8ae5a45569449c5a791df6b2f54c1877f3f344 \
-    --hash=sha256:b65d125976b0f8bf8ad1e93311a98e7dfb334ff6023627a59a52b35499165ec3
+keras==3.9.0 \
+    --hash=sha256:71078e833994384f45d5ea192d18f0969a12bd2572a5d15968c755945ad91d1c \
+    --hash=sha256:b5bf04e7c64c3176eda5124d035005bb7a676fb505f42496c7b03a99d5683652
     # via tensorflow
 libclang==18.1.1 \
     --hash=sha256:0b2e143f0fac830156feb56f9231ff8338c20aecfe72b4ffe96f19e5a1dbb69a \
