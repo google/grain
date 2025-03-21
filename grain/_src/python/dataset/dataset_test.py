@@ -768,6 +768,14 @@ class DatasetTest(parameterized.TestCase):
     outputs = ds.pipe(lambda self, *args, **kwargs: (args, kwargs), 1, 2, x=3)
     self.assertEqual(outputs, ((1, 2), {"x": 3}))
 
+  def test_concatenate(self):
+    ds1 = dataset.MapDataset.range(3)
+    ds2 = dataset.MapDataset.range(3, 8)
+    self.assertEqual(
+        list(dataset.MapDataset.concatenate([ds1, ds2])),
+        [0, 1, 2, 3, 4, 5, 6, 7],
+    )
+
 
 class TfRandomMapAlwaysAddingOne(transforms.TfRandomMapTransform):
 

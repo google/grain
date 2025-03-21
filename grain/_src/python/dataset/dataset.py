@@ -286,6 +286,28 @@ class _MapDatasetMeta(abc.ABCMeta):
     # pylint: enable=g-import-not-at-top
     return mix.MixedMapDataset(parents=datasets, selection_map=selection_map)
 
+  def concatenate(cls, datasets: Sequence[MapDataset[T]]) -> MapDataset[T]:
+    """Returns a dataset of elements from all input datasets.
+
+    Example usage:
+    ```
+    ds1 = MapDataset.range(3)
+    ds2 = MapDataset.range(3, 8)
+    list(MapDataset.concatenate([ds1, ds2])) == [0, 1, 2, 3, 4, 5, 6, 7]
+    ```
+
+    Args:
+      datasets: The datasets to concatenate.
+
+    Returns:
+      A MapDataset that represents a concatenation of the input datasets.
+    """
+    # Loaded lazily due to a circular dependency (dataset <-> mix).
+    # pylint: disable=g-import-not-at-top
+    from grain._src.python.dataset.transformations import mix
+    # pylint: enable=g-import-not-at-top
+    return mix.ConcatenateMapDataset(parents=datasets)
+
 
 class MapDataset(_Dataset, Generic[T], metaclass=_MapDatasetMeta):
   """Represents a dataset with transformations that support random access.
