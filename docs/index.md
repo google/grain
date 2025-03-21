@@ -68,12 +68,11 @@ tutorials/dataset_advanced_tutorial
 tutorials/dataset_debugging_tutorial
 ```
 
-<!-- Automatically generated documentation from docstrings -->
 ``` {toctree}
 :maxdepth: 1
 :hidden:
-:caption: References
-autoapi/index
+:caption: API reference
+grain
 ```
 
 ``` {toctree}

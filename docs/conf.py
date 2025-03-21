@@ -9,11 +9,31 @@ https://www.sphinx-doc.org/en/master/usage/configuration.html
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
+import os
 import pathlib
 import sys
 
-sys.path.insert(0, str(pathlib.Path('..', 'grain').resolve()))
+autodoc_mock_imports = [
+    'grain.proto.execution_summary_pb2',
+    'grain._src.python.experimental.index_shuffle.python.index_shuffle_module',
+    'cloudpickle',
+    'numpy',
+    'orbax',
+    'tree',
+    'absl',
+    'absl.logging',
+    'array_record',
+]
 
+sys.path.insert(0, str(pathlib.Path('..', 'grain').resolve()))
+sys.path.insert(0, os.path.abspath('..'))
+
+
+# import grain  # pylint: disable=unused-import, g-import-not-at-top, g-bad-import-order
+
+# raise ValueError(f'cwd: {os.getcwd()}\n\n path: {sys.path}')
+
+# pylint: disable=unreachable
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
@@ -28,7 +48,9 @@ extensions = [
     'myst_nb',
     'sphinx_copybutton',
     'sphinx_design',
-    'autoapi.extension',
+    'sphinx.ext.autodoc',
+    'sphinx.ext.autosummary',
+    'sphinx.ext.napoleon',
 ]
 
 templates_path = ['_templates']
@@ -70,16 +92,8 @@ html_theme_options = {
 
 # Autodoc settings
 # Should be relative to the source of the documentation
-autoapi_dirs = [
-    '../grain/_src/core',
-    '../grain/_src/python',
-]
-
-autoapi_ignore = [
-    '*_test.py',
-    'testdata/*',
-    '*/dataset/stats.py',
-]
+autosummary_generate = True
+autodoc_typehints = 'description'
 
 # -- Myst configurations -------------------------------------------------
 myst_enable_extensions = ['colon_fence']
