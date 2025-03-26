@@ -24,7 +24,7 @@ class RandomAccessDataSourceTest(parameterized.TestCase):
   @parameterized.parameters(
       data_sources.ArrayRecordDataSource,
       data_sources.RangeDataSource,
-      data_sources.InMemoryDataSource,
+      data_sources.SharedMemoryDataSource,
   )
   def test_protocol(self, source_cls):
     self.assertIsInstance(source_cls, base.RandomAccessDataSource)

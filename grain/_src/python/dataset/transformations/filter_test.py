@@ -24,21 +24,21 @@ from grain._src.python.dataset.transformations import filter as filter_dataset
 
 
 @dataclasses.dataclass(frozen=True)
-class FilterNoElements(transforms.FilterTransform):
+class FilterNoElements(transforms.Filter):
 
   def filter(self, element: int):
     return True
 
 
 @dataclasses.dataclass(frozen=True)
-class FilterAllElements(transforms.FilterTransform):
+class FilterAllElements(transforms.Filter):
 
   def filter(self, element: int):
     return False
 
 
 @dataclasses.dataclass(frozen=True)
-class FilterEvenElementsOnly(transforms.FilterTransform):
+class FilterEvenElementsOnly(transforms.Filter):
 
   def filter(self, element: int):
     return element % 2

@@ -61,7 +61,7 @@ from grain._src.python.dataset.transformations.zip import (
 )
 from grain._src.core.transforms import (
     FlatMapTransform,
-    MapWithIndexTransform,
+    MapWithIndex as MapWithIndexTransform,
 )
 from grain._src.python.experimental.example_packing.packing import PackAndBatchOperation
 

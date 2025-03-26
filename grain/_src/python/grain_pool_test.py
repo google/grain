@@ -56,7 +56,7 @@ class GrainPoolTest(absltest.TestCase):
     )
 
   def test_pool_equal_split_in_memory_data_source(self):
-    in_memory_ds = data_sources.InMemoryDataSource(range(12))
+    in_memory_ds = data_sources.SharedMemoryDataSource(range(12))
 
     # 12 elements in the `in_memory_ds` are divided
     # equally among 4 processes.

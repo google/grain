@@ -67,7 +67,7 @@ def load(
   if batch_size is not None:
     transformations = list(transformations)
     transformations.append(
-        transforms.BatchTransform(batch_size, drop_remainder=drop_remainder)
+        transforms.Batch(batch_size, drop_remainder=drop_remainder)
     )
   return data_loader.DataLoader(
       data_source=source,

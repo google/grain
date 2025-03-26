@@ -34,10 +34,10 @@ class FilterMapDataset(dataset.MapDataset[T]):
   def __init__(
       self,
       parent: dataset.MapDataset[T],
-      transform: Union[transforms.FilterTransform, Callable[[T], bool]],
+      transform: Union[transforms.Filter, Callable[[T], bool]],
   ):
     super().__init__(parent)
-    if isinstance(transform, transforms.FilterTransform):
+    if isinstance(transform, transforms.Filter):
       self._filter_fn = transform.filter
       self._transform_cls_name = transform.__class__.__name__
     else:
@@ -181,10 +181,10 @@ class FilterIterDataset(dataset.IterDataset[T]):
   def __init__(
       self,
       parent: dataset.IterDataset,
-      transform: Union[transforms.FilterTransform, Callable[[T], bool]],
+      transform: Union[transforms.Filter, Callable[[T], bool]],
   ):
     super().__init__(parent)
-    if isinstance(transform, transforms.FilterTransform):
+    if isinstance(transform, transforms.Filter):
       self._filter_fn = transform.filter
       self._transform_cls_name = transform.__class__.__name__
     else:

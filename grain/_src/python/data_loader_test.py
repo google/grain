@@ -28,12 +28,14 @@ import multiprocessing as mp
 from grain._src.python import data_loader as data_loader_lib
 from grain._src.python import samplers
 from grain._src.python import shared_memory_array
+# pylint: disable=g-importing-member
 from grain._src.python.data_sources import ArrayRecordDataSource
-from grain._src.python.data_sources import InMemoryDataSource
 from grain._src.python.data_sources import RangeDataSource
+from grain._src.python.data_sources import SharedMemoryDataSource
 from grain._src.python.operations import BatchOperation
 from grain._src.python.operations import FilterOperation
 from grain._src.python.operations import MapOperation
+# pylint: enable=g-importing-member
 import numpy as np
 
 
@@ -48,7 +50,7 @@ def condition_function(data):
   return data % 2 == 0
 
 
-class FilterEven(transforms.FilterTransform):
+class FilterEven(transforms.Filter):
 
   def filter(self, x: int) -> bool:
     return x % 2 == 0
@@ -261,7 +263,7 @@ class DataLoaderTest(parameterized.TestCase):
     np.testing.assert_equal(actual, expected)
 
   def test_data_loader_in_memory_data_source(self):
-    data_source = InMemoryDataSource([0, 1, 2, 3, 4, 5, 6, 7])
+    data_source = SharedMemoryDataSource([0, 1, 2, 3, 4, 5, 6, 7])
 
     sampler = samplers.SequentialSampler(
         num_records=len(data_source), shard_options=sharding.NoSharding()
@@ -644,7 +646,7 @@ class DataLoaderTest(parameterized.TestCase):
     transformations = [
         PlusOne(),
         FilterEven(),
-        transforms.BatchTransform(batch_size=2),
+        transforms.Batch(batch_size=2),
     ]
     data_loader = self._create_data_loader_for_short_sequence(transformations)
     expected = [np.array([2, 4]), np.array([6, 8])]

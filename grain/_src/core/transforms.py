@@ -48,7 +48,7 @@ class RandomMapTransform(abc.ABC):
     """Maps a single element."""
 
 
-class MapWithIndexTransform(abc.ABC):
+class MapWithIndex(abc.ABC):
   """Abstract base class for 1:1 transformations of elements and their index."""
 
   @abc.abstractmethod
@@ -64,7 +64,7 @@ class TfRandomMapTransform(abc.ABC):
     """Maps a single element."""
 
 
-class FilterTransform(abc.ABC):
+class Filter(abc.ABC):
   """Abstract base class for filter transformations for individual elements.
 
   The pipeline will drop any element for which the filter function returns
@@ -98,19 +98,19 @@ class FlatMapTransform(abc.ABC):
 
 
 @dataclasses.dataclass(frozen=True)
-class BatchTransform:
+class Batch:
   batch_size: int
   drop_remainder: bool = False
 
 
 Transformation = Union[
-    BatchTransform,
+    Batch,
     MapTransform,
     RandomMapTransform,
     TfRandomMapTransform,
-    FilterTransform,
+    Filter,
     FlatMapTransform,
-    MapWithIndexTransform,
+    MapWithIndex,
 ]
 Transformations = Sequence[Transformation]
 
@@ -130,11 +130,11 @@ def get_pretty_transform_name(
   if isinstance(
       transform,
       (
-          BatchTransform,
+          Batch,
           MapTransform,
           RandomMapTransform,
           TfRandomMapTransform,
-          FilterTransform,
+          Filter,
           FlatMapTransform,
       ),
   ):

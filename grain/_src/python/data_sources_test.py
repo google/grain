@@ -66,7 +66,7 @@ class InMemoryDataSourceTest(DataSourceTest):
 
   def test_single_process(self):
     sequence = list(range(12))
-    in_memory_ds = data_sources.InMemoryDataSource(sequence)
+    in_memory_ds = data_sources.SharedMemoryDataSource(sequence)
 
     output_by_index = [in_memory_ds[i] for i in range(len(in_memory_ds))]
     self.assertEqual(sequence, output_by_index)
@@ -79,14 +79,14 @@ class InMemoryDataSourceTest(DataSourceTest):
 
   @staticmethod
   def read_elements(
-      in_memory_ds: data_sources.InMemoryDataSource, indices: Sequence[int]
+      in_memory_ds: data_sources.SharedMemoryDataSource, indices: Sequence[int]
   ) -> Sequence[Any]:
     res = [in_memory_ds[i] for i in indices]
     return res
 
   def test_multi_processes_co_read(self):
     sequence = list(range(12))
-    in_memory_ds = data_sources.InMemoryDataSource(
+    in_memory_ds = data_sources.SharedMemoryDataSource(
         sequence, name="DataSourceTestingCoRead"
     )
 
@@ -115,7 +115,7 @@ class InMemoryDataSourceTest(DataSourceTest):
     in_memory_ds.unlink()
 
   def test_empty_sequence(self):
-    in_memory_ds = data_sources.InMemoryDataSource([])
+    in_memory_ds = data_sources.SharedMemoryDataSource([])
     self.assertEmpty(in_memory_ds)
 
     in_memory_ds.close()
@@ -124,7 +124,7 @@ class InMemoryDataSourceTest(DataSourceTest):
   def test_str(self):
     sequence = list(range(12))
     name = "DataSourceTestingStr"
-    in_memory_ds = data_sources.InMemoryDataSource(sequence, name=name)
+    in_memory_ds = data_sources.SharedMemoryDataSource(sequence, name=name)
     actual_str = str(in_memory_ds)
     self.assertEqual(
         actual_str,

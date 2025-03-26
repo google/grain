@@ -415,7 +415,7 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
     )
 
   def filter(
-      self, transform: transforms.FilterTransform | Callable[[T], bool]
+      self, transform: transforms.Filter | Callable[[T], bool]
   ) -> MapDataset[T]:
     """Returns a dataset containing only the elements that match the filter.
 
@@ -491,7 +491,7 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
 
   def map_with_index(
       self,
-      transform: transforms.MapWithIndexTransform | Callable[[int, T], S],
+      transform: transforms.MapWithIndex | Callable[[int, T], S],
   ) -> MapDataset[S]:
     """Returns a dataset containing the elements transformed by ``transform``.
 
@@ -1003,7 +1003,7 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
     return _WithSeedIterDataset(parent=self, seed=seed)
 
   def filter(
-      self, transform: transforms.FilterTransform | Callable[[T], bool]
+      self, transform: transforms.Filter | Callable[[T], bool]
   ) -> IterDataset[T]:
     """Returns a dataset containing only the elements that match the filter.
 
@@ -1386,7 +1386,7 @@ def apply_transformations(
     transformations = (transformations,)
   for transformation in transformations:
     match transformation:
-      case transforms.BatchTransform():
+      case transforms.Batch():
         ds = ds.batch(
             transformation.batch_size,
             drop_remainder=transformation.drop_remainder,
@@ -1395,14 +1395,14 @@ def apply_transformations(
         ds = ds.map(transformation)
       case transforms.RandomMapTransform():
         ds = ds.random_map(transformation)
-      case transforms.MapWithIndexTransform():
+      case transforms.MapWithIndex():
         if isinstance(ds, MapDataset):
           ds = ds.map_with_index(transformation)
         else:
           raise NotImplementedError(
               "MapWithIndexTransform is only supported for MapDataset."
           )
-      case transforms.FilterTransform():
+      case transforms.Filter():
         ds = ds.filter(transformation)
       case _:
         raise NotImplementedError(

@@ -19,10 +19,10 @@
 # pylint: disable=unused-import
 
 from grain._src.core.transforms import (
-    BatchTransform as Batch,
-    FilterTransform as Filter,
+    Batch,
+    Filter,
     MapTransform as Map,
-    MapWithIndexTransform as MapWithIndex,
+    MapWithIndex,
     RandomMapTransform as RandomMap,
     Transformation,
     Transformations,

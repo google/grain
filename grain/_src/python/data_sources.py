@@ -143,7 +143,7 @@ class RangeDataSource:
     )
 
 
-class InMemoryDataSource(shared_memory.ShareableList):
+class SharedMemoryDataSource(shared_memory.ShareableList):
   """Simple in-memory data source for sequences that is sharable among multiple processes.
 
   Note:

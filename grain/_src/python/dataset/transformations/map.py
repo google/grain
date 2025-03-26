@@ -166,10 +166,10 @@ class MapWithIndexMapDataset(dataset.MapDataset[T]):
   def __init__(
       self,
       parent: dataset.MapDataset,
-      transform: transforms.MapWithIndexTransform | Callable[[int, Any], T],
+      transform: transforms.MapWithIndex | Callable[[int, Any], T],
   ):
     super().__init__(parent)
-    if isinstance(transform, transforms.MapWithIndexTransform):
+    if isinstance(transform, transforms.MapWithIndex):
       self._map_fn = transform.map_with_index
       # Use the transform class name. The `cached_property` below will not
       # be called.

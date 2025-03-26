@@ -26,7 +26,7 @@ import numpy as np
 FLAGS = flags.FLAGS
 
 
-class FilterEven(transforms.FilterTransform):
+class FilterEven(transforms.Filter):
 
   def filter(self, x: int) -> bool:
     return x % 2 == 0

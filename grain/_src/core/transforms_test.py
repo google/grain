@@ -18,13 +18,13 @@ from absl.testing import parameterized
 from grain._src.core import transforms
 
 
-class _TestFilter(transforms.FilterTransform):
+class _TestFilter(transforms.Filter):
 
   def filter(self, x):
     return x % 2 == 0
 
 
-class _TestFilterWithStr(transforms.FilterTransform):
+class _TestFilterWithStr(transforms.Filter):
 
   def filter(self, x):
     return x % 2 == 0

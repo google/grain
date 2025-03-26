@@ -67,7 +67,7 @@ class RandomMapWithDeterminismTransform(transforms.RandomMapTransform):
 
 
 @dataclasses.dataclass(frozen=True)
-class AddIndexTransform(transforms.MapWithIndexTransform):
+class AddIndexTransform(transforms.MapWithIndex):
 
   def map_with_index(self, index: int, element: int):
     return (index, element)

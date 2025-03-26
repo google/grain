@@ -34,23 +34,25 @@ from grain._src.core.constants import (
 )
 from grain._src.core.sharding import NoSharding, ShardByJaxProcess, ShardOptions
 from grain._src.core.transforms import (
-    BatchTransform as Batch,
-    FilterTransform,
+    Batch,
+    Filter as FilterTransform,
     MapTransform,
-    MapWithIndexTransform,
+    MapWithIndex as MapWithIndexTransform,
     RandomMapTransform,
     Transformation,
     Transformations,
 )
 
-from grain._src.python.checkpoint_handlers import PyGrainCheckpointHandler
+from grain._src.python.checkpoint_handlers import (
+    CheckpointHandler as PyGrainCheckpointHandler,
+)
 from grain._src.python.data_loader import (
     DataLoader,
-    PyGrainDatasetIterator,
+    DataLoaderIterator as PyGrainDatasetIterator,
 )
 from grain._src.python.data_sources import (
     ArrayRecordDataSource,
-    InMemoryDataSource,
+    SharedMemoryDataSource as InMemoryDataSource,
     RandomAccessDataSource,
     RangeDataSource,
 )
@@ -82,8 +84,8 @@ from grain.python import experimental
 # These are imported only if Orbax is present.
 try:
   from grain._src.python.checkpoint_handlers import (
-      PyGrainCheckpointSave,
-      PyGrainCheckpointRestore,
+      CheckpointSave as PyGrainCheckpointSave,
+      CheckpointRestore as PyGrainCheckpointRestore,
   )
 except ImportError:
   pass

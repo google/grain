@@ -40,7 +40,7 @@ _T = TypeVar("_T")
 
 
 @dataclasses.dataclass(frozen=True)
-class FilterKeepingOddElementsOnly(transforms.FilterTransform):
+class FilterKeepingOddElementsOnly(transforms.Filter):
 
   def filter(self, element: int) -> bool:
     return bool(element % 2)
@@ -68,7 +68,7 @@ class MapTransformAddingOne(transforms.MapTransform):
 
 
 @dataclasses.dataclass(frozen=True)
-class MapWithIndexProducingIndexElementTuple(transforms.MapWithIndexTransform):
+class MapWithIndexProducingIndexElementTuple(transforms.MapWithIndex):
 
   def map_with_index(self, index: int, element: int) -> tuple[int, int]:
     return (index, element)
@@ -783,7 +783,7 @@ class TfRandomMapAlwaysAddingOne(transforms.TfRandomMapTransform):
     return x + 1
 
 
-class FilterArraysWithLargeSum(transforms.FilterTransform):
+class FilterArraysWithLargeSum(transforms.Filter):
 
   def filter(self, x):
     return np.sum(x) < 20
@@ -810,7 +810,7 @@ class ApplyTransformationsTest(parameterized.TestCase):
         [
             MapTransformAddingOne(),
             RandomMapAlwaysAddingOne(),
-            transforms.BatchTransform(batch_size=2, drop_remainder=True),
+            transforms.Batch(batch_size=2, drop_remainder=True),
             FilterArraysWithLargeSum(),
         ],
     )

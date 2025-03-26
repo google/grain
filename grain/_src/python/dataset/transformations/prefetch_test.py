@@ -35,14 +35,14 @@ _T = TypeVar('_T')
 
 
 @dataclasses.dataclass(frozen=True)
-class FilterKeepingOddElementsOnly(transforms.FilterTransform):
+class FilterKeepingOddElementsOnly(transforms.Filter):
 
   def filter(self, element: int) -> bool:
     return bool(element % 2)
 
 
 @dataclasses.dataclass(frozen=True)
-class FilterAllElements(transforms.FilterTransform):
+class FilterAllElements(transforms.Filter):
 
   def filter(self, element: int):
     return False

@@ -56,7 +56,7 @@ _api_usage_counter = monitoring.Counter(
 _iterator_get_next_metric = monitoring.EventMetric(
     "/grain/python/data_loader/iterator_get_next",
     monitoring.Metadata(
-        description="Gauge for PyGrainDatasetIterator.__next__() latency.",
+        description="Gauge for DataLoaderIterator.__next__() latency.",
         units=monitoring.Units.NANOSECONDS,
     ),
     root=grain_monitoring.get_monitoring_root(),
@@ -253,8 +253,8 @@ class DataLoader:
     """Returns the number of workers across all data shards."""
     return self._local_num_workers * self._shard_options.shard_count  # pytype: disable=attribute-error
 
-  def __iter__(self) -> PyGrainDatasetIterator:
-    return PyGrainDatasetIterator(self, self._create_initial_state())
+  def __iter__(self) -> DataLoaderIterator:
+    return DataLoaderIterator(self, self._create_initial_state())
 
   def _create_initial_state(self) -> _IteratorState:
     """Create the initial state for checkpoints."""
@@ -387,22 +387,22 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn):
     yield from self._read_and_transform_data(last_seen_index)
 
 
-class PyGrainDatasetIterator(collections.abc.Iterator[_T]):
+class DataLoaderIterator(collections.abc.Iterator[_T]):
   """DataLoader iterator providing get/set state functionality.
 
   This is the only iterator we expose to users. It wraps underlying
   MultipleProcessIterator. In order to set state, it recreates the underlying
   iterator fresh with a new state.
 
-  Checkpointing for PyGrainDatasetIterator:
-  PyGrainDatasetIterator uses GrainPool, which distributes RecordMetadata from
+  Checkpointing for DataLoaderIterator:
+  DataLoaderIterator uses GrainPool, which distributes RecordMetadata from
   produced records among worker processes in a round robin fashion. Generally,
   some workers can process more elements than others at a given training step.
   Checkpointing logic goes as follows:
   1) With each output batch produced, GrainPool emits the worker_index of The
      worker that processed the batch.
-  2) PyGrainDatasetIterator keeps track of the last_seen_index at each worker.
-  3) When restoring from a state, PyGrainDatasetIterator checks what is the
+  2) DataLoaderIterator keeps track of the last_seen_index at each worker.
+  3) When restoring from a state, DataLoaderIterator checks what is the
      minimum last_seen_index (among the last seen indices for all workers.) and
      which worker processed that index. GrainPool is instructed to start
      distributing indices to the next worker.
@@ -415,7 +415,7 @@ class PyGrainDatasetIterator(collections.abc.Iterator[_T]):
     self._raw_iterator = None
     self._iterator = None
 
-  def __iter__(self) -> PyGrainDatasetIterator[_T]:
+  def __iter__(self) -> DataLoaderIterator[_T]:
     return self
 
   def _create_iterator(self) -> None:
@@ -507,9 +507,9 @@ def _apply_transform(
         ),
         True,
     )
-  elif isinstance(transform, transforms.FilterTransform):
+  elif isinstance(transform, transforms.Filter):
     fn = lambda r: (r, bool(transform.filter(r.data)))
-  elif isinstance(transform, transforms.BatchTransform):
+  elif isinstance(transform, transforms.Batch):
     batch_op = BatchOperation(
         batch_size=transform.batch_size,
         drop_remainder=transform.drop_remainder,

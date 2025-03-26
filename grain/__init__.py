@@ -35,7 +35,7 @@ from grain import (
 from grain._src.core.config import config
 from grain._src.python.data_loader import (
     DataLoader,
-    PyGrainDatasetIterator as DataLoaderIterator,
+    DataLoaderIterator,
 )
 from grain._src.python.dataset.dataset import (
     DatasetIterator,

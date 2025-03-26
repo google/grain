@@ -21,7 +21,7 @@ from grain._src.python import data_loader
 from grain._src.python.dataset import dataset
 
 IteratorType = TypeVar(
-    "IteratorType", data_loader.PyGrainDatasetIterator, dataset.DatasetIterator
+    "IteratorType", data_loader.DataLoaderIterator, dataset.DatasetIterator
 )
 
 
@@ -35,7 +35,7 @@ def _get_process_index_and_count():
 
 
 # Ipmlements orbax.checkpoint.CheckpointHandler.
-class PyGrainCheckpointHandler:
+class CheckpointHandler:
   """Orbax CheckpointHandler for PyGrain iterators."""
 
   def save(
@@ -103,15 +103,16 @@ try:
   # present.
   import orbax.checkpoint as ocp  # pylint:disable=g-import-not-at-top # pytype:disable=import-error
 
-  @ocp.args.register_with_handler(PyGrainCheckpointHandler, for_save=True)  # pytype:disable=wrong-arg-types
+  @ocp.args.register_with_handler(CheckpointHandler, for_save=True)  # pytype:disable=wrong-arg-types
   @dataclasses.dataclass
-  class PyGrainCheckpointSave(ocp.args.CheckpointArgs):
+  class CheckpointSave(ocp.args.CheckpointArgs):
     item: Any
 
-  @ocp.args.register_with_handler(PyGrainCheckpointHandler, for_restore=True)  # pytype:disable=wrong-arg-types
+  @ocp.args.register_with_handler(CheckpointHandler, for_restore=True)  # pytype:disable=wrong-arg-types
   @dataclasses.dataclass
-  class PyGrainCheckpointRestore(ocp.args.CheckpointArgs):
+  class CheckpointRestore(ocp.args.CheckpointArgs):
     item: Any
+
 
 except (ImportError, TypeError, AttributeError):
   pass
