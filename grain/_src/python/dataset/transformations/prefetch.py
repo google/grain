@@ -39,6 +39,7 @@ from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
 from grain._src.python.dataset.transformations import filter as filter_dataset
+from grain._src.python.dataset.transformations import source
 import numpy as np
 
 T = TypeVar("T")

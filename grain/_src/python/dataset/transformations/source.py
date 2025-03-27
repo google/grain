@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 import functools
-from typing import Union
+from typing import Sequence, Union
 
 from absl import logging
 from grain._src.python import options
@@ -44,6 +44,14 @@ class SourceMapDataset(dataset.MapDataset):
 
   def log_lineage(self):
     pass
+
+  @property
+  def paths(self) -> str | Sequence[str]:
+    if hasattr(self._source, "paths"):
+      assert isinstance(self._source, base.RandomAccessDataSource)
+      return self._source.paths
+    else:
+      return []
 
 
 def log_lineage_for_sources(

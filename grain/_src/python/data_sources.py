@@ -86,6 +86,10 @@ class ArrayRecordDataSource(array_record.ArrayRecordDataSource):
     _bytes_read_counter.IncrementBy(len(data), "ArrayRecordDataSource")
     return data
 
+  @property
+  def paths(self) -> ArrayRecordDataSourcePaths:
+    return self._paths
+
 
 @typing.runtime_checkable
 class RandomAccessDataSource(Protocol, Generic[T]):

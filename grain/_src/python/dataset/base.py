@@ -84,6 +84,7 @@ class _Default(Generic[T]):
 
 @dataclasses.dataclass(kw_only=True, frozen=True)
 class DatasetOptions:
+  # pyformat: disable
   """Holds options used by dataset transformations.
 
   Attributes:
@@ -105,6 +106,7 @@ class DatasetOptions:
       processes rather than passed via shared memory. For smaller arrays, the
       overhead of using shared memory can be higher than the cost of copying.
   """
+  # pyformat: enable
 
   filter_warn_threshold_ratio: float | None | _Default[float] = _Default(0.9)
   filter_raise_threshold_ratio: float | None | _Default[None] = _Default(None)
@@ -112,7 +114,6 @@ class DatasetOptions:
       ExecutionTrackingMode | _Default[ExecutionTrackingMode]
   ) = _Default(ExecutionTrackingMode.DISABLED)
   min_shm_size: int | _Default[int] = _Default(0)
-
   # Internal fields.
 
   # Names of fields which were set by the user.
