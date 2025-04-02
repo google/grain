@@ -22,6 +22,7 @@ import dataclasses
 import functools
 import json
 from multiprocessing import pool
+from multiprocessing import queues
 import os
 import sys
 import time
@@ -380,7 +381,11 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn):
     self._read_and_transform_data = read_and_transform_data
 
   def __call__(
-      self, *, worker_index: int, worker_count: int
+      self,
+      *,
+      worker_index: int,
+      worker_count: int,
+      stats_out_queue: queues.Queue | None = None,
   ) -> Iterator[record.Record]:
     del worker_count
     last_seen_index = self._state[_LAST_SEEN_INDICES].get(str(worker_index))
