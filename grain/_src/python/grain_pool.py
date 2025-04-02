@@ -521,8 +521,8 @@ class GrainPool(Iterator[T]):
         # In case all our attempts to terminate the system fails, we forcefully
         # kill the child processes.
         if process.is_alive():
-          logging.info("Forcibly terminating process with pid %i", process.pid)
-          process.terminate()
+          logging.info("Killing worker process with pid %i", process.pid)
+          process.kill()
 
 
 @dataclasses.dataclass(slots=True, frozen=True)
