@@ -113,9 +113,17 @@ class MixedMapDataset(dataset.MapDataset[T]):
       return self.slice(index)
     with self._stats.record_self_time():
       dataset_index, index_in_dataset = self._selection_map[index]
-    return self._stats.record_output_spec(
-        self._parents[dataset_index][index_in_dataset]
-    )
+    try:
+      return self._stats.record_output_spec(
+          self._parents[dataset_index][index_in_dataset]
+      )
+    except Exception as e:
+      if sys.version_info >= (3, 11):
+        e.add_note(
+            f"Exception caught while processing dataset @ {dataset_index=},"
+            f" {index_in_dataset=}"
+        )
+      raise e
 
 
 @dataclasses.dataclass
