@@ -789,6 +789,14 @@ class FilterArraysWithLargeSum(transforms.Filter):
     return np.sum(x) < 20
 
 
+class FlatMapAddingOne(transforms.FlatMapTransform):
+
+  max_fan_out = 2
+
+  def flat_map(self, x):
+    return [x, x + 1]
+
+
 class ApplyTransformationsTest(parameterized.TestCase):
 
   @parameterized.parameters(
@@ -830,6 +838,14 @@ class ApplyTransformationsTest(parameterized.TestCase):
         ds, MapWithIndexProducingIndexElementTuple()
     )
     self.assertSequenceEqual(list(ds), [(i, i) for i in range(10)])
+
+  @parameterized.parameters(
+      (dataset.MapDataset.range(3),),
+      (dataset.MapDataset.range(3).to_iter_dataset(),),
+  )
+  def test_flat_map(self, ds):
+    ds = dataset.apply_transformations(ds, FlatMapAddingOne())
+    self.assertSequenceEqual(list(ds), [0, 1, 1, 2, 2, 3])
 
   def test_map_with_index_iter_dataset(self):
     ds = dataset.MapDataset.range(10).to_iter_dataset()

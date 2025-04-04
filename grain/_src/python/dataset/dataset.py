@@ -1402,6 +1402,15 @@ def apply_transformations(
           raise NotImplementedError(
               "MapWithIndexTransform is only supported for MapDataset."
           )
+      case transforms.FlatMapTransform():
+        # Loaded lazily due to a circular dependency (dataset <-> flatmap).
+        # pylint: disable=g-import-not-at-top
+        from grain._src.python.dataset.transformations import flatmap
+        # pylint: enable=g-import-not-at-top
+        if isinstance(ds, MapDataset):
+          ds = flatmap.FlatMapMapDataset(ds, transformation)
+        else:
+          ds = flatmap.FlatMapIterDataset(ds, transformation)
       case transforms.Filter():
         ds = ds.filter(transformation)
       case _:

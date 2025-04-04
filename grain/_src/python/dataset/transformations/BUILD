@@ -9,6 +9,7 @@ filegroup(
     srcs = [
         "batch.py",
         "filter.py",
+        "flatmap.py",
         "map.py",
         "mix.py",
         "prefetch.py",
@@ -88,23 +89,11 @@ py_library(
     ],
 )
 
-py_library(
-    name = "flatmap",
-    srcs = ["flatmap.py"],
-    srcs_version = "PY3",
-    deps = [
-        "//grain/_src/core:transforms",
-        "//grain/_src/python/dataset",
-        "//grain/_src/python/dataset:stats",
-    ],
-)
-
 py_test(
     name = "flatmap_test",
     srcs = ["flatmap_test.py"],
     srcs_version = "PY3",
     deps = [
-        ":flatmap",
         "//grain/_src/core:transforms",
         "//grain/_src/python/dataset",
         "@abseil-py//absl/testing:absltest",
