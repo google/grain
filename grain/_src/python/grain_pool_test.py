@@ -41,7 +41,7 @@ class GrainPoolTest(absltest.TestCase):
   def test_pool_with_flags_not_parsed(self):
     class GetElementProducerFn(gp.GetElementProducerFn):
 
-      def __call__(self, *, worker_index: int, worker_count: int):
+      def __call__(self, *, worker_index: int, worker_count: int, **kwargs):
         del self
         return iter(range(worker_index, 14, worker_count))
 
@@ -62,7 +62,7 @@ class GrainPoolTest(absltest.TestCase):
     # equally among 4 processes.
     class GetElementProducerFn(gp.GetElementProducerFn):
 
-      def __call__(self, *, worker_index: int, worker_count: int):
+      def __call__(self, *, worker_index: int, worker_count: int, **kwargs):
         del self
         return iter(range(worker_index, 12, worker_count))
 
@@ -91,7 +91,7 @@ class GrainPoolTest(absltest.TestCase):
     # 16 elements divide equally among 4 processes
     class GetElementProducerFn(gp.GetElementProducerFn):
 
-      def __call__(self, *, worker_index: int, worker_count: int):
+      def __call__(self, *, worker_index: int, worker_count: int, **kwargs):
         del self
         return iter(range(worker_index, 16, worker_count))
 
@@ -124,7 +124,7 @@ class GrainPoolTest(absltest.TestCase):
     # 14 elements do not divide equally among 4 processes
     class GetElementProducerFn(gp.GetElementProducerFn):
 
-      def __call__(self, *, worker_index: int, worker_count: int):
+      def __call__(self, *, worker_index: int, worker_count: int, **kwargs):
         del self
         return iter(range(worker_index, 14, worker_count))
 
@@ -154,7 +154,7 @@ class GrainPoolTest(absltest.TestCase):
 
     class GetElementProducerFn(gp.GetElementProducerFn):
 
-      def __call__(self, *, worker_index: int, worker_count: int):
+      def __call__(self, *, worker_index: int, worker_count: int, **kwargs):
         del self
         return iter(range(worker_index, 14, worker_count))
 
@@ -180,7 +180,7 @@ class GrainPoolTest(absltest.TestCase):
 
     class GetElementProducerFn(gp.GetElementProducerFn):
 
-      def __call__(self, *, worker_index: int, worker_count: int):
+      def __call__(self, *, worker_index: int, worker_count: int, **kwargs):
         del self
         return iter(range(worker_index, 14, worker_count))
 
@@ -211,7 +211,7 @@ def _make_uniform_element_producer_fn(
   class _RoundrobinElementProducerFn(gp.GetElementProducerFn):
 
     def __call__(
-        self, *, worker_index: int, worker_count: int
+        self, *, worker_index: int, worker_count: int, **kwargs
     ) -> Iterator[int]:
       del self
       yield from range(10)[last_seen_index + 1 + worker_index :: worker_count]
@@ -222,7 +222,7 @@ def _make_uniform_element_producer_fn(
 class RoundrobinRecordElementProducerFn(gp.GetElementProducerFn):
 
   def __call__(
-      self, *, worker_index: int, worker_count: int
+      self, *, worker_index: int, worker_count: int, **kwargs
   ) -> Iterator[record.Record[int]]:
     del self
     for i in range(5)[worker_index::worker_count]:
@@ -231,7 +231,9 @@ class RoundrobinRecordElementProducerFn(gp.GetElementProducerFn):
 
 class NonUniformElementProducerFn(gp.GetElementProducerFn):
 
-  def __call__(self, *, worker_index: int, worker_count: int) -> Iterator[int]:
+  def __call__(
+      self, *, worker_index: int, worker_count: int, **kwargs
+  ) -> Iterator[int]:
     del self, worker_count
     for _ in range(worker_index * 3):
       yield worker_index
@@ -370,7 +372,7 @@ class MultiProcessIteratorTest(parameterized.TestCase):
     class FailingGetElementProducerFn(gp.GetElementProducerFn):
 
       def __call__(
-          self, *, worker_index: int, worker_count: int
+          self, *, worker_index: int, worker_count: int, **kwargs
       ) -> Iterator[int]:
         del self, worker_index, worker_count
         raise ValueError(error_msg)
@@ -390,7 +392,7 @@ class MultiProcessIteratorTest(parameterized.TestCase):
     class FailingGetElementProducerFn(gp.GetElementProducerFn):
 
       def __call__(
-          self, *, worker_index: int, worker_count: int
+          self, *, worker_index: int, worker_count: int, **kwargs
       ) -> Iterator[int]:
         del self, worker_index, worker_count
         sys.exit(12)
@@ -420,7 +422,7 @@ class MultiProcessIteratorTest(parameterized.TestCase):
     class GetElementProducerFnWithUnpicklableClosure(gp.GetElementProducerFn):
 
       def __call__(
-          self, *, worker_index: int, worker_count: int
+          self, *, worker_index: int, worker_count: int, **kwargs
       ) -> Iterator[int]:
         del self, worker_index, worker_count
         yield 1 if local_state is None else 2
@@ -445,7 +447,7 @@ class MultiProcessIteratorTest(parameterized.TestCase):
     class GetElementProducerFnReturningGlobal(gp.GetElementProducerFn):
 
       def __call__(
-          self, *, worker_index: int, worker_count: int
+          self, *, worker_index: int, worker_count: int, **kwargs
       ) -> Iterator[tuple[int, int]]:
         del self, worker_index, worker_count
         yield gp.monkey_patched_index_and_count  # pytype: disable=module-attr

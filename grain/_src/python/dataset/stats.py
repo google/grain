@@ -16,11 +16,13 @@
 from __future__ import annotations
 
 import abc
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 import contextlib
 import dataclasses
 import functools
+from multiprocessing import queues
 import pprint
+import queue
 import sys
 import threading
 import time
@@ -32,6 +34,7 @@ from grain._src.core import config as grain_config
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import tree_lib
 from grain._src.python.dataset import base
+from grain._src.python.dataset import stats_utils
 from grain.proto import execution_summary_pb2
 
 from grain._src.core import monitoring
@@ -70,6 +73,7 @@ T = TypeVar("T")
 # Time between two consecutive monitoring reports.
 _REPORTING_PERIOD_SEC = 10
 _LOG_EXECUTION_SUMMARY_PERIOD_SEC = 60
+_WORKER_QUEUE_TIMEOUT_SEC = 2
 # Stop reporting if there has been no statistics updates for this long.
 _REPORTING_TIMEOUT_SEC = 120
 
@@ -402,7 +406,7 @@ class Timer:
     self._last = 0
 
 
-@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+@dataclasses.dataclass(slots=True, kw_only=True)
 class StatsConfig:
   """Statistics recording condiguration."""
 
@@ -416,6 +420,14 @@ class StatsConfig:
   is_prefetch: bool = False
   # Whether to log the execution summary.
   log_summary: bool = False
+  # Queue for each child process from which to receive execution summaries in
+  # the main process. This is only populated to the stats object of the
+  # `mp_prefetch` transformation node.
+  stats_in_queues: tuple[queues.Queue, ...] | None = None
+  # Queue used by child processes to send it's execution summary to the main
+  # process. This queue is only populated to the stats object of the output node
+  # in the pipeline within the child process.
+  stats_out_queue: queues.Queue | None = None
 
 
 class Stats(abc.ABC):
@@ -644,7 +656,24 @@ class _ExecutionStats(_VisualizationStats):
         return
       self.report()
 
-  def _logging_execution_summary_loop(self):
+  def _send_stats_to_main_process_loop(self) -> None:
+    """Puts the execution summary into the main process queue periodically."""
+    stats_queue = self._config.stats_out_queue
+    if stats_queue is None:
+      raise ValueError(
+          "Worker failed to report summary, `stats_out_queue` is None"
+      )
+    while self._should_report():
+      time.sleep(_LOG_EXECUTION_SUMMARY_PERIOD_SEC)
+      try:
+        stats_queue.put(self._get_execution_summary())
+      except queue.Full:
+        logging.info(
+            "Couldn't send execution summary from child process. Queue full"
+        )
+        pass
+
+  def _logging_execution_summary_loop(self) -> None:
     """Logs the execution summary periodically."""
     while self._should_report():
       time.sleep(_LOG_EXECUTION_SUMMARY_PERIOD_SEC)
@@ -699,6 +728,13 @@ class _ExecutionStats(_VisualizationStats):
     _populate_wait_time_ratio(result)
     return result
 
+  def _flush_execution_summary_loop(self) -> Callable[[], None]:
+    """Returns the loop function to be executed by the logging thread."""
+    if self._config.stats_out_queue:
+      return self._send_stats_to_main_process_loop
+    else:
+      return self._logging_execution_summary_loop
+
   @contextlib.contextmanager
   def record_self_time(self, offset_ns: int = 0):
     start_time = time.perf_counter_ns()
@@ -723,9 +759,11 @@ class _ExecutionStats(_VisualizationStats):
               self._reporting_thread.start()
         if self._config.log_summary and self._logging_thread is None:
           with self._logging_thread_init_lock:
+            # Check above together with update would not be atomic -- another
+            # thread may have started the logging thread.
             if self._logging_thread is None:
               self._logging_thread = threading.Thread(
-                  target=self._logging_execution_summary_loop, daemon=True
+                  target=self._flush_execution_summary_loop(), daemon=True
               )
               self._logging_thread.start()
 
@@ -745,6 +783,71 @@ class _ExecutionStats(_VisualizationStats):
       _self_time_ns_histogram.Record(self_time_ns, self._config.name)
     for p in self._parents:
       p.report()
+
+
+class _MPPrefetchExecutionStats(_ExecutionStats):
+  """Execution time statistics for multiprocess prefetch transformations.
+
+  This class is responsible for aggregating the execution summary from all
+  workers and building the complete execution summary in the main process.
+  """
+
+  def __init__(self, config: StatsConfig, parents: Sequence[Stats]):
+    super().__init__(config, parents)
+    self._merged_summary_from_workers = execution_summary_pb2.ExecutionSummary()
+
+  def _get_merged_summary_from_workers(
+      self,
+  ) -> execution_summary_pb2.ExecutionSummary:
+    """Calculates the aggregated execution summary from all workers."""
+    aggregated_summary_from_workers = execution_summary_pb2.ExecutionSummary()
+    stats_in_queues = self._config.stats_in_queues
+    for worker_index, worker_queue in enumerate(stats_in_queues):
+      try:
+        summary_from_worker = worker_queue.get(
+            timeout=_WORKER_QUEUE_TIMEOUT_SEC
+        )
+        # Combine the summary from all workers into a single summary.
+        aggregated_summary_from_workers = stats_utils.merge_execution_summaries(
+            aggregated_summary_from_workers, summary_from_worker
+        )
+      except queue.Empty:
+        logging.warning(
+            "Couldn't get execution summary from the child process %i",
+            worker_index,
+        )
+        return self._merged_summary_from_workers
+    self._merged_summary_from_workers = aggregated_summary_from_workers
+    return self._merged_summary_from_workers
+
+  def _build_execution_summary(
+      self,
+      execution_summary: execution_summary_pb2.ExecutionSummary,
+      node_id: int,
+  ) -> tuple[execution_summary_pb2.ExecutionSummary, int]:
+    # By this point, all the nodes in the pipeline have been visited and
+    # `_output_spec` & `name` has been set.
+    self._summary.id = node_id
+    self._summary.name = self._config.name
+    self._summary.output_spec = str(self.output_spec)
+    self._summary.is_output = self._is_output
+    self._summary.is_prefetch = self._config.is_prefetch
+    execution_summary.nodes.get_or_create(node_id)
+    execution_summary.nodes[node_id].CopyFrom(self._summary)
+    current_node_id = node_id
+    combined_summary_from_workers = execution_summary_pb2.ExecutionSummary()
+    combined_summary_from_workers.CopyFrom(
+        self._get_merged_summary_from_workers()
+    )
+    execution_summary = stats_utils.get_complete_summary(
+        execution_summary, combined_summary_from_workers, current_node_id + 1
+    )
+    for p in self._parents:
+      node_id += 1
+      execution_summary.nodes[current_node_id].inputs.append(node_id)
+      assert isinstance(p, _ExecutionStats)
+      _, node_id = p._build_execution_summary(execution_summary, node_id)  # pylint: disable=protected-access
+    return execution_summary, node_id
 
 
 def make_stats(
@@ -768,6 +871,8 @@ def make_stats(
   if grain_config.config.get_or_default("py_debug_mode"):
     # In debug mode, we always log the execution summary.
     config = dataclasses.replace(config, log_summary=True)
+    if config.stats_in_queues:
+      return _MPPrefetchExecutionStats(config, parents)
     return _ExecutionStats(config, parents=parents)
   if execution_tracking_mode == base.ExecutionTrackingMode.STAGE_TIMING:
     return _ExecutionStats(config, parents=parents)
