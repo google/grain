@@ -13,7 +13,29 @@
 # limitations under the License.
 """Util functions for stats.py."""
 
+import functools
+import logging
+import math
+from typing import Any
+
+from grain._src.core import tree_lib
+from grain._src.python import shared_memory_array
 from grain.proto import execution_summary_pb2
+import numpy as np
+
+
+def pretty_format_bytes(bytes_value: int) -> str:
+  """Returns a pretty formatted string for bytes."""
+  if bytes_value < 1024:
+    return f"{bytes_value} bytes"
+  elif bytes_value < 1024 * 1024:
+    return f"{bytes_value / 1024:.2f} kB"
+  elif bytes_value < 1024 * 1024 * 1024:
+    return f"{bytes_value / 1024 / 1024:.2f} MB"
+  elif bytes_value < 1024 * 1024 * 1024 * 1024:
+    return f"{bytes_value / 1024 / 1024 / 1024:.2f} GB"
+  else:
+    return f"{bytes_value / 1024 / 1024 / 1024 / 1024:.2f} TB"
 
 
 def merge_execution_summaries(
@@ -91,3 +113,33 @@ def get_complete_summary(
     main_summary.nodes[node.id].CopyFrom(node)
 
   return main_summary
+
+
+def get_allocated_bytes(element: Any) -> int:
+  """Calculates the allocated bytes of the element."""
+  if isinstance(element, np.ndarray):
+    return element.nbytes
+  elif isinstance(element, shared_memory_array.SharedMemoryArrayMetadata):
+    return math.prod(element.shape) * np.dtype(element.dtype).itemsize
+  elif isinstance(element, str) or isinstance(element, bytes):
+    return len(element)
+  else:
+    logging.warning(
+        "Unsupported type for estimating memory usage: %s", type(element)
+    )
+    return 0
+
+
+def get_leaf_size(element: Any, memory_buffer: list[int]) -> Any:
+  """Calculates the size of leaf element and appends it to the memory buffer."""
+  size = get_allocated_bytes(element)
+  memory_buffer.append(size)
+  return element
+
+
+def record_size(element: Any, memory_buffer: list[int]) -> Any:
+  """Records the size of the element in the memory buffer."""
+  return tree_lib.map_structure(
+      functools.partial(get_leaf_size, memory_buffer=memory_buffer),
+      element,
+  )
