@@ -528,6 +528,21 @@ class Stats(abc.ABC):
     """
     ...
 
+  @abc.abstractmethod
+  def record_bytes_consumed(self, element: Any) -> None:
+    """Records bytes consumed by this node."""
+    ...
+
+  @abc.abstractmethod
+  def record_bytes_produced(self, element: Any) -> None:
+    """Records bytes produced by this node."""
+    ...
+
+  @abc.abstractmethod
+  def record_bytes_consumed_async(self, func, *args) -> None:
+    """Records memory usage of the element produced by this node asynchronously."""
+    ...
+
   def _visualize_dataset_graph(self):
     """Generates Dataset visualization graph."""
     # TODO:Save the graph to a dot file for advanced visualization.
@@ -582,6 +597,15 @@ class _DefaultStats(Stats):
   def report(self):
     pass
 
+  def record_bytes_consumed(self, element: Any) -> None:
+    pass
+
+  def record_bytes_produced(self, element: Any) -> None:
+    pass
+
+  def record_bytes_consumed_async(self, func, *args) -> None:
+    return func(*args)
+
 
 class _VisualizationStats(Stats):
   """Produces Dataset Visualization Graph."""
@@ -611,6 +635,15 @@ class _VisualizationStats(Stats):
             self._reported = True
     return element
 
+  def record_bytes_consumed(self, element: Any) -> None:
+    pass
+
+  def record_bytes_produced(self, element: Any) -> None:
+    pass
+
+  def record_bytes_consumed_async(self, func, *args) -> None:
+    return func(*args)
+
   def report(self):
     msg = f"Grain Dataset graph:\n\n{self._visualize_dataset_graph()}"
     logging.info(msg)
@@ -629,6 +662,8 @@ class _ExecutionStats(_VisualizationStats):
     # https://docs.python.org/3/faq/library.html#what-kinds-of-global-value-mutation-are-thread-safe
     # The buffer is popped from a single(!) background reporting thread.
     self._self_times_buffer = []
+    self._produced_memory_buffer = []
+    self._consumed_memory_buffer = []
     self._reporting_thread = None
     self._logging_thread = None
     self._reporting_thread_init_lock = threading.Lock()
@@ -781,8 +816,32 @@ class _ExecutionStats(_VisualizationStats):
       )
       self._summary.total_processing_time_ns += self_time_ns
       _self_time_ns_histogram.Record(self_time_ns, self._config.name)
+    while self._consumed_memory_buffer:
+      self._summary.bytes_consumed += self._consumed_memory_buffer.pop()
+    while self._produced_memory_buffer:
+      self._summary.bytes_produced += self._produced_memory_buffer.pop()
     for p in self._parents:
       p.report()
+
+  def record_bytes_consumed(self, element: Any):
+    """Records the memory usage of the element."""
+    num_bytes = stats_utils.get_allocated_bytes(element)
+    self._consumed_memory_buffer.append(num_bytes)
+
+  def record_bytes_produced(self, element: Any):
+    """Records the memory usage of the element."""
+    num_bytes = stats_utils.get_allocated_bytes(element)
+    self._produced_memory_buffer.append(num_bytes)
+
+  def record_bytes_consumed_async(self, thread_fn, *args):
+    @functools.wraps(thread_fn)
+    def wrapper():
+      return thread_fn(*args)
+
+    element = wrapper()
+    num_bytes = stats_utils.get_allocated_bytes(element)
+    self.record_bytes_consumed(num_bytes)
+    return element
 
 
 class _MPPrefetchExecutionStats(_ExecutionStats):

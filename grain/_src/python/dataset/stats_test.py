@@ -24,6 +24,7 @@ from absl import flags
 from absl.testing import flagsaver
 import cloudpickle
 from grain._src.core import transforms
+from grain._src.python import options
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
 from grain.proto import execution_summary_pb2
@@ -57,7 +58,7 @@ _MAP_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
 "<class 'int'>[]"
 
   ││
-  ││  MapWithIndexMapDataset(transform=_add_dummy_metadata @ .../python/dataset/stats_test.py:154)
+  ││  MapWithIndexMapDataset(transform=_add_dummy_metadata @ .../python/dataset/stats_test.py:155)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -66,7 +67,7 @@ _MAP_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
  'index': "<class 'int'>[]"}
 
   ││
-  ││  MapMapDataset(transform=_identity @ .../python/dataset/stats_test.py:158)
+  ││  MapMapDataset(transform=_identity @ .../python/dataset/stats_test.py:159)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -104,7 +105,7 @@ _ITER_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
 "<class 'int'>[]"
 
   ││
-  ││  MapDatasetIterator(transform=<lambda> @ .../python/dataset/stats_test.py:543)
+  ││  MapDatasetIterator(transform=<lambda> @ .../python/dataset/stats_test.py:559)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -509,6 +510,21 @@ class DebugModeStatsTest(absltest.TestCase):
         "Saving the dataset graph to a file is not supported yet.",
     ):
       _ = list(ds)
+
+  @mock.patch.object(stats, "_REPORTING_PERIOD_SEC", 0.05)
+  def test_memory_usage(self):
+    ds = dataset.MapDataset.range(10)
+    ds = ds.map(lambda x: x + 1)
+    ds = ds.to_iter_dataset(
+        read_options=options.ReadOptions(prefetch_buffer_size=10)
+    )
+    it = ds.__iter__()
+    _ = list(it)
+    time.sleep(1)
+    local_stats = it._stats
+    self.assertIsInstance(local_stats, stats._ExecutionStats)
+    self.assertEqual(local_stats._summary.bytes_consumed, 80)
+    self.assertEqual(local_stats._summary.bytes_produced, 80)
 
 
 class GraphModeStatsTest(absltest.TestCase):

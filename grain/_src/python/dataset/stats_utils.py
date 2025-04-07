@@ -13,7 +13,11 @@
 # limitations under the License.
 """Util functions for stats.py."""
 
+import logging
+from typing import Any
+
 from grain.proto import execution_summary_pb2
+import numpy as np
 
 
 def merge_execution_summaries(
@@ -91,3 +95,12 @@ def get_complete_summary(
     main_summary.nodes[node.id].CopyFrom(node)
 
   return main_summary
+
+
+def get_allocated_bytes(element: Any) -> int:
+  """Returns the allocated bytes of the given element."""
+  element = np.array(element)
+  if element.dtype.hasobject:
+    logging.warning("Cannot get allocated bytes for custom object.")
+    return -1
+  return element.nbytes

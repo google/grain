@@ -161,7 +161,11 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
             # stats initialization before multithreaded prefetching.
             _ = self._stats
             self._buffer = collections.deque(
-                self._executor.submit(self._map_parent.__getitem__, i)
+                self._executor.submit(
+                    self._stats.record_bytes_consumed_async,
+                    self._map_parent.__getitem__,
+                    i,
+                )
                 for i in indices
             )
           element = self._buffer.popleft()
@@ -169,11 +173,13 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
               self._next_index + self._prefetch_buffer_size
               < self._dataset_length
           ):
+            # pylint: disable:attribute-error
             self._buffer.append(
                 self._executor.submit(
+                    self._stats.record_bytes_consumed_async,
                     self._map_parent.__getitem__,
                     self._next_index + self._prefetch_buffer_size,
-                )
+                )  # pylint: disable=attribute-error
             )
           element = element.result()
         else:
@@ -183,6 +189,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
       self._threshold_checker.check(return_element)
       if return_element:
         with self._stats.record_self_time(offset_ns=timer.value()):
+          self._stats.record_bytes_produced(element)
           return self._stats.record_output_spec(element)
     raise StopIteration
 
