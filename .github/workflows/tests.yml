@@ -30,6 +30,7 @@ jobs:
           export PYTHON_MINOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f2)
           export BAZEL_VERSION="7.1.1"
           export AUDITWHEEL_PLATFORM="manylinux2014_x86_64"
+          export RUN_TESTS="true"
           cd /tmp/grain
           DOCKER_BUILDKIT=1 docker build --progress=plain --no-cache \
             --build-arg AUDITWHEEL_PLATFORM=${AUDITWHEEL_PLATFORM} \
@@ -42,6 +43,7 @@ jobs:
             --env PYTHON_MINOR_VERSION=${PYTHON_MINOR_VERSION} \
             --env BAZEL_VERSION=${BAZEL_VERSION} \
             --env AUDITWHEEL_PLATFORM=${AUDITWHEEL_PLATFORM} \
+            --env RUN_TESTS=${RUN_TESTS} \
             -v /tmp/grain:/tmp/grain \
             --name grain grain:${PYTHON_VERSION} \
             bash grain/oss/build_whl.sh
