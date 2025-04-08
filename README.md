@@ -14,7 +14,7 @@ evaluating JAX models. It is flexible, fast and deterministic.
 Grain allows to define data processing steps in a simple declarative way:
 
 ```python
-import grain.python as grain
+import grain
 
 dataset = (
     grain.MapDataset.source([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])

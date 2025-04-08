@@ -5,7 +5,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.4
+    jupytext_version: 1.17.0
 kernelspec:
   display_name: Python 3
   name: python3
@@ -55,8 +55,8 @@ executionInfo:
   user_tz: 480
 id: FCZXw2YhhPyu
 ---
-import grain.python as grain
-import pprint
+import grain
+from pprint import pprint
 ```
 
 +++ {"id": "gPv3wrQd3pZS"}
@@ -87,8 +87,8 @@ dataset = (
     .batch(batch_size=2)  # Batches consecutive elements.
 )
 
-pprint.pprint(dataset[0])
-pprint.pprint(list(dataset))
+pprint(dataset[0])
+pprint(list(dataset))
 ```
 
 +++ {"id": "Aii_JDBw5SEI"}
@@ -108,7 +108,7 @@ executionInfo:
 id: 592ut9AgiDCz
 ---
 # Note: Inheriting `grain.RandomAccessDataSource` is optional but recommended.
-class MySource(grain.RandomAccessDataSource):
+class MySource(grain.sources.RandomAccessDataSource):
   def __init__(self):
     self._data = [0, 1, 2, 3, 4, 5, 6, 7]
 
@@ -141,8 +141,8 @@ dataset = (
     .batch(batch_size=2)  # Batches consecutive elements.
 )
 
-pprint.pprint(dataset[0])
-pprint.pprint(list(dataset))
+pprint(dataset[0])
+pprint(list(dataset))
 ```
 
 +++ {"id": "zKv2kWjB6XPd"}
@@ -163,7 +163,7 @@ id: GSW1cJe06NEO
 outputId: ffe2b9e8-069c-45f1-ac93-c391604b5b34
 ---
 # Prints the 3rd element of the second epoch.
-pprint.pprint(dataset[len(dataset)+2])
+pprint(dataset[len(dataset)+2])
 ```
 
 +++ {"id": "azfAr8F37njE"}
@@ -183,7 +183,7 @@ executionInfo:
 id: _o3wxb8k7XDY
 outputId: f4c2a263-0084-45d3-dd0f-51f58c96bead
 ---
-pprint.pprint(dataset[len(dataset)+2] == dataset[2])
+pprint(dataset[len(dataset)+2] == dataset[2])
 ```
 
 +++ {"id": "B2kLX0fa8GfV"}
@@ -207,8 +207,8 @@ outputId: c8818ad2-c7d7-414f-8359-0bd2e679b9ed
 ---
 filtered_dataset = dataset.filter(lambda e: (e[0] + e[1]) % 2 == 0)
 
-pprint.pprint(f"Length of this dataset: {len(filtered_dataset)}")
-pprint.pprint([filtered_dataset[i] for i in range(len(filtered_dataset))])
+pprint(f"Length of this dataset: {len(filtered_dataset)}")
+pprint([filtered_dataset[i] for i in range(len(filtered_dataset))])
 ```
 
 +++ {"id": "FJLK_BQj9GuG"}
@@ -233,8 +233,8 @@ shard_count = 2
 
 sharded_dataset = dataset[shard_index::shard_count]
 print(f"Sharded dataset length = {len(sharded_dataset)}")
-pprint.pprint(sharded_dataset[0])
-pprint.pprint(sharded_dataset[1])
+pprint(sharded_dataset[0])
+pprint(sharded_dataset[1])
 ```
 
 +++ {"id": "KvycxocM-Fpk"}
@@ -256,10 +256,11 @@ executionInfo:
 id: FnWPIpce9aAJ
 outputId: dba2951e-a965-4dd3-816c-dcbbea6352f7
 ---
-iter_dataset = sharded_dataset.to_iter_dataset(grain.ReadOptions(num_threads=16, prefetch_buffer_size=500))
+iter_dataset = sharded_dataset.to_iter_dataset(
+    grain.sources.ReadOptions(num_threads=16, prefetch_buffer_size=500))
 
 for element in iter_dataset:
-  pprint.pprint(element)
+  pprint(element)
 ```
 
 +++ {"id": "W-Brm4Mh_Bo1"}
@@ -290,7 +291,7 @@ id: DRgatGFX_nxL
 outputId: 5ec46759-41a9-4211-c856-3f46c2ee2a9c
 ---
 dataset_iter = iter(dataset)
-pprint.pprint(isinstance(dataset_iter, grain.DatasetIterator))
+pprint(isinstance(dataset_iter, grain.DatasetIterator))
 ```
 
 ```{code-cell}
@@ -306,14 +307,14 @@ executionInfo:
 id: dOCiJfSJ_vi4
 outputId: 6e010a76-11e3-4aad-ef16-93c00aa6ae27
 ---
-pprint.pprint(next(dataset_iter))
+pprint(next(dataset_iter))
 
 checkpoint = dataset_iter.get_state()
 
-pprint.pprint(next(dataset_iter))
+pprint(next(dataset_iter))
 
 # Recover the iterator to the state after the first produced element.
 dataset_iter.set_state(checkpoint)
 
-pprint.pprint(next(dataset_iter))  # This should generate the same element as above
+pprint(next(dataset_iter))  # This should generate the same element as above
 ```
