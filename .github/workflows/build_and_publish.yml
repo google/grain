@@ -6,6 +6,12 @@ name: Build & Publish
 
 on:
   workflow_dispatch:
+    inputs:
+      run_tests:
+        description: 'Run unit tests'
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -19,7 +25,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
-        os: [ubuntu-20.04, ubuntu-22.04-arm, macos-14]
+        os: [ubuntu-22.04, ubuntu-22.04-arm, macos-14]
 
     steps:
       - uses: "actions/checkout@v3"
@@ -36,6 +42,7 @@ jobs:
           export BAZEL_VERSION="7.1.1"
           export OUTPUT_DIR="/tmp/grain"
           export SOURCE_DIR="/tmp/grain"
+          export RUN_TESTS=${{ inputs.run_tests }}
           . "${SOURCE_DIR}"'/grain/oss/runner_common.sh'
           build_and_test_grain
       - name: Upload Grain artifacts
