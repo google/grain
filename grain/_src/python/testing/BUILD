@@ -6,7 +6,6 @@ py_library(
     srcs_version = "PY3",
     deps = [
         "//grain/_src/core:tree_lib",
-        "//grain/_src/python/dataset",
         "@pypi//numpy:pkg",
     ],
 )

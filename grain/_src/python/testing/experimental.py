@@ -1,21 +1,22 @@
 """API to test checkpointing."""
 
 import itertools
+from typing import Any
 
 from grain._src.core import tree_lib
-from grain._src.python.dataset import dataset
 import numpy as np
 
 
 def assert_equal_output_after_checkpoint(
-    ds: dataset.IterDataset,
+    ds: Any,
 ):
   """Tests restoring an iterator to various checkpointed states.
 
   Args:
     ds: The dataset to test.  It is recommended to use a small dataset,
       potentially created using `grain.python.experimental.LimitIterDataset`, to
-      restrict the number of steps being tested.
+      restrict the number of steps being tested. The underlying dataset iterator
+      must implement `get_state` and `set_state` for checkpointing.
   """
 
   iterator = ds.__iter__()
