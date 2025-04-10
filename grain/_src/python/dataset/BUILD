@@ -118,6 +118,7 @@ py_library(
     srcs_version = "PY3",
     deps = [
         "//grain/proto:execution_summary_py_pb2",
+        "@pypi//numpy:pkg",
     ],
 )
 
@@ -140,6 +141,7 @@ py_test(
         ":dataset",
         ":stats",
         "//grain/_src/core:transforms",
+        "//grain/_src/python:options",
         "//grain/proto:execution_summary_py_pb2",
         "@abseil-py//absl/flags",
         "@abseil-py//absl/testing:absltest",
