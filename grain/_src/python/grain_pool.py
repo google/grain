@@ -57,6 +57,7 @@ import threading
 import traceback
 from typing import Any, Callable, Protocol, TypeVar, Union, runtime_checkable
 
+from absl import flags
 from absl import logging
 import cloudpickle
 from grain._src.core import parallel
@@ -160,9 +161,10 @@ class GetElementProducerFn(Protocol[T]):
 
     return obj
 
+
 def parse_debug_flags(debug_flags: dict[str, Any]):
   """Parses debug flags."""
-  from absl import flags
+
   flags.FLAGS["grain_py_debug_mode"].present = True
   flags.FLAGS["grain_py_dataset_visualization_output_dir"].present = True
   config.update("py_debug_mode", debug_flags["grain_py_debug_mode"])
@@ -401,20 +403,6 @@ class GrainPool(Iterator[T]):
       # they are unpickled after absl.app.run() was called in the child
       # processes.
       worker_init_fns = [self._worker_init_fn] if self._worker_init_fn else []
-      parse_debug_flags_fn = parse_debug_flags
-      worker_init_fns = cloudpickle.dumps(worker_init_fns)
-      parse_debug_flags_fn = cloudpickle.dumps(parse_debug_flags_fn)
-      worker_args_queue.put(
-          (parse_debug_flags_fn, worker_init_fns, get_element_producer_fn)
-      )
-      process = ctx.Process(  # pytype: disable=attribute-error  # re-none
-          target=_worker_loop, kwargs=process_kwargs, daemon=True
-      )
-      self.worker_args_queues.append(worker_args_queue)
-      self.worker_output_queues.append(worker_output_queue)
-      self.processes.append(process)
-
-    logging.info("Grain pool will start child processes.")
     parallel.run_in_parallel(
         function=lambda child_process: child_process.start(),
         list_of_kwargs_to_function=[
