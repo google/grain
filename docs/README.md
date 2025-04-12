@@ -96,12 +96,3 @@ to process the raw records as read by the data source. The second transformation
 needs to be able to process the elements produced by the first transformation
 and so on.
 
-## Bottleneck Analysis
-
-Grain pipelines can be easily configured with additional options to visualize
-the execution graph and provide stage timing. Further details about these
-options are available
-[here](https://github.com/google/grain/blob/main/docs/dataset/debugging.md). Another method to detect
-input bottlenecks is to profile jobs with xprof. Instructions on how to enable
-it can be found at https://github.com/google/grain/blob/main/docs/performance/profiling..md
-
