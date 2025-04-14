@@ -13,6 +13,7 @@ List of Members
     DatasetOptions
     ExecutionTrackingMode
     apply_transformations
+    ElasticIterator
     WithOptionsIterDataset
     ParquetIterDataset
     FlatMapMapDataset
