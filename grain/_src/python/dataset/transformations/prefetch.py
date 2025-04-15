@@ -405,6 +405,8 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
     worker_state = self._state[_WORKERS_STATE][str(worker_index)]
     if worker_state is not None:
       it.set_state(worker_state)
+    # Set the stats queue in worker process to send stats to the main process.
+    it._stats._config.stats_out_queue = stats_out_queue  # pytype: disable=attribute-error
     # Skip the required number of iterations after the last recorded state.
     for _ in range(self._state[_ITERATIONS_TO_SKIP][str(worker_index)]):
       _ = next(it)
