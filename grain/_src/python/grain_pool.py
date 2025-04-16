@@ -57,6 +57,7 @@ import threading
 import traceback
 from typing import Any, Callable, Protocol, TypeVar, Union, runtime_checkable
 
+from absl import flags
 from absl import logging
 import cloudpickle
 from grain._src.core import parallel
@@ -160,9 +161,10 @@ class GetElementProducerFn(Protocol[T]):
 
     return obj
 
+
 def parse_debug_flags(debug_flags: dict[str, Any]):
   """Parses debug flags."""
-  from absl import flags
+
   flags.FLAGS["grain_py_debug_mode"].present = True
   flags.FLAGS["grain_py_dataset_visualization_output_dir"].present = True
   config.update("py_debug_mode", debug_flags["grain_py_debug_mode"])
