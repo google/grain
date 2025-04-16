@@ -313,10 +313,7 @@ class _ConcatSelectionMap(base.DatasetSelectionMap):
   of datasets with indices i+1, i+2, ...
   """
 
-  def __init__(
-      self,
-      parents: Sequence[dataset.MapDataset],
-  ):
+  def __init__(self, parents: Sequence[dataset.MapDataset]):
     dataset_sizes = [len(parent) for parent in parents]
     for i, dataset_size in enumerate(dataset_sizes):
       if dataset_size >= sys.maxsize:
@@ -327,15 +324,21 @@ class _ConcatSelectionMap(base.DatasetSelectionMap):
     for i in range(len(parents)):
       cumulative_sizes[i + 1] = cumulative_sizes[i] + dataset_sizes[i]
     self._cumulative_dataset_sizes = cumulative_sizes
+    self._dataset_sizes = dataset_sizes
 
   def __len__(self) -> int:
     return self._cumulative_dataset_sizes[-1]
 
   def __getitem__(self, index: int) -> tuple[int, int]:
+    epoch, index_in_epoch = divmod(index, len(self))
     dataset_index = (
-        bisect.bisect_right(self._cumulative_dataset_sizes, index) - 1
+        bisect.bisect_right(self._cumulative_dataset_sizes, index_in_epoch) - 1
     )
-    return dataset_index, index - self._cumulative_dataset_sizes[dataset_index]
+    epochs_offset = epoch * self._dataset_sizes[dataset_index]
+    index_in_dataset_in_epoch = (
+        index_in_epoch - self._cumulative_dataset_sizes[dataset_index]
+    )
+    return dataset_index, index_in_dataset_in_epoch + epochs_offset
 
 
 @dataclasses.dataclass

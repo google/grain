@@ -493,6 +493,16 @@ class ConcatenateLazyMapTest(absltest.TestCase):
     expected_values = [0, 2, 4, 6, 8, 1, 3, 5, 7, 9]
     self.assertListEqual(actual_values, expected_values)
 
+  def test_concatenate_multiple_epochs(self):
+    first = dataset.MapDataset.range(5)
+    second = dataset.MapDataset.range(5, 10)
+    ds = mix.ConcatenateMapDataset([first, second])
+    self.assertLen(ds, 10)
+
+    first_two_epochs = list(ds.repeat(2).to_iter_dataset())
+    expected_values = list(range(10)) + list(range(10))
+    self.assertListEqual(first_two_epochs, expected_values)
+
   def test_slice_concatenated_finite_datasets(self):
     evens = dataset.MapDataset.range(0, 10, 2)
     odds = dataset.MapDataset.range(1, 10, 2)

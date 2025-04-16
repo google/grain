@@ -313,6 +313,8 @@ class MapDatasetMeta(abc.ABCMeta):
 
     Returns:
       A ``MapDataset`` that represents a concatenation of the input datasets.
+      The n-th epoch of the returned dataset will be the n-th epoch of the
+      component datasets.
     """
     # Loaded lazily due to a circular dependency (dataset <-> mix).
     # pylint: disable=g-import-not-at-top
