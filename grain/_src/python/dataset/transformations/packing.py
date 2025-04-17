@@ -81,6 +81,17 @@ class FirstFitPackIterDataset(dataset.IterDataset):
   def __str__(self) -> str:
     return "FirstFitPackIterDataset"
 
+  def _get_iterator_and_kwargs(
+      self,
+  ):
+    kwargs = {}
+    iterator = (
+        FirstFitPackDatasetIterator
+        if self._use_fast_cc_impl
+        else FirstFitPackDatasetIterator
+    )
+    return iterator, kwargs
+
   def __iter__(self) -> dataset.DatasetIterator:
     return FirstFitPackDatasetIterator(
         self._parent.__iter__(),
@@ -186,12 +197,17 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
     if element_for_shapes is None:
       self._current_batch = None
     else:
-      self._current_batch = packing_packed_batch.PackedBatch(
-          element_for_shapes,
-          self._num_packing_bins,
-          self._length_struct,
-          meta_features=self._meta_features,
-      )
+      self._current_batch = self._init_packed_batch(element_for_shapes)
+
+  def _init_packed_batch(
+      self, element_for_shapes
+  ) -> packing_packed_batch.PackedBatch:
+    return packing_packed_batch.PackedBatch(
+        element_for_shapes,
+        self._num_packing_bins,
+        self._length_struct,
+        meta_features=self._meta_features,
+    )
 
   @dataset_stats.record_next_duration_if_output
   def __next__(self):
@@ -240,12 +256,7 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
         if self._current_batch is None:  # pytype: disable=attribute-error
           # Use `element` to set dtypes + trailing dimensions.
           # We are not adding the element to the batch, just initializing it.
-          self._current_batch = packing_packed_batch.PackedBatch(
-              element,
-              self._num_packing_bins,
-              self._length_struct,
-              meta_features=self._meta_features,
-          )
+          self._current_batch = self._init_packed_batch(element)
 
         # Try adding element to the current packed batch.
         failing_components = self._current_batch.try_add_to_batch(element)
