@@ -163,7 +163,7 @@ class DatasetTest(parameterized.TestCase):
       dict(proportions=[1, 2],
            expected=[
                0, 100, 101, 1, 102, 103, 2, 104, 105, 3, 106, 107, 4, 108, 109,
-               5, 110, 111, 6, 112, 113, 7]),
+               5, 110, 111, 6, 112, 113, 7, 114]),
       # pyformat: enable
   )
   def test_mix_map(self, proportions, expected):
