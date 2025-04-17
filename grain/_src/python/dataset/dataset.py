@@ -538,6 +538,14 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
     seeding). Given the same seed, the pipeline is guaranteed to always use the
     same seeds for each transformation.
 
+    WARNING: The seed for random downstream transformations is derived from the
+    seed passed to ``ds.seed`` and the absolute position of the transformation
+    in the pipeline. This means that if you add transformations before the
+    random transformation, its seed will change. For instance, if this random
+    transformation is ``shuffle``, adding a transformation before ``shuffle``
+    will change its seed and data order, consequently. To avoid this, pass the
+    seed to the transformation directly.
+
     Note about custom dataset implementations: the default seed generation is
     available through ``_default_seed``, but the private API is not guaranteed
     to be stable.
