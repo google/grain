@@ -19,7 +19,7 @@ import bisect
 from collections.abc import Sequence
 import dataclasses
 import sys
-from typing import Any, TypeVar, overload
+from typing import Any, Callable, TypeVar, overload
 
 from grain._src.core import exceptions
 from grain._src.python.dataset import base
@@ -29,6 +29,52 @@ from typing_extensions import override
 
 Element = Any
 T = TypeVar("T")  # pylint: disable=invalid-name
+
+
+def binary_search_largest_true(
+    search_range: Sequence[int],
+    criterion: Callable[
+        [
+            int,
+        ],
+        bool,
+    ],
+) -> int:
+  """Binary search the largest value for which the criterion is true.
+
+  Args:
+    search_range: A sequence of values to search in.
+    criterion: A function that takes a value from `search_range` and returns
+      True or False.
+
+  Returns:
+    The largest value in `search_range` for which the `criterion` is true.
+    If `search_range` is empty, returns 0.
+    If no value in `search_range` satisfies the `criterion`, returns 0.
+  """
+  if not search_range:
+    return 0
+
+  low = 0
+  high = len(search_range) - 1
+  largest_true_value = 0
+
+  while low <= high:
+    mid_index = (low + high) // 2
+    mid_value = search_range[mid_index]
+
+    if criterion(mid_value):
+      # Criterion is true for the middle value.
+      # This could be the largest true value, but we need to check
+      # the right half for potentially larger true values.
+      largest_true_value = mid_value
+      low = mid_index + 1  # Search in the right half
+    else:
+      # Criterion is false for the middle value.
+      # The largest true value (if any) must be in the left half.
+      high = mid_index - 1  # Search in the left half
+
+  return largest_true_value
 
 
 @dataclasses.dataclass
@@ -50,14 +96,35 @@ class SelectionWithProportionsMap(base.DatasetSelectionMap):
     assert len(parents) == len(proportions)
     self._proportions = tuple(proportions)
 
-    # Compute length such that elements of constituent datasets appear at most
-    # once.
-    weight_sum = sum(proportions)
-    lengths = [
-        len(parent) / (weight / weight_sum)
-        for parent, weight in zip(parents, proportions)
-    ]
-    self._length = min(sys.maxsize, int(min(lengths)))
+    # Compute maximal length of mixture -- the mixture ends when we request
+    # an example from an already-exhausted parent iterator.
+    parent_lengths = [len(parent) for parent in parents]
+    search_range_min = min(parent_lengths)
+    if search_range_min == sys.maxsize:
+      # All parent datasets are infinite.
+      length = sys.maxsize
+    else:
+      # We have at least one dataset which is finite.
+      # We need to add up only the finite parent lengths.
+      # This trick will fail if we have finite datasets that are close to
+      # sys.maxsize.
+      search_range_max = sum(
+          parent_length
+          for parent_length in parent_lengths
+          if parent_length < sys.maxsize
+      )
+
+      def criterion(l: int) -> bool:
+        counts = _counts_per_dataset(l, self._proportions)
+        return all(
+            [count <= length for count, length in zip(counts, parent_lengths)]
+        )
+
+      length = binary_search_largest_true(
+          search_range=range(search_range_min, search_range_max + 1),
+          criterion=criterion,
+      )
+    self._length = min(sys.maxsize, length)
 
   def __len__(self) -> int:
     return self._length
