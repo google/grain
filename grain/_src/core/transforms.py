@@ -33,7 +33,11 @@ import numpy as np
 
 
 class MapTransform(abc.ABC):
-  """Abstract base class for all 1:1 transformations of elements."""
+  """Abstract base class for all 1:1 transformations of elements.
+
+  Implementations should be threadsafe since they are often executed in
+  parallel.
+  """
 
   @abc.abstractmethod
   def map(self, element):
@@ -41,7 +45,11 @@ class MapTransform(abc.ABC):
 
 
 class RandomMapTransform(abc.ABC):
-  """Abstract base class for all random 1:1 transformations of elements."""
+  """Abstract base class for all random 1:1 transformations of elements.
+
+  Implementations should be threadsafe since they are often executed in
+  parallel.
+  """
 
   @abc.abstractmethod
   def random_map(self, element, rng: np.random.Generator):
@@ -49,7 +57,11 @@ class RandomMapTransform(abc.ABC):
 
 
 class MapWithIndex(abc.ABC):
-  """Abstract base class for 1:1 transformations of elements and their index."""
+  """Abstract base class for 1:1 transformations of elements and their index.
+
+  Implementations should be threadsafe since they are often executed in
+  parallel.
+  """
 
   @abc.abstractmethod
   def map_with_index(self, index: int, element):
@@ -69,6 +81,9 @@ class Filter(abc.ABC):
 
   The pipeline will drop any element for which the filter function returns
   False.
+
+  Implementations should be threadsafe since they are often executed in
+  parallel.
   """
 
   @abc.abstractmethod
@@ -78,6 +93,9 @@ class Filter(abc.ABC):
 
 class FlatMapTransform(abc.ABC):
   """Abstract base class for splitting operations of individual elements.
+
+  Implementations should be threadsafe since they are often executed in
+  parallel.
 
   Attributes
     max_fan_out: Absolute maximum number of splits that an element can generate.
