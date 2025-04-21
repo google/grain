@@ -137,7 +137,8 @@ class RangeDataSource:
 
   def __getitem__(self, record_key: SupportsIndex) -> int:
     record_key = record_key.__index__()
-    assert record_key >= 0 and record_key < self._len
+    if record_key < 0 or record_key >= self._len:
+      raise IndexError(f"Index {record_key} out of range for {self._len}")
     return self._start + record_key * self._step
 
   def __repr__(self) -> str:
