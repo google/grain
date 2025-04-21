@@ -36,7 +36,7 @@ online rather than read records from storage.)
 
 ```python
 range_data_source = grain.python.RangeDataSource(start=1,stop=10,step=2)
-print(list(x)) # prints [1, 3, 5, 7, 9]
+print(list(range_data_source)) # prints [1, 3, 5, 7, 9]
 ```
 
 ### ArrayRecord Data Source
