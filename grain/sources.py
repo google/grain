@@ -29,7 +29,3 @@ from grain._src.python.data_sources import (
     RandomAccessDataSource,
     RangeDataSource,
 )
-
-# TODO: Remove this in favor of `grain.ReadOptions` once we make
-# a release. Modify the public API reference accordingly.
-from grain._src.python.options import ReadOptions

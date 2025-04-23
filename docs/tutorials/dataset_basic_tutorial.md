@@ -257,7 +257,7 @@ id: FnWPIpce9aAJ
 outputId: dba2951e-a965-4dd3-816c-dcbbea6352f7
 ---
 iter_dataset = sharded_dataset.to_iter_dataset(
-    grain.sources.ReadOptions(num_threads=16, prefetch_buffer_size=500))
+    grain.ReadOptions(num_threads=16, prefetch_buffer_size=500))
 
 for element in iter_dataset:
   pprint(element)

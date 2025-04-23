@@ -13,4 +13,3 @@ List of Members
     SharedMemoryDataSource
     RandomAccessDataSource
     RangeDataSource
-    ReadOptions

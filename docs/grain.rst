@@ -27,6 +27,7 @@ Flexible low-level pipelines
    MapDataset
    IterDataset
    DatasetIterator
+   ReadOptions
 
 
 Simple high-level pipelines
