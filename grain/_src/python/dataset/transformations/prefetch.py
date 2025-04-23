@@ -180,7 +180,9 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
             )
           element = element.result()
         else:
-          element = self._map_parent[self._next_index]
+          element = self._stats.record_bytes_consumed(
+              self._map_parent[self._next_index]
+          )
         self._next_index += 1
       return_element = self._allow_nones or element is not None
       self._threshold_checker.check(return_element)
