@@ -14,7 +14,7 @@ jupyter:
 <!-- #region id="Xz3HnUBqWlWf" -->
 ## Reading Data from S3 and Building Grain Pipelines
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/google/grain/blob/main/docs/tutorials/load_with_s3.ipynb)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/google/grain/blob/main/docs/tutorials/dataset_load_from_s3_tutorial.ipynb)
 
 This document outlines how to read data from an Amazon S3 bucket and construct a Grain pipeline. We will leverage [S3 Mountpoint](https://docs.aws.amazon.com/AmazonS3/latest/userguide/mountpoint.html), a service provided by AWS. S3 Mountpoint enables you to mount your S3 bucket as a local file system, allowing you to access and read data as if it were stored locally.
 <!-- #endregion -->
