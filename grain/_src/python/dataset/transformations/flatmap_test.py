@@ -48,8 +48,7 @@ class VariableSizeCappedSplitWithNoTransform(transforms.FlatMapTransform):
   max_fan_out: int
 
   def flat_map(self, element: int):
-    for _ in range(min(element, self.max_fan_out)):
-      yield element
+    return [element] * min(element, self.max_fan_out)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -57,8 +56,7 @@ class VariableSizeUncappedSplitWithNoTransform(transforms.FlatMapTransform):
   max_fan_out: int
 
   def flat_map(self, element: int):
-    for _ in range(element):
-      yield element
+    return [element] * element
 
 
 class FlatMapMapDatasetTest(absltest.TestCase):
@@ -138,6 +136,14 @@ class FlatMapMapDatasetTest(absltest.TestCase):
           VariableSizeUncappedSplitWithNoTransform(max_fan_out=self.fan_out),
       )
       _ = [flatmap_ds[i] for i in range(len(flatmap_ds))]
+
+  def test_with_filter(self):
+    ds = self.range_ds.filter(lambda x: x % 2 == 0)
+    flatmap_ds = flatmap.FlatMapMapDataset(
+        ds,
+        FixedSizeSplitWithTransform(max_fan_out=2),
+    )
+    self.assertEqual(list(flatmap_ds), [1, 1, 3, 3, 5, 5, 7, 7, 9, 9])
 
 
 class Unbatch(transforms.FlatMapTransform):

@@ -54,15 +54,15 @@ class FlatMapMapDataset(dataset.MapDataset[T]):
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
-    timer = dataset_stats.Timer()
-    with timer:
-      fan_out = self._transform.max_fan_out
-      split_index = index % fan_out
-      element_index = index // fan_out
+    element_index, split_index = divmod(index, self._transform.max_fan_out)
     element = self._parent[element_index]
-    with timer:
-      splits = list(enumerate(self._transform.flat_map(element)))
-      if len(splits) > fan_out:
+    with self._stats.record_self_time():
+      if element is None:
+        return None
+      splits = self._transform.flat_map(element)
+      if not isinstance(splits, Sequence):
+        splits = list(splits)
+      if len(splits) > self._transform.max_fan_out:
         raise ValueError(
             "The user-provided FlatMapTransform has a split that exceeds"
             " specified max fan-out size. To address this, you can raise the"
@@ -70,10 +70,8 @@ class FlatMapMapDataset(dataset.MapDataset[T]):
             " may suffer. Please consider preprocessing your data to keep the"
             " max fan-out size reasonable."
         )
-    with self._stats.record_self_time(offset_ns=timer.value()):
-      for i, sub_element in splits:
-        if i == split_index:
-          return self._stats.record_output_spec(sub_element)
+      if split_index < len(splits):
+        return self._stats.record_output_spec(splits[split_index])
       return None
 
 
