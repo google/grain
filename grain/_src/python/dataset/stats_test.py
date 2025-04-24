@@ -25,6 +25,7 @@ from absl import flags
 from absl.testing import flagsaver
 import cloudpickle
 from grain._src.core import transforms
+from grain._src.core.config import config
 from grain._src.python import options
 from grain._src.python import shared_memory_array
 from grain._src.python.dataset import dataset
@@ -524,6 +525,28 @@ class DebugModeStatsTest(absltest.TestCase):
     local_stats.report()
     self.assertEqual(local_stats._summary.bytes_consumed, 91)
     self.assertEqual(local_stats._summary.bytes_produced, 91)
+
+  def _assert_visualization(self, ds, expected):
+    result = ds._stats._visualize_dataset_graph()  # pytype: disable=attribute-error
+    # Remove line number from the result to make test less brittle.
+    result = re.sub(r".py:\d+", ".py:XXX", result)
+    self.assertEqual(result, expected)
+
+  def test_viz_graph_with_config(self):
+    config.update("py_dataset_visualization_output_dir", "")
+    ds = (
+        dataset.MapDataset.range(10)
+        .seed(42)
+        .shuffle()
+        .slice(slice(1, None, 3))
+        .map_with_index(_add_dummy_metadata)
+        .map(_identity)
+        .repeat(2)
+    )
+    # Visualization graph is constructed while iterating through pipeline.
+    _ = list(ds)
+    self.assertIsInstance(ds._stats, stats._VisualizationStats)
+    self._assert_visualization(ds, _MAP_DATASET_REPR)
 
 
 class GraphModeStatsTest(absltest.TestCase):
