@@ -47,7 +47,7 @@ class SequentialSampler:
   def __init__(
       self,
       num_records: int,
-      shard_options: sharding.ShardOptions,
+      shard_options: sharding.ShardOptions = sharding.NoSharding(),
       seed: Optional[int] = None,
   ):
     if num_records <= 0:
@@ -118,7 +118,7 @@ class IndexSampler:
   def __init__(
       self,
       num_records: int,
-      shard_options: sharding.ShardOptions,
+      shard_options: sharding.ShardOptions = sharding.NoSharding(),
       shuffle: bool = False,
       num_epochs: Optional[int] = None,
       seed: Optional[int] = None,
