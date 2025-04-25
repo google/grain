@@ -30,12 +30,6 @@ message ExecutionSummary {
     // their wait time ratio derived from the ratio of the prefetch node.
     // Sum of all ratios in a single pipeline is 1.
     bool is_prefetch = 12;
-    // Bytes consumed by the node. Currently, bytes comsumed and bytes produced
-    // by the node is best estimated only for prefetch nodes. The difference is
-    // used to estimate the memory usage of the node.
-    int64 bytes_consumed = 13;
-    // Bytes produced by the node.
-    int64 bytes_produced = 14;
   }
   // Map of node IDs to nodes in the pipeline.
   map<int32, Node> nodes = 1;

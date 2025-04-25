@@ -969,7 +969,7 @@ class GetExecutionSummaryTest(parameterized.TestCase):
   @mock.patch.object(dataset_stats, "_REPORTING_PERIOD_SEC", 0.05)
   @mock.patch.object(dataset_stats, "_LOG_EXECUTION_SUMMARY_PERIOD_SEC", 0.06)
   def test_execution_summary_with_no_logging(self):
-    with self.assertLogs(level="INFO") as logs:
+    with self.assertNoLogs(level="INFO"):
       ds = dataset.MapDataset.range(10).shuffle(42)
       ds = ds.map(MapTransformAddingOne())
       ds = ds.to_iter_dataset()
@@ -984,8 +984,6 @@ class GetExecutionSummaryTest(parameterized.TestCase):
       _ = list(it)
       # reporting stats after 0.05 seconds.
       time.sleep(0.1)
-    log_value = "Grain Dataset Execution Summary"
-    self.assertNotIn(log_value, "".join(logs.output))
 
 
 if __name__ == "__main__":
