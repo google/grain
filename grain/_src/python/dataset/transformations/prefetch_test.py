@@ -277,29 +277,30 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
     for i in range(3):
       np.testing.assert_array_equal(actual[i], expected[i])
 
-  @parameterized.named_parameters(
-      dict(
-          testcase_name='0_workers',
-          num_workers=0,
-          record_state_interval=prefetch._RECORD_STATE_INTERVAL_S,
+  @parameterized.product(
+      (
+          dict(
+              num_workers=0,
+              record_state_interval=prefetch._RECORD_STATE_INTERVAL_S,
+          ),
+          dict(
+              num_workers=1,
+              record_state_interval=prefetch._RECORD_STATE_INTERVAL_S,
+          ),
+          dict(
+              num_workers=10,
+              record_state_interval=prefetch._RECORD_STATE_INTERVAL_S,
+          ),
+          dict(
+              num_workers=10,
+              record_state_interval=0,
+          ),
       ),
-      dict(
-          testcase_name='1_worker',
-          num_workers=7,
-          record_state_interval=prefetch._RECORD_STATE_INTERVAL_S,
-      ),
-      dict(
-          testcase_name='10_workers',
-          num_workers=10,
-          record_state_interval=prefetch._RECORD_STATE_INTERVAL_S,
-      ),
-      dict(
-          testcase_name='10_workers_with_continuous_state_recording',
-          num_workers=10,
-          record_state_interval=0,
-      ),
+      step_index=[0, 3, 8],
   )
-  def test_checkpoint(self, num_workers: int, record_state_interval: int):
+  def test_checkpoint(
+      self, num_workers: int, record_state_interval: int, step_index: int
+  ):
     with mock.patch.object(
         prefetch, '_RECORD_STATE_INTERVAL_S', record_state_interval
     ):
@@ -307,17 +308,37 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
           self.iter_ds,
           options.MultiprocessingOptions(num_workers),
       )
-      ds_iter = iter(ds)
+      ds_iter = ds.__iter__()
 
       max_steps = 10
       values_without_interruption = []
       checkpoints = []
       for _ in range(max_steps):
-        checkpoints.append(ds_iter.get_state())  # pytype: disable=attribute-error
+        checkpoints.append(ds_iter.get_state())
+        values_without_interruption.append(next(ds_iter))
+
+      ds_iter.set_state(checkpoints[step_index])
+      for i in range(step_index, max_steps):
+        value = next(ds_iter)
+        self.assertEqual(value, values_without_interruption[i])
+
+  def test_set_state_twice(self):
+    with mock.patch.object(prefetch, '_RECORD_STATE_INTERVAL_S', 0):
+      ds = prefetch.MultiprocessPrefetchIterDataset(
+          self.iter_ds,
+          options.MultiprocessingOptions(2),
+      )
+      ds_iter = ds.__iter__()
+
+      max_steps = 10
+      values_without_interruption = []
+      checkpoints = []
+      for _ in range(max_steps):
+        checkpoints.append(ds_iter.get_state())
         values_without_interruption.append(next(ds_iter))
 
       for starting_step in [0, 3, 8]:
-        ds_iter.set_state(checkpoints[starting_step])  # pytype: disable=attribute-error
+        ds_iter.set_state(checkpoints[starting_step])
         for i in range(starting_step, max_steps):
           value = next(ds_iter)
           self.assertEqual(value, values_without_interruption[i])

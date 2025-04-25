@@ -49,7 +49,7 @@ py_test(
     name = "prefetch_test",
     timeout = "long",
     srcs = ["prefetch_test.py"],
-    shard_count = 20,
+    shard_count = 50,
     srcs_version = "PY3",
     deps = [
         "//grain/_src/core:transforms",
@@ -174,6 +174,7 @@ py_test(
 py_test(
     name = "shuffle_test",
     srcs = ["shuffle_test.py"],
+    shard_count = 10,
     srcs_version = "PY3",
     deps = [
         "//grain/_src/python/dataset",
