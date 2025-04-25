@@ -15,7 +15,6 @@
 import collections
 import contextlib
 import functools
-import re
 import sys
 import threading
 import time
@@ -25,12 +24,9 @@ from absl import flags
 from absl.testing import flagsaver
 import cloudpickle
 from grain._src.core import transforms
-from grain._src.python import options
-from grain._src.python import shared_memory_array
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
 from grain.proto import execution_summary_pb2
-import numpy as np
 
 from absl.testing import absltest
 
@@ -61,7 +57,7 @@ _MAP_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
 "<class 'int'>[]"
 
   ││
-  ││  MapWithIndexMapDataset(transform=_add_dummy_metadata @ .../python/dataset/stats_test.py:XXX)
+  ││  MapWithIndexMapDataset(transform=_add_dummy_metadata @ .../python/dataset/stats_test.py:154)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -70,7 +66,7 @@ _MAP_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
  'index': "<class 'int'>[]"}
 
   ││
-  ││  MapMapDataset(transform=_identity @ .../python/dataset/stats_test.py:XXX)
+  ││  MapMapDataset(transform=_identity @ .../python/dataset/stats_test.py:158)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -108,7 +104,7 @@ _ITER_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
 "<class 'int'>[]"
 
   ││
-  ││  MapDatasetIterator(transform=<lambda> @ .../python/dataset/stats_test.py:XXX)
+  ││  MapDatasetIterator(transform=<lambda> @ .../python/dataset/stats_test.py:543)
   ││
   ╲╱
 {'data': "<class 'int'>[]",
@@ -333,6 +329,21 @@ class DebugModeStatsTest(absltest.TestCase):
     s = cloudpickle.loads(cloudpickle.dumps(s))
     self.assertIsInstance(s, stats._ExecutionStats)
 
+  def test_dataset_visualization(self):
+    ds = (
+        dataset.MapDataset.range(10)
+        .seed(42)
+        .shuffle()
+        .slice(slice(1, None, 3))
+        .map_with_index(_add_dummy_metadata)
+        .map(_identity)
+        .repeat(2)
+    )
+    # Visualization graph is constructed while iterating through pipeline.
+    _ = list(ds)
+    self.assertIsInstance(ds._stats, stats._ExecutionStats)
+    self.assertEqual(ds._stats._visualize_dataset_graph(), _MAP_DATASET_REPR)
+
   def test_pretty_print_execution_summary(self):
     dummy_summary = execution_summary_pb2.ExecutionSummary()
     dummy_summary.nodes[0].CopyFrom(
@@ -361,8 +372,6 @@ class DebugModeStatsTest(absltest.TestCase):
             output_spec="<class 'int'>[]",
             is_output=True,
             is_prefetch=True,
-            bytes_consumed=100000,
-            bytes_produced=50000,
         )
     )
     dummy_summary.nodes[2].CopyFrom(
@@ -406,23 +415,23 @@ class DebugModeStatsTest(absltest.TestCase):
     )
 
     expected_result = """
-|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| id | name                           | inputs | percent wait time | total processing time | min processing time | max processing time | avg processing time | num produced elements | memory usage |
-|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 4  | RangeMapDataset                | []     | 0.00%             | N/A                   | N/A                 | N/A                 | N/A                 | N/A                   | 0 bytes      |
-|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 3  | RangeMapDataset                | []     | 12.50%            | 4.00s                 | 400.00us            | 400.00ms            | 400.00ms            | 10                    | 0 bytes      |
-|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 2  | MapMapDataset                  | [3, 4] | 37.50%            | 400.00ms              | 4.00us              | 40.00ms             | 40.00ms             | 10                    | 0 bytes      |
-|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 1  | PrefetchDatasetIterator        | [2]    | N/A               | 400.00us              | 400ns               | 40.00us             | 40.00us             | 10                    | 48.83 KiB    |
-|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 0  | MapDatasetIterator(transform=_ | [1]    | 50.00%            | N/A                   | N/A                 | N/A                 | N/A                 | N/A                   | 0 bytes      |
-|    | MapFnFromPreprocessingBuilder( |        |                   |                       |                     |                     |                     |                       |              |
-|    | preprocessing_builder=NextToke |        |                   |                       |                     |                     |                     |                       |              |
-|    | nAsTargetTextPreprocessingBuil |        |                   |                       |                     |                     |                     |                       |              |
-|    | der))                          |        |                   |                       |                     |                     |                     |                       |              |
-|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| id | name                           | inputs | percent wait time | total processing time | min processing time | max processing time | avg processing time | num produced elements |
+|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 4  | RangeMapDataset                | []     | 0.00%             | N/A                   | N/A                 | N/A                 | N/A                 | N/A                   |
+|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 3  | RangeMapDataset                | []     | 12.50%            | 4.00s                 | 400.00us            | 400.00ms            | 400.00ms            | 10                    |
+|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 2  | MapMapDataset                  | [3, 4] | 37.50%            | 400.00ms              | 4.00us              | 40.00ms             | 40.00ms             | 10                    |
+|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1  | PrefetchDatasetIterator        | [2]    | N/A               | 400.00us              | 400ns               | 40.00us             | 40.00us             | 10                    |
+|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 0  | MapDatasetIterator(transform=_ | [1]    | 50.00%            | N/A                   | N/A                 | N/A                 | N/A                 | N/A                   |
+|    | MapFnFromPreprocessingBuilder( |        |                   |                       |                     |                     |                     |                       |
+|    | preprocessing_builder=NextToke |        |                   |                       |                     |                     |                     |                       |
+|    | nAsTargetTextPreprocessingBuil |        |                   |                       |                     |                     |                     |                       |
+|    | der))                          |        |                   |                       |                     |                     |                     |                       |
+|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 """
     self.assertEqual(
         expected_result,
@@ -501,30 +510,6 @@ class DebugModeStatsTest(absltest.TestCase):
     ):
       _ = list(ds)
 
-  def test_memory_usage(self):
-    # Create elements of different types
-    np_array = np.zeros(shape=(5, 2), dtype=np.int32)  # 5*2*4 = 40 bytes
-    test_string = "hello world"  # 11 bytes
-    shm_meta = shared_memory_array.SharedMemoryArrayMetadata(
-        name="test_key", dtype=np.float32, shape=(10,)
-    )  # 10*4 = 40 bytes
-
-    ds = (
-        dataset.MapDataset.source([np_array, test_string, shm_meta])
-        .map(lambda x: x)
-        .to_iter_dataset(
-            read_options=options.ReadOptions(prefetch_buffer_size=10)
-        )
-    )
-    it = ds.__iter__()
-    _ = list(it)
-    local_stats = it._stats
-    self.assertIsInstance(local_stats, stats._ExecutionStats)
-    # Force aggregate the buffered stats.
-    local_stats.report()
-    self.assertEqual(local_stats._summary.bytes_consumed, 91)
-    self.assertEqual(local_stats._summary.bytes_produced, 91)
-
 
 class GraphModeStatsTest(absltest.TestCase):
 
@@ -533,28 +518,6 @@ class GraphModeStatsTest(absltest.TestCase):
     self.enter_context(
         flagsaver.flagsaver(grain_py_dataset_visualization_output_dir="")
     )
-
-  def _assert_visualization(self, ds, expected):
-    result = ds._stats._visualize_dataset_graph()  # pytype: disable=attribute-error
-    # Remove line number from the result to make test less brittle.
-    result = re.sub(r".py:\d+", ".py:XXX", result)
-    self.assertEqual(result, expected)
-
-  @flagsaver.flagsaver(grain_py_debug_mode=True)
-  def test_visualization_in_debug_mode(self):
-    ds = (
-        dataset.MapDataset.range(10)
-        .seed(42)
-        .shuffle()
-        .slice(slice(1, None, 3))
-        .map_with_index(_add_dummy_metadata)
-        .map(_identity)
-        .repeat(2)
-    )
-    # Visualization graph is constructed while iterating through pipeline.
-    _ = list(ds)
-    self.assertIsInstance(ds._stats, stats._ExecutionStats)
-    self._assert_visualization(ds, _MAP_DATASET_REPR)
 
   def test_visualize_map(self):
     ds = (
@@ -569,7 +532,7 @@ class GraphModeStatsTest(absltest.TestCase):
     # Visualization graph is constructed while iterating through pipeline.
     _ = list(ds)
     self.assertIsInstance(ds._stats, stats._VisualizationStats)
-    self._assert_visualization(ds, _MAP_DATASET_REPR)
+    self.assertEqual(ds._stats._visualize_dataset_graph(), _MAP_DATASET_REPR)
 
   def test_visualize_iter(self):
     ds = (
@@ -584,7 +547,7 @@ class GraphModeStatsTest(absltest.TestCase):
     it = ds.__iter__()
     _ = list(it)
     self.assertIsInstance(it._stats, stats._VisualizationStats)
-    self._assert_visualization(it, _ITER_DATASET_REPR)
+    self.assertEqual(it._stats._visualize_dataset_graph(), _ITER_DATASET_REPR)
 
   def test_visualize_with_mix(self):
     ds1 = dataset.MapDataset.range(10).shuffle(42)
@@ -593,7 +556,7 @@ class GraphModeStatsTest(absltest.TestCase):
     # Visualization graph is constructed while iterating through pipeline.
     _ = list(ds)
     self.assertIsInstance(ds._stats, stats._VisualizationStats)
-    self._assert_visualization(ds, _MIX_DATASET_REPR)
+    self.assertEqual(ds._stats._visualize_dataset_graph(), _MIX_DATASET_REPR)
 
   @flagsaver.flagsaver(grain_py_dataset_visualization_output_dir="TEST_DIR")
   def test_dataset_visualization_with_output_dir(self):
@@ -623,7 +586,7 @@ class GraphModeStatsTest(absltest.TestCase):
     # Visualization graph is constructed while iterating through pipeline.
     _ = list(ds)
     self.assertIsInstance(ds._stats, stats._VisualizationStats)
-    self._assert_visualization(ds, _MAP_DATASET_REPR)
+    self.assertEqual(ds._stats._visualize_dataset_graph(), _MAP_DATASET_REPR)
 
   @flagsaver.flagsaver(grain_py_dataset_visualization_output_dir=None)
   def test_dataset_visualization_with_output_dir_none(self):

@@ -13,31 +13,7 @@
 # limitations under the License.
 """Util functions for stats.py."""
 
-import functools
-import math
-from typing import Any
-
-from absl import logging
-from grain._src.core import tree_lib
-from grain._src.python import shared_memory_array
 from grain.proto import execution_summary_pb2
-import numpy as np
-
-
-def pretty_format_bytes(bytes_value: int) -> str:
-  """Returns a pretty formatted string for bytes."""
-  # pylint: disable=bad-whitespace
-  if bytes_value < 1024:
-    return f"{bytes_value} bytes"
-  elif bytes_value < 1024 * 1024:
-    return f"{bytes_value / 1024:.2f} KiB"
-  elif bytes_value < 1024 * 1024 * 1024:
-    return f"{bytes_value / 1024 / 1024:.2f} MiB"
-  elif bytes_value < 1024 * 1024 * 1024 * 1024:
-    return f"{bytes_value / 1024 / 1024 / 1024:.2f} GiB"
-  else:
-    return f"{bytes_value / 1024 / 1024 / 1024 / 1024:.2f} TiB"
-  # pylint: enable=bad-whitespace
 
 
 def merge_execution_summaries(
@@ -115,47 +91,3 @@ def get_complete_summary(
     main_summary.nodes[node.id].CopyFrom(node)
 
   return main_summary
-
-
-def calculate_allocated_bytes(element: Any) -> int:
-  """Calculates the allocated bytes of the element.
-
-  This method estimates the memory footprint of common data types within Grain
-  data pipelines.
-
-  Args:
-    element: The element for which the size is to be calculated.
-
-  Returns:
-    Estimated allocated bytes in memory for the element, or 0 for unsupported
-    types.
-  """
-  if isinstance(element, np.ndarray):
-    return element.nbytes
-  elif isinstance(element, shared_memory_array.SharedMemoryArrayMetadata):
-    return math.prod(element.shape) * np.dtype(element.dtype).itemsize
-  elif isinstance(element, str) or isinstance(element, bytes):
-    return len(element)
-  else:
-    logging.log_first_n(
-        logging.WARNING,
-        "Unsupported type for estimating memory usage: %s",
-        1,
-        type(element),
-    )
-    return 0
-
-
-def _record_leaf_size(element: Any, memory_buffer: list[int]) -> Any:
-  """Calculates the size of leaf element and appends it to the memory buffer."""
-  size = calculate_allocated_bytes(element)
-  memory_buffer.append(size)
-  return element
-
-
-def record_size(element: Any, memory_buffer: list[int]) -> Any:
-  """Records the size of the element in the memory buffer."""
-  return tree_lib.map_structure(
-      functools.partial(_record_leaf_size, memory_buffer=memory_buffer),
-      element,
-  )

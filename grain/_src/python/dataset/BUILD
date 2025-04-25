@@ -106,6 +106,7 @@ py_library(
         "//grain/_src/core:config",
         "//grain/_src/core:monitoring",
         "//grain/_src/core:tree_lib",
+        "//grain/_src/python:multiprocessing_common",
         "//grain/proto:execution_summary_py_pb2",
         "@abseil-py//absl/logging",
     ],
@@ -116,11 +117,7 @@ py_library(
     srcs = ["stats_utils.py"],
     srcs_version = "PY3",
     deps = [
-        "//grain/_src/core:tree_lib",
-        "//grain/_src/python:shared_memory_array",
         "//grain/proto:execution_summary_py_pb2",
-        "@abseil-py//absl/logging",
-        "@pypi//numpy:pkg",
     ],
 )
 
@@ -130,10 +127,8 @@ py_test(
     srcs_version = "PY3",
     deps = [
         ":stats_utils",
-        "//grain/_src/python:shared_memory_array",
         "//grain/proto:execution_summary_py_pb2",
         "@abseil-py//absl/testing:absltest",
-        "@pypi//numpy:pkg",
     ],
 )
 
@@ -145,14 +140,11 @@ py_test(
         ":dataset",
         ":stats",
         "//grain/_src/core:transforms",
-        "//grain/_src/python:options",
-        "//grain/_src/python:shared_memory_array",
         "//grain/proto:execution_summary_py_pb2",
         "@abseil-py//absl/flags",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:flagsaver",
         "@pypi//cloudpickle:pkg",
-        "@pypi//numpy:pkg",
     ],
 )
 

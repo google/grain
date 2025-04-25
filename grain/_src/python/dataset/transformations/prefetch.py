@@ -137,10 +137,6 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
         raise_threshold=self._ctx.dataset_options.filter_raise_threshold_ratio,
     )
 
-  def _getitem(self, index: int) -> T:
-    """Records the memory usage of the element before prefetching."""
-    return self._stats.record_bytes_consumed(self._map_parent[index])
-
   @dataset_stats.record_next_duration_if_output
   def __next__(self) -> T:
     # The time recorded here is the time spent in prefetch node to return an
@@ -165,7 +161,8 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
             # stats initialization before multithreaded prefetching.
             _ = self._stats
             self._buffer = collections.deque(
-                self._executor.submit(self._getitem, i) for i in indices
+                self._executor.submit(self._map_parent.__getitem__, i)
+                for i in indices
             )
           element = self._buffer.popleft()
           if (
@@ -174,21 +171,18 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
           ):
             self._buffer.append(
                 self._executor.submit(
-                    self._getitem,
+                    self._map_parent.__getitem__,
                     self._next_index + self._prefetch_buffer_size,
                 )
             )
           element = element.result()
         else:
-          element = self._stats.record_bytes_consumed(
-              self._map_parent[self._next_index]
-          )
+          element = self._map_parent[self._next_index]
         self._next_index += 1
       return_element = self._allow_nones or element is not None
       self._threshold_checker.check(return_element)
       if return_element:
         with self._stats.record_self_time(offset_ns=timer.value()):
-          element = self._stats.record_bytes_produced(element)
           return self._stats.record_output_spec(element)
     raise StopIteration
 
