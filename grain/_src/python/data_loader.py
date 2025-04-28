@@ -288,7 +288,7 @@ class DataLoader:
         _LAST_WORKER_INDEX: -1,
         _WORKER_COUNT: self._multiprocessing_options.num_workers,
         _SAMPLER: repr(self._sampler),
-        _DATA_SOURCE: repr(self._data_source),
+        _DATA_SOURCE: _source_repr(self._data_source),
     }
 
   def _read_data(self, last_seen_index: int) -> Iterator[record.Record]:
@@ -352,11 +352,11 @@ class DataLoader:
           "Grain uses `repr(sampler)` to validate the sampler, so you "
           "may need to implement a custom `__repr__`."
       )
-    if state[_DATA_SOURCE] != repr(self._data_source):
+    if state[_DATA_SOURCE] != _source_repr(self._data_source):
       raise ValueError(
           "DataSource in checkpoint does not match datasource in dataloader.\n"
           f"data source in checkpoint: {state[_DATA_SOURCE]}\n"
-          f"data source in dataloader: {repr(self._data_source)}\n"
+          f"data source in dataloader: {_source_repr(self._data_source)}\n"
           "Grain uses `repr(data_source)` to validate the source, so you "
           "may need to implement a custom `__repr__`."
       )
@@ -367,6 +367,14 @@ def _iterator_with_context(
 ) -> Iterator[_T]:
   with iterator as it:
     yield from it
+
+
+def _source_repr(source: RandomAccessDataSource) -> str:
+  """Returns a string representation of the source."""
+  # If the source has data in memory avoid printing the data itself.
+  if isinstance(source, (list, tuple, np.ndarray)):
+    return str(type(source))
+  return repr(source)
 
 
 class GetElementProducerFn(grain_pool.GetElementProducerFn):

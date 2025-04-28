@@ -687,6 +687,16 @@ class DataLoaderTest(parameterized.TestCase):
     batch_operation._enable_shared_memory.assert_called_once()
     self.assertTrue(data_loader._operations[-1], batch_operation)
 
+  def test_state_without_in_memory_data(self):
+    data_source = list(range(10000))
+    loader = data_loader_lib.DataLoader(
+        data_source=data_source,
+        sampler=samplers.SequentialSampler(num_records=len(data_source)),
+    )
+    it = loader.__iter__()
+    state = it.get_state()
+    self.assertLess(len(state), 1000)
+
 
 class PyGrainDatasetIteratorTest(absltest.TestCase):
 
