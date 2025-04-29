@@ -25,7 +25,6 @@ from grain._src.python.shared_memory_array import SharedMemoryArray
 from grain._src.python.shared_memory_array import SharedMemoryArrayMetadata
 import jax
 import numpy as np
-import tensorflow as tf
 
 
 def _create_and_delete_shm() -> SharedMemoryArrayMetadata:
@@ -47,13 +46,14 @@ def _wait_for_deletion(metadata: SharedMemoryArrayMetadata) -> None:
 
 class SharedMemoryArrayTest(parameterized.TestCase):
 
-  @parameterized.parameters(["numpy", "tensorflow", "jax"])
+  @parameterized.parameters([
+      "numpy",
+      "jax",
+  ])
   def test_batch_dict_of_data_with_shared_memory(self, mode):
     data = [[1, 2], [3, 4]]
     if mode == "numpy":
       data = list(map(lambda x: np.array(x, dtype=np.int32), data))
-    elif mode == "tensorflow":
-      data = list(map(tf.constant, data))
     else:
       data = list(map(jax.numpy.array, data))
 

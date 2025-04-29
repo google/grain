@@ -37,7 +37,6 @@ testing = [
     'jaxlib',
     'jaxtyping',
     'pyarrow',
-    'tensorflow',
     'tensorflow-datasets',
 ]
 parquet = [

@@ -314,6 +314,5 @@ py_test(
         "@abseil-py//absl/testing:parameterized",
         "@pypi//jax:pkg",
         "@pypi//numpy:pkg",
-        "@pypi//tensorflow:pkg",
     ],
 )

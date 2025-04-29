@@ -20,7 +20,7 @@ build_and_test_grain_linux() {
 
   # Build wheels for multiple Python minor versions.
   PYTHON_MAJOR_VERSION=3
-  for PYTHON_MINOR_VERSION in 10 11 12
+  for PYTHON_MINOR_VERSION in 10 11 12 13
   do
     PYTHON_VERSION=$PYTHON_MAJOR_VERSION$PYTHON_MINOR_VERSION
     docker rmi -f grain:${PYTHON_VERSION}
@@ -102,7 +102,7 @@ build_and_test_grain_macos() {
   bazel --version
 
   PYTHON_MAJOR_VERSION=3
-  for PYTHON_MINOR_VERSION in 10 11 12
+  for PYTHON_MINOR_VERSION in 10 11 12 13
   do
     # Set up Pyenv.
     PYTHON_VERSION="${PYTHON_MAJOR_VERSION}"'.'"${PYTHON_MINOR_VERSION}"

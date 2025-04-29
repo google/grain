@@ -23,7 +23,6 @@ etils[epath,epy]
 cloudpickle
 jax
 jaxtyping
-numpy<2.0
+numpy
 attrs
-tensorflow==2.19.0rc0
 pyarrow

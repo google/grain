@@ -38,6 +38,10 @@ main() {
   write_to_bazelrc "test --action_env PYTHON_VERSION=${PYTHON_VERSION}"
   write_to_bazelrc "test --test_timeout=300"
 
+  # Make sure that we use the exact versions of dependencies specified in
+  # MODULE.bazel file.
+  write_to_bazelrc "common --check_direct_dependencies=error"
+
   bazel clean
   bazel build ... --action_env PYTHON_BIN_PATH="${PYTHON_BIN}" --action_env MACOSX_DEPLOYMENT_TARGET='11.0'
 
@@ -90,9 +94,13 @@ main() {
 
   # Install grain from the wheel and run smoke tests.
   $PYTHON_BIN -m pip install --find-links=/tmp/grain/all_dist grain
-  $PYTHON_BIN -m pip install tensorflow jax
-  $PYTHON_BIN grain/_src/core/smoke_test_with_tf.py
+  $PYTHON_BIN -m pip install jax
   $PYTHON_BIN grain/_src/core/smoke_test_with_jax.py
+  # TF is not available on Python 3.13 and above.
+  if (( "${PYTHON_MINOR_VERSION}" < 13 )); then
+    $PYTHON_BIN -m pip install tensorflow
+    $PYTHON_BIN grain/_src/core/smoke_test_with_tf.py
+  fi
 }
 
 main "$@"

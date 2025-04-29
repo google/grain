@@ -5,7 +5,6 @@ from grain._src.core import tree_lib
 from grain._src.python import record
 from grain._src.python.experimental.example_packing import packing
 import numpy as np
-import tensorflow as tf
 
 
 def create_input_dataset(input_dataset_elements):
@@ -487,4 +486,4 @@ class PackingTest(absltest.TestCase):
 
 
 if __name__ == "__main__":
-  tf.test.main()
+  absltest.main()

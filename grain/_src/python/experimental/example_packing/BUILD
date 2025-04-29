@@ -25,6 +25,5 @@ py_test(
         "@abseil-py//absl/testing:absltest",
         "@pypi//jax:pkg",
         "@pypi//numpy:pkg",
-        "@pypi//tensorflow:pkg",
     ],
 )
