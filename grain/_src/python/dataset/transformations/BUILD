@@ -144,8 +144,11 @@ py_test(
     srcs = ["packing_test.py"],
     srcs_version = "PY3",
     deps = [
+        ":packing",
+        ":packing_packed_batch",
         ":testing_util",
         "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
     ],
 )
 
