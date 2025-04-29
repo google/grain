@@ -19,13 +19,12 @@ import bisect
 from collections.abc import Sequence
 import dataclasses
 import sys
-from typing import Any, TypeVar, overload
+from typing import Any, TypeVar
 
 from grain._src.core import exceptions
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
-from typing_extensions import override
 
 Element = Any
 T = TypeVar("T")  # pylint: disable=invalid-name
@@ -93,12 +92,10 @@ class MixedMapDataset(dataset.MapDataset[T]):
     if proportions is not None and selection_map is not None:
       raise ValueError("Cannot set both proportions and selection_map.")
 
-    if selection_map is not None:
-      self._selection_map = selection_map
-      self._proportions = None
-    else:
-      self._selection_map = SelectionWithProportionsMap(parents, proportions)
-      self._proportions = self._selection_map._proportions
+    if selection_map is None:
+      selection_map = SelectionWithProportionsMap(parents, proportions)
+
+    self._selection_map = selection_map
 
     self._length = len(self._selection_map)
 
@@ -342,8 +339,8 @@ class _ConcatSelectionMap(base.DatasetSelectionMap):
 
 
 @dataclasses.dataclass
-class ConcatenateMapDataset(dataset.MapDataset[T]):
-  """LazyDataset for concatenating the elements from a sequence of datasets."""
+class ConcatenateMapDataset(MixedMapDataset[T]):
+  """MapDataset for concatenating the elements from a sequence of datasets."""
 
   def __init__(
       self,
@@ -355,27 +352,4 @@ class ConcatenateMapDataset(dataset.MapDataset[T]):
       parents: Component datasets to draw from. We will draw elements in order
         of their appearance in `parents`.
     """
-    super().__init__(parents)
-    self._selection_map = _ConcatSelectionMap(parents)
-    self._length = len(self._selection_map)
-
-  def __len__(self) -> int:
-    return self._length
-
-  @overload
-  def __getitem__(self, index: slice) -> dataset.MapDataset[T]:
-    ...
-
-  @overload
-  def __getitem__(self, index: int) -> T | None:
-    ...
-
-  @override
-  def __getitem__(self, index):
-    if isinstance(index, slice):
-      return self.slice(index)
-    with self._stats.record_self_time():
-      dataset_index, index_in_dataset = self._selection_map[index]
-    return self._stats.record_output_spec(
-        self._parents[dataset_index][index_in_dataset]
-    )
+    super().__init__(parents, selection_map=_ConcatSelectionMap(parents))
