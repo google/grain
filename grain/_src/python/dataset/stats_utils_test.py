@@ -12,8 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from grain._src.python import shared_memory_array
 from grain._src.python.dataset import stats_utils
 from grain.proto import execution_summary_pb2
+import numpy as np
+
 from absl.testing import absltest
 
 
@@ -103,6 +106,17 @@ class StatsUtilsTest(absltest.TestCase):
     # The output node in the workers summary is the input to the root node in
     # the main summary.
     self.assertEqual(complete_summary.nodes[1].is_output, False)
+
+  def test_get_allocated_bytes(self):
+    # Create elements of different types
+    np_array = np.zeros(shape=(5, 2), dtype=np.int32)  # 5*2*4 = 40 bytes
+    test_string = "hello world"  # 11 bytes
+    shm_meta = shared_memory_array.SharedMemoryArrayMetadata(
+        name="test_key", dtype=np.float32, shape=(10,)
+    )  # 10*4 = 40 bytes
+    self.assertEqual(stats_utils.calculate_allocated_bytes(np_array), 40)
+    self.assertEqual(stats_utils.calculate_allocated_bytes(test_string), 11)
+    self.assertEqual(stats_utils.calculate_allocated_bytes(shm_meta), 40)
 
 
 if __name__ == "__main__":

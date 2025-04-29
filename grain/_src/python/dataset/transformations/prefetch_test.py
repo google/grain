@@ -216,6 +216,23 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     ds = dataset.WithOptionsIterDataset(ds, ds_options)
     self.assertEqual(list(ds), [None] * 1000)
 
+  def test_iterator_has_no_reference_cycle(self):
+    ds = (
+        dataset.MapDataset.range(0, 1000)
+        .map(lambda x: x)
+        .to_iter_dataset()
+    )
+    ds_iter = iter(ds)
+    # Here, we check that iterating over the data does not create new references
+    # to the iterator. One common scenario when this could happen is if the
+    # iterator is passed to the prefetching threads. This is a problem because
+    # it delays garbage collection of all objects referred to by the iterator,
+    # including the buffered data.
+    ref_count_before = sys.getrefcount(ds_iter)
+    for _ in range(1000):
+      next(ds_iter)
+      self.assertEqual(sys.getrefcount(ds_iter), ref_count_before)
+
 
 class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
 

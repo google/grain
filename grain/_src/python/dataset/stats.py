@@ -86,6 +86,7 @@ _EDGE_TEMPLATE = r"""{input_spec}
 """
 
 _AVG_PROCESSING_TIME_COLUMN_NAME = "avg processing time"
+_MEMORY_USAGE_COLUMN_NAME = "memory usage"
 
 _COLUMN_NAME_OVERRIDES = types.MappingProxyType({
     "wait_time_ratio": "percent wait time",
@@ -214,6 +215,10 @@ def _get_col_value(
   """Returns the string representation of the value of a column for the given node."""
   if name == _AVG_PROCESSING_TIME_COLUMN_NAME:
     value = _get_avg_processing_time_ns(node)
+  elif name == _MEMORY_USAGE_COLUMN_NAME:
+    value = stats_utils.pretty_format_bytes(
+        node.bytes_consumed - node.bytes_produced
+    )
   else:
     value = getattr(node, name)
 
@@ -256,10 +261,13 @@ def pretty_format_summary(
   col_names.remove("output_spec")
   col_names.remove("is_output")
   col_names.remove("is_prefetch")
+  col_names.remove("bytes_consumed")
+  col_names.remove("bytes_produced")
   # Insert the average processing time column after the max processing time
   # column.
   index = col_names.index("max_processing_time_ns")
   col_names.insert(index + 1, _AVG_PROCESSING_TIME_COLUMN_NAME)
+  col_names.append(_MEMORY_USAGE_COLUMN_NAME)
 
   tabular_summary.append(
       [_COLUMN_NAME_OVERRIDES.get(name, name) for name in col_names]
@@ -528,6 +536,16 @@ class Stats(abc.ABC):
     """
     ...
 
+  @abc.abstractmethod
+  def record_bytes_consumed(self, element: Any) -> Any:
+    """Records bytes consumed by this node."""
+    ...
+
+  @abc.abstractmethod
+  def record_bytes_produced(self, element: Any) -> Any:
+    """Records bytes produced by this node."""
+    ...
+
   def _visualize_dataset_graph(self):
     """Generates Dataset visualization graph."""
     # TODO:Save the graph to a dot file for advanced visualization.
@@ -582,6 +600,12 @@ class _DefaultStats(Stats):
   def report(self):
     pass
 
+  def record_bytes_consumed(self, element: Any) -> Any:
+    return element
+
+  def record_bytes_produced(self, element: Any) -> Any:
+    return element
+
 
 class _VisualizationStats(Stats):
   """Produces Dataset Visualization Graph."""
@@ -611,6 +635,12 @@ class _VisualizationStats(Stats):
             self._reported = True
     return element
 
+  def record_bytes_consumed(self, element: Any) -> Any:
+    return element
+
+  def record_bytes_produced(self, element: Any) -> Any:
+    return element
+
   def report(self):
     msg = f"Grain Dataset graph:\n\n{self._visualize_dataset_graph()}"
     logging.info(msg)
@@ -629,6 +659,8 @@ class _ExecutionStats(_VisualizationStats):
     # https://docs.python.org/3/faq/library.html#what-kinds-of-global-value-mutation-are-thread-safe
     # The buffer is popped from a single(!) background reporting thread.
     self._self_times_buffer = []
+    self._produced_memory_buffer = []
+    self._consumed_memory_buffer = []
     self._reporting_thread = None
     self._logging_thread = None
     self._reporting_thread_init_lock = threading.Lock()
@@ -781,8 +813,20 @@ class _ExecutionStats(_VisualizationStats):
       )
       self._summary.total_processing_time_ns += self_time_ns
       _self_time_ns_histogram.Record(self_time_ns, self._config.name)
+    while self._consumed_memory_buffer:
+      self._summary.bytes_consumed += self._consumed_memory_buffer.pop()
+    while self._produced_memory_buffer:
+      self._summary.bytes_produced += self._produced_memory_buffer.pop()
     for p in self._parents:
       p.report()
+
+  def record_bytes_consumed(self, element: Any) -> Any:
+    """Records the memory usage of the element."""
+    return stats_utils.record_size(element, self._consumed_memory_buffer)
+
+  def record_bytes_produced(self, element: Any) -> Any:
+    """Records the memory usage of the element."""
+    return stats_utils.record_size(element, self._produced_memory_buffer)
 
 
 class _MPPrefetchExecutionStats(_ExecutionStats):

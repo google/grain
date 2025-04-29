@@ -46,6 +46,13 @@ import numpy as np
 T = TypeVar("T")
 
 
+def _getitem(
+    stats: dataset_stats.Stats, parent: dataset.MapDataset[T], index: int
+) -> T:
+  """Helper to record the memory usage of the element before prefetching."""
+  return stats.record_bytes_consumed(parent[index])
+
+
 @typing.runtime_checkable
 class SupportsInPlaceSlicing(Protocol):
   """Datasets that support mutation by setting the processed data slice."""
@@ -161,7 +168,10 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
             # stats initialization before multithreaded prefetching.
             _ = self._stats
             self._buffer = collections.deque(
-                self._executor.submit(self._map_parent.__getitem__, i)
+                self._executor.submit(
+                    functools.partial(_getitem, self._stats, self._map_parent),
+                    i,
+                )
                 for i in indices
             )
           element = self._buffer.popleft()
@@ -171,18 +181,21 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
           ):
             self._buffer.append(
                 self._executor.submit(
-                    self._map_parent.__getitem__,
+                    functools.partial(_getitem, self._stats, self._map_parent),
                     self._next_index + self._prefetch_buffer_size,
                 )
             )
           element = element.result()
         else:
-          element = self._map_parent[self._next_index]
+          element = self._stats.record_bytes_consumed(
+              self._map_parent[self._next_index]
+          )
         self._next_index += 1
       return_element = self._allow_nones or element is not None
       self._threshold_checker.check(return_element)
       if return_element:
         with self._stats.record_self_time(offset_ns=timer.value()):
+          element = self._stats.record_bytes_produced(element)
           return self._stats.record_output_spec(element)
     raise StopIteration
 
