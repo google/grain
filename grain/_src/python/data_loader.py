@@ -26,9 +26,10 @@ from multiprocessing import queues
 import os
 import sys
 import time
-from typing import Any, Callable, Optional, Sequence, Tuple, TypeVar, Union
+from typing import Any, Awaitable, Callable, Optional, Sequence, Tuple, TypeVar, Union
 
 from absl import logging
+from etils import epath
 from concurrent import futures
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import sharding
@@ -36,6 +37,7 @@ from grain._src.core import transforms
 from grain._src.core import tree_lib
 from grain._src.core import usage_logging
 import multiprocessing as mp
+from grain._src.python import checkpointing
 from grain._src.python import grain_pool
 from grain._src.python import options
 from grain._src.python import record
@@ -493,6 +495,50 @@ class DataLoaderIterator(collections.abc.Iterator[_T]):
     self._state: _IteratorState = state
     self._raw_iterator = None
     self._iterator = None
+
+  ### BEGIN Orbax checkpointing API.
+  # See orbax.checkpoint.v1.handlers.StatefulCheckpointable for more details.
+  # See https://orbax.readthedocs.io/en/latest/ for usage examples.
+
+  async def save(
+      self, directory: checkpointing.PathAwaitingCreation
+  ) -> Awaitable[None]:
+    """Saves the iterator state to a directory.
+
+    The current state (`get_state`) is used for saving, so any updates to the
+    state after returning from this method will not affect the saved checkpoint.
+
+    Args:
+      directory: A path in the process of being created. Must call
+        await_creation before accessing the physical path.
+
+    Returns:
+      A coroutine that has not been awaited. This is called by Orbax in a
+      background thread to perform I/O without blocking the main thread.
+    """
+    state = self.get_state().decode()
+    return checkpointing.background_save(directory, state)
+
+  async def load(self, directory: epath.Path) -> Awaitable[None]:
+    """Loads the iterator state from a directory.
+
+    The state may be loaded and set in a background thread. The main thread
+    should not alter the state content while the load is in progress.
+
+    Args:
+      directory: The directory to load the state from.
+
+    Returns:
+      A coroutine that has not been awaited. This is called by Orbax in a
+      background thread to perform I/O without blocking the main thread.
+    """
+
+    def set_state_fn(state: str):
+      self.set_state(state.encode())
+
+    return checkpointing.background_load(directory, set_state_fn)
+
+  ### END Orbax checkpointing API.
 
   def __str__(self):
     return f"PyGrainDatasetIterator(state={self.get_state().decode()})"

@@ -148,6 +148,7 @@ py_library(
     ],
     srcs_version = "PY3",
     deps = [
+        ":checkpointing",
         ":data_sources",
         ":grain_pool",
         ":operations",
@@ -161,6 +162,7 @@ py_library(
         "//grain/_src/core:tree_lib",
         "//grain/_src/core:usage_logging",
         "@abseil-py//absl/logging",
+        "@pypi//etils:pkg",
         "@pypi//numpy:pkg",
     ],
 )
@@ -236,6 +238,7 @@ py_library(
     srcs_version = "PY3",
     deps = [
         ":data_loader",
+        "//grain/_src/core:sharding",
         "//grain/_src/python/dataset",
         "@pypi//etils:pkg",
     ],
@@ -317,5 +320,15 @@ py_test(
         "@abseil-py//absl/testing:parameterized",
         "@pypi//jax:pkg",
         "@pypi//numpy:pkg",
+    ],
+)
+
+py_library(
+    name = "checkpointing",
+    srcs = ["checkpointing.py"],
+    srcs_version = "PY3",
+    deps = [
+        "//grain/_src/core:sharding",
+        "@pypi//etils:pkg",
     ],
 )

@@ -17,21 +17,13 @@ import json
 from typing import Any, Optional, TypeVar
 
 from etils import epath
+from grain._src.core import sharding
 from grain._src.python import data_loader
 from grain._src.python.dataset import dataset
 
 IteratorType = TypeVar(
     "IteratorType", data_loader.DataLoaderIterator, dataset.DatasetIterator
 )
-
-
-def _get_process_index_and_count():
-  try:
-    import jax  # pylint:disable=g-import-not-at-top  # pytype:disable=import-error
-
-    return jax.process_index(), jax.process_count()
-  except ImportError:
-    return 0, 1
 
 
 # Ipmlements orbax.checkpoint.CheckpointHandler.
@@ -52,7 +44,7 @@ class CheckpointHandler:
       state = json.dumps(item.get_state(), indent=4)
     else:
       state = item.get_state().decode()
-    process_index, process_count = _get_process_index_and_count()
+    process_index, process_count = sharding.get_process_index_and_count()
     filename = directory / f"process_{process_index}-of-{process_count}.json"
     filename.write_text(state)
 
@@ -64,7 +56,7 @@ class CheckpointHandler:
   ) -> IteratorType:
     """Restores the given iterator from the checkpoint in `directory`."""
     item = item or args.item  # pytype:disable=attribute-error
-    process_index, process_count = _get_process_index_and_count()
+    process_index, process_count = sharding.get_process_index_and_count()
     filename = directory / f"process_{process_index}-of-{process_count}.json"
     if not filename.exists():
       raise ValueError(f"File {filename} does not exist.")

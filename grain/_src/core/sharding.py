@@ -58,12 +58,10 @@ class ShardByJaxProcess(ShardOptions):
   """Shards the data across JAX processes."""
 
   def __init__(self, drop_remainder: bool = False):
-    # pylint: disable=g-import-not-at-top
-    import jax  # pytype: disable=import-error
-    # pylint: enable=g-import-not-at-top
+    process_index, process_count = get_process_index_and_count()
     super().__init__(
-        shard_index=jax.process_index(),
-        shard_count=jax.process_count(),
+        shard_index=process_index,
+        shard_count=process_count,
         drop_remainder=drop_remainder,
     )
 
@@ -103,3 +101,12 @@ def even_split(num_examples: int, options: ShardOptions) -> tuple[int, int]:
       shard_start += min(options.shard_index, num_unused_examples)
       shard_end += min(options.shard_index + 1, num_unused_examples)
   return shard_start, shard_end
+
+
+def get_process_index_and_count():
+  try:
+    import jax  # pylint:disable=g-import-not-at-top  # pytype:disable=import-error
+
+    return jax.process_index(), jax.process_count()
+  except ImportError:
+    return 0, 1

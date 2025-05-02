@@ -38,14 +38,15 @@ py_library(
         "//grain/_src/core:transforms",
         "//grain/_src/core:tree_lib",
         "//grain/_src/core:usage_logging",
+        "//grain/_src/python:checkpointing",
         "//grain/_src/python:grain_pool",
         "//grain/_src/python:options",
         "//grain/_src/python:shared_memory_array",
         "//grain/proto:execution_summary_py_pb2",
         "@abseil-py//absl/logging",
         "@pypi//cloudpickle:pkg",
+        "@pypi//etils:pkg",
         "@pypi//numpy:pkg",
-        "@pypi//typing_extensions:pkg",
     ],
 )
 
