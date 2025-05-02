@@ -185,6 +185,14 @@ class BatchMapDatasetTest(parameterized.TestCase):
     for i in range(len(actual)):
       np.testing.assert_allclose(actual[i], expected[i])
 
+  def test_batch_after_filter_raises_error(self):
+    ds = dataset.MapDataset.range(0, 10).filter(lambda x: x % 2 == 0)
+    with self.assertRaisesRegex(
+        ValueError,
+        "`MapDataset.batch` can not follow `MapDataset.filter`",
+    ):
+      _ = batch.BatchMapDataset(ds, batch_size=3, drop_remainder=True)
+
 
 class BatchIterDatasetTest(absltest.TestCase):
 

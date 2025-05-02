@@ -44,26 +44,21 @@ details about each class.
 ```
 
 ```{code-cell}
----
-executionInfo:
-  elapsed: 4007
-  status: ok
-  timestamp: 1734118718461
-  user:
-    displayName: ''
-    userId: ''
-  user_tz: 480
-id: FCZXw2YhhPyu
----
-import grain
+:id: FCZXw2YhhPyu
+
 from pprint import pprint
+import grain
 ```
 
 +++ {"id": "gPv3wrQd3pZS"}
 
 ## `MapDataset`
 
-`MapDataset` defines a dataset that supports efficient random access. Think of it as an (infinite) `Sequence` that computes values lazily. It will either be the starting point of the input pipeline or in the middle of the pipeline following another `MapDataset`. Grain provides many basic transformations for users to get started.
+`MapDataset` defines a dataset that supports efficient random access. Think of
+it as an (infinite) `Sequence` that computes values lazily. It will either be
+the starting point of the input pipeline or in the middle of the pipeline
+following another `MapDataset`. Grain provides many basic transformations for
+users to get started.
 
 ```{code-cell}
 ---
@@ -83,7 +78,7 @@ dataset = (
     # range-like input.
     grain.MapDataset.source([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     .shuffle(seed=10)  # Shuffles globally.
-    .map(lambda x: x+1)  # Maps each element.
+    .map(lambda x: x + 1)  # Maps each element.
     .batch(batch_size=2)  # Batches consecutive elements.
 )
 
@@ -93,22 +88,15 @@ pprint(list(dataset))
 
 +++ {"id": "Aii_JDBw5SEI"}
 
-The requirement for `MapDataset`'s source is a `grain.RandomAccessDataSource` interface: i.e. `__getitem__` and `__len__`.
+The requirement for `MapDataset`'s source is a `grain.RandomAccessDataSource`
+interface: i.e. `__getitem__` and `__len__`.
 
 ```{code-cell}
----
-executionInfo:
-  elapsed: 55
-  status: ok
-  timestamp: 1734118753268
-  user:
-    displayName: ''
-    userId: ''
-  user_tz: 480
-id: 592ut9AgiDCz
----
+:id: 592ut9AgiDCz
+
 # Note: Inheriting `grain.RandomAccessDataSource` is optional but recommended.
 class MySource(grain.sources.RandomAccessDataSource):
+
   def __init__(self):
     self._data = [0, 1, 2, 3, 4, 5, 6, 7]
 
@@ -137,7 +125,7 @@ source = MySource()
 dataset = (
     grain.MapDataset.source(source)
     .shuffle(seed=10)  # Shuffles globally.
-    .map(lambda x: x+1)  # Maps each element.
+    .map(lambda x: x + 1)  # Maps each element.
     .batch(batch_size=2)  # Batches consecutive elements.
 )
 
@@ -147,7 +135,9 @@ pprint(list(dataset))
 
 +++ {"id": "zKv2kWjB6XPd"}
 
-Access by index will never raise an `IndexError` and can treat indices that are equal or larger than the length as a different epoch (e.g. shuffle differently, use different random numbers).
+Access by index will never raise an `IndexError` and can treat indices that are
+equal or larger than the length as a different epoch (e.g. shuffle differently,
+use different random numbers).
 
 ```{code-cell}
 ---
@@ -163,12 +153,14 @@ id: GSW1cJe06NEO
 outputId: ffe2b9e8-069c-45f1-ac93-c391604b5b34
 ---
 # Prints the 3rd element of the second epoch.
-pprint(dataset[len(dataset)+2])
+pprint(dataset[len(dataset) + 2])
 ```
 
 +++ {"id": "azfAr8F37njE"}
 
-Note that `dataset[idx] == dataset[len(dataset) + idx]` iff there's no random transfomations. Since `dataset` has global shuffle, different epochs are shuffled differently:
+Note that `dataset[idx] == dataset[len(dataset) + idx]` iff there's no random
+transfomations. Since `dataset` has global shuffle, different epochs are
+shuffled differently:
 
 ```{code-cell}
 ---
@@ -183,14 +175,17 @@ executionInfo:
 id: _o3wxb8k7XDY
 outputId: f4c2a263-0084-45d3-dd0f-51f58c96bead
 ---
-pprint(dataset[len(dataset)+2] == dataset[2])
+pprint(dataset[len(dataset) + 2] == dataset[2])
 ```
 
 +++ {"id": "B2kLX0fa8GfV"}
 
-You can use `filter` to remove elements not needed but it will return `None` to indicate that there is no element at the given index.
+You can use `filter` to remove elements not needed but it will return `None` to
+indicate that there is no element at the given index.
 
-Returning `None` for the majority of positions can negatively impact performance of the pipeline. For example, if your pipeline filters 90% of the data it might be better to store a filtered version of your dataset.
+Returning `None` for the majority of positions can negatively impact performance
+of the pipeline. For example, if your pipeline filters 90% of the data it might
+be better to store a filtered version of your dataset.
 
 ```{code-cell}
 ---
@@ -213,7 +208,9 @@ pprint([filtered_dataset[i] for i in range(len(filtered_dataset))])
 
 +++ {"id": "FJLK_BQj9GuG"}
 
-`MapDataset` also supports slicing using the same syntax as Python lists. This returns a `MapDataset` representing the sliced section. Slicing is the easiest way to "shard" data during distributed training.
+`MapDataset` also supports slicing using the same syntax as Python lists. This
+returns a `MapDataset` representing the sliced section. Slicing is the easiest
+way to "shard" data during distributed training.
 
 ```{code-cell}
 ---
@@ -239,7 +236,9 @@ pprint(sharded_dataset[1])
 
 +++ {"id": "KvycxocM-Fpk"}
 
-For the actual running training with the dataset, we should convert `MapDataset` into `IterDataset` to leverage parallel prefetching to hide the latency of each element's IO using Python threads.
+For the actual running training with the dataset, we should convert `MapDataset`
+into `IterDataset` to leverage parallel prefetching to hide the latency of each
+element's IO using Python threads.
 
 This brings us to the next section of the tutorial: `IterDataset`.
 
@@ -257,7 +256,8 @@ id: FnWPIpce9aAJ
 outputId: dba2951e-a965-4dd3-816c-dcbbea6352f7
 ---
 iter_dataset = sharded_dataset.to_iter_dataset(
-    grain.ReadOptions(num_threads=16, prefetch_buffer_size=500))
+    grain.ReadOptions(num_threads=16, prefetch_buffer_size=500)
+)
 
 for element in iter_dataset:
   pprint(element)
@@ -267,15 +267,53 @@ for element in iter_dataset:
 
 ## IterDataset
 
-Most data pipelines will start with one or more `MapDataset` (often derived from a `RandomAccessDataSource`) and switch to `IterDataset` late or not at all. `IterDataset` does not support efficient random access and only supports iterating over it. It's an `Iterable`.
+Most data pipelines will start with one or more `MapDataset` (often derived from
+a `RandomAccessDataSource`) and switch to `IterDataset` late or not at all.
+`IterDataset` does not support efficient random access and only supports
+iterating over it. It's an `Iterable`.
 
-Any `MapDataset` can be turned into a `IterDataset` by calling `to_iter_dataset`. When possible this should happen late in the pipeline since it will restrict the transformations that can come after it (e.g. global shuffle must come before). This conversion by default skips `None` elements.
+Any `MapDataset` can be turned into a `IterDataset` by calling
+`to_iter_dataset`. When possible this should happen late in the pipeline since
+it will restrict the transformations that can come after it (e.g. global shuffle
+must come before). This conversion by default skips `None` elements.
+
+Some transformations have implementations for both, `MapDataset` and
+`IterDataset`, e.g. `filter`, `map`, `random_map`, `batch`. They produce the
+same result with one caveat: `MapDataset.batch` cannot follow
+`MapDataset.filter` - you will need to convert to `IterDataset` before applying
+`batch`:
+
+```{code-cell}
+---
+executionInfo:
+  elapsed: 57
+  status: ok
+  timestamp: 1746224728172
+  user:
+    displayName: ''
+    userId: ''
+  user_tz: 420
+id: AKJhIi0VGSCR
+outputId: c4803f59-026b-49a8-c45b-cbe9f856037d
+---
+ds = (
+    grain.MapDataset.range(10)
+    .filter(lambda x: x % 2 == 0)
+    .to_iter_dataset()
+    .batch(2)  # Calling `batch` before `to_iter_dataset` will raise an error.
+)
+pprint(list(ds))
+```
 
 +++ {"id": "GDO1u2tQ_zPz"}
 
-`DatasetIterator` is a stateful iterator of `IterDataset`. The state of the iterator can be cheaply saved and restored. This is intended for checkpointing the input pipeline together with the trained model. The returned state will not contain data that flows through the pipeline.
+`DatasetIterator` is a stateful iterator of `IterDataset`. The state of the
+iterator can be cheaply saved and restored. This is intended for checkpointing
+the input pipeline together with the trained model. The returned state will not
+contain data that flows through the pipeline.
 
-Essentially, `DatasetIterator` only checkpoints index information for it to recover (assuming the underlying content of files will not change).
+Essentially, `DatasetIterator` only checkpoints index information for it to
+recover (assuming the underlying content of files will not change).
 
 ```{code-cell}
 ---
