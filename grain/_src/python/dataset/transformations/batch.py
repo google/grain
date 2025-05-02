@@ -18,12 +18,15 @@ from __future__ import annotations
 from collections.abc import Sequence
 import math
 import pprint
+import sys
 from typing import Callable, TypeVar
 
 from grain._src.core import tree_lib
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
+from grain._src.python.dataset.transformations import filter as filter_ds
 import numpy as np
+
 
 T = TypeVar("T")
 S = TypeVar("S")
@@ -113,6 +116,16 @@ class BatchMapDataset(dataset.MapDataset[T]):
     super().__init__(parent)
     if batch_size <= 0:
       raise ValueError("batch_size must be positive.")
+    to_check = [parent]
+    while to_check:
+      next_ds = to_check.pop()
+      if isinstance(next_ds, filter_ds.FilterMapDataset):
+        raise ValueError(
+            "`MapDataset.batch` can not follow `MapDataset.filter` "
+            "because `filter` can discard elements. Convert `MapDataset` to "
+            "`IterDataset` with `to_iter_dataset()` before calling `batch`."
+        )
+      to_check.extend(next_ds.parents)
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
     self._batch_fn = _make_batch if batch_fn is None else batch_fn
@@ -138,7 +151,17 @@ class BatchMapDataset(dataset.MapDataset[T]):
     stop += epoch * len(self._parent)
     values = [self._parent[i] for i in range(start, stop)]
     with self._stats.record_self_time():
-      return self._stats.record_output_spec(self._batch_fn(values))
+      try:
+        return self._stats.record_output_spec(self._batch_fn(values))
+      except ValueError as e:
+        if sys.version_info >= (3, 11):
+          e.add_note(
+              "\nIf you are trying to batch elements after a sparse "
+              "transformation, such as `filter`, you need to first convert the "
+              "dataset to `IterDataset` with `to_iter_dataset()` and then "
+              "apply `batch`."
+          )
+        raise e
 
   def __str__(self) -> str:
     return (
