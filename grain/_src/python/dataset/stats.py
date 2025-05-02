@@ -216,9 +216,16 @@ def _get_col_value(
   if name == _AVG_PROCESSING_TIME_COLUMN_NAME:
     value = _get_avg_processing_time_ns(node)
   elif name == _MEMORY_USAGE_COLUMN_NAME:
-    value = stats_utils.pretty_format_bytes(
-        node.bytes_consumed - node.bytes_produced
+    # Only calculate for prefetch nodes, otherwise default to 0.
+    # In multiprocessing, stats reporting is asynchronous, so at times,
+    # `bytes_produced` in main process might be more than the `bytes_consumed`
+    # from child process.
+    num_bytes = (
+        max(0, node.bytes_consumed - node.bytes_produced)
+        if node.is_prefetch
+        else 0
     )
+    value = stats_utils.pretty_format_bytes(num_bytes)
   else:
     value = getattr(node, name)
 

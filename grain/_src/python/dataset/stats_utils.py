@@ -66,6 +66,8 @@ def merge_execution_summaries(
     )
     to_node.total_processing_time_ns += from_node.total_processing_time_ns
     to_node.num_produced_elements += from_node.num_produced_elements
+    to_node.bytes_produced += from_node.bytes_produced
+    to_node.bytes_consumed += from_node.bytes_consumed
   return to_s
 
 
@@ -105,10 +107,17 @@ def get_complete_summary(
   update_node_ids_with_offset(workers_summary, num_nodes_in_main)
   # The output nodes in workers summary are the inputs to the main process.
   output_node_ids = [node.id for node in get_output_nodes(workers_summary)]
+
+  total_bytes_produced_by_workers = 0
   for node in get_output_nodes(workers_summary):
     node.is_output = False
+    total_bytes_produced_by_workers += node.bytes_produced
+
   root_id = num_nodes_in_main - 1
   main_summary.nodes[root_id].inputs.extend(output_node_ids)
+  # `bytes_consumed`` for the root node in the main process is the sum of
+  # `bytes_produced` by the output node in the workers summary.
+  main_summary.nodes[root_id].bytes_consumed = total_bytes_produced_by_workers
 
   # Merge the workers summary into the main summary.
   for node in workers_summary.nodes.values():

@@ -82,6 +82,7 @@ class StatsUtilsTest(absltest.TestCase):
             num_produced_elements=10,
             output_spec="<class 'int'>[]",
             is_output=True,
+            bytes_produced=100,
         )
     )
     workers_summary.nodes[1].CopyFrom(
@@ -106,6 +107,7 @@ class StatsUtilsTest(absltest.TestCase):
     # The output node in the workers summary is the input to the root node in
     # the main summary.
     self.assertEqual(complete_summary.nodes[1].is_output, False)
+    self.assertEqual(complete_summary.nodes[0].bytes_consumed, 100)
 
   def test_get_allocated_bytes(self):
     # Create elements of different types

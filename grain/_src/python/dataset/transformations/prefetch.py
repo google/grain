@@ -427,6 +427,10 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
     for element in it:
       now = time.time()
       element = _copy_struct_to_shm(element, min_size=min_shm_size)
+      # If the node is prefetch, we already record the bytes produced in it's
+      # __next__ method.
+      if not it._stats._config.is_prefetch:
+        it._stats.record_bytes_produced(element)
       if now - last_recorded_state_time >= _RECORD_STATE_INTERVAL_S:
         last_recorded_state_time = now
         yield (element, it.get_state())  # pytype: disable=attribute-error
@@ -547,6 +551,7 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       else:
         iterations_to_skip[worker_index_str] = 0
         worker_state[worker_index_str] = state
+    result = self._stats.record_bytes_produced(result)
     return _open_struct_from_shm(result)
 
   def start_prefetch(self) -> None:
