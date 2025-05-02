@@ -135,6 +135,7 @@ py_library(
         "//grain/_src/python/dataset",
         "//grain/_src/python/dataset:stats",
         "@pypi//dm_tree:pkg",
+        "@pypi//etils:pkg",
         "@pypi//numpy:pkg",
     ],
 )

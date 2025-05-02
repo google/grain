@@ -6,7 +6,10 @@ py_library(
     name = "parquet_dataset",
     srcs = ["parquet_dataset.py"],
     srcs_version = "PY3",
-    deps = ["//grain/_src/python/dataset"],
+    deps = [
+        "//grain/_src/python/dataset",
+        "@pypi//etils:pkg",
+    ],
 )
 
 py_test(

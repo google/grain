@@ -13,6 +13,7 @@ py_library(
         "//grain/_src/core:usage_logging",
         "@abseil-py//absl/logging",
         "@pypi//array_record:pkg",
+        "@pypi//etils:pkg",
     ],
 )
 
@@ -32,6 +33,7 @@ py_test(
         "@abseil-py//absl/flags",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
+        "@pypi//etils:pkg",
     ],
 )
 
@@ -235,6 +237,7 @@ py_library(
     deps = [
         ":data_loader",
         "//grain/_src/python/dataset",
+        "@pypi//etils:pkg",
     ],
 )
 
