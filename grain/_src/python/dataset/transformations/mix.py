@@ -229,48 +229,6 @@ def _float_to_int_proportions(
   return [int(p * scale_factor) for p in values]
 
 
-def _counts_per_dataset(k: int, proportions: tuple[int, ...]) -> Sequence[int]:
-  """Calculates the counts per dataset at n elements accordings to proportions.
-
-  We are interleaving n infinite datasets into one combined dataset.
-
-  Proportions P is a list of n integers, representing mixing proportions.
-
-  mix(P, k, i) represents the number of examples from component i
-  among the first k examples from the mixed sequence. It is given by the
-  following formula:
-
-    mix(P, k, 0) = ceiling(k * P[0] / sum(P))
-    mix(P, k, i>0) = mix(P[1:], k - mix(P, k, 0), i - 1)
-
-  Element k of the mixed sequence is equal to element m from component i iff:
-
-    mix(P, k + 1, i) == m + 1  AND
-    mix(P, k, i) == m
-
-  _counts_per_dataset() computes the "mix" function described above.
-
-  _dataset_and_key_of_next_element() maps from the index in the combined
-  dataset to identity of the ID of the source dataset and key in the source
-  dataset.
-
-  Args:
-    k: Number of elements of the mixed sequence.
-    proportions: The mixing proportions for the n dataset.
-
-  Returns:
-    Counts of how many elements from each source dataset are used.
-  """
-  remaining_proportions = sum(proportions)
-  result = []
-  for p in proportions:
-    new_k = (k * (remaining_proportions - p)) // remaining_proportions
-    result.append(k - new_k)
-    remaining_proportions -= p
-    k = new_k
-  return result
-
-
 def _dataset_and_key_of_next_element(
     k: int, proportions: tuple[int, ...]
 ) -> tuple[int, int]:
@@ -278,7 +236,9 @@ def _dataset_and_key_of_next_element(
 
   We are interleaving n infinite datasets into one combined dataset.
 
-  See the description in _counts_per_dataset() above.
+  We determine which dataset provides the (k+1)-th element
+  in the mixed sequence and what the index within that dataset is.
+  We find the dataset at which the frequency count increases.
 
   Args:
     k: Index in the combined dataset.
@@ -288,13 +248,19 @@ def _dataset_and_key_of_next_element(
     A tuple with the index of the source dataset and the key in it for the
     element at index `k` of the combined dataset.
   """
-  old_counts = _counts_per_dataset(k, proportions)
-  new_counts = _counts_per_dataset(k + 1, proportions)
-  # For the new dataset the count increased by 1. All other counts should be
-  # the same.
-  for dataset_index in range(len(proportions)):
-    if old_counts[dataset_index] != new_counts[dataset_index]:
-      return dataset_index, new_counts[dataset_index] - 1
+
+  # TODO: if we're happy to be approximate, this could be faster
+  remaining = sum(proportions)
+  curr_k, curr_k1 = k, k + 1
+  for i, p in enumerate(proportions):
+    next_k = (curr_k * (remaining - p)) // remaining
+    next_k1 = (curr_k1 * (remaining - p)) // remaining
+    count_k_plus_1 = curr_k1 - next_k1
+    if (curr_k - next_k) != count_k_plus_1:
+      return i, count_k_plus_1 - 1
+    remaining -= p
+    curr_k, curr_k1 = next_k, next_k1
+
   raise exceptions.PyGrainInternalError(
       "PyGrain internal error: please file a bug with the Grain team."
   )
