@@ -1425,10 +1425,17 @@ _ConsistentDatasetType = TypeVar(
     "_ConsistentDatasetType", MapDataset, IterDataset
 )
 
+T = TypeVar("T")
+S = TypeVar("S")
+
 
 def apply_transformations(
     ds: _ConsistentDatasetType,
-    transformations: transforms.Transformation | transforms.Transformations,
+    transformations: (
+        Callable[[T], S]
+        | transforms.Transformation
+        | transforms.Transformations
+    ),
 ) -> _ConsistentDatasetType:
   """Applies transformations to a dataset.
 
@@ -1448,7 +1455,7 @@ def apply_transformations(
             transformation.batch_size,
             drop_remainder=transformation.drop_remainder,
         )
-      case transforms.MapTransform():
+      case transforms.MapTransform() | t if callable(t):
         ds = ds.map(transformation)
       case transforms.RandomMapTransform():
         ds = ds.random_map(transformation)
