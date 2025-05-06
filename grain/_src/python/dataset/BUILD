@@ -171,11 +171,13 @@ py_library(
 py_test(
     name = "elastic_iterator_test",
     srcs = ["elastic_iterator_test.py"],
+    shard_count = 10,
     srcs_version = "PY3",
     deps = [
         ":dataset",
         ":elastic_iterator",
         "//grain/_src/core:sharding",
+        "//grain/_src/python:options",
         "//grain/_src/python/testing:experimental",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",

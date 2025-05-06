@@ -47,7 +47,9 @@ class ElasticIterator(dataset.DatasetIterator):
       ds: dataset.MapDataset,
       global_batch_size: int,
       shard_options: sharding.ShardOptions,
+      *,
       read_options: options.ReadOptions = options.ReadOptions(),
+      multiprocessing_options: options.MultiprocessingOptions | None = None,
   ):
     super().__init__()
     to_check = [ds]
@@ -63,6 +65,7 @@ class ElasticIterator(dataset.DatasetIterator):
     self._shard_options = shard_options
     self._global_next_index = 0
     self._read_options = read_options
+    self._multiprocessing_options = multiprocessing_options
 
   @functools.cached_property
   def _iterator(self) -> dataset.DatasetIterator:
@@ -80,6 +83,8 @@ class ElasticIterator(dataset.DatasetIterator):
       )
     ds = ds.batch(host_batch_size, drop_remainder=True)
     ds = ds.to_iter_dataset(read_options=self._read_options)
+    if self._multiprocessing_options is not None:
+      ds = ds.mp_prefetch(self._multiprocessing_options)
     return ds.__iter__()
 
   def __iter__(self) -> dataset.DatasetIterator:
