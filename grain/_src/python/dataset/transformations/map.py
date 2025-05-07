@@ -209,12 +209,6 @@ class _MapDatasetIterator(dataset.DatasetIterator[T]):
     super().__init__(parent)
     self._map_fn = map_fn
     self._transform_name = transform_name
-    # This only exists for backwards compatibility with the old implementation.
-    # Users rely on the specific value of the produced state (which is wrong,
-    # we do not guarantee the specific state value, but rather
-    # get_state / set_state compatibility).
-    # TODO: Move users away from this and remove.
-    self._index_for_rng = 0
 
   @stats.record_next_duration_if_output
   def __next__(self):
@@ -222,18 +216,13 @@ class _MapDatasetIterator(dataset.DatasetIterator[T]):
     with self._stats.record_self_time():
       if element is not None:
         element = self._map_fn(element)
-      self._index_for_rng += 1
       return self._stats.record_output_spec(element)
 
   def get_state(self):
-    return {
-        "parent": self._parent.get_state(),
-        "index_for_rng": self._index_for_rng,
-    }
+    return self._parent.get_state()
 
   def set_state(self, state):
-    self._parent.set_state(state["parent"])
-    self._index_for_rng = state["index_for_rng"]
+    self._parent.set_state(state)
 
   def __str__(self) -> str:
     return f"MapDatasetIterator(transform={self._transform_name})"
