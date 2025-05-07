@@ -15,9 +15,11 @@ from concurrent import futures
 import dataclasses
 import logging as std_logging
 import sys
+import threading
 import time
 from typing import TypeVar, cast
 from unittest import mock
+
 from absl import logging
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -732,38 +734,63 @@ class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
     expected = list(range(1, 20, 2))
     self.assertSequenceEqual(actual, expected)
 
-  @parameterized.named_parameters(
-      dict(
-          testcase_name='default_record_state_interval',
-          warm_start=False,
-      ),
-      dict(
-          testcase_name='continuous_state_recording',
-          warm_start=True,
-      ),
-  )
+  @parameterized.parameters([False, True])
   def test_checkpoint(self, warm_start: bool):
-    with mock.patch.object(prefetch, '_RECORD_STATE_INTERVAL_S', 0):
-      ds = prefetch.ThreadPrefetchIterDataset(
-          self.ds,
-          prefetch_buffer_size=500,
-      )
+    ds = prefetch.ThreadPrefetchIterDataset(
+        self.ds,
+        prefetch_buffer_size=500,
+    )
+    ds_iter = ds.__iter__()
+    if warm_start:
+      ds_iter.start_prefetch()
+
+    max_steps = 10
+    values_without_interruption = []
+    checkpoints = []
+    for _ in range(max_steps):
+      checkpoints.append(ds_iter.get_state())
+      values_without_interruption.append(next(ds_iter))
+
+    for starting_step in range(9):
+      ds_iter.set_state(checkpoints[starting_step])
+      for i in range(starting_step, max_steps):
+        value = next(ds_iter)
+        self.assertEqual(value, values_without_interruption[i])
+
+  def test_set_state_on_fresh_iterator(self):
+    ds = prefetch.ThreadPrefetchIterDataset(
+        self.ds,
+        prefetch_buffer_size=2,
+    )
+    ds_iter = ds.__iter__()
+
+    max_steps = 10
+    values_without_interruption = []
+    checkpoints = []
+    for _ in range(max_steps):
+      checkpoints.append(ds_iter.get_state())
+      values_without_interruption.append(next(ds_iter))
+
+    for starting_step in range(9):
       ds_iter = ds.__iter__()
-      if warm_start:
-        ds_iter.start_prefetch()
+      ds_iter.set_state(checkpoints[starting_step])
+      for i in range(starting_step, max_steps):
+        value = next(ds_iter)
+        self.assertEqual(value, values_without_interruption[i])
 
-      max_steps = 10
-      values_without_interruption = []
-      checkpoints = []
-      for _ in range(max_steps):
-        checkpoints.append(ds_iter.get_state())  # pytype: disable=attribute-error
-        values_without_interruption.append(next(ds_iter))
+  def test_get_state_doesnt_start_prefetch(self):
+    event = threading.Event()
 
-      for starting_step in range(9):
-        ds_iter.set_state(checkpoints[starting_step])  # pytype: disable=attribute-error
-        for i in range(starting_step, max_steps):
-          value = next(ds_iter)
-          self.assertEqual(value, values_without_interruption[i])
+    def f(x):
+      event.set()
+      return x
+
+    ds = dataset.MapDataset.source([1, 2, 3]).map(f).to_iter_dataset()
+    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=10)
+    it = ds.__iter__()
+    it.get_state()
+    time.sleep(1)
+    self.assertFalse(event.is_set())
 
   def test_fails_with_negative_prefetch_buffer_size(self):
     with self.assertRaisesRegex(

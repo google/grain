@@ -27,7 +27,7 @@ import sys
 import threading
 import time
 import typing
-from typing import Any, Generic, Mapping, Optional, Protocol, TypeVar
+from typing import Any, Generic, Optional, Protocol, TypeVar
 
 import cloudpickle
 from concurrent import futures
@@ -653,11 +653,7 @@ class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
 
 
 # Type for the iterator state.
-StateT = Mapping[str, Any]
-
-
-# Representation of the initial state, pre-next.
-_INITIAL_STATE_SENTINEL = object()
+StateT = dict[str, Any]
 
 
 class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
@@ -673,6 +669,7 @@ class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     super().__init__(parent)
     assert prefetch_buffer_size > 0, prefetch_buffer_size
     self._prefetch_buffer_size = prefetch_buffer_size
+    self._step_zero_state: StateT = parent.get_state()
     self._state: StateT | None = None
 
     self._work_queue = queue.Queue[Callable[[], Any]]()
@@ -682,11 +679,8 @@ class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._producer_running: threading.Event = None
     self._buffer: queue.Queue[tuple[T, StateT, Exception | None]] = None
 
-  def _start_producer(self, initial_state: None):
+  def _start_producer(self):
     """Starts the producer.
-
-    Args:
-      initial_state: An optional initial state to set on the delegate.
 
     Raises:
       ValueError: If the iterator has been closed, or if the producer is already
@@ -705,14 +699,13 @@ class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       )
       self._work_thread.start()
 
-    self._state = initial_state
     self._producer_running = threading.Event()
     self._producer_running.set()
     self._buffer = queue.Queue(maxsize=self._prefetch_buffer_size)
     self._work_queue.put(
         functools.partial(
             self._producer,
-            initial_state=initial_state,
+            initial_state=self._state,
             output_buffer=self._buffer,
             running=self._producer_running,
         )
@@ -720,7 +713,7 @@ class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   def _producer(
       self,
-      initial_state,
+      initial_state: StateT | None,
       output_buffer: queue.Queue[tuple[T, StateT, Exception | None]],
       running: threading.Event,
   ) -> None:
@@ -736,13 +729,6 @@ class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     try:
       if initial_state is not None:
         self._parent.set_state(initial_state)
-      else:
-        # Put the initial state of the iterator with a sentinel value, which
-        # will be discarded. This avoids having to call a potentially expensive
-        # and unused get_state() on the main thread.
-        output_buffer.put(
-            (_INITIAL_STATE_SENTINEL, self._parent.get_state(), None)
-        )
       # Check if the producer thread should be running every time an item is
       # retrieved from the queue.
       while running.is_set():
@@ -761,19 +747,8 @@ class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
     if err is not None:
       raise err
-    if self._state is None or element is _INITIAL_STATE_SENTINEL:
-      # Both conditions should be simultaneously true and only once.
-      assert element is _INITIAL_STATE_SENTINEL
-      if self._state is not None:
-        raise AssertionError(f"Expected {self._state=} to be None. {state=}.")
-      self._state = state
-      # Current call has retrieved a sentinel value and the initial state,
-      # make another call to retrieve the actual first value from the delegate
-      # iterator.
-      return next(self)
-    else:
-      self._state = state
-      return element
+    self._state = state
+    return element
 
   def close(self):
     """Stops the iterator. No further calls to the iterator are expected."""
@@ -792,7 +767,7 @@ class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     if self._closed:
       raise ValueError("Attempting to use a closed iterator.")
     if self._producer_running is None:
-      self._start_producer(None)
+      self._start_producer()
 
   def _stop_producer(self):
     """Stops the producer if it's currently running."""
@@ -815,27 +790,14 @@ class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._buffer = None
 
   def get_state(self):
-    self.start_prefetch()
-    if self._state is None:
-      # `__next__` has not been called, the first tuple in the buffer should be
-      # made up of the `_INITIAL_STATE_SENTINEL` value and the initial state of
-      # the delegate iterator.
-      buffer = self._buffer
-      assert buffer is not None  # PyType.
-      val, state, err = buffer.get()
-      if err is not None:
-        raise err
-      assert val is _INITIAL_STATE_SENTINEL
-      assert state is not None
-      self._state = state
-    return self._state
+    return self._step_zero_state if self._state is None else self._state
 
   def set_state(self, state):
     self._stop_producer()
     self._state = state
     if self._prefetch_buffer_size > 0:
       self._buffer = None
-    self._start_producer(state)
+    self._start_producer()
 
   def _work_loop(self):
     while not self._closed:
