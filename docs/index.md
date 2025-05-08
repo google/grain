@@ -68,6 +68,7 @@ tutorials/dataset_advanced_tutorial
 tutorials/dataset_debugging_tutorial
 tutorials/dataset_load_from_s3_tutorial
 tutorials/parquet_dataset_tutorial
+tutorials/arrayrecord_dataset_tutorial
 ```
 
 ``` {toctree}

@@ -108,4 +108,5 @@ nb_execution_excludepatterns = [
     'tutorials/dataset_debugging_tutorial.ipynb',
     'tutorials/dataset_load_from_s3_tutorial.ipynb',
     'tutorials/parquet_dataset_tutorial.ipynb',
+    'tutorials/arrayrecord_dataset_tutorial.ipynb',
 ]
