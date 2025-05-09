@@ -106,6 +106,7 @@ nb_execution_excludepatterns = [
     'tutorials/dataset_basic_tutorial.ipynb',
     'tutorials/data_loader_tutorial.ipynb',
     'tutorials/dataset_debugging_tutorial.ipynb',
-    'tutorials/dataset_load_from_s3_tutorial.ipynb',
-    'tutorials/parquet_dataset_tutorial.ipynb',
+    'tutorials/data_sources/load_from_s3_tutorial.ipynb',
+    'tutorials/data_sources/parquet_dataset_tutorial.ipynb',
+    'tutorials/data_sources/arrayrecord_data_source_tutorial.ipynb',
 ]

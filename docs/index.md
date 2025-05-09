@@ -58,8 +58,8 @@ data_loader/samplers
 data_loader/transformations
 ```
 
-``` {toctree}
-:maxdepth: 1
+```{toctree}
+:maxdepth: 3
 :hidden:
 :caption: Tutorials
 tutorials/data_loader_tutorial
@@ -67,7 +67,7 @@ tutorials/dataset_basic_tutorial
 tutorials/dataset_advanced_tutorial
 tutorials/dataset_debugging_tutorial
 tutorials/dataset_load_from_s3_tutorial
-tutorials/parquet_dataset_tutorial
+tutorials/data_sources/index
 ```
 
 ``` {toctree}

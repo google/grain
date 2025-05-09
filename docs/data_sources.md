@@ -2,6 +2,10 @@
 
 
 
+.md
+
+
+
 A Grain data source is responsible for retrieving individual records. Records
 could be in a file/storage system or generated on the fly. Data sources need to
 implement the following protocol:
@@ -24,7 +28,8 @@ random access. Grain currently supports random-access file format [ArrayRecord](
 
 ## Available Data Sources
 
-We provide a variety of data sources for Grain, which we discuss in the following sections.
+We provide a variety of data sources for Grain,
+which we discuss in the following sections.
 
 ### Range Data Source
 
@@ -76,6 +81,16 @@ Arguments are equivalent to `tfds.load()`. For more information see
 
 ```python
 tfds_data_source = tfds.data_source("imagenet2012", split="train[:75%]")
+```
+
+### Parquet Data Source
+
+This data source reads [Parquet](https://parquet.apache.org/docs/) files,
+accepting a file path within any PyArrow-supported
+[file system](https://arrow.apache.org/docs/python/api/filesystems.html).
+
+```python
+parquet_data_source = grain.experimental.ParquetIterDataset(path="<your_path>/<file_name>.parquet")
 ```
 
 ## Implement your own Data Source

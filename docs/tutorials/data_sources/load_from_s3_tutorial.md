@@ -5,14 +5,14 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.3'
-      jupytext_version: 1.16.4
+      jupytext_version: 1.17.1
   kernelspec:
     display_name: Python 3
     name: python3
 ---
 
 <!-- #region id="Xz3HnUBqWlWf" -->
-## Read from AWS S3
+## Reading from AWS S3
 
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/google/grain/blob/main/docs/tutorials/dataset_load_from_s3_tutorial.ipynb)
 
