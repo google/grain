@@ -24,3 +24,26 @@ py_test(
         "@pypi//pyarrow:pkg",
     ],
 )
+
+py_library(
+    name = "tfrecord_dataset",
+    srcs = ["tfrecord_dataset.py"],
+    srcs_version = "PY3",
+    deps = ["//grain/_src/python/dataset"],
+)
+
+py_test(
+    name = "tfrecord_dataset_test",
+    srcs = ["tfrecord_dataset_test.py"],
+    args = ["--test_srcdir=grain/_src/python/testdata"],
+    data = [
+        "//grain/_src/python/testdata:morris_sequence_first_5.tfrecord",
+    ],
+    srcs_version = "PY3",
+    deps = [
+        ":tfrecord_dataset",
+        "//grain",
+        "@abseil-py//absl/flags",
+        "@abseil-py//absl/testing:absltest",
+    ],
+)
