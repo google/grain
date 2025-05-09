@@ -793,7 +793,6 @@ class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._state = self._parent.get_state()
     if self._prefetch_buffer_size > 0:
       self._buffer = None
-    self._start_producer()
 
   def _work_loop(self):
     while not self._closed:
