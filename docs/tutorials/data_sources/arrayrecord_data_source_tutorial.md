@@ -13,7 +13,7 @@ jupyter:
 
 <!-- #region id="1UO5sEL_3t-K" -->
 # Reading ArrayRecord Files
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/google/grain/blob/main/docs/tutorials/arrayrecord_data_source_tutorial.ipynb)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/google/grain/blob/main/docs/tutorials/data_sources/arrayrecord_data_source_tutorial.ipynb)
 
 This tutorial provides an example of how to retrieve records from ArrayRecord
  files using `grain.sources.ArrayRecordDataSource`, also covers how to process

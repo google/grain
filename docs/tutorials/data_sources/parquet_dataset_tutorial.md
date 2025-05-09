@@ -14,7 +14,7 @@ jupyter:
 <!-- #region id="DQk1knFmoaw_" -->
 # Reading Apache Parquet Files
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/google/grain/blob/main/docs/tutorials/parquet_dataset_tutorial.ipynb)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/google/grain/blob/main/docs/tutorials/data_sources/parquet_dataset_tutorial.ipynb)
 
 This tutorial provides an example of how to read data from [Apache Parquet](https://parquet.apache.org/) file, also covers how to process and transform the data with Grain.
 
