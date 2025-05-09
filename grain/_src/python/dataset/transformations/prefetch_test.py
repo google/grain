@@ -792,6 +792,29 @@ class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
     time.sleep(1)
     self.assertFalse(event.is_set())
 
+  def test_parent_dataset_modifies_state(self):
+    class TestIterator(dataset.DatasetIterator):
+
+      def __next__(self):
+        return 1
+
+      def get_state(self):
+        return {'test': 1}
+
+      def set_state(self, state):
+        pass
+
+    class TestDataset(dataset.IterDataset):
+
+      def __iter__(self):
+        return TestIterator()
+
+    parent = TestDataset()
+    ds = prefetch.ThreadPrefetchIterDataset(parent, prefetch_buffer_size=1)
+    ds_iter = ds.__iter__()
+    ds_iter.set_state({'test': 2})
+    self.assertEqual(ds_iter.get_state(), {'test': 1})
+
   def test_fails_with_negative_prefetch_buffer_size(self):
     with self.assertRaisesRegex(
         ValueError, '`prefetch_buffer_size` must be greater than or equal to 0'

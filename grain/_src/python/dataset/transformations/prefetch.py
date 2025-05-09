@@ -705,7 +705,6 @@ class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._work_queue.put(
         functools.partial(
             self._producer,
-            initial_state=self._state,
             output_buffer=self._buffer,
             running=self._producer_running,
         )
@@ -713,7 +712,6 @@ class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   def _producer(
       self,
-      initial_state: StateT | None,
       output_buffer: queue.Queue[tuple[T, StateT, Exception | None]],
       running: threading.Event,
   ) -> None:
@@ -722,13 +720,10 @@ class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     Should be run on a separate thread.
 
     Args:
-      initial_state: state to initialize the itertor to.
       output_buffer: queue to fill.
       running: an sync event for whether the thread should run.
     """
     try:
-      if initial_state is not None:
-        self._parent.set_state(initial_state)
       # Check if the producer thread should be running every time an item is
       # retrieved from the queue.
       while running.is_set():
@@ -794,7 +789,8 @@ class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   def set_state(self, state):
     self._stop_producer()
-    self._state = state
+    self._parent.set_state(state)
+    self._state = self._parent.get_state()
     if self._prefetch_buffer_size > 0:
       self._buffer = None
     self._start_producer()
