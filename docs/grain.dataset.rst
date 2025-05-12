@@ -1,5 +1,5 @@
 ``grain`` Dataset
-=====================
+=================
 
 .. automodule:: grain._src.python.dataset.dataset
 .. currentmodule:: grain

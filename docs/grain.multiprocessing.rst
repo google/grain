@@ -1,5 +1,5 @@
 ``grain.multiprocessing`` module
-=====================
+================================
 
 .. automodule:: grain.multiprocessing
 

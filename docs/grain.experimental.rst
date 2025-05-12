@@ -1,5 +1,5 @@
 ``grain.experimental`` module
-=====================
+=============================
 
 .. automodule:: grain.experimental
 

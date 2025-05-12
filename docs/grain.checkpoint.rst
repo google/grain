@@ -1,6 +1,6 @@
 
 ``grain.checkpoint`` module
-=====================
+===========================
 
 .. automodule:: grain.checkpoint
 
