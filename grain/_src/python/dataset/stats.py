@@ -21,6 +21,7 @@ import contextlib
 import dataclasses
 import functools
 from multiprocessing import queues
+from multiprocessing import synchronize
 import pprint
 import queue
 import sys
@@ -44,6 +45,8 @@ from grain._src.core import monitoring
 # Registry of weak references to output dataset iterators for collecting
 # execution stats.
 _iter_weakref_registry = []
+
+stats_reinit_event = None
 
 _self_time_ns_histogram = monitoring.EventMetric(
     "/grain/python/dataset/self_time_ns",
@@ -436,6 +439,9 @@ class StatsConfig:
   # process. This queue is only populated to the stats object of the output node
   # in the pipeline within the child process.
   stats_out_queue: queues.Queue | None = None
+  # Multiprocessing Event that is set when the stats object needs to be
+  # reinitialized.
+  stats_reinit_event: synchronize.Event | threading.Event | None = None
   # Weak reference to the iterator that this stats object is associated with.
   iter_weakref: weakref.ReferenceType | None = None
 
@@ -463,11 +469,18 @@ class Stats(abc.ABC):
     # Mark parent nodes as non-outputs. Nodes that are not updated are the
     # output nodes.
     self._is_output = True
+    self._reinit_monitor_thread = None
+    self._reinit_monitor_thread_init_lock = threading.Lock()
     _iter_weakref_registry.append(config.iter_weakref)
     for p in parents:
       p._is_output = False
       if p._config.iter_weakref in _iter_weakref_registry:
         _iter_weakref_registry.remove(p._config.iter_weakref)
+    if self._config.is_prefetch:
+      if self._config.stats_reinit_event is None:
+        self._config.stats_reinit_event = threading.Event()
+      global stats_reinit_event
+      stats_reinit_event = self._config.stats_reinit_event
 
   @property
   def output_spec(self) -> Any:
@@ -606,7 +619,26 @@ class _DefaultStats(Stats):
 
   @contextlib.contextmanager
   def record_self_time(self, offset_ns: int = 0):
-    yield
+    try:
+      yield
+    finally:
+      if self._config.is_prefetch:
+        # We avoid acquiring `_reinit_monitor_thread_init_lock` here to avoid
+        # lock contention.
+        if self._reinit_monitor_thread is None:
+          with self._reinit_monitor_thread_init_lock:
+            # Check above together with update would not be atomic -- another
+            # thread may have started the reporting thread.
+            if self._reinit_monitor_thread is None:
+              self._reinit_monitor_thread = threading.Thread(
+                  target=_stats_reinit_monitor,
+                  # When we reinitialize stats from this class, we want to
+                  # reinitialize stats to `ExecutionStats`. Hence, we set the
+                  # debug mode to `True`.
+                  args=(self._config.stats_reinit_event, True),
+                  daemon=True,
+              )
+              self._reinit_monitor_thread.start()
 
   def record_output_spec(self, element: T) -> T:
     return element
@@ -794,6 +826,20 @@ class _ExecutionStats(_VisualizationStats):
       self._self_times_buffer.append(
           time.perf_counter_ns() - start_time + offset_ns
       )
+      if self._config.is_prefetch:
+        # We avoid acquiring `_reinit_monitor_thread_init_lock` here to avoid
+        # lock contention.
+        if self._reinit_monitor_thread is None:
+          with self._reinit_monitor_thread_init_lock:
+            # Check above together with update would not be atomic -- another
+            # thread may have started the reporting thread.
+            if self._reinit_monitor_thread is None:
+              self._reinit_monitor_thread = threading.Thread(
+                  target=_stats_reinit_monitor,
+                  args=(self._config.stats_reinit_event,),
+                  daemon=True,
+              )
+              self._reinit_monitor_thread.start()
       if self._is_output:
         # We avoid acquiring `_reporting_thread_init_lock` here to avoid lock
         # contention.

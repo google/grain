@@ -22,6 +22,7 @@ import copy
 import functools
 import math
 from multiprocessing import queues
+from multiprocessing import synchronize
 import queue
 import sys
 import threading
@@ -406,6 +407,7 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
       *,
       worker_index: int,
       worker_count: int,
+      stats_reinit_event: synchronize.Event | None = None,
       stats_out_queue: queues.Queue | None = None,
   ) -> Iterator[tuple[T, Optional[dict[str, Any]]]]:
     if worker_count > 1:
@@ -419,8 +421,11 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
     worker_state = self._state[_WORKERS_STATE][str(worker_index)]
     if worker_state is not None:
       it.set_state(worker_state)
+    # pytype: disable=attribute-error
+    it._stats._config.stats_reinit_event = stats_reinit_event
     # Set the stats queue in worker process to send stats to the main process.
-    it._stats._config.stats_out_queue = stats_out_queue  # pytype: disable=attribute-error
+    it._stats._config.stats_out_queue = stats_out_queue
+    # pytype: enable=attribute-error
     # Skip the required number of iterations after the last recorded state.
     for _ in range(self._state[_ITERATIONS_TO_SKIP][str(worker_index)]):
       _ = next(it)
@@ -504,6 +509,7 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         mp.get_context("spawn").Queue(maxsize=5)
         for _ in range(multiprocessing_options.num_workers)
     )
+    self._stats_reinit_event = mp.get_context("spawn").Event()
 
     self._state: dict[str, dict[str, Any] | int] = {
         _WORKERS_STATE: workers_state,
@@ -518,6 +524,7 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
         is_prefetch=True,
         stats_in_queues=self._stats_in_queues,
+        stats_reinit_event=self._stats_reinit_event,
         iter_weakref=weakref.ref(self),
     )
     return dataset_stats.make_stats(
@@ -602,6 +609,7 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         (self._state[_LAST_WORKER_INDEX] + 1)
         % self._multiprocessing_options.num_workers,
         self._worker_init_fn,
+        self._stats_reinit_event,
         self._stats_in_queues,
     )
 
