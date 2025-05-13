@@ -97,6 +97,13 @@ _COLUMN_NAME_OVERRIDES = types.MappingProxyType({
     "output_spec": "output spec",
 })
 
+_PROCESSING_TIME_COLUMNS = (
+    "min_processing_time_ns",
+    "max_processing_time_ns",
+    "total_processing_time_ns",
+    _AVG_PROCESSING_TIME_COLUMN_NAME,
+)
+
 _MAX_COLUMN_WIDTH = 30
 _MAX_ROW_LINES = 5
 
@@ -209,10 +216,36 @@ def _populate_wait_time_ratio(
   _compute_wait_time_ratio(summary, 0, aggregated_wait_time_ns)
 
 
+def _pretty_format_col_value(
+    value: Any,
+    name: Any,
+) -> str:
+  """Pretty formats the column value for the given column name."""
+  if name == "wait_time_ratio":
+    value = _format_ratio_as_percent(value)
+  elif name == _MEMORY_USAGE_COLUMN_NAME:
+    value = stats_utils.pretty_format_bytes(value)
+  elif name in _PROCESSING_TIME_COLUMNS:
+    value = _pretty_format_ns(value)
+  return str(value)
+
+
 def _get_col_value(
     name: str, node: execution_summary_pb2.ExecutionSummary.Node
 ) -> str:
   """Returns the string representation of the value of a column for the given node."""
+  if node.is_prefetch:
+    # The prefetch's iterator wait time of the prefetch node is distributed
+    # across its child nodes.
+    if name == "wait_time_ratio":
+      return "N/A"
+
+  # If the total processing time is zero, the pipeline has not yet
+  # produced an element and processing times & num_produced_elements are
+  # not yet meaningful.
+  if name in _PROCESSING_TIME_COLUMNS and node.total_processing_time_ns == 0:
+    return "N/A"
+
   if name == _AVG_PROCESSING_TIME_COLUMN_NAME:
     value = _get_avg_processing_time_ns(node)
   elif name == _MEMORY_USAGE_COLUMN_NAME:
@@ -220,41 +253,14 @@ def _get_col_value(
     # In multiprocessing, stats reporting is asynchronous, so at times,
     # `bytes_produced` in main process might be more than the `bytes_consumed`
     # from child process.
-    num_bytes = (
+    value = (
         max(0, node.bytes_consumed - node.bytes_produced)
         if node.is_prefetch
         else 0
     )
-    value = stats_utils.pretty_format_bytes(num_bytes)
   else:
     value = getattr(node, name)
-
-  if name == "wait_time_ratio":
-    if node.is_prefetch:
-      # The iterator wait time of the prefetch node is distributed across
-      # its child nodes.
-      return "N/A"
-    else:
-      return _format_ratio_as_percent(value)
-
-  elif name in (
-      "min_processing_time_ns",
-      "max_processing_time_ns",
-      "total_processing_time_ns",
-      _AVG_PROCESSING_TIME_COLUMN_NAME,
-      "num_produced_elements",
-  ):
-    # If the total processing time is zero, the pipeline has not yet
-    # produced an element and processing times & num_produced_elements are
-    # not yet meaningful.
-    if node.total_processing_time_ns == 0:
-      return "N/A"
-    elif name != "num_produced_elements":
-      return _pretty_format_ns(value)
-    else:
-      return str(value)
-  else:
-    return str(value)
+  return _pretty_format_col_value(value, name)
 
 
 def pretty_format_summary(
