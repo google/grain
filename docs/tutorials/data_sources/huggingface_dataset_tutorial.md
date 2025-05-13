@@ -27,7 +27,7 @@ In this tutorial you will learn how to utilize HF datasets and tools with Grain:
 ```
 
 ```{code-cell} ipython3
-# Python standard library imports
+# Python standard library
 from pprint import pprint
 from dateutil.parser import parse
 
@@ -53,26 +53,6 @@ Each sample is a Python dictionary with string or integer data.
 hf_train[0]
 ```
 
-Now we define our data source class. HF dataset provides a random access, so we inherit from `RandomAccessDataSource` and implement required functions.
-
-```{code-cell} ipython3
-class HFSource(grain.sources.RandomAccessDataSource):
-
-    def __init__(self, dataset):
-        self._dataset = dataset
-
-    def __getitem__(self, idx):
-        return self._dataset[idx]
-
-    def __len__(self):
-        return len(self._dataset)
-```
-
-```{code-cell} ipython3
-hf_train_src = HFSource(hf_train)
-hf_test_src = HFSource(hf_test)
-```
-
 Let's assume that for our preprocessing pipeline we want the string `date` field to become a timestamp and the whole sample - a NumPy array.
 
 ```{code-cell} ipython3
@@ -84,11 +64,11 @@ def process_sample_to_np(sample: dict) -> np.ndarray:
     return np.array([*sample.values()], dtype=object)
 ```
 
-Building a pipeline is as simple as chaining `map` calls. The resulting object is of type `MapMapDataset` with random access support.
+Building a pipeline is as simple as chaining `map` calls. HF dataset supports random access so we can pass it directly to a `source` method. The resulting object is of type `grain.MapDataset` with random access support.
 
 ```{code-cell} ipython3
-pipeline_1 = (
-    grain.MapDataset.source(hf_train_src)
+dataset = (
+    grain.MapDataset.source(hf_train)
     .shuffle(seed=10)  # shuffles globally
     .map(process_date)  # maps each element
     .map(process_sample_to_np)  # maps each element
@@ -96,7 +76,7 @@ pipeline_1 = (
 ```
 
 ```{code-cell} ipython3
-list(pipeline_1)
+list(dataset)
 ```
 
 Next we would like to tokenize the `review` field. LLM models operate on integers (encoded words) rather than raw strings. `AutoTokenizer` generic class ships `from_pretrained` method - accessor to models and tokenizers hosted on HF services.
@@ -124,7 +104,7 @@ def process_transformer(sample: dict) -> dict:
     sample["review"] = np.array(tokenizer(sample["review"])["input_ids"])
     return sample
 
-pipeline_2 = (
+dataset = (
     grain.MapDataset.source(hf_train)
     .shuffle(seed=10)
     .map(process_date)
@@ -135,7 +115,7 @@ pipeline_2 = (
 Now samples are less human- but more machine-friendly.
 
 ```{code-cell} ipython3
-pipeline_2[1]
+dataset[1]
 ```
 
 Time to build our final pipeline! The pipeline doesn't need to be restricted to `shuffle` and `map`. Grain has a rich API and hands us multiple functionalities such as: `filter`, `random_map`, `repeat`.
@@ -143,7 +123,7 @@ Time to build our final pipeline! The pipeline doesn't need to be restricted to 
 On top of the transformer we want to discard reviews that are rated three stars or less. It's crucial to mention that filtering changes the number of samples in the following steps so random access is no longer available. To perform `batching` as the final step we plug `.to_iter_dataset()` converting `MapDataset` to `IterDataset` - a dataset that gives us an iterator-like interface.
 
 ```{code-cell} ipython3
-pipeline_3 = (
+dataset = (
     grain.MapDataset.source(hf_train)
     .shuffle(seed=10)
     .map(process_date)
@@ -158,7 +138,7 @@ pipeline_3 = (
 With `IterDataset` we can use Python built-ins, `iter` and `next`, to interact with the dataset.
 
 ```{code-cell} ipython3
-next(iter(pipeline_3))
+next(iter(dataset))
 ```
 
 And that's it! We ended up with a batch with processed date, tokenized review, and filtered rating.
