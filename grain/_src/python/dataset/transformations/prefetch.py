@@ -710,6 +710,9 @@ class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         )
     )
 
+  def _get_parent_next(self) -> T:
+    return next(self._parent)
+
   def _producer(
       self,
       output_buffer: queue.Queue[tuple[T, StateT, Exception | None]],
@@ -728,7 +731,7 @@ class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       # retrieved from the queue.
       while running.is_set():
         while True:
-          element, state = next(self._parent), self._parent.get_state()
+          element, state = self._get_parent_next(), self._parent.get_state()
           output_buffer.put((element, state, None))
           break
     except Exception as e:  # pylint: disable=broad-except
