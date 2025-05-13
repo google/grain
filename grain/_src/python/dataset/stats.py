@@ -732,11 +732,12 @@ class _ExecutionStats(_VisualizationStats):
         summary = self._get_execution_summary()
         msg = (
             "Grain Dataset Execution Summary:\n\nNOTE: Before analyzing the"
-            " `MapDataset` nodes, ensure that the `total_processing_time` of"
-            " the `PrefetchDatasetIterator` node indicates it is a bottleneck."
-            " The `MapDataset` nodes are executed in multiple threads and thus,"
-            " should not be compared to the `total_processing_time` of"
-            f" `DatasetIterator` nodes.\n\n{pretty_format_summary(summary)}"
+            " `total_processing_time` for a node, please check the `percent"
+            " wait time` column to ensure that the node is indicated as"
+            " bottleneck. The `MapDataset` nodes are executed in multiple"
+            " threads and thus, should not be compared to the"
+            " `total_processing_time` of `DatasetIterator` nodes."
+            f"\n\n{pretty_format_summary(summary)}"
         )
         logging.info(msg)
         if _running_in_colab():
