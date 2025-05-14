@@ -730,6 +730,7 @@ class _ExecutionStats(_VisualizationStats):
       if self._last_update_time > self._last_report_time:
         self._last_report_time = time.time()
         summary = self._get_execution_summary()
+        summary = stats_utils.sort_nodes_by_wait_time_ratio(summary)
         msg = (
             "Grain Dataset Execution Summary:\n\nNOTE: Before analyzing the"
             " `total_processing_time` for a node, please check the `percent"

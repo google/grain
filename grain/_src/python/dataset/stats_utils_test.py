@@ -120,6 +120,29 @@ class StatsUtilsTest(absltest.TestCase):
     self.assertEqual(stats_utils.calculate_allocated_bytes(test_string), 11)
     self.assertEqual(stats_utils.calculate_allocated_bytes(shm_meta), 40)
 
+  def test_sort_nodes_by_wait_time_ratio(self):
+    summary = execution_summary_pb2.ExecutionSummary()
+    summary.nodes[0].CopyFrom(
+        execution_summary_pb2.ExecutionSummary.Node(id=0, wait_time_ratio=0.8)
+    )
+    summary.nodes[1].CopyFrom(
+        execution_summary_pb2.ExecutionSummary.Node(id=1, wait_time_ratio=0.2)
+    )
+    summary.nodes[2].CopyFrom(
+        execution_summary_pb2.ExecutionSummary.Node(id=2, wait_time_ratio=0.5)
+    )
+
+    sorted_summary = stats_utils.sort_nodes_by_wait_time_ratio(summary)
+
+    # Check if the nodes are sorted by wait_time_ratio and re-keyed
+    self.assertLen(sorted_summary.nodes, 3)
+    self.assertEqual(sorted_summary.nodes[0].wait_time_ratio, 0.2)
+    self.assertEqual(sorted_summary.nodes[0].id, 1)  # Original ID
+    self.assertEqual(sorted_summary.nodes[1].wait_time_ratio, 0.5)
+    self.assertEqual(sorted_summary.nodes[1].id, 2)  # Original ID
+    self.assertEqual(sorted_summary.nodes[2].wait_time_ratio, 0.8)
+    self.assertEqual(sorted_summary.nodes[2].id, 0)  # Original ID
+
 
 if __name__ == "__main__":
   absltest.main()

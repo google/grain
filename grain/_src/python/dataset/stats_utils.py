@@ -24,6 +24,18 @@ from grain.proto import execution_summary_pb2
 import numpy as np
 
 
+def sort_nodes_by_wait_time_ratio(
+    execution_summary: execution_summary_pb2.ExecutionSummary,
+) -> execution_summary_pb2.ExecutionSummary:
+  """Sorts the nodes in the summary by their wait time ratio."""
+  nodes = list(execution_summary.nodes.values())
+  nodes.sort(key=lambda x: x.wait_time_ratio)
+  execution_summary.ClearField("nodes")
+  for node_id, node in enumerate(nodes):
+    execution_summary.nodes[node_id].CopyFrom(node)
+  return execution_summary
+
+
 def pretty_format_bytes(bytes_value: int) -> str:
   """Returns a pretty formatted string for bytes."""
   # pylint: disable=bad-whitespace
