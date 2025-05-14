@@ -1,5 +1,5 @@
 ``grain.samplers`` module
-=====================
+=========================
 
 .. automodule:: grain.samplers
 

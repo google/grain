@@ -1,5 +1,5 @@
 ``grain.sources`` module
-=====================
+========================
 
 .. automodule:: grain.sources
 

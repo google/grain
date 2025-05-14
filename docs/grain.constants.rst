@@ -1,10 +1,10 @@
 ``grain.constants`` module
-=====================
+==========================
 
 .. automodule:: grain.constants
 
 List of Constants
----------------
+-----------------
 
 .. autosummary::
   :toctree: _autosummary

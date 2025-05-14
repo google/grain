@@ -1,5 +1,5 @@
 ``grain.sharding`` module
-=====================
+=========================
 
 .. automodule:: grain.sharding
 

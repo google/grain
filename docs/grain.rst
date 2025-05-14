@@ -1,7 +1,7 @@
 .. currentmodule:: grain
 
 Public API: ``grain`` package
-===========================
+=============================
 
 Subpackages
 -----------
@@ -20,7 +20,7 @@ Subpackages
 
 
 Flexible low-level pipelines
--------------
+----------------------------
 
 .. autosummary::
 
@@ -31,7 +31,7 @@ Flexible low-level pipelines
 
 
 Simple high-level pipelines
--------------
+---------------------------
 
 
 .. autosummary::

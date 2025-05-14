@@ -1,5 +1,5 @@
 ``grain.transforms`` module
-=====================
+===========================
 
 .. automodule:: grain.transforms
 
