@@ -23,6 +23,32 @@ from grain._src.python import shared_memory_array
 from grain.proto import execution_summary_pb2
 import numpy as np
 
+_SOURCE_NODE_NAME = "SourceMapDataset"
+
+
+def is_source_node(node: execution_summary_pb2.ExecutionSummary.Node) -> bool:
+  """Returns True if the node is a source node."""
+  return _SOURCE_NODE_NAME in node.name
+
+
+def analyze_summary(
+    summary: execution_summary_pb2.ExecutionSummary,
+) -> list[str]:
+  """Analyzes the sorted execution summary and returns warning messages."""
+  warnings = []
+  num_nodes = len(summary.nodes)
+  # The execution summary is sorted by wait time ratio by the time we
+  # analyze it.
+  top_node = summary.nodes[num_nodes - 1]
+  if is_source_node(top_node):
+    msg = (
+        "WARNING: Your source is likely the bottleneck. Please ensure if you"
+        " have enough spindle quota or if your data is co-located with the"
+        " computation. "
+    )
+    warnings.append(msg)
+  return warnings
+
 
 def sort_nodes_by_wait_time_ratio(
     execution_summary: execution_summary_pb2.ExecutionSummary,

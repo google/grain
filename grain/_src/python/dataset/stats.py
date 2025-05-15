@@ -740,6 +740,8 @@ class _ExecutionStats(_VisualizationStats):
             " `total_processing_time` of `DatasetIterator` nodes."
             f"\n\n{pretty_format_summary(summary)}"
         )
+        for warning in stats_utils.analyze_summary(summary):
+          msg += "\n" + warning
         logging.info(msg)
         if _running_in_colab():
           print(msg)

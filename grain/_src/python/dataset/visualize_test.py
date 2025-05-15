@@ -161,7 +161,7 @@ _PREFETCH_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
  'index': "<class 'int'>[]"}
 """
 
-_SOURCE_DATASET_REPR = r"""SourceMapDataset(source=SourceMapDataset)
+_SOURCE_DATASET_REPR = r"""SourceMapDataset(source=_ExpensiveSource)
   ││
   ││  
   ││

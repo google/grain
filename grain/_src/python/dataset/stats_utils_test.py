@@ -143,6 +143,38 @@ class StatsUtilsTest(absltest.TestCase):
     self.assertEqual(sorted_summary.nodes[2].wait_time_ratio, 0.8)
     self.assertEqual(sorted_summary.nodes[2].id, 0)  # Original ID
 
+  def test_analyze_summary_source_bottleneck(self):
+    summary = execution_summary_pb2.ExecutionSummary()
+    summary.nodes[0].CopyFrom(
+        execution_summary_pb2.ExecutionSummary.Node(id=0, name="MapDataset")
+    )
+    # top node
+    summary.nodes[1].CopyFrom(
+        execution_summary_pb2.ExecutionSummary.Node(
+            id=1, name="SourceMapDataset"
+        )
+    )
+    detected_bottleneck = stats_utils.analyze_summary(summary)
+    self.assertLen(detected_bottleneck, 1)
+    self.assertIn(
+        "Your source is likely the bottleneck",
+        detected_bottleneck[0],
+    )
+
+  def test_analyze_summary_no_source_bottleneck(self):
+    summary = execution_summary_pb2.ExecutionSummary()
+    summary.nodes[0].CopyFrom(
+        execution_summary_pb2.ExecutionSummary.Node(
+            id=0, name="SourceMapDataset"
+        )
+    )
+    # top node
+    summary.nodes[1].CopyFrom(
+        execution_summary_pb2.ExecutionSummary.Node(id=1, name="MapDataset")
+    )
+    detected_bottleneck = stats_utils.analyze_summary(summary)
+    self.assertEmpty(detected_bottleneck)
+
 
 if __name__ == "__main__":
   absltest.main()

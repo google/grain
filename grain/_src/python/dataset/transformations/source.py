@@ -34,7 +34,7 @@ class SourceMapDataset(dataset.MapDataset):
     return len(self._source)
 
   def __str__(self) -> str:
-    return f"SourceMapDataset(source={self.__class__.__name__})"
+    return f"SourceMapDataset(source={self._source.__class__.__name__})"
 
   def __getitem__(self, index):
     if isinstance(index, slice):
