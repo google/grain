@@ -62,6 +62,31 @@ def sort_nodes_by_wait_time_ratio(
   return execution_summary
 
 
+def format_ratio_as_percent(value: float) -> str:
+  return f"{value*100:.2f}%"
+
+
+def pretty_format_ns(value: int) -> str:
+  """Pretty formats a time value in nanoseconds to human readable value."""
+  if value < 1000:
+    return f"{value}ns"
+  elif value < 1000_000:
+    return f"{value/1000:.2f}us"
+  elif value < 1_000_000_000:
+    return f"{value/1000_000:.2f}ms"
+  else:
+    return f"{value/1000_000_000:.2f}s"
+
+
+def get_avg_processing_time_ns(
+    node: execution_summary_pb2.ExecutionSummary.Node,
+) -> int:
+  """Returns the average processing time in nanoseconds for the given node."""
+  if node.num_produced_elements == 0:
+    return 0
+  return int(node.total_processing_time_ns / node.num_produced_elements)
+
+
 def pretty_format_bytes(bytes_value: int) -> str:
   """Returns a pretty formatted string for bytes."""
   # pylint: disable=bad-whitespace

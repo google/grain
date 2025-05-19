@@ -108,31 +108,6 @@ _MAX_COLUMN_WIDTH = 30
 _MAX_ROW_LINES = 5
 
 
-def _format_ratio_as_percent(value: float) -> str:
-  return f"{value*100:.2f}%"
-
-
-def _pretty_format_ns(value: int) -> str:
-  """Pretty formats a time value in nanoseconds to human readable value."""
-  if value < 1000:
-    return f"{value}ns"
-  elif value < 1000_000:
-    return f"{value/1000:.2f}us"
-  elif value < 1_000_000_000:
-    return f"{value/1000_000:.2f}ms"
-  else:
-    return f"{value/1000_000_000:.2f}s"
-
-
-def _get_avg_processing_time_ns(
-    node: execution_summary_pb2.ExecutionSummary.Node,
-) -> int:
-  """Returns the average processing time in nanoseconds for the given node."""
-  if node.num_produced_elements == 0:
-    return 0
-  return int(node.total_processing_time_ns / node.num_produced_elements)
-
-
 def _get_nodes_before_prefetch(
     node: int, summary: execution_summary_pb2.ExecutionSummary
 ) -> list[int]:
@@ -222,11 +197,11 @@ def _pretty_format_col_value(
 ) -> str:
   """Pretty formats the column value for the given column name."""
   if name == "wait_time_ratio":
-    value = _format_ratio_as_percent(value)
+    value = stats_utils.format_ratio_as_percent(value)
   elif name == _MEMORY_USAGE_COLUMN_NAME:
     value = stats_utils.pretty_format_bytes(value)
   elif name in _PROCESSING_TIME_COLUMNS:
-    value = _pretty_format_ns(value)
+    value = stats_utils.pretty_format_ns(value)
   return str(value)
 
 
@@ -247,7 +222,7 @@ def _get_col_value(
     return "N/A"
 
   if name == _AVG_PROCESSING_TIME_COLUMN_NAME:
-    value = _get_avg_processing_time_ns(node)
+    value = stats_utils.get_avg_processing_time_ns(node)
   elif name == _MEMORY_USAGE_COLUMN_NAME:
     # Only calculate for prefetch nodes, otherwise default to 0.
     # In multiprocessing, stats reporting is asynchronous, so at times,
