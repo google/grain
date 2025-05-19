@@ -111,4 +111,5 @@ nb_execution_excludepatterns = [
     'tutorials/data_sources/parquet_dataset_tutorial.ipynb',
     'tutorials/data_sources/arrayrecord_data_source_tutorial.ipynb',
     'tutorials/data_sources/huggingface_dataset_tutorial.ipynb',
+    'tutorials/data_sources/pytorch_dataset_tutorial.ipynb',
 ]
