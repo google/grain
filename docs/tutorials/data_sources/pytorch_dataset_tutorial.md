@@ -12,11 +12,11 @@ kernelspec:
   name: python3
 ---
 
-# PyTorch dataset tutorial
+# How to use a Torchvision dataset in the Grain pipeline
 
 +++
 
-In this tutorial we're going to learn how to migrate from Torchvision to Grain pipeline for [Fashion-MNIST](https://github.com/zalandoresearch/fashion-mnist) dataset.
+In this tutorial we're going to learn how to migrate from the Torchvision to the Grain pipeline for the [Fashion-MNIST](https://github.com/zalandoresearch/fashion-mnist) dataset.
 
 +++
 
@@ -25,10 +25,8 @@ In this tutorial we're going to learn how to migrate from Torchvision to Grain p
 Here we require `grain`, `torch`, and `torchvision` dependencies installed but the last will be used primarily for dataset access. Additionally we want `matplotlib` in our environment for displaying samples.
 
 ```{code-cell} ipython3
-# @test {"output": "ignore"}
-!pip install grain
-# @test {"output": "ignore"}
-!pip install numpy matplotlib torch torchvision
+%pip install grain
+%pip install numpy matplotlib torch torchvision
 ```
 
 ```{code-cell} ipython3
@@ -45,9 +43,9 @@ from torchvision.transforms import ToTensor, Lambda
 rng = np.random.default_rng(0)
 ```
 
-## Loading dataset
+## Loading the dataset with Torchvision
 
-`FashionMNIST` function provides access to our dataset. There are 60k samples in the dataset, where each one of them is a Pillow image instance together with a label.
+The Torchvision `FashionMNIST` function provides access to our dataset. There are 60k samples in the dataset, where each one of them is a Pillow image instance together with a label.
 
 ```{code-cell} ipython3
 fashion_mnist = datasets.FashionMNIST(root="data", train=True, download=True)
@@ -56,9 +54,9 @@ print(fashion_mnist[0])
 fashion_mnist[0][0]
 ```
 
-Here, for example, we have an ankle boot (label 9). First we should acknowledge that both sample and label requires a dedicated preprocessing:
-- Sample should be a PyTorch tensor
-- Label needs to use one-hot encoding, so `9` becomes `[0,0,0,0,0,0,0,0,0,1]`
+In this example, we have an ankle boot (label 9). First we should acknowledge that both sample and label require dedicated preprocessing:
+- The sample should be a PyTorch tensor;
+- The label needs to use one-hot encoding, so `9` becomes `[0,0,0,0,0,0,0,0,0,1]`.
 
 Let's inspect a few more samples first.
 
@@ -71,7 +69,7 @@ for x in range(ncols):
         axs[y, x].set_axis_off()
 ```
 
-`torchvision`'s function, which imports the dataset, already offers `transform` and `target_transform` arguments. Let's confirm that `ToTensor` and `Lambda` do what we anticipate.
+`torchvision`'s `datasets` function, which imports the dataset, already offers `transform` and `target_transform` arguments. Let's confirm that `ToTensor` and `Lambda` do what we anticipate.
 
 ```{code-cell} ipython3
 fashion_mnist_2 = datasets.FashionMNIST(
@@ -89,9 +87,13 @@ fashion_mnist_2 = datasets.FashionMNIST(
 (fashion_mnist_2[0][0].size(), fashion_mnist_2[0][1])
 ```
 
-The resulting contents are PyTorch tensor and one-hot encoded label indeed.
+The resulting contents are a PyTorch tensor and a one-hot encoded label, as expected.
 
-Now let's move to Grain! Given the unprocessed dataset we want to arrive with the same transformation. You might have noticed in the "Dataset basics" tutorial that defining a data source requires implementing a class that inherits from `grain.sources.RandomAccessDataSource`. With PyTorch datasets we don't need it - the dataset is already compliant with the protocol.
++++
+
+## Processing the dataset with Grain
+
+Now let's move to Grain! Our goal is perform the same transformation on the dataset as before, but this time using Grain API. You might have noticed in the [Dataset basics tutorial](https://google-grain.readthedocs.io/en/latest/tutorials/dataset_basic_tutorial.html) that defining a data source requires implementing a class that inherits from `grain.sources.RandomAccessDataSource`. With PyTorch datasets we don't need it - the dataset is already compliant with the protocol.
 
 First let's define our data source with random access capabilities.
 
@@ -99,14 +101,12 @@ First let's define our data source with random access capabilities.
 fashion_source = fashion_mnist
 ```
 
-## Preprocessing
-
 Next let's move to the preprocessing stage. We implement a custom class which inherits from `grain.transforms.Map` and implements a `map` method. In this method we instantiate a PyTorch tensor and devise a one-hot encoded label.
 
-To make this rewrite more compelling let's use Grain capabilities beyond simple samples traversal. Assuming that we are interested in shoes only (labels: `5` - sandals, `7` - sneakers, and `9` - ankle boots) we implement a `Filter` class with `filter` that allows us to discard unwanted samples.
+To make this rewrite more compelling, let's use Grain's capabilities beyond simple samples traversal. Assuming that we are interested in shoes only (labels: `5` - sandals, `7` - sneakers, and `9` - ankle boots) we implement a `Filter` class with a `filter` that allows us to discard unwanted samples.
 
 ```{code-cell} ipython3
-class Preprocess(grain.transforms.Map):
+class ToTensorAndOneHot(grain.transforms.Map):
     to_tensor = ToTensor()
 
     def map(self, element: tuple[Image, int]) -> tuple[torch.Tensor, torch.Tensor]:
@@ -117,7 +117,7 @@ class Preprocess(grain.transforms.Map):
         return (data, target)
 
 
-class Filter(grain.transforms.Filter):
+class KeepShoesOnly(grain.transforms.Filter):
     shoes_only = {5, 7, 9}  # Sandal, Sneaker, Ankle boot
 
     def filter(self, element: tuple[Image, int]) -> bool:
@@ -132,8 +132,8 @@ Now we combine all pieces into a single pipeline. Grain exposes an API that allo
 dataset = (
     grain.MapDataset.source(fashion_source)
     .shuffle(seed=42)
-    .filter(Filter())  # leave only shoes
-    .map(Preprocess())  # construct tensors and label one-hot encoding
+    .filter(KeepShoesOnly())  # leave only shoes
+    .map(ToTensorAndOneHot())  # construct tensors and label one-hot encoding
     .to_iter_dataset()
     .batch(  # batches consecutive elements
         batch_size=5,
