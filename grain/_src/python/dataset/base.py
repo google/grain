@@ -32,7 +32,7 @@ T = TypeVar("T")
 class RandomAccessDataSource(Protocol[T]):
   """Interface for datasets where storage supports efficient random access."""
 
-  def __len__(self):
+  def __len__(self) -> int:
     ...
 
   def __getitem__(self, index: int) -> T:
