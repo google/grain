@@ -277,6 +277,43 @@ class _RandomMapDatasetIterator(dataset.DatasetIterator[T]):
     return f"RandomMapDatasetIterator(transform={self._transform_name})"
 
 
+class _MapWithIndexDatasetIterator(dataset.DatasetIterator[T]):
+  """Iterator that applies map with index transformation to elements."""
+
+  def __init__(
+      self,
+      parent: dataset.DatasetIterator,
+      map_fn: Callable[[int, Any], T],
+      transform_name: str,
+  ):
+    super().__init__(parent)
+    self._map_fn = map_fn
+    self._transform_name = transform_name
+    self._counter = 0
+
+  @stats.record_next_duration_if_output
+  def __next__(self):
+    element = next(self._parent)
+    with self._stats.record_self_time():
+      if element is not None:
+        element = self._map_fn(self._counter, element)
+      self._counter += 1
+      return self._stats.record_output_spec(element)
+
+  def get_state(self):
+    return {
+        "parent": self._parent.get_state(),
+        "counter": self._counter,
+    }
+
+  def set_state(self, state):
+    self._parent.set_state(state["parent"])
+    self._counter = state["counter"]
+
+  def __str__(self) -> str:
+    return f"MapWithIndexDatasetIterator(transform={self._transform_name})"
+
+
 class RandomMapIterDataset(dataset.IterDataset[T]):
   """Random map transformation for IterDataset."""
 
@@ -351,3 +388,35 @@ class MapIterDataset(dataset.IterDataset[T]):
 
   def __str__(self) -> str:
     return f"MapIterDataset(transform={self._transform_name})"
+
+
+class MapWithIndexIterDataset(dataset.IterDataset[T]):
+  """Map with index transformation for IterDatasets."""
+
+  def __init__(
+      self,
+      parent: dataset.IterDataset,
+      transform: transforms.MapWithIndex | Callable[[int, Any], T],
+  ):
+    super().__init__(parent)
+    if isinstance(transform, transforms.MapWithIndex):
+      # Use the transform class name. The `cached_property` below will not
+      # be called.
+      self._transform_name = transform.__class__.__name__
+      self._map_fn = transform.map_with_index
+    else:
+      self._map_fn = transform
+
+  @functools.cached_property
+  def _transform_name(self):
+    return transforms.get_pretty_transform_name(self._map_fn)
+
+  def __iter__(self) -> _MapWithIndexDatasetIterator[T]:
+    return _MapWithIndexDatasetIterator(
+        self._parent.__iter__(),
+        map_fn=self._map_fn,
+        transform_name=self._transform_name,
+    )
+
+  def __str__(self) -> str:
+    return f"MapWithIndexIterDataset(transform={self._transform_name})"

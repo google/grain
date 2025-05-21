@@ -1130,6 +1130,37 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
         parent=self, transform=transform, seed=seed
     )
 
+  def map_with_index(
+      self, transform: transforms.MapWithIndex | Callable[[int, T], S]
+  ) -> IterDataset[S]:
+    """Returns a dataset of the elements transformed by the ``transform``.
+
+    The ``transform`` is called with the index of the element in the dataset
+    as the first argument and the element as the second argument.
+
+    Example usage::
+
+      ds = MapDataset.range(5).to_iter_dataset()
+      ds = ds.map(lambda i, x: (i, 2**x))
+      list(ds) == [(0, 1), (1, 2), (2, 4), (3, 8), (4, 16)]
+
+    Args:
+      transform: Either a ``MapWithIndexTransform`` containing the
+        ``map_with_index`` method or a callable that takes an index and an
+        element and returns a new element.
+
+    Returns:
+      A dataset containing the elements of the original dataset transformed by
+      ``transform``.
+    """
+    # Loaded lazily due to a circular dependency (dataset <-> map).
+    # pylint: disable=g-import-not-at-top
+    from grain._src.python.dataset.transformations import (
+        map as map_dataset,
+    )
+    # pylint: enable=g-import-not-at-top
+    return map_dataset.MapWithIndexIterDataset(parent=self, transform=transform)
+
   def prefetch(
       self, multiprocessing_options: grain_options.MultiprocessingOptions
   ) -> IterDataset[T]:
@@ -1453,12 +1484,7 @@ def apply_transformations(
       case transforms.RandomMapTransform():
         ds = ds.random_map(transformation)
       case transforms.MapWithIndex():
-        if isinstance(ds, MapDataset):
-          ds = ds.map_with_index(transformation)
-        else:
-          raise NotImplementedError(
-              "MapWithIndexTransform is only supported for MapDataset."
-          )
+        ds = ds.map_with_index(transformation)
       case transforms.FlatMapTransform():
         # Loaded lazily due to a circular dependency (dataset <-> flatmap).
         # pylint: disable=g-import-not-at-top

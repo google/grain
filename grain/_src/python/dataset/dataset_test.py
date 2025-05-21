@@ -673,16 +673,25 @@ class DatasetTest(parameterized.TestCase):
     ds = dataset.MapDataset.range(15).map_with_index(lambda i, x: x + i)
     self.assertLen(ds, 15)
 
-  def test_map_with_index_has_one_parent(self):
-    ds = dataset.MapDataset.range(15).map_with_index(lambda i, x: x)
+  @parameterized.parameters(
+      (dataset.MapDataset.range(15),),
+      (dataset.MapDataset.range(15).to_iter_dataset(),),
+  )
+  def test_map_with_index_has_one_parent(self, ds):
+    ds = ds.map_with_index(lambda i, x: x)
     self.assertLen(ds.parents, 1)
 
-  @parameterized.parameters(
-      (MapWithIndexProducingIndexElementTuple(),), ((lambda i, x: (i, x)),)
+  @parameterized.product(
+      initial_ds=[
+          dataset.MapDataset.range(5),
+          dataset.MapDataset.range(5).to_iter_dataset(),
+      ],
+      transform=[MapWithIndexProducingIndexElementTuple(), lambda i, x: (i, x)],
   )
-  def test_map_with_index_produces_correct_elements(self, transform):
-    ds = dataset.MapDataset.range(15)[:5]  # [0, 1, 2, 3, 4]
-    ds = ds.map(lambda x: 2 * x)  # [0, 2, 4, 6, 8]
+  def test_map_with_index_produces_correct_elements(
+      self, initial_ds, transform
+  ):
+    ds = initial_ds.map(lambda x: 2 * x)  # [0, 2, 4, 6, 8]
     ds = ds.map_with_index(transform)
     self.assertSequenceEqual(list(ds), [(0, 0), (1, 2), (2, 4), (3, 6), (4, 8)])
 
@@ -832,8 +841,11 @@ class ApplyTransformationsTest(parameterized.TestCase):
         ],
     )
 
-  def test_map_with_index_map_dataset(self):
-    ds = dataset.MapDataset.range(10)
+  @parameterized.parameters(
+      (dataset.MapDataset.range(10),),
+      (dataset.MapDataset.range(10).to_iter_dataset(),),
+  )
+  def test_map_with_index(self, ds):
     ds = dataset.apply_transformations(
         ds, MapWithIndexProducingIndexElementTuple()
     )
@@ -846,13 +858,6 @@ class ApplyTransformationsTest(parameterized.TestCase):
   def test_flat_map(self, ds):
     ds = dataset.apply_transformations(ds, FlatMapAddingOne())
     self.assertSequenceEqual(list(ds), [0, 1, 1, 2, 2, 3])
-
-  def test_map_with_index_iter_dataset(self):
-    ds = dataset.MapDataset.range(10).to_iter_dataset()
-    with self.assertRaises(NotImplementedError):
-      _ = dataset.apply_transformations(
-          ds, MapWithIndexProducingIndexElementTuple()
-      )
 
   def test_unsupported_transform(self):
     ds = dataset.MapDataset.range(10)

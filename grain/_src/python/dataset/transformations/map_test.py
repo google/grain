@@ -21,6 +21,7 @@ import cloudpickle
 from grain._src.core import transforms
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import map as map_ds
+from grain._src.python.testing.experimental import assert_equal_output_after_checkpoint
 import numpy as np
 
 
@@ -118,6 +119,10 @@ class MapMapDatasetTest(parameterized.TestCase):
     ]
     self.assertEqual(expected_data, actual_data)
 
+  def test_map_checkpointing(self):
+    ds = self.range_ds.map(MapWithTransform())
+    assert_equal_output_after_checkpoint(ds)
+
 
 class RandomMapMapDatasetTest(parameterized.TestCase):
 
@@ -172,6 +177,13 @@ class RandomMapMapDatasetTest(parameterized.TestCase):
     with self.assertRaises(ValueError):
       map_ds.RandomMapMapDataset(self.range_ds, transform)
 
+  @parameterized.parameters(0, 1, 42)
+  def test_random_map_checkpointing(self, random_map_seed):
+    ds = map_ds.RandomMapMapDataset(
+        self.range_ds, RandomMapWithTransform(), seed=random_map_seed
+    )
+    assert_equal_output_after_checkpoint(ds)
+
 
 class MapIterDatasetTest(parameterized.TestCase):
 
@@ -202,6 +214,10 @@ class MapIterDatasetTest(parameterized.TestCase):
     with self.assertRaises(StopIteration):
       next(map_no_transform_iter_ds)
       _ = [next(map_no_transform_iter_ds) for _ in range(20)]
+
+  def test_map_checkpointing(self):
+    ds = self.range_iter_ds.map(MapWithTransform())
+    assert_equal_output_after_checkpoint(ds)
 
 
 class RandomMapIterDatasetTest(parameterized.TestCase):
@@ -258,6 +274,13 @@ class RandomMapIterDatasetTest(parameterized.TestCase):
     with self.assertRaises(ValueError):
       map_ds.RandomMapIterDataset(self.range_iter_ds, transform)
 
+  @parameterized.parameters(0, 1, 42)
+  def test_random_map_checkpointing(self, random_map_seed):
+    ds = map_ds.RandomMapIterDataset(
+        self.range_iter_ds, RandomMapWithTransform(), seed=random_map_seed
+    )
+    assert_equal_output_after_checkpoint(ds)
+
 
 class MapWithIndexMapDatasetTest(absltest.TestCase):
 
@@ -277,6 +300,33 @@ class MapWithIndexMapDatasetTest(absltest.TestCase):
     self.assertEqual(ds[3], (3, 3))
     self.assertEqual(ds[4], (4, 4))
     self.assertEqual(ds[5], (5, 5))
+
+
+class MapWithIndexIterDatasetTest(absltest.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    self.range_iter_ds = dataset.MapDataset.range(10).to_iter_dataset()
+
+  def test_map_with_index_transform(self):
+    map_with_index_transform_iter_ds = iter(
+        map_ds.MapWithIndexIterDataset(self.range_iter_ds, AddIndexTransform())
+    )
+    expected_data = [(i, i) for i in range(10)]
+    actual_data = [next(map_with_index_transform_iter_ds) for _ in range(10)]
+    self.assertEqual(expected_data, actual_data)
+
+  def test_map_with_index_past_one_epoch_raises_exception(self):
+    map_with_index_transform_iter_ds = iter(
+        map_ds.MapWithIndexIterDataset(self.range_iter_ds, AddIndexTransform())
+    )
+    with self.assertRaises(StopIteration):
+      next(map_with_index_transform_iter_ds)
+      _ = [next(map_with_index_transform_iter_ds) for _ in range(20)]
+
+  def test_map_with_index_checkpointing(self):
+    ds = self.range_iter_ds.map_with_index(AddIndexTransform())
+    assert_equal_output_after_checkpoint(ds)
 
 
 if __name__ == "__main__":
