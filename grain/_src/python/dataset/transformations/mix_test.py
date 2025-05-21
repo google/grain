@@ -162,16 +162,17 @@ class MixedMapDatasetTest(absltest.TestCase):
     self.odd_ds = dataset.MapDataset.range(1, 10, 2)
 
   def test_len(self):
-    # Mix dataset has length to see any element at most once.
+    # Mix dataset has the largest length such that we do not request an example
+    # from a dataset that has been exhausted.
     ds1 = dataset.MapDataset.range(10)
     ds2 = dataset.MapDataset.range(20)
     ds3 = dataset.MapDataset.range(5)
     # Equal proportions.
     ds = mix.MixedMapDataset([ds1, ds2, ds3])
-    self.assertLen(ds, 15)
-    # Heigher weight for second dataset.
+    self.assertLen(ds, 17)
+    # Higher weight for second dataset.
     ds = mix.MixedMapDataset([ds1, ds2, ds3], proportions=[1, 2, 1])
-    self.assertLen(ds, 5 + 10 + 5)
+    self.assertLen(ds, 23)
 
   def test_mixing_equal_probability_with_integer_proportions(self):
     mixed_lzds = mix.MixedMapDataset(
@@ -227,14 +228,14 @@ class MixedMapDatasetTest(absltest.TestCase):
     mixed_lzds = mix.MixedMapDataset(
         parents=[self.even_ds, self.odd_ds], proportions=[1, 2]
     )
-    self.assertLen(list(mixed_lzds), 7)
+    self.assertLen(list(mixed_lzds), 8)
 
     actual_values = list(mixed_lzds)
-    expected_first_epoch = [0, 1, 3, 2, 5, 7, 4]
+    expected_first_epoch = [0, 1, 3, 2, 5, 7, 4, 9]
     self.assertEqual(expected_first_epoch, actual_values)
 
     actual_values = list(mixed_lzds.repeat(2))
-    expected_two_epochs = [0, 1, 3, 2, 5, 7, 4, 9, 1, 6, 3, 5, 8, 7]
+    expected_two_epochs = [0, 1, 3, 2, 5, 7, 4, 9, 1, 6, 3, 5, 8, 7, 9, 0]
     self.assertEqual(expected_two_epochs, actual_values)
 
   def test_mixing_zero_one_probability_fails_with_error(self):
