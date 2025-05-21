@@ -227,7 +227,6 @@ py_test(
         ":record",
         "//grain/_src/core:config",
         "@abseil-py//absl/flags",
-        "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
     ],
 )
