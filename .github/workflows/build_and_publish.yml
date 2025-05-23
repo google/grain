@@ -43,6 +43,9 @@ jobs:
           export RUN_TESTS=${{ inputs.run_tests }}
           . "${SOURCE_DIR}"'/grain/oss/runner_common.sh'
           build_and_test_grain
+      - name: Remove unaudited wheels
+        if: runner.os == 'Linux'
+        run: find /tmp/grain/all_dist/ -maxdepth 1 -type f | grep -v "manylinux" | xargs rm -v
       - name: Upload Grain artifacts
         uses: actions/upload-artifact@v4
         with:
