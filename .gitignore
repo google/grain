@@ -57,3 +57,9 @@ __pypackages__/
 
 # Environments
 .venv
+
+# Bazel outputs
+bazel-bin/
+bazel-grain/
+bazel-out/
+bazel-testlogs/

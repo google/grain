@@ -72,11 +72,15 @@ main() {
   previous_wd="$(pwd)"
   cd "${TMPDIR}"
   printf '%s : "=== Building wheel\n' "$(date)"
-  if [ "$(uname)" = "Darwin" ]; then
-    "$PYTHON_BIN" setup.py bdist_wheel --python-tag py3"${PYTHON_MINOR_VERSION}" --plat-name macosx_11_0_"$(uname -m)"
-  else
-    "$PYTHON_BIN" setup.py bdist_wheel --python-tag py3"${PYTHON_MINOR_VERSION}"
+
+  if [ "$IS_NIGHTLY" == true ]; then
+    WHEEL_BLD_ARGS="egg_info --tag-build=.dev --tag-date"
   fi
+  WHEEL_BLD_ARGS="${WHEEL_BLD_ARGS} bdist_wheel --python-tag py3${PYTHON_MINOR_VERSION}"
+  if [ "$(uname)" == "Darwin" ]; then
+    WHEEL_BLD_ARGS="${WHEEL_BLD_ARGS} --plat-name macosx_11_0_$(uname -m)"
+  fi
+  "$PYTHON_BIN" setup.py $WHEEL_BLD_ARGS
 
   cp 'dist/'*.whl "${DEST}"
 
