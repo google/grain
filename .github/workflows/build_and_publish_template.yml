@@ -3,12 +3,16 @@
 name: Build & Publish
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
+      pypi_project_url:
+        required: true
+        type: string
       run_tests:
-        description: 'Run unit tests'
-        required: false
-        default: true
+        required: true
+        type: boolean
+      is_nightly:
+        required: true
         type: boolean
 
 permissions:
@@ -41,6 +45,7 @@ jobs:
           export OUTPUT_DIR="/tmp/grain"
           export SOURCE_DIR="/tmp/grain"
           export RUN_TESTS=${{ inputs.run_tests }}
+          export IS_NIGHTLY=${{ inputs.is_nightly }}
           . "${SOURCE_DIR}"'/grain/oss/runner_common.sh'
           build_and_test_grain
       - name: Remove unaudited wheels
@@ -59,7 +64,7 @@ jobs:
       id-token: write
     environment:
       name: pypi
-      url: https://pypi.org/project/grain
+      url: ${{ inputs.pypi_project_url }}
     steps:
       - name: Download Grain artifacts
         uses: actions/download-artifact@v4
