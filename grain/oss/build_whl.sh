@@ -62,6 +62,9 @@ main() {
 
   cp README.md "${TMPDIR}"
   cp setup.py "${TMPDIR}"
+  if [ "$IS_NIGHTLY" == true ]; then
+    sed -i 's/^name = "grain"$/name = "grain-nightly"/' pyproject.toml
+  fi
   cp pyproject.toml "${TMPDIR}"
   cp LICENSE "${TMPDIR}"
   rsync -avm -L --exclude="__pycache__/*" grain "${TMPDIR}"
@@ -72,11 +75,15 @@ main() {
   previous_wd="$(pwd)"
   cd "${TMPDIR}"
   printf '%s : "=== Building wheel\n' "$(date)"
-  if [ "$(uname)" = "Darwin" ]; then
-    "$PYTHON_BIN" setup.py bdist_wheel --python-tag py3"${PYTHON_MINOR_VERSION}" --plat-name macosx_11_0_"$(uname -m)"
-  else
-    "$PYTHON_BIN" setup.py bdist_wheel --python-tag py3"${PYTHON_MINOR_VERSION}"
+
+  if [ "$IS_NIGHTLY" == true ]; then
+    WHEEL_BLD_ARGS="egg_info --tag-build=.dev --tag-date"
   fi
+  WHEEL_BLD_ARGS="${WHEEL_BLD_ARGS} bdist_wheel --python-tag py3${PYTHON_MINOR_VERSION}"
+  if [ "$(uname)" == "Darwin" ]; then
+    WHEEL_BLD_ARGS="${WHEEL_BLD_ARGS} --plat-name macosx_11_0_$(uname -m)"
+  fi
+  "$PYTHON_BIN" setup.py $WHEEL_BLD_ARGS
 
   if [ -n "${AUDITWHEEL_PLATFORM}" ]; then
     printf '%s : "=== Auditing wheel\n' "$(date)"
@@ -93,7 +100,12 @@ main() {
   printf '%s : "=== Output wheel file is in: %s\n' "$(date)" "${DEST}"
 
   # Install grain from the wheel and run smoke tests.
-  $PYTHON_BIN -m pip install --find-links=/tmp/grain/all_dist grain
+  if [ "$IS_NIGHTLY" == true ]; then
+    PKG_NAME=grain-nightly
+  else
+    PKG_NAME=grain
+  fi
+  $PYTHON_BIN -m pip install --find-links=/tmp/grain/all_dist "${PKG_NAME}"
   $PYTHON_BIN -m pip install jax
   $PYTHON_BIN grain/_src/core/smoke_test_with_jax.py
   # TF is not available on Python 3.13 and above.
