@@ -1,6 +1,4 @@
 # This workflow builds Grain wheels and uploads them as artifacts.
-# TODO: Add a step to publish the wheels to PyPI and automatically run this workflow
-# on project version change.
 
 name: Build & Publish
 
@@ -45,8 +43,31 @@ jobs:
           export RUN_TESTS=${{ inputs.run_tests }}
           . "${SOURCE_DIR}"'/grain/oss/runner_common.sh'
           build_and_test_grain
+      - name: Remove unaudited wheels
+        if: runner.os == 'Linux'
+        run: find /tmp/grain/all_dist/ -maxdepth 1 -type f | grep -v "manylinux" | xargs rm -v
       - name: Upload Grain artifacts
         uses: actions/upload-artifact@v4
         with:
           name: built-grain-wheels-${{ matrix.os }}-${{ matrix.python-version }}
-          path: /tmp/grain/all_dist/**/*.whl
+          path: /tmp/grain/all_dist/*.whl
+
+  publish-wheel:
+    runs-on: ubuntu-22.04
+    needs: build-and-test
+    permissions:
+      id-token: write
+    environment:
+      name: pypi
+      url: https://pypi.org/project/grain
+    steps:
+      - name: Download Grain artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: built-grain-wheels-*
+          path: /tmp/grain/all_dist
+          merge-multiple: true
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: /tmp/grain/all_dist
