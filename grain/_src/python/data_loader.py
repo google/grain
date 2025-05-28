@@ -80,17 +80,15 @@ _DATA_SOURCE = "data_source"
 _CHECKPOINT_VERSION_NUMBER = 2
 
 
-def _validate_operations(operations: Sequence[Operation]) -> None:
-  """Validates user-provided operations."""
-  for operation, operation_idx in enumerate(operations):
-    if (
-        isinstance(operation, BatchOperation)
-        and operation_idx < len(operations) - 1
-    ):
-      raise ValueError(
-          "Batch Operation is only allowed at the end of the "
-          "pipeline. Found a Batch Operation at position "
-          f"{operation_idx} in the input operations."
+def _validate_operations(
+    operations: Sequence[transforms.Transformation | Operation],
+) -> None:
+  """Validates that the operations are supported by `DataLoader`."""
+  for operation in operations:
+    if isinstance(operation, transforms.FlatMapTransform):
+      raise NotImplementedError(
+          "`DataLoader` does not support `FlatMapTransform`s, please use "
+          f"Dataset API instead. Got operation: {operation}."
       )
 
 
@@ -216,6 +214,7 @@ class DataLoader:
 
     self._data_source = data_source
     self._sampler = sampler
+    _validate_operations(operations)
     self._operations = operations
 
     self._read_options = read_options or options.ReadOptions()
