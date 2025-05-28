@@ -78,16 +78,16 @@ main() {
     "$PYTHON_BIN" setup.py bdist_wheel --python-tag py3"${PYTHON_MINOR_VERSION}"
   fi
 
-  cp 'dist/'*.whl "${DEST}"
-
   if [ -n "${AUDITWHEEL_PLATFORM}" ]; then
     printf '%s : "=== Auditing wheel\n' "$(date)"
     auditwheel repair --plat "${AUDITWHEEL_PLATFORM}" -w dist dist/*.whl
+    cp 'dist/'*manylinux*.whl "${DEST}"
+  else
+    cp 'dist/'*.whl "${DEST}"
   fi
 
   printf '%s : "=== Listing wheel\n' "$(date)"
-  ls -lrt 'dist/'*.whl
-  cp 'dist/'*.whl "${DEST}"
+  ls -lrt "${DEST}"/*.whl
   cd "${previous_wd}"
 
   printf '%s : "=== Output wheel file is in: %s\n' "$(date)" "${DEST}"
