@@ -226,6 +226,10 @@ class TimerTest(absltest.TestCase):
 
 class DefaultStatsTest(absltest.TestCase):
 
+  def setUp(self):
+    super().setUp()
+    stats._iter_weakref_registry.clear()
+
   def test_assert_is_default(self):
     s = _make_stats_tree(stats.make_stats)
     self.assertIsInstance(s, stats._DefaultStats)
@@ -262,6 +266,7 @@ class DebugModeStatsTest(absltest.TestCase):
   def setUp(self):
     super().setUp()
     self.enter_context(flagsaver.flagsaver(grain_py_debug_mode=True))
+    stats._iter_weakref_registry.clear()
 
   @mock.patch.object(stats, "_REPORTING_PERIOD_SEC", 0.05)
   def test_record_stats(self):
