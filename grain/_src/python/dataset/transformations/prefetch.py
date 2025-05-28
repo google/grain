@@ -28,10 +28,12 @@ import threading
 import time
 import typing
 from typing import Any, Generic, Optional, Protocol, TypeVar
+import weakref
 
 import cloudpickle
 from concurrent import futures
 from grain._src.core import tree_lib
+import grain._src.core.config as grain_config
 import multiprocessing as mp
 from grain._src.python import grain_pool
 from grain._src.python import options as grain_options
@@ -119,6 +121,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   @functools.cached_property
   def _stats(self):
+    grain_config.GLOBAL_ITERATOR_REGISTRY.append(weakref.proxy(self))
     execution_tracking_mode = self._ctx.dataset_options.execution_tracking_mode
     parent_stats = self._map_parent._initialize_stats(  # pylint: disable=protected-access
         execution_tracking_mode
@@ -512,6 +515,7 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   @functools.cached_property
   def _stats(self):
+    grain_config.GLOBAL_ITERATOR_REGISTRY.append(weakref.proxy(self))
     config = dataset_stats.StatsConfig(
         name=str(self),
         transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,

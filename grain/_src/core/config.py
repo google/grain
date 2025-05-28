@@ -23,6 +23,10 @@ from grain._src.core import monitoring as grain_monitoring
 
 from grain._src.core import monitoring
 
+
+# Registry of dataset iterators for collecting execution summaries.
+GLOBAL_ITERATOR_REGISTRY = []
+
 # Performance optimisations. Consider most of these experimental. We might
 # remove them once we are confident that the default values work well for
 # everyone.

@@ -19,9 +19,11 @@ from typing import Any
 
 from absl import logging
 from grain._src.core import tree_lib
+import grain._src.core.config as grain_config
 from grain._src.python import shared_memory_array
 from grain.proto import execution_summary_pb2
 import numpy as np
+
 
 _SOURCE_NODE_NAME = "SourceMapDataset"
 
