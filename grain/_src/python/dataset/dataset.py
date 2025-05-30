@@ -59,11 +59,13 @@ from typing import (
     overload,
 )
 import warnings
+import weakref
 
 from etils import epath
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import transforms
 from grain._src.core import usage_logging
+import grain._src.core.config as grain_config
 from grain._src.python import checkpointing
 from grain._src.python import options as grain_options
 from grain._src.python.dataset import base
@@ -814,6 +816,7 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
     Returns:
       The initialized stats object.
     """
+    grain_config.GLOBAL_ITERATOR_REGISTRY.append(weakref.proxy(self))
     # There may be parent `MapDataset` nodes introduced by users that did not
     # call super init and thus don't have `_parents`.
     parents_stats = []
@@ -1313,6 +1316,7 @@ class DatasetIterator(Iterator[T], abc.ABC):
   @functools.cached_property
   def _stats(self):
     """Returns the Stats object for recording statistics about this iterator."""
+    grain_config.GLOBAL_ITERATOR_REGISTRY.append(weakref.proxy(self))
     config = dataset_stats.StatsConfig(
         name=str(self),
         transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,

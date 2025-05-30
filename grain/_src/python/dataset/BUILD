@@ -33,6 +33,7 @@ py_library(
     deps = [
         ":base",
         ":stats",
+        "//grain/_src/core:config",
         "//grain/_src/core:exceptions",
         "//grain/_src/core:monitoring",
         "//grain/_src/core:transforms",
@@ -117,6 +118,7 @@ py_library(
     srcs = ["stats_utils.py"],
     srcs_version = "PY3",
     deps = [
+        "//grain/_src/core:config",
         "//grain/_src/core:tree_lib",
         "//grain/_src/python:shared_memory_array",
         "//grain/proto:execution_summary_py_pb2",
@@ -145,9 +147,11 @@ py_test(
     deps = [
         ":dataset",
         ":stats",
+        "//grain/_src/core:config",
         "//grain/_src/core:transforms",
         "//grain/_src/python:options",
         "//grain/_src/python:shared_memory_array",
+        "//grain/_src/python/dataset:stats_utils",
         "//grain/proto:execution_summary_py_pb2",
         "@abseil-py//absl/flags",
         "@abseil-py//absl/testing:absltest",

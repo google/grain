@@ -25,10 +25,12 @@ from absl import flags
 from absl.testing import flagsaver
 import cloudpickle
 from grain._src.core import transforms
+import grain._src.core.config as grain_config
 from grain._src.python import options
 from grain._src.python import shared_memory_array
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
+from grain._src.python.dataset import stats_utils
 from grain.proto import execution_summary_pb2
 import numpy as np
 
@@ -262,6 +264,7 @@ class DebugModeStatsTest(absltest.TestCase):
   def setUp(self):
     super().setUp()
     self.enter_context(flagsaver.flagsaver(grain_py_debug_mode=True))
+    grain_config.GLOBAL_ITERATOR_REGISTRY.clear()
 
   @mock.patch.object(stats, "_REPORTING_PERIOD_SEC", 0.05)
   def test_record_stats(self):
