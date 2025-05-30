@@ -65,4 +65,4 @@ jobs:
           path: dist/
           merge-multiple: true
       - name: Publish package distributions to PyPI
-        uses: pypa/gh-action-pypi-publish@v1.12.1
+        uses: pypa/gh-action-pypi-publish@release/v1
