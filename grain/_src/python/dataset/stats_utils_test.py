@@ -175,6 +175,64 @@ class StatsUtilsTest(absltest.TestCase):
     detected_bottleneck = stats_utils.analyze_summary(summary)
     self.assertEmpty(detected_bottleneck)
 
+  def test_compute_iterator_wait_time_ratio(self):
+    dummy_summary = execution_summary_pb2.ExecutionSummary()
+    dummy_summary.nodes[0].CopyFrom(
+        execution_summary_pb2.ExecutionSummary.Node(
+            id=0,
+            name="MapDatasetIterator",
+            inputs=[1],
+            total_processing_time_ns=4000_000_000,
+            min_processing_time_ns=400,
+            max_processing_time_ns=40000,
+            num_produced_elements=10,
+            output_spec="<class 'int'>[]",
+            is_output=True,
+        )
+    )
+    dummy_summary.nodes[1].CopyFrom(
+        execution_summary_pb2.ExecutionSummary.Node(
+            id=1,
+            name="PrefetchDatasetIterator",
+            inputs=[2],
+            total_processing_time_ns=4000_000_000,
+            min_processing_time_ns=4000,
+            max_processing_time_ns=40_000_000,
+            num_produced_elements=10,
+            output_spec="<class 'int'>[]",
+            is_prefetch=True,
+        )
+    )
+    dummy_summary.nodes[2].CopyFrom(
+        execution_summary_pb2.ExecutionSummary.Node(
+            id=2,
+            name="MapMapDataset",
+            inputs=[3],
+            total_processing_time_ns=1000_000_000,
+            min_processing_time_ns=400_000,
+            max_processing_time_ns=400_000_000,
+            num_produced_elements=10,
+            output_spec="<class 'int'>[]",
+        )
+    )
+    dummy_summary.nodes[3].CopyFrom(
+        execution_summary_pb2.ExecutionSummary.Node(
+            id=3,
+            name="RangeMapDataset",
+            total_processing_time_ns=3000_000_000,
+            min_processing_time_ns=400_000,
+            max_processing_time_ns=4000_000,
+            num_produced_elements=10,
+            inputs=[],
+            output_spec="<class 'int'>[]",
+        )
+    )
+    stats_utils.populate_wait_time_ratio(dummy_summary)
+    self.assertEqual(dummy_summary.nodes[0].wait_time_ratio, 0.5)
+    self.assertEqual(dummy_summary.nodes[1].wait_time_ratio, 0)
+    self.assertEqual(dummy_summary.nodes[2].wait_time_ratio, 0.125)
+    self.assertEqual(dummy_summary.nodes[3].wait_time_ratio, 0.375)
+
 
 if __name__ == "__main__":
   absltest.main()

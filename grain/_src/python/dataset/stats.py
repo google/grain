@@ -108,89 +108,6 @@ _MAX_COLUMN_WIDTH = 30
 _MAX_ROW_LINES = 5
 
 
-def _get_nodes_before_prefetch(
-    node: int, summary: execution_summary_pb2.ExecutionSummary
-) -> list[int]:
-  """Returns nodes in the path from a given node to a prefetch node."""
-  child_nodes = []
-  nodes_to_visit = [node]
-  while nodes_to_visit:
-    node_id = nodes_to_visit.pop()
-    node = summary.nodes[node_id]
-    child_nodes.append(node_id)
-    if node.is_prefetch:
-      continue  # Skip adding inputs for the prefetch node
-    nodes_to_visit.extend(node.inputs)
-  return child_nodes
-
-
-def _find_aggregated_processing_time(
-    summary: execution_summary_pb2.ExecutionSummary,
-    node_ids: list[int],
-) -> int:
-  """Finds aggregated processing time for the given node IDs."""
-  return sum(
-      summary.nodes[node_id].total_processing_time_ns for node_id in node_ids
-  )
-
-
-def _compute_wait_time_ratio(
-    summary: execution_summary_pb2.ExecutionSummary,
-    node_id: int,
-    aggregated_wait_time_ns: int,
-    prefetch_factor: int = 1,
-) -> None:
-  """Computes the wait time ratio for all the nodes in the execution summary.
-
-  Args:
-    summary: The execution summary to update the `wait_time_ratio` for.
-    node_id: The current node for which to compute the `wait_time_ratio`.
-    aggregated_wait_time_ns: The aggregated wait time of the nodes running under
-      prefetch.
-    prefetch_factor: The factor by which to multiply the `total_processing_time`
-      of the node to get it's wait time ratio.
-  """
-  if aggregated_wait_time_ns == 0:
-    return
-  node = summary.nodes[node_id]
-  node_wait_ratio = prefetch_factor * (
-      node.total_processing_time_ns / aggregated_wait_time_ns
-  )
-  node.wait_time_ratio = round(node_wait_ratio, 4)
-  for input_node_id in node.inputs:
-    # If the node is executed in multiple threads, the iterator's wait time
-    # ratio attributed to the prefetch node is distributed among these nodes
-    # proportionally to their total processing time.
-    if node.is_prefetch:
-      prefetch_factor = node.wait_time_ratio
-      prefetch_child_nodes = _get_nodes_before_prefetch(input_node_id, summary)
-      aggregated_wait_time_ns = _find_aggregated_processing_time(
-          summary, prefetch_child_nodes
-      )
-      # The `wait_time_ratio` of the prefetch node is sum of `wait_time_ratio`
-      # of all the nodes running under it. Here we set it to 0 as it is already
-      # accounted for in the ancestor nodes and sum of `wait_time_ratio` of all
-      # the nodes in a pipeline should be 1.
-      node.wait_time_ratio = 0
-    _compute_wait_time_ratio(
-        summary,
-        input_node_id,
-        aggregated_wait_time_ns,
-        prefetch_factor,
-    )
-
-
-def _populate_wait_time_ratio(
-    summary: execution_summary_pb2.ExecutionSummary,
-) -> None:
-  """Populates the `wait_time_ratio` for all the nodes in the execution summary."""
-  iterator_nodes = _get_nodes_before_prefetch(0, summary)
-  aggregated_wait_time_ns = _find_aggregated_processing_time(
-      summary, iterator_nodes
-  )
-  _compute_wait_time_ratio(summary, 0, aggregated_wait_time_ns)
-
-
 def _pretty_format_col_value(
     value: Any,
     name: Any,
@@ -749,7 +666,7 @@ class _ExecutionStats(_VisualizationStats):
     """Returns ExecutionStats Summary for the dataset pipeline."""
     execution_summary = execution_summary_pb2.ExecutionSummary()
     result, _ = self._build_execution_summary(execution_summary, 0)
-    _populate_wait_time_ratio(result)
+    stats_utils.populate_wait_time_ratio(result)
     return result
 
   def _flush_execution_summary_loop(self) -> Callable[[], None]:
