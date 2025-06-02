@@ -21,11 +21,12 @@ from unittest import mock
 
 from absl import flags
 from absl.testing import absltest
-from absl.testing import parameterized
+from absl.testing import parameterized as absl_parameterized
 from grain._src.core import sharding
 from grain._src.core import transforms
 import multiprocessing as mp
 from grain._src.python import data_loader as data_loader_lib
+from grain._src.python import options
 from grain._src.python import samplers
 from grain._src.python import shared_memory_array
 # pylint: disable=g-importing-member
@@ -37,6 +38,7 @@ from grain._src.python.operations import FilterOperation
 from grain._src.python.operations import MapOperation
 # pylint: enable=g-importing-member
 import numpy as np
+import parameterized
 
 
 FLAGS = flags.FLAGS
@@ -152,11 +154,23 @@ class CopyNumPyArrayToSharedMemoryTest(absltest.TestCase):
     self.assertIs(result, element)
 
 
-class DataLoaderTest(parameterized.TestCase):
+@parameterized.parameterized_class([
+    {"num_threads_per_worker": None},
+    {"num_threads_per_worker": 0},
+    {"num_threads_per_worker": 15},
+])
+class DataLoaderTest(absl_parameterized.TestCase):
+  # Number of prefetch threads for each Grain worker
+  num_threads_per_worker: int | None
 
   def setUp(self):
     super().setUp()
     self.testdata_dir = pathlib.Path(FLAGS.test_srcdir) / "testdata"
+    self.read_options = (
+        options.ReadOptions(num_threads=self.num_threads_per_worker)
+        if (self.num_threads_per_worker is not None)
+        else None
+    )
 
   def _create_data_loader_for_short_sequence(
       self,
@@ -177,6 +191,7 @@ class DataLoaderTest(parameterized.TestCase):
         sampler=sampler,
         operations=transformations,
         worker_count=worker_count,
+        read_options=self.read_options,
     )
 
   def test_fails_to_pickle(self):
@@ -285,6 +300,7 @@ class DataLoaderTest(parameterized.TestCase):
         sampler=sampler,
         operations=operations,
         worker_count=num_workers,
+        read_options=self.read_options,
     )
 
     expected = [np.array([2, 4]), np.array([6, 8])]
@@ -316,6 +332,7 @@ class DataLoaderTest(parameterized.TestCase):
         sampler=sampler,
         operations=operations,
         worker_count=num_workers,
+        read_options=self.read_options,
     )
 
     expected = [np.array([2, 4]), np.array([6, 8])]
@@ -347,6 +364,7 @@ class DataLoaderTest(parameterized.TestCase):
         sampler=sampler,
         operations=operations,
         worker_count=num_workers,
+        read_options=self.read_options,
     )
 
     expected = [np.array([2, 4]), np.array([6, 8])]
@@ -369,6 +387,7 @@ class DataLoaderTest(parameterized.TestCase):
         sampler=sampler,
         operations=operations,
         worker_count=num_workers,
+        read_options=self.read_options,
     )
     with self.assertRaises(Exception) as e:
       list(data_loader)
@@ -390,7 +409,10 @@ class DataLoaderTest(parameterized.TestCase):
 
     num_workers = 1
     data_loader = data_loader_lib.DataLoader(
-        data_source=data_source, sampler=sampler, worker_count=num_workers
+        data_source=data_source,
+        sampler=sampler,
+        worker_count=num_workers,
+        read_options=self.read_options,
     )
     expected = [b"0", b"1", b"2", b"3", b"4", b"5", b"6", b"7", b"8", b"9"]
     actual = list(data_loader)
@@ -411,7 +433,10 @@ class DataLoaderTest(parameterized.TestCase):
     num_workers = -1
     with self.assertRaises(ValueError):
       data_loader_lib.DataLoader(
-          data_source=ar_data_source, sampler=sampler, worker_count=num_workers
+          data_source=ar_data_source,
+          sampler=sampler,
+          worker_count=num_workers,
+          read_options=self.read_options,
       )
 
   def create_checkpointing_dataloader(
@@ -435,9 +460,10 @@ class DataLoaderTest(parameterized.TestCase):
         sampler=sampler,
         operations=operations,
         worker_count=num_workers,
+        read_options=self.read_options,
     )
 
-  @parameterized.parameters(
+  @absl_parameterized.parameters(
       {
           "num_workers": 0,
           "steps_to_iterate": 0,
@@ -535,7 +561,7 @@ class DataLoaderTest(parameterized.TestCase):
 
     np.testing.assert_equal(actual, expected)
 
-  @parameterized.parameters(
+  @absl_parameterized.parameters(
       {
           "num_workers": 0,
           "steps_to_iterate": 0,
@@ -672,6 +698,7 @@ class DataLoaderTest(parameterized.TestCase):
         sampler=sampler,
         operations=operations,
         worker_count=0,
+        read_options=self.read_options,
     )
     batch_operation._enable_shared_memory.assert_not_called()
     self.assertTrue(
@@ -683,6 +710,7 @@ class DataLoaderTest(parameterized.TestCase):
         sampler=sampler,
         operations=operations + [batch_operation],
         worker_count=2,
+        read_options=self.read_options,
     )
     batch_operation._enable_shared_memory.assert_called_once()
     self.assertTrue(data_loader._operations[-1], batch_operation)
@@ -692,6 +720,7 @@ class DataLoaderTest(parameterized.TestCase):
     loader = data_loader_lib.DataLoader(
         data_source=data_source,
         sampler=samplers.SequentialSampler(num_records=len(data_source)),
+        read_options=self.read_options,
     )
     it = loader.__iter__()
     state = it.get_state()

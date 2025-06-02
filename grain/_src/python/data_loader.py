@@ -301,18 +301,27 @@ class DataLoader:
     # to be available.
     next_index = last_seen_index + self._global_num_workers
 
-    buffer = collections.deque()
-    buffer_size = self._read_options.prefetch_buffer_size
-
-    def prefetch_element(index: int) -> record.Record:
+    def fetch_element(index: int) -> record.Record:
       metadata = self._sampler[index]
       data = self._data_source[metadata.record_key]
       return record.Record(metadata=metadata, data=data)
 
+    if self._read_options.num_threads == 0:
+      while True:
+        try:
+          element = fetch_element(next_index)
+        except IndexError:
+          return
+        yield element
+        next_index += self._global_num_workers
+
+    buffer = collections.deque()
+    buffer_size = self._read_options.prefetch_buffer_size
+
     with futures.ThreadPoolExecutor(self._read_options.num_threads) as executor:
       # Fill the buffer initially.
       while len(buffer) < buffer_size:
-        buffer.append(executor.submit(prefetch_element, next_index))
+        buffer.append(executor.submit(fetch_element, next_index))
         next_index += self._global_num_workers
 
       # Iterate until we get an IndexError. The IndexError indicates that we
@@ -324,7 +333,7 @@ class DataLoader:
           # End of sampler.
           return
         yield element
-        buffer.append(executor.submit(prefetch_element, next_index))
+        buffer.append(executor.submit(fetch_element, next_index))
         next_index += self._global_num_workers
 
   def _read_and_transform_data(

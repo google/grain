@@ -184,6 +184,7 @@ py_test(
         ":data_loader",
         ":data_sources",
         ":operations",
+        ":options",
         ":samplers",
         ":shared_memory_array",
         "//grain/_src/core:sharding",
@@ -192,6 +193,7 @@ py_test(
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
         "@pypi//numpy:pkg",
+        "@pypi//parameterized:pkg",
     ],
 )
 

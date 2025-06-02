@@ -26,3 +26,4 @@ jaxtyping
 numpy
 attrs
 pyarrow
+parameterized

@@ -2,6 +2,10 @@
 
 
 
+.md
+
+
+
 Grain Transforms interface denotes transformations which are applied to data. In
 the case of local transformations (such as map, random map, filter), the
 transforms receive an element on which custom changes are applied. For global
@@ -9,7 +13,6 @@ transformations (such as batching), one must provide the batch size.
 
 The Grain core transforms interface code is
 [here](https://github.com/google/grain/tree/main/grain/_src/core/transforms.py).
-
 
 ## MapTransform
 
@@ -25,6 +28,23 @@ class PlusOne(transforms.MapTransform):
 
   def map(self, x: int) -> int:
     return x + 1
+```
+
+## MapWithIndexTransform
+
+`MapWithIndexTransform` is similar to `MapTransform` in being a 1:1
+transformations of elements, but also takes in the index/position of the element
+as the first argument. This is useful for pairing elements with an index key or
+even keeping it as metadata alongside the actual data.
+
+Example of transformation which implements `MapWithIndexTransform` (for elements
+of type `int`):
+
+```python
+class PlusOneWithIndexKey(transforms.MapWithIndexTransform):
+
+  def map_with_index(self, i: int, x: int) -> tuple[int, int]:
+    return (x + 1, i)
 ```
 
 ## RandomMapTransform
