@@ -17,14 +17,14 @@ module(
     repo_name = "com_google_grain",
 )
 
-bazel_dep(name = "bazel_skylib", version = "1.6.1")
-bazel_dep(name = "platforms", version = "0.0.8")
-bazel_dep(name = "rules_python", version = "0.37.0")
-bazel_dep(name = "rules_cc", version = "0.0.9")
+bazel_dep(name = "bazel_skylib", version = "1.7.1")
+bazel_dep(name = "platforms", version = "0.0.10")
+bazel_dep(name = "rules_python", version = "0.40.0")
+bazel_dep(name = "rules_cc", version = "0.0.17")
 bazel_dep(name = "pybind11_bazel", version = "2.11.1")
 bazel_dep(name = "abseil-py", version = "2.1.0")
-bazel_dep(name = "abseil-cpp", version = "20230802.0.bcr.1")
-bazel_dep(name = "protobuf", version = "24.4", repo_name = "com_google_protobuf")
+bazel_dep(name = "abseil-cpp", version = "20240116.1")
+bazel_dep(name = "protobuf", version = "29.0", repo_name = "com_google_protobuf")
 
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
