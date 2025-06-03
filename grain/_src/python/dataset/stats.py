@@ -28,6 +28,7 @@ import threading
 import time
 import types
 from typing import Any, TypeVar
+import weakref
 
 from absl import logging
 from grain._src.core import config as grain_config
@@ -39,6 +40,10 @@ from grain.proto import execution_summary_pb2
 
 from grain._src.core import monitoring
 
+
+# Registry of weak references to output dataset iterators for collecting
+# execution stats.
+_iter_weakref_registry = []
 
 _self_time_ns_histogram = monitoring.EventMetric(
     "/grain/python/dataset/self_time_ns",
@@ -88,7 +93,7 @@ _EDGE_TEMPLATE = r"""{input_spec}
 _AVG_PROCESSING_TIME_COLUMN_NAME = "avg processing time"
 _MEMORY_USAGE_COLUMN_NAME = "memory usage"
 
-_COLUMN_NAME_OVERRIDES = types.MappingProxyType({
+COLUMN_NAME_OVERRIDES = types.MappingProxyType({
     "wait_time_ratio": "percent wait time",
     "min_processing_time_ns": "min processing time",
     "max_processing_time_ns": "max processing time",
@@ -205,7 +210,7 @@ def _pretty_format_col_value(
   return str(value)
 
 
-def _get_col_value(
+def get_col_value(
     name: str, node: execution_summary_pb2.ExecutionSummary.Node
 ) -> str:
   """Returns the string representation of the value of a column for the given node."""
@@ -238,11 +243,10 @@ def _get_col_value(
   return _pretty_format_col_value(value, name)
 
 
-def pretty_format_summary(
+def get_col_names(
     summary: execution_summary_pb2.ExecutionSummary,
-) -> str:
-  """Returns Execution Stats Summary for the dataset pipeline in tabular format."""
-  tabular_summary = []
+) -> list[str]:
+  """Returns all the column names for the given execution stats."""
   col_names = [key for key in summary.nodes[0].DESCRIPTOR.fields_by_name.keys()]
   # Remove the columns `output_spec` and `is_output` as they are available in
   # the visualization graph.
@@ -256,22 +260,30 @@ def pretty_format_summary(
   index = col_names.index("max_processing_time_ns")
   col_names.insert(index + 1, _AVG_PROCESSING_TIME_COLUMN_NAME)
   col_names.append(_MEMORY_USAGE_COLUMN_NAME)
+  return col_names
 
+
+def pretty_format_summary(
+    summary: execution_summary_pb2.ExecutionSummary,
+) -> str:
+  """Returns Execution Stats Summary for the dataset pipeline in tabular format."""
+  tabular_summary = []
+  col_names = get_col_names(summary)
   tabular_summary.append(
-      [_COLUMN_NAME_OVERRIDES.get(name, name) for name in col_names]
+      [COLUMN_NAME_OVERRIDES.get(name, name) for name in col_names]
   )
 
   # Compute the maximum width of each column.
   col_widths = []
   for name in col_names:
-    max_width = len(_COLUMN_NAME_OVERRIDES.get(name, name))
+    max_width = len(COLUMN_NAME_OVERRIDES.get(name, name))
     for node in summary.nodes.values():
-      max_width = max(len(_get_col_value(name, node)), max_width)
+      max_width = max(len(get_col_value(name, node)), max_width)
     col_widths.append(max_width)
 
   for node_id in sorted(summary.nodes, reverse=True):
     node = summary.nodes[node_id]
-    row_values = [_get_col_value(name, node) for name in col_names]
+    row_values = [get_col_value(name, node) for name in col_names]
     tabular_summary.append(row_values)
   table = _Table(tabular_summary, col_widths=col_widths)
   return table.get_pretty_wrapped_summary()
@@ -307,6 +319,21 @@ def record_next_duration_if_output(next_fn):
     return result
 
   return wrapper
+
+
+class PicklableWeakRef:
+  """Wrapper for `weakref.ref` that enables `pickle` serialization."""
+
+  def __init__(self, obj: Any):
+    self._weakref = weakref.ref(obj)
+
+  def __call__(self) -> Any:
+    return self._weakref()
+
+  def __reduce__(
+      self,
+  ) -> tuple[Callable[..., Any], tuple[weakref.ReferenceType | None]]:
+    return PicklableWeakRef, (self(),)
 
 
 class _Table:
@@ -424,6 +451,8 @@ class StatsConfig:
   # process. This queue is only populated to the stats object of the output node
   # in the pipeline within the child process.
   stats_out_queue: queues.Queue | None = None
+  # Weak reference to the iterator that this stats object is associated with.
+  iter_weakref: PicklableWeakRef | None = None
 
 
 class Stats(abc.ABC):
@@ -440,8 +469,10 @@ class Stats(abc.ABC):
     # Mark parent nodes as non-outputs. Nodes that are not updated are the
     # output nodes.
     self._is_output = True
+    _iter_weakref_registry.append(config.iter_weakref)
     for p in parents:
       p._is_output = False
+      _iter_weakref_registry.remove(p._config.iter_weakref)
 
   @property
   def output_spec(self) -> Any:
