@@ -63,7 +63,11 @@ main() {
   cp README.md "${TMPDIR}"
   cp setup.py "${TMPDIR}"
   if [ "$IS_NIGHTLY" == true ]; then
-    sed -i 's/^name = "grain"$/name = "grain-nightly"/' pyproject.toml
+    if [ "$(uname)" = "Darwin" ] ; then
+      sed -i '' 's/^name = "grain"$/name = "grain-nightly"/' pyproject.toml
+    else
+      sed -i 's/^name = "grain"$/name = "grain-nightly"/' pyproject.toml
+    fi
   fi
   cp pyproject.toml "${TMPDIR}"
   cp LICENSE "${TMPDIR}"
@@ -105,7 +109,7 @@ main() {
   else
     PKG_NAME=grain
   fi
-  $PYTHON_BIN -m pip install --find-links=/tmp/grain/all_dist "${PKG_NAME}"
+  $PYTHON_BIN -m pip install --find-links=/tmp/grain/all_dist --pre "${PKG_NAME}"
   $PYTHON_BIN -m pip install jax
   $PYTHON_BIN grain/_src/core/smoke_test_with_jax.py
   # TF is not available on Python 3.13 and above.
