@@ -27,7 +27,9 @@ class ReadOptions:
   data (8 threads in each of 10 Python processes).
 
   Attributes:
-    num_threads: Number of threads reading from the DataSource in parallel.
+    num_threads: Number of threads reading from the DataSource in parallel. If
+      the data are already loaded in memory, we recommend setting this to 0 to
+      avoid Python GIL contention by multiple threads.
     prefetch_buffer_size: Size of the buffer for reading elements per Python
       process (not per thread). Useful when reading from a distributed file
       system.
