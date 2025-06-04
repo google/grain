@@ -28,6 +28,7 @@ import threading
 import time
 import types
 from typing import Any, TypeVar
+import weakref
 
 from absl import logging
 from grain._src.core import config as grain_config
@@ -39,6 +40,10 @@ from grain.proto import execution_summary_pb2
 
 from grain._src.core import monitoring
 
+
+# Registry of weak references to output dataset iterators for collecting
+# execution stats.
+_iter_weakref_registry = []
 
 _self_time_ns_histogram = monitoring.EventMetric(
     "/grain/python/dataset/self_time_ns",
@@ -309,6 +314,27 @@ def record_next_duration_if_output(next_fn):
   return wrapper
 
 
+class PicklableWeakRef:
+  """Wrapper for `weakref.ref` that enables `pickle` serialization."""
+
+  def __init__(self, obj: Any):
+    if obj is None:
+      self._weakref = None
+    else:
+      self._weakref = weakref.ref(obj)
+
+  def __call__(self) -> Any:
+    if self._weakref is None:
+      return None
+    else:
+      return self._weakref()
+
+  def __reduce__(
+      self,
+  ) -> tuple[Callable[..., Any], tuple[weakref.ReferenceType | None]]:
+    return PicklableWeakRef, (self(),)
+
+
 class _Table:
   """Table class for pretty printing tabular data."""
 
@@ -424,6 +450,8 @@ class StatsConfig:
   # process. This queue is only populated to the stats object of the output node
   # in the pipeline within the child process.
   stats_out_queue: queues.Queue | None = None
+  # Weak reference to the iterator that this stats object is associated with.
+  iter_weakref: PicklableWeakRef | None = None
 
 
 class Stats(abc.ABC):
@@ -440,8 +468,10 @@ class Stats(abc.ABC):
     # Mark parent nodes as non-outputs. Nodes that are not updated are the
     # output nodes.
     self._is_output = True
+    _iter_weakref_registry.append(config.iter_weakref)
     for p in parents:
       p._is_output = False
+      _iter_weakref_registry.remove(p._config.iter_weakref)
 
   @property
   def output_spec(self) -> Any:
