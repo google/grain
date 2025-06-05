@@ -30,6 +30,7 @@ from grain import (
     sharding,
     sources,
     transforms,
+    version,
 )
 
 from grain._src.core.config import config

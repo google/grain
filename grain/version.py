@@ -11,19 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""Version information for Grain."""
 
-# This is the list of our Python third_party dependencies that Bazel should
-# pull from PyPi.
-# Note that requirements.txt must be re-generated using 
-# bazel run //:requirements.update in the OSS version.
-array-record
-absl-py
-dm-tree
-etils[epath,epy]
-cloudpickle
-jax
-jaxtyping
-numpy
-attrs
-pyarrow
-parameterized
+
+# pylint: disable=g-importing-member
+# pylint: disable=g-multiple-import
+# pylint: disable=unused-import
+
+from grain._src.core.version import __version__, __version_info__

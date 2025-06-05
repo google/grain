@@ -42,6 +42,7 @@ from grain._src.core.transforms import (
     Transformation,
     Transformations,
 )
+from grain._src.core.version import __version__, __version_info__
 
 from grain._src.python.checkpoint_handlers import (
     CheckpointHandler as PyGrainCheckpointHandler,
