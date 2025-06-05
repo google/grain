@@ -11,19 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""Utility to get the version of Grain."""
 
-# This is the list of our Python third_party dependencies that Bazel should
-# pull from PyPi.
-# Note that requirements.txt must be re-generated using 
-# bazel run //:requirements.update in the OSS version.
-array-record
-absl-py
-dm-tree
-etils[epath,epy]
-cloudpickle
-jax
-jaxtyping
-numpy
-attrs
-pyarrow
-parameterized
+_version = "0.2.9"
+
+__version__ = _version
+__version_info__ = tuple(int(i) for i in _version.split(".") if i.isdigit())
