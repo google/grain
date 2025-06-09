@@ -1,0 +1,14 @@
+name: Build and Publish Nightly
+
+on:
+  schedule:
+    # At 04:00 on Monday.
+    - cron: '0 4 * * 1'
+
+jobs:
+  call-workflow:
+    uses: ./.github/workflows/build_and_publish_template.yml
+    with:
+      pypi_project_url: https://pypi.org/project/grain-nightly
+      run_tests: true
+      is_nightly: true
