@@ -15,6 +15,10 @@ on:
         required: true
         type: boolean
 
+defaults:
+  run:
+    shell: bash
+
 permissions:
   contents: read
 
@@ -29,7 +33,19 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
         os: [ubuntu-22.04, ubuntu-22.04-arm, macos-14]
 
+    env:
+      USE_BAZEL_VERSION: "7.1.1"
     steps:
+      - name: Set up Bazel
+        uses: bazel-contrib/setup-bazel@0.15.0
+      - name: Check Bazel installation
+        run: |
+          which bazel
+          bazel version
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
       - uses: "actions/checkout@v3"
       - name: Create directory
         run: |
