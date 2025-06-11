@@ -149,6 +149,8 @@ py_test(
         "//grain/_src/python:options",
         "//grain/_src/python:shared_memory_array",
         "//grain/proto:execution_summary_py_pb2",
+        "//third_party/py/bs4",
+        "//third_party/py/soupsieve",
         "@abseil-py//absl/flags",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:flagsaver",
