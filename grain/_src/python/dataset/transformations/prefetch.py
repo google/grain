@@ -128,6 +128,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
             name=str(self),
             transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
             is_prefetch=True,
+            iter_weakref=dataset_stats.PicklableWeakRef(self),
         ),
         (parent_stats,),
         execution_tracking_mode,
@@ -516,6 +517,7 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
         is_prefetch=True,
         stats_in_queues=self._stats_in_queues,
+        iter_weakref=dataset_stats.PicklableWeakRef(self),
     )
     return dataset_stats.make_stats(
         config,

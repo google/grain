@@ -822,7 +822,9 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
         parents_stats.append(p._initialize_stats(execution_tracking_mode))  # pylint: disable=protected-access
     self._stats = dataset_stats.make_stats(
         dataset_stats.StatsConfig(
-            name=str(self), transform_mutates_spec=self._MUTATES_ELEMENT_SPEC
+            name=str(self),
+            transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
+            iter_weakref=dataset_stats.PicklableWeakRef(self),
         ),
         parents_stats,
         execution_tracking_mode=execution_tracking_mode,
@@ -1316,6 +1318,7 @@ class DatasetIterator(Iterator[T], abc.ABC):
     config = dataset_stats.StatsConfig(
         name=str(self),
         transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
+        iter_weakref=dataset_stats.PicklableWeakRef(self),
     )
     return dataset_stats.make_stats(
         config,
