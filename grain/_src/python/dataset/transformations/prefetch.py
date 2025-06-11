@@ -79,7 +79,6 @@ class PrefetchIterDataset(dataset.IterDataset[T]):
     """Replaces `MapDataset` parents with their sliced versions."""
     assert isinstance(self._parent, dataset.MapDataset), self._parent
     self._parents = (self._parent.slice(sl),)
-    self._parent._stats._is_output = False  # pylint: disable=protected-access
 
   def __str__(self) -> str:
     return (
