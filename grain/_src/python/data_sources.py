@@ -66,19 +66,29 @@ _SparseArray = collections.namedtuple(
     "SparseArray", ["indices", "values", "dense_shape"]
 )
 
+ArrayRecordReaderOptions = dict[str, str] | None
+
 
 class ArrayRecordDataSource(array_record.ArrayRecordDataSource):
   """Data source for ArrayRecord files."""
 
-  def __init__(self, paths: ArrayRecordDataSourcePaths):
+  def __init__(
+      self,
+      paths: ArrayRecordDataSourcePaths,
+      reader_options: ArrayRecordReaderOptions = None,
+  ):
     """Creates a new ArrayRecordDataSource object.
 
     See `array_record.ArrayRecordDataSource` for more details.
 
     Args:
       paths: A single path/FileInstruction or list of paths/FileInstructions.
+      reader_options: string of comma-separated options to be passed when
+        creating a reader. For example, "index_storage_option:in_memory" stores
+        the reader indices in memory versus "index_storage_option:offloaded"
+        stores the indices on disk to save memory usage.
     """
-    super().__init__(paths)
+    super().__init__(paths, reader_options)
     _api_usage_counter.Increment("ArrayRecordDataSource")
 
   def __getitem__(self, record_key: SupportsIndex) -> bytes:
