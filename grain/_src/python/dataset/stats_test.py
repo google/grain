@@ -20,6 +20,7 @@ import sys
 import threading
 import time
 from unittest import mock
+import weakref
 
 from absl import flags
 from absl.testing import flagsaver
@@ -226,6 +227,10 @@ class TimerTest(absltest.TestCase):
 
 class DefaultStatsTest(absltest.TestCase):
 
+  def setUp(self):
+    super().setUp()
+    stats._iter_weakref_registry.clear()
+
   def test_assert_is_default(self):
     s = _make_stats_tree(stats.make_stats)
     self.assertIsInstance(s, stats._DefaultStats)
@@ -262,6 +267,7 @@ class DebugModeStatsTest(absltest.TestCase):
   def setUp(self):
     super().setUp()
     self.enter_context(flagsaver.flagsaver(grain_py_debug_mode=True))
+    stats._iter_weakref_registry.clear()
 
   @mock.patch.object(stats, "_REPORTING_PERIOD_SEC", 0.05)
   def test_record_stats(self):
@@ -324,7 +330,13 @@ class DebugModeStatsTest(absltest.TestCase):
     self.assertGreaterEqual(reported_self_time, n_threads)
 
   def test_picklable(self):
-    s = stats.make_stats(stats.StatsConfig(name="test_stats"), ())
+    mock_iter = mock.Mock()
+    s = stats.make_stats(
+        stats.StatsConfig(
+            name="test_stats", iter_weakref=weakref.ref(mock_iter)
+        ),
+        (),
+    )
     self.assertIsInstance(s, stats._ExecutionStats)
     s = cloudpickle.loads(cloudpickle.dumps(s))
     self.assertIsInstance(s, stats._ExecutionStats)

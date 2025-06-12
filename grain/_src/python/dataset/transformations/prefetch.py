@@ -28,6 +28,7 @@ import threading
 import time
 import typing
 from typing import Any, Generic, Optional, Protocol, TypeVar
+import weakref
 
 import cloudpickle
 from concurrent import futures
@@ -128,6 +129,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
             name=str(self),
             transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
             is_prefetch=True,
+            iter_weakref=weakref.ref(self),
         ),
         (parent_stats,),
         execution_tracking_mode,
@@ -516,6 +518,7 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
         is_prefetch=True,
         stats_in_queues=self._stats_in_queues,
+        iter_weakref=weakref.ref(self),
     )
     return dataset_stats.make_stats(
         config,

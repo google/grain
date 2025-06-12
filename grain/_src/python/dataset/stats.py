@@ -28,6 +28,7 @@ import threading
 import time
 import types
 from typing import Any, TypeVar
+import weakref
 
 from absl import logging
 from grain._src.core import config as grain_config
@@ -39,6 +40,10 @@ from grain.proto import execution_summary_pb2
 
 from grain._src.core import monitoring
 
+
+# Registry of weak references to output dataset iterators for collecting
+# execution stats.
+_iter_weakref_registry = []
 
 _self_time_ns_histogram = monitoring.EventMetric(
     "/grain/python/dataset/self_time_ns",
@@ -402,7 +407,7 @@ class Timer:
     self._last = 0
 
 
-@dataclasses.dataclass(slots=True, kw_only=True)
+@dataclasses.dataclass(kw_only=True)
 class StatsConfig:
   """Statistics recording condiguration."""
 
@@ -424,6 +429,17 @@ class StatsConfig:
   # process. This queue is only populated to the stats object of the output node
   # in the pipeline within the child process.
   stats_out_queue: queues.Queue | None = None
+  # Weak reference to the iterator that this stats object is associated with.
+  iter_weakref: weakref.ReferenceType | None = None
+
+  def __getstate__(self):
+    state = self.__dict__.copy()
+    del state["iter_weakref"]
+    return state
+
+  def __setstate__(self, state):
+    self.__dict__.update(state)
+    self.iter_weakref = None
 
 
 class Stats(abc.ABC):
@@ -440,8 +456,11 @@ class Stats(abc.ABC):
     # Mark parent nodes as non-outputs. Nodes that are not updated are the
     # output nodes.
     self._is_output = True
+    _iter_weakref_registry.append(config.iter_weakref)
     for p in parents:
       p._is_output = False
+      if p._config.iter_weakref in _iter_weakref_registry:
+        _iter_weakref_registry.remove(p._config.iter_weakref)
 
   @property
   def output_spec(self) -> Any:
