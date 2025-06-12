@@ -243,11 +243,10 @@ def _get_col_value(
   return _pretty_format_col_value(value, name)
 
 
-def pretty_format_summary(
+def _get_col_names(
     summary: execution_summary_pb2.ExecutionSummary,
-) -> str:
-  """Returns Execution Stats Summary for the dataset pipeline in tabular format."""
-  tabular_summary = []
+) -> list[str]:
+  """Returns all the column names for the given execution stats."""
   col_names = [key for key in summary.nodes[0].DESCRIPTOR.fields_by_name.keys()]
   # Remove the columns `output_spec` and `is_output` as they are available in
   # the visualization graph.
@@ -261,7 +260,15 @@ def pretty_format_summary(
   index = col_names.index("max_processing_time_ns")
   col_names.insert(index + 1, _AVG_PROCESSING_TIME_COLUMN_NAME)
   col_names.append(_MEMORY_USAGE_COLUMN_NAME)
+  return col_names
 
+
+def pretty_format_summary(
+    summary: execution_summary_pb2.ExecutionSummary,
+) -> str:
+  """Returns Execution Stats Summary for the dataset pipeline in tabular format."""
+  tabular_summary = []
+  col_names = _get_col_names(summary)
   tabular_summary.append(
       [_COLUMN_NAME_OVERRIDES.get(name, name) for name in col_names]
   )
