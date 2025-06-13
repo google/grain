@@ -23,6 +23,7 @@ import functools
 import json
 from multiprocessing import pool
 from multiprocessing import queues
+from multiprocessing import synchronize
 import os
 import sys
 import time
@@ -404,6 +405,7 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn):
       *,
       worker_index: int,
       worker_count: int,
+      stats_reinit_event: synchronize.Event | None = None,
       stats_out_queue: queues.Queue | None = None,
   ) -> Iterator[record.Record]:
     del worker_count
