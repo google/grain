@@ -222,6 +222,8 @@ def _worker_loop(
     enable_profiling: bool,
     debug_flags: dict[str, Any],
     stats_out_queue: queues.Queue,
+    debug_port_queue: (
+        queues.Queue[tuple[int, int]] | None
 ):
   """Code to be run on each child process."""
   out_of_elements = False
@@ -238,6 +240,7 @@ def _worker_loop(
         worker_count=worker_count,
         stats_out_queue=stats_out_queue,
     )
+
     profiling_enabled = enable_profiling and worker_index == 0
     if profiling_enabled:
       profile = cProfile.Profile()
@@ -425,6 +428,7 @@ class GrainPool(Iterator[T]):
         num_workers=min(_PROCESS_MANAGEMENT_MAX_THREADS, self.num_processes),
     )
     logging.info("Grain pool started all child processes.")
+
     self._next_worker_index = worker_index_to_start_reading
 
   def __iter__(self) -> GrainPool:

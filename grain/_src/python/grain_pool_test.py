@@ -239,6 +239,13 @@ class NonUniformElementProducerFn(gp.GetElementProducerFn):
       yield worker_index
 
 
+class DummyProducerFn(gp.GetElementProducerFn):
+  """A valid GetElementProducerFn that does nothing."""
+
+  def __call__(self, **kwargs) -> Iterator[Any]:
+    yield from []
+
+
 class MultiProcessIteratorTest(parameterized.TestCase):
 
   @parameterized.named_parameters(
