@@ -156,12 +156,8 @@ py_test(
     ],
 )
 
-py_test(
-    name = "version_test",
-    srcs = ["version_test.py"],
+py_library(
+    name = "version",
+    srcs = ["version.py"],
     srcs_version = "PY3",
-    deps = [
-        "//grain:python",
-        "@abseil-py//absl/testing:absltest",
-    ],
 )
