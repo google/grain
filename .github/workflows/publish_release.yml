@@ -12,6 +12,8 @@ on:
 jobs:
   call-workflow:
     uses: ./.github/workflows/build_and_publish_template.yml
+    permissions:
+      id-token: write
     with:
       pypi_project_url: https://pypi.org/project/grain
       run_tests: ${{ inputs.run_tests }}
