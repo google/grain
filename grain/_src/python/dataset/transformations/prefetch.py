@@ -658,6 +658,26 @@ class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
 StateT = dict[str, Any]
 
 
+def _get_iterator_next_and_state(
+    iterator: dataset.DatasetIterator[T],
+) -> tuple[T, StateT]:
+  return iterator.__next__(), iterator.get_state()
+
+
+def _put_iterator_elements_in_buffer(
+    iterator: dataset.DatasetIterator[T],
+    buffer: queue.Queue[tuple[T, StateT, Exception | None]],
+    should_stop: threading.Event,
+):
+  """Fetches elements from the iterator and puts them in the buffer."""
+  try:
+    while not should_stop.is_set():
+      element, state = _get_iterator_next_and_state(iterator)
+      buffer.put((element, state, None))
+  except Exception as e:  # pylint: disable=broad-except
+    buffer.put((None, None, e))
+
+
 class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   """Iterator that performs prefetching using a synchronized queue."""
 
@@ -674,75 +694,41 @@ class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._step_zero_state: StateT = parent.get_state()
     self._state: StateT | None = None
 
-    self._work_queue = queue.Queue[Callable[[], Any]]()
-    self._work_thread: threading.Thread | None = None
     # Whether this iterator is closed, meaning it should no longer be used.
     self._closed = False
-    self._producer_running: threading.Event = None
-    self._buffer: queue.Queue[tuple[T, StateT, Exception | None]] = None
+    self._prefetch_thread: threading.Thread | None = None
+    self._prefetch_should_stop: threading.Event = threading.Event()
+    self._buffer: queue.Queue[tuple[T, StateT, Exception | None]] = queue.Queue(
+        maxsize=self._prefetch_buffer_size
+    )
 
-  def _start_producer(self):
-    """Starts the producer.
+  def start_prefetch(self):
+    """Starts prefetching elements in background.
 
     Raises:
-      ValueError: If the iterator has been closed, or if the producer is already
-        running.
+      ValueError: If the iterator has been closed.
     """
     if self._closed:
       raise ValueError("Attempting to use a closed iterator.")
-    if self._producer_running is not None:
-      raise ValueError("The producer is already running.")
+    if self._prefetch_thread is not None:
+      return
 
-    if self._work_thread is None:
-      self._work_thread = threading.Thread(
-          target=self._work_loop,
-          daemon=True,
-          name=f"worker-thread-{str(self)}",
-      )
-      self._work_thread.start()
-
-    self._producer_running = threading.Event()
-    self._producer_running.set()
-    self._buffer = queue.Queue(maxsize=self._prefetch_buffer_size)
-    self._work_queue.put(
-        functools.partial(
-            self._producer,
-            output_buffer=self._buffer,
-            running=self._producer_running,
-        )
+    self._prefetch_should_stop.clear()
+    self._prefetch_thread = threading.Thread(
+        target=functools.partial(
+            _put_iterator_elements_in_buffer,
+            iterator=self._parent,
+            buffer=self._buffer,
+            should_stop=self._prefetch_should_stop,
+        ),
+        daemon=True,
+        name=f"prefetch-thread-{str(self)}",
     )
-
-  def _get_parent_next(self) -> T:
-    return next(self._parent)
-
-  def _producer(
-      self,
-      output_buffer: queue.Queue[tuple[T, StateT, Exception | None]],
-      running: threading.Event,
-  ) -> None:
-    """Functor that fills the queue to its capacity.
-
-    Should be run on a separate thread.
-
-    Args:
-      output_buffer: queue to fill.
-      running: an sync event for whether the thread should run.
-    """
-    try:
-      # Check if the producer thread should be running every time an item is
-      # retrieved from the queue.
-      while running.is_set():
-        while True:
-          element, state = self._get_parent_next(), self._parent.get_state()
-          output_buffer.put((element, state, None))
-          break
-    except Exception as e:  # pylint: disable=broad-except
-      output_buffer.put((None, None, e))
+    self._prefetch_thread.start()
 
   @dataset_stats.record_next_duration_if_output
   def __next__(self):
     self.start_prefetch()
-    assert self._buffer is not None
     element, state, err = self._buffer.get()
 
     if err is not None:
@@ -753,55 +739,37 @@ class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   def close(self):
     """Stops the iterator. No further calls to the iterator are expected."""
     self._closed = True
-    self._stop_producer()
-    # Make sure the work thread isn't blocked, so it can exit.
-    self._work_queue.put(lambda: None)
+    self._stop_prefetch()
 
-  def start_prefetch(self):
-    """Starts the producer if it's not already running.
-
-    Raises:
-      ValueError: If the iterator has been closed, or if there's already a
-        running producer.
-    """
-    if self._closed:
-      raise ValueError("Attempting to use a closed iterator.")
-    if self._producer_running is None:
-      self._start_producer()
-
-  def _stop_producer(self):
-    """Stops the producer if it's currently running."""
-    producer_running = self._producer_running
-    buffer = self._buffer
-    if producer_running is None:
-      # Nothing to stop.
-      return
-
-    producer_running.clear()
-    # Remove entries from the buffer to unblock the producer, so that it checks
-    # producer_running.is_set() and exits.
-    assert buffer is not None  # PyType.
+  def _clear_buffer(self):
     while True:
       try:
-        buffer.get_nowait()
+        self._buffer.get_nowait()
       except queue.Empty:
-        break
-    self._producer_running = None
-    self._buffer = None
+        return
 
-  def get_state(self):
+  def _stop_prefetch(self):
+    """Stops the prefetching thread if it's currently running."""
+    if self._prefetch_thread is None:
+      return
+
+    self._prefetch_should_stop.set()
+    # Remove entries from the buffer to unblock the producer, so that it checks
+    # producer_running.is_set() and exits.
+    self._clear_buffer()
+    self._prefetch_thread.join()
+    self._prefetch_thread = None
+    # Clear the buffer again in case the prefetch loop added more elements on
+    # exit.
+    self._clear_buffer()
+
+  def get_state(self) -> StateT:
     return self._step_zero_state if self._state is None else self._state
 
-  def set_state(self, state):
-    self._stop_producer()
+  def set_state(self, state: StateT):
+    self._stop_prefetch()
     self._parent.set_state(state)
     self._state = self._parent.get_state()
-    if self._prefetch_buffer_size > 0:
-      self._buffer = None
-
-  def _work_loop(self):
-    while not self._closed:
-      self._work_queue.get()()
 
   def __str__(self) -> str:
     return (

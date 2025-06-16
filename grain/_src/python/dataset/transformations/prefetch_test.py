@@ -829,6 +829,15 @@ class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
     it.start_prefetch()
     del it
 
+  def test_does_not_create_reference_to_itself(self):
+    ds = dataset.MapDataset.source([1, 2, 3]).repeat(100).to_iter_dataset()
+    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=10)
+    it = ds.__iter__()
+    refcount_before_iteration = sys.getrefcount(it)
+    _ = next(it)
+    refcount_after_iteration = sys.getrefcount(it)
+    self.assertEqual(refcount_before_iteration, refcount_after_iteration)
+
 
 if __name__ == '__main__':
   absltest.main()
