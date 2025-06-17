@@ -156,9 +156,15 @@ py_test(
     ],
 )
 
+py_library(
+    name = "version",
+    srcs = ["version.py"],
+    srcs_version = "PY3",
+)
+
 py_test(
-    name = "version_test",
-    srcs = ["version_test.py"],
+    name = "py_version_test",
+    srcs = ["py_version_test.py"],
     srcs_version = "PY3",
     deps = [
         "//grain:python",

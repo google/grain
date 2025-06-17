@@ -33,6 +33,7 @@ from grain import (
 )
 
 from grain._src.core.config import config
+from grain._src.core.version import __version__, __version_info__
 from grain._src.python.data_loader import (
     DataLoader,
     DataLoaderIterator,

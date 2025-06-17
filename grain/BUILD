@@ -40,6 +40,7 @@ py_library(
         "//grain/_src/core:monitoring",
         "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
+        "//grain/_src/core:version",
         "//grain/_src/python:checkpoint_handlers",
         "//grain/_src/python:data_loader",
         "//grain/_src/python:data_sources",
