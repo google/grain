@@ -649,7 +649,7 @@ class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
       # Avoid raising a NotImplemented error and make a noop instead.
       parent_iter.start_prefetch = lambda: None
       return parent_iter
-    return _ThreadPrefetchDatasetIterator(
+    return ThreadPrefetchDatasetIterator(
         parent_iter, self._prefetch_buffer_size
     )
 
@@ -678,7 +678,7 @@ def _put_iterator_elements_in_buffer(
     buffer.put((None, None, e))
 
 
-class _ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
+class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   """Iterator that performs prefetching using a synchronized queue."""
 
   _MUTATES_ELEMENT_SPEC = False
