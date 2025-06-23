@@ -16,6 +16,8 @@
 Config options can be set via flags starting with '--grain_' or by calling
 `grain.config.update(name, value)`.
 """
+
+import functools
 from typing import Any
 
 from absl import flags
