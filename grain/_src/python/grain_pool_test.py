@@ -23,6 +23,7 @@ from absl import flags
 from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.core import config
+from grain._src.core import monitoring as grain_monitoring
 import multiprocessing as mp
 from grain._src.python import data_sources
 from grain._src.python import grain_pool as gp
