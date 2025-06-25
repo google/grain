@@ -26,6 +26,7 @@ from absl import flags
 from absl.testing import flagsaver
 import cloudpickle
 from grain._src.core import transforms
+import grain._src.core.config as grain_config
 from grain._src.python import options
 from grain._src.python import shared_memory_array
 from grain._src.python.dataset import dataset
@@ -641,6 +642,50 @@ class GraphModeStatsTest(absltest.TestCase):
   def test_dataset_visualization_with_output_dir_none(self):
     s = stats.make_stats(stats.StatsConfig(name="test_stats"), ())
     self.assertIsInstance(s, stats._DefaultStats)
+
+
+class OnDemandProfilingTest(absltest.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    # Ensure a clean state for each test.
+    self.original_py_debug_mode = grain_config.config.py_debug_mode
+    grain_config.config.update("py_debug_mode", False)
+
+    # Clean up weakref registry.
+    stats._iter_weakref_registry.clear()
+
+  def tearDown(self):
+    super().tearDown()
+    grain_config.config.update("py_debug_mode", self.original_py_debug_mode)
+    # Reset globals modified by the test.
+    stats.start_profile_event = None
+    stats.stop_profile_event = None
+
+  def test_on_demand_profiling(self):
+    """Tests that _reinitialize_stats correctly updates stats objects."""
+    ds = dataset.MapDataset.source(range(20)).map(lambda x: x)
+    it = ds.__iter__()
+
+    for _ in range(5):
+      _ = next(it)
+    # The iterator should have _DefaultStats initially.
+    self.assertIsInstance(it._stats, stats._DefaultStats)
+
+    # start profiling
+    stats.start_profiling()
+    # allow time for the stats to be reinitialized.
+    time.sleep(2)
+    for _ in range(5):
+      _ = next(it)
+    self.assertIsInstance(it._stats, stats._ExecutionStats)
+    # stop profiling
+    stats.stop_profiling()
+    # allow time for the stats to be reinitialized.
+    time.sleep(2)
+    for _ in range(5):
+      _ = next(it)
+    self.assertIsInstance(it._stats, stats._DefaultStats)
 
 
 if __name__ == "__main__":

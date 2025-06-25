@@ -790,6 +790,8 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
   def __iter__(self) -> DatasetIterator[T]:
     return self.to_iter_dataset().__iter__()
 
+  # pytype: disable=attribute-error
+  # pylint: disable=protected-access
   def _initialize_stats(
       self, execution_tracking_mode: base.ExecutionTrackingMode
   ) -> dataset_stats.Stats:
@@ -813,7 +815,7 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
     parents_stats = []
     if hasattr(self, "_parents"):
       for p in self._parents:
-        parents_stats.append(p._initialize_stats(execution_tracking_mode))  # pylint: disable=protected-access
+        parents_stats.append(p._initialize_stats(execution_tracking_mode))
     self._stats = dataset_stats.make_stats(
         dataset_stats.StatsConfig(
             name=str(self),
@@ -829,6 +831,20 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
   def _stats(self) -> dataset_stats.Stats:
     """Returns the Stats object for recording statistics about this dataset."""
     return self._initialize_stats(base.ExecutionTrackingMode.DISABLED)
+
+  def _reinitialize_stats(self):
+    """Deletes and re-creates the stats object for this dataset."""
+    if hasattr(self, "_parents"):
+      for p in self._parents:
+        p._reinitialize_stats()
+    orig_stats = self._stats
+    del self._stats
+    _ = self._stats
+    self._stats._config.stats_out_queue = orig_stats._config.stats_out_queue
+    self._stats._config.stats_in_queues = orig_stats._config.stats_in_queues
+
+  # pytype: enable=attribute-error
+  # pylint: enable=protected-access
 
 
 class IterDatasetMeta(abc.ABCMeta):
@@ -1321,6 +1337,19 @@ class DatasetIterator(Iterator[T], abc.ABC):
             self._ctx.dataset_options.execution_tracking_mode
         ),
     )
+
+  # pylint: disable=protected-access
+  def _reinitialize_stats(self):
+    """Deletes and re-creates the stats object for this iterator."""
+    for parent in self._parents:
+      parent._reinitialize_stats()
+    orig_stats = self._stats
+    del self._stats
+    _ = self._stats
+    self._stats._config.stats_out_queue = orig_stats._config.stats_out_queue
+    self._stats._config.stats_in_queues = orig_stats._config.stats_in_queues
+
+  # pylint: enable=protected-access
 
   ### BEGIN Orbax checkpointing API.
   # See orbax.checkpoint.v1.handlers.StatefulCheckpointable for more details.

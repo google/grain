@@ -133,6 +133,8 @@ class GetElementProducerFn(Protocol[T]):
       *,
       worker_index: int,
       worker_count: int,
+      start_profiling_event: synchronize.Event | None = None,
+      stop_profiling_event: synchronize.Event | None = None,
       stats_out_queue: queues.Queue | None = None,
   ) -> Iterator[T]:
     """Returns a generator of elements."""
@@ -182,6 +184,8 @@ def _initialize_and_get_element_producer(
     debug_flags: dict[str, Any],
     worker_index: int,
     worker_count: int,
+    start_profiling_event: synchronize.Event,
+    stop_profiling_event: synchronize.Event,
     stats_out_queue: queues.Queue,
 ) -> Iterator[Any]:
   """Unpickles the element producer from the args queue and closes the queue."""
@@ -206,6 +210,8 @@ def _initialize_and_get_element_producer(
   element_producer = element_producer_fn(
       worker_index=worker_index,
       worker_count=worker_count,
+      start_profiling_event=start_profiling_event,
+      stop_profiling_event=stop_profiling_event,
       stats_out_queue=stats_out_queue,
   )
   # args_queue has only a single argument and thus can be safely closed.
@@ -219,6 +225,8 @@ def _worker_loop(
     errors_queue: queues.Queue,
     output_queue: queues.Queue,
     termination_event: synchronize.Event,
+    start_profiling_event: synchronize.Event,
+    stop_profiling_event: synchronize.Event,
     worker_index: int,
     worker_count: int,
     enable_profiling: bool,
@@ -238,6 +246,8 @@ def _worker_loop(
         debug_flags=debug_flags,
         worker_index=worker_index,
         worker_count=worker_count,
+        start_profiling_event=start_profiling_event,
+        stop_profiling_event=stop_profiling_event,
         stats_out_queue=stats_out_queue,
     )
     profiling_enabled = enable_profiling and worker_index == 0
@@ -324,6 +334,8 @@ class GrainPool(Iterator[T]):
       get_element_producer_fn: GetElementProducerFn[T],
       worker_index_to_start_reading: int = 0,
       termination_event: threading.Event | None = None,
+      start_profiling_event: synchronize.Event | None = None,
+      stop_profiling_event: synchronize.Event | None = None,
       options: MultiprocessingOptions,
       worker_init_fn: Callable[[int, int], None] | None = None,
       stats_in_queues: tuple[queues.Queue, ...] | None = None,
@@ -339,6 +351,8 @@ class GrainPool(Iterator[T]):
       termination_event: Setting this event will terminate the pool. Otherwise,
         the pool will terminate when either one of the workers failed or when
         all workers are done processing data. GrainPool will not set this event.
+      start_profiling_event: Event to start prism profiling.
+      stop_profiling_event: Event to stop prism profiling.
       options: Options for multiprocessing. See MultiprocessingOptions.
       worker_init_fn: Function to run in each worker process before the element
         producer. The function takes two arguments: the current worker index and
@@ -390,6 +404,8 @@ class GrainPool(Iterator[T]):
               else None
           ),
           termination_event=self._workers_termination_event,
+          start_profiling_event=start_profiling_event,
+          stop_profiling_event=stop_profiling_event,
           worker_index=worker_index,
           worker_count=options.num_workers,
           enable_profiling=options.enable_profiling,
@@ -592,6 +608,8 @@ def _process_elements_in_grain_pool(
     reader_queue: queue.Queue[_QueueElement],
     thread_pool: pool.ThreadPool,
     termination_event: threading.Event,
+    start_profiling_event: synchronize.Event | None,
+    stop_profiling_event: synchronize.Event | None,
     worker_index_to_start_reading: int,
     worker_init_fn: Callable[[int, int], None] | None,
     stats_in_queues: tuple[queues.Queue, ...] | None,
@@ -609,6 +627,8 @@ def _process_elements_in_grain_pool(
         get_element_producer_fn=get_element_producer_fn,
         worker_index_to_start_reading=worker_index_to_start_reading,
         termination_event=termination_event,
+        start_profiling_event=start_profiling_event,
+        stop_profiling_event=stop_profiling_event,
         options=multiprocessing_options,
         worker_init_fn=worker_init_fn,
         stats_in_queues=stats_in_queues,
@@ -665,6 +685,8 @@ class MultiProcessIterator(Iterator[T]):
       multiprocessing_options: MultiprocessingOptions,
       worker_index_to_start_reading: int,
       worker_init_fn: Callable[[int, int], None] | None = None,
+      start_profiling_event: synchronize.Event | None = None,
+      stop_profiling_event: synchronize.Event | None = None,
       stats_in_queues: tuple[queues.Queue, ...] | None = None,
   ):
     """Initializes MultiProcessIterator.
@@ -678,6 +700,8 @@ class MultiProcessIterator(Iterator[T]):
       worker_init_fn: Function to run in each worker process before the element
         producer. The function takes two arguments: the current worker index and
         the total worker count.
+      start_profiling_event: Event to start prism profiling.
+      stop_profiling_event: Event to stop prism profiling.
       stats_in_queues: Queues to send execution summaries from worker processes
         to the main process.
     """
@@ -690,6 +714,8 @@ class MultiProcessIterator(Iterator[T]):
     self._termination_event = None
     self._reader_thread = None
     self._stats_in_queues = stats_in_queues
+    self._start_profiling_event = start_profiling_event
+    self._stop_profiling_event = stop_profiling_event
 
   def __del__(self):
     if self._reader_thread:
@@ -717,6 +743,8 @@ class MultiProcessIterator(Iterator[T]):
             reader_queue=self._reader_queue,
             thread_pool=self._reader_thread_pool,
             termination_event=self._termination_event,
+            start_profiling_event=self._start_profiling_event,
+            stop_profiling_event=self._stop_profiling_event,
             worker_index_to_start_reading=self._last_worker_index + 1,
             worker_init_fn=self._worker_init_fn,
             stats_in_queues=self._stats_in_queues,
