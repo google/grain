@@ -34,6 +34,7 @@ def _common_test_body(
     length_struct,
     *,
     num_packing_bins: int,
+    seed: int = 0,
     shuffle_bins: bool = False,
     shuffle_bins_group_by_feature: str | None = None,
     meta_features: Sequence[str] = (),
@@ -52,6 +53,7 @@ def _common_test_body(
       source.SourceMapDataset(input_elements).to_iter_dataset(),
       num_packing_bins=num_packing_bins,
       length_struct=length_struct,
+      seed=seed,
       shuffle_bins=shuffle_bins,
       shuffle_bins_group_by_feature=shuffle_bins_group_by_feature,
       meta_features=meta_features,
@@ -455,6 +457,72 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
         shuffle_bins_group_by_feature="epoch",
         meta_features=["epoch"],
         kwargs=self.kwargs,
+    )
+
+  @parameterized.parameters(
+      {"seed": 0},
+      {"seed": 42},
+      {"seed": 123},
+  )
+  def test_shuffle_seed_default(self, seed):
+    input_elements = [
+        {
+            "inputs": [1, 2, 3],
+            "targets": [10],
+        },
+        {
+            "inputs": [4, 5],
+            "targets": [20, 30, 40],
+        },
+        {
+            "inputs": [6],
+            "targets": [50, 60],
+        },
+    ]
+
+    length_struct = {"inputs": 3, "targets": 3}
+
+    element_1 = {
+        "inputs": [6, 0, 0],
+        "targets": [50, 60, 0],
+        "inputs_segment_ids": [1, 0, 0],
+        "targets_segment_ids": [1, 1, 0],
+        "inputs_positions": [0, 0, 0],
+        "targets_positions": [0, 1, 0],
+    }
+    element_2 = {
+        "inputs": [1, 2, 3],
+        "targets": [10, 0, 0],
+        "inputs_segment_ids": [1, 1, 1],
+        "targets_segment_ids": [1, 0, 0],
+        "inputs_positions": [0, 1, 2],
+        "targets_positions": [0, 0, 0],
+    }
+    element_3 = {
+        "inputs": [4, 5, 0],
+        "targets": [20, 30, 40],
+        "inputs_segment_ids": [1, 1, 0],
+        "targets_segment_ids": [1, 1, 1],
+        "inputs_positions": [0, 1, 0],
+        "targets_positions": [0, 1, 2],
+    }
+    if seed == 0:
+      expected_elements = [element_1, element_2, element_3]
+    elif seed == 42:
+      expected_elements = [element_1, element_3, element_2]
+    elif seed == 123:
+      expected_elements = [element_2, element_1, element_3]
+    else:
+      raise ValueError(f"Unexpected seed: {seed}")
+
+    _common_test_body(
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=5,
+        kwargs=self.kwargs,
+        seed=seed,
+        shuffle_bins=True,
     )
 
   # Don't convert epoch `1` to `np.asarray(1)` during testing

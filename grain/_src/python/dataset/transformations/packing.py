@@ -50,6 +50,7 @@ class FirstFitPackIterDataset(dataset.IterDataset):
       *,
       length_struct: Any,
       num_packing_bins: int,
+      seed: int = 0,
       shuffle_bins: bool = True,
       shuffle_bins_group_by_feature: str | None = None,
       meta_features: Sequence[str] = (),
@@ -61,6 +62,7 @@ class FirstFitPackIterDataset(dataset.IterDataset):
         longer than their length_struct value.
       length_struct: Target sequence length for each feature.
       num_packing_bins: Number of bins to pack sequences into.
+      seed: Random seed for shuffling bins, if shuffling is enabled.
       shuffle_bins: Whether to shuffle bins after packing.
       shuffle_bins_group_by_feature: No-op if shuffle_bins is False. When
         shuffle_bins is True, if shuffle_bins_group_by_feature is set to
@@ -74,6 +76,7 @@ class FirstFitPackIterDataset(dataset.IterDataset):
     super().__init__(parent)
     self._length_struct = length_struct
     self._num_packing_bins = num_packing_bins
+    self._seed = seed
     self._shuffle_bins = shuffle_bins
     self._shuffle_bins_group_by_feature = shuffle_bins_group_by_feature
     self._meta_features = meta_features
@@ -86,6 +89,7 @@ class FirstFitPackIterDataset(dataset.IterDataset):
         self._parent.__iter__(),
         num_packing_bins=self._num_packing_bins,
         length_struct=self._length_struct,
+        seed=self._seed,
         shuffle_bins=self._shuffle_bins,
         shuffle_bins_group_by_feature=self._shuffle_bins_group_by_feature,
         meta_features=self._meta_features,
@@ -101,6 +105,7 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
       *,
       num_packing_bins: int,
       length_struct: Any,  # PyTree[int | None],
+      seed: int,
       shuffle_bins: bool,
       shuffle_bins_group_by_feature: str | None,
       meta_features: Sequence[str],
@@ -108,6 +113,7 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
     super().__init__(parent)
     self._num_packing_bins = num_packing_bins
     self._length_struct = length_struct
+    self._seed = seed
     self._shuffle_bins = shuffle_bins
     self._shuffle_bins_group_by_feature = shuffle_bins_group_by_feature
     self._meta_features = meta_features
@@ -149,7 +155,7 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
 
   def _generate_and_set_shuffled_rows(self):
     assert self._packed_batch_num_bins is not None
-    seed = self._counter - self._next_row
+    seed = self._seed + self._counter - self._next_row
     self._shuffled_rows = np.random.default_rng(seed).permuted(
         range(self._packed_batch_num_bins)
     )
