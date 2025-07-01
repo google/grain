@@ -26,6 +26,59 @@ import numpy as np
 _SOURCE_NODE_NAME = "SourceMapDataset"
 
 
+def pretty_format_ns(value: int) -> str:
+  """Pretty formats a time value in nanoseconds to human readable value."""
+  if value < 1000:
+    return f"{value}ns"
+  elif value < 1000_000:
+    return f"{value/1000:.2f}us"
+  elif value < 1_000_000_000:
+    return f"{value/1000_000:.2f}ms"
+  else:
+    return f"{value/1000_000_000:.2f}s"
+
+
+def format_ratio_as_percent(value: float) -> str:
+  return f"{value*100:.2f}%"
+
+
+def pretty_format_bytes(bytes_value: int) -> str:
+  """Returns a pretty formatted string for bytes."""
+  # pylint: disable=bad-whitespace
+  if bytes_value < 1024:
+    return f"{bytes_value} bytes"
+  elif bytes_value < 1024 * 1024:
+    return f"{bytes_value / 1024:.2f} KiB"
+  elif bytes_value < 1024 * 1024 * 1024:
+    return f"{bytes_value / 1024 / 1024:.2f} MiB"
+  elif bytes_value < 1024 * 1024 * 1024 * 1024:
+    return f"{bytes_value / 1024 / 1024 / 1024:.2f} GiB"
+  else:
+    return f"{bytes_value / 1024 / 1024 / 1024 / 1024:.2f} TiB"
+  # pylint: enable=bad-whitespace
+
+
+def get_avg_processing_time_ns(
+    node: execution_summary_pb2.ExecutionSummary.Node,
+) -> int:
+  """Returns the average processing time in nanoseconds for the given node."""
+  if node.num_produced_elements == 0:
+    return 0
+  return int(node.total_processing_time_ns / node.num_produced_elements)
+
+
+def sort_nodes_by_wait_time_ratio(
+    execution_summary: execution_summary_pb2.ExecutionSummary,
+) -> execution_summary_pb2.ExecutionSummary:
+  """Sorts the nodes in the summary by their wait time ratio."""
+  nodes = list(execution_summary.nodes.values())
+  nodes.sort(key=lambda x: x.wait_time_ratio)
+  execution_summary.ClearField("nodes")
+  for node_id, node in enumerate(nodes):
+    execution_summary.nodes[node_id].CopyFrom(node)
+  return execution_summary
+
+
 def is_source_node(node: execution_summary_pb2.ExecutionSummary.Node) -> bool:
   """Returns True if the node is a source node."""
   return _SOURCE_NODE_NAME in node.name
@@ -48,59 +101,6 @@ def analyze_summary(
     )
     warnings.append(msg)
   return warnings
-
-
-def sort_nodes_by_wait_time_ratio(
-    execution_summary: execution_summary_pb2.ExecutionSummary,
-) -> execution_summary_pb2.ExecutionSummary:
-  """Sorts the nodes in the summary by their wait time ratio."""
-  nodes = list(execution_summary.nodes.values())
-  nodes.sort(key=lambda x: x.wait_time_ratio)
-  execution_summary.ClearField("nodes")
-  for node_id, node in enumerate(nodes):
-    execution_summary.nodes[node_id].CopyFrom(node)
-  return execution_summary
-
-
-def format_ratio_as_percent(value: float) -> str:
-  return f"{value*100:.2f}%"
-
-
-def pretty_format_ns(value: int) -> str:
-  """Pretty formats a time value in nanoseconds to human readable value."""
-  if value < 1000:
-    return f"{value}ns"
-  elif value < 1000_000:
-    return f"{value/1000:.2f}us"
-  elif value < 1_000_000_000:
-    return f"{value/1000_000:.2f}ms"
-  else:
-    return f"{value/1000_000_000:.2f}s"
-
-
-def get_avg_processing_time_ns(
-    node: execution_summary_pb2.ExecutionSummary.Node,
-) -> int:
-  """Returns the average processing time in nanoseconds for the given node."""
-  if node.num_produced_elements == 0:
-    return 0
-  return int(node.total_processing_time_ns / node.num_produced_elements)
-
-
-def pretty_format_bytes(bytes_value: int) -> str:
-  """Returns a pretty formatted string for bytes."""
-  # pylint: disable=bad-whitespace
-  if bytes_value < 1024:
-    return f"{bytes_value} bytes"
-  elif bytes_value < 1024 * 1024:
-    return f"{bytes_value / 1024:.2f} KiB"
-  elif bytes_value < 1024 * 1024 * 1024:
-    return f"{bytes_value / 1024 / 1024:.2f} MiB"
-  elif bytes_value < 1024 * 1024 * 1024 * 1024:
-    return f"{bytes_value / 1024 / 1024 / 1024:.2f} GiB"
-  else:
-    return f"{bytes_value / 1024 / 1024 / 1024 / 1024:.2f} TiB"
-  # pylint: enable=bad-whitespace
 
 
 def merge_execution_summaries(
@@ -132,6 +132,89 @@ def merge_execution_summaries(
     to_node.bytes_produced += from_node.bytes_produced
     to_node.bytes_consumed += from_node.bytes_consumed
   return to_s
+
+
+def _get_nodes_before_prefetch(
+    node: int, summary: execution_summary_pb2.ExecutionSummary
+) -> list[int]:
+  """Returns nodes in the path from a given node to a prefetch node."""
+  child_nodes = []
+  nodes_to_visit = [node]
+  while nodes_to_visit:
+    node_id = nodes_to_visit.pop()
+    node = summary.nodes[node_id]
+    child_nodes.append(node_id)
+    if node.is_prefetch:
+      continue  # Skip adding inputs for the prefetch node
+    nodes_to_visit.extend(node.inputs)
+  return child_nodes
+
+
+def _find_aggregated_processing_time(
+    summary: execution_summary_pb2.ExecutionSummary,
+    node_ids: list[int],
+) -> int:
+  """Finds aggregated processing time for the given node IDs."""
+  return sum(
+      summary.nodes[node_id].total_processing_time_ns for node_id in node_ids
+  )
+
+
+def _compute_wait_time_ratio(
+    summary: execution_summary_pb2.ExecutionSummary,
+    node_id: int,
+    aggregated_wait_time_ns: int,
+    prefetch_factor: int = 1,
+) -> None:
+  """Computes the wait time ratio for all the nodes in the execution summary.
+
+  Args:
+    summary: The execution summary to update the `wait_time_ratio` for.
+    node_id: The current node for which to compute the `wait_time_ratio`.
+    aggregated_wait_time_ns: The aggregated wait time of the nodes running under
+      prefetch.
+    prefetch_factor: The factor by which to multiply the `total_processing_time`
+      of the node to get it's wait time ratio.
+  """
+  if aggregated_wait_time_ns == 0:
+    return
+  node = summary.nodes[node_id]
+  node_wait_ratio = prefetch_factor * (
+      node.total_processing_time_ns / aggregated_wait_time_ns
+  )
+  node.wait_time_ratio = round(node_wait_ratio, 4)
+  for input_node_id in node.inputs:
+    # If the node is executed in multiple threads, the iterator's wait time
+    # ratio attributed to the prefetch node is distributed among these nodes
+    # proportionally to their total processing time.
+    if node.is_prefetch:
+      prefetch_factor = node.wait_time_ratio
+      prefetch_child_nodes = _get_nodes_before_prefetch(input_node_id, summary)
+      aggregated_wait_time_ns = _find_aggregated_processing_time(
+          summary, prefetch_child_nodes
+      )
+      # The `wait_time_ratio` of the prefetch node is sum of `wait_time_ratio`
+      # of all the nodes running under it. Here we set it to 0 as it is already
+      # accounted for in the ancestor nodes and sum of `wait_time_ratio` of all
+      # the nodes in a pipeline should be 1.
+      node.wait_time_ratio = 0
+    _compute_wait_time_ratio(
+        summary,
+        input_node_id,
+        aggregated_wait_time_ns,
+        prefetch_factor,
+    )
+
+
+def populate_wait_time_ratio(
+    summary: execution_summary_pb2.ExecutionSummary,
+) -> None:
+  """Populates the `wait_time_ratio` for all the nodes in the execution summary."""
+  iterator_nodes = _get_nodes_before_prefetch(0, summary)
+  aggregated_wait_time_ns = _find_aggregated_processing_time(
+      summary, iterator_nodes
+  )
+  _compute_wait_time_ratio(summary, 0, aggregated_wait_time_ns)
 
 
 def update_node_ids_with_offset(
