@@ -7,6 +7,7 @@
 [**Installation**](#installation)
 | [**Quickstart**](#quickstart)
 | [**Reference docs**](https://google-grain.readthedocs.io/en/latest/)
+| [**Change logs**](https://google-grain.readthedocs.io/en/latest/changelog.html)
 
 Grain is a Python library for reading and processing data for training and
 evaluating JAX models. It is flexible, fast and deterministic.

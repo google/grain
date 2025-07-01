@@ -75,6 +75,7 @@ tutorials/data_sources/index
 :hidden:
 :caption: API reference
 grain
+changelog
 ```
 
 ``` {toctree}

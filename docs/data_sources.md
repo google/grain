@@ -1,11 +1,5 @@
 # Data Sources
 
-
-
-.md
-
-
-
 A Grain data source is responsible for retrieving individual records. Records
 could be in a file/storage system or generated on the fly. Data sources need to
 implement the following protocol:

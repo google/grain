@@ -5,8 +5,6 @@ are processed. This allows Grain to implement global transformations (e.g.
 global shuffling, sharding, repeating for multiple epochs) before reading any
 records.
 
-
-
 Samplers need to implement the following iterator protocol:
 
 ```python

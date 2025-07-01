@@ -1,11 +1,5 @@
 # Transformations
 
-
-
-.md
-
-
-
 Grain Transforms interface denotes transformations which are applied to data. In
 the case of local transformations (such as map, random map, filter), the
 transforms receive an element on which custom changes are applied. For global
