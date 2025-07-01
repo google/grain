@@ -24,7 +24,7 @@ def _get_version():
     version = importlib_metadata.version("grain")
   except importlib_metadata.PackageNotFoundError:
     # Fallback version
-    version = "0.2.10"
+    version = "0.0.1"
   return version
 
 
