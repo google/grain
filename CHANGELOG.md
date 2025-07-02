@@ -13,7 +13,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 
 * Bug fixes
 
-## Grain 0.2.10 (June 16, 2025)
+## Grain 0.2.11 (July 2, 2025)
 
 * New features:
   * Automatic publishing releases to PyPI via GitHub actions.
