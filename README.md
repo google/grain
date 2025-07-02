@@ -3,10 +3,10 @@
 [![Continuous integration](https://github.com/google/grain/actions/workflows/tests.yml/badge.svg)](https://github.com/google/grain/actions/workflows/tests.yml)
 [![PyPI version](https://img.shields.io/pypi/v/grain)](https://pypi.org/project/grain/)
 
-
 [**Installation**](#installation)
 | [**Quickstart**](#quickstart)
 | [**Reference docs**](https://google-grain.readthedocs.io/en/latest/)
+| [**Change logs**](https://google-grain.readthedocs.io/en/latest/changelog.html)
 
 Grain is a Python library for reading and processing data for training and
 evaluating JAX models. It is flexible, fast and deterministic.
