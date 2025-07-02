@@ -18,13 +18,17 @@ class _ParquetDatasetIterator(dataset.DatasetIterator[T]):
   """A DatasetIterator for Parquet file format."""
 
   def __init__(
-      self, path: str, row_group: int = 0, index_within_row_group: int = 0
+      self,
+      path: str,
+      row_group: int = 0,
+      index_within_row_group: int = 0,
+      **read_kwargs,
   ):
     super().__init__()
     self._row_group = row_group
     self._index_within_row_group = index_within_row_group
     self._pq_path = path
-    self._pq_file = pq.ParquetFile(self._pq_path)
+    self._pq_file = pq.ParquetFile(self._pq_path, **read_kwargs)
     self._np_table = {}
     self._row_group_len = 0
     self._read_row_group_to_np_table()
@@ -67,14 +71,16 @@ class _ParquetDatasetIterator(dataset.DatasetIterator[T]):
 class ParquetIterDataset(dataset.IterDataset[T]):
   """An IterDataset for a parquet format file."""
 
-  def __init__(self, path: str):
+  def __init__(self, path: str, **read_kwargs):
     """Initializes ParquetIterDataset.
 
     Args:
-      path: A path to a record io format file.
+      path: A path to a parquet format file.
+      **read_kwargs: Keyword arguments to pass to pyarrow.parquet.ParquetFile.
     """
     super().__init__()
     self._path = path
+    self._read_kwargs = read_kwargs
 
   def __iter__(self) -> _ParquetDatasetIterator[T]:
-    return _ParquetDatasetIterator(self._path)
+    return _ParquetDatasetIterator(self._path, **self._read_kwargs)
