@@ -26,19 +26,19 @@ from collections.abc import Sequence
 import math
 from multiprocessing import shared_memory
 import os
+from platform import system
 import threading
 import time
 import typing
 from typing import Any, Generic, Optional, Protocol, SupportsIndex, TypeVar, Union
 
 from absl import logging
-import array_record.python.array_record_data_source as array_record
 from etils import epath
+
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import usage_logging
-
 from grain._src.core import monitoring  # pylint: disable=g-bad-import-order
-from array_record.python.array_record_data_source import PathLikeOrFileInstruction
+
 
 _api_usage_counter = monitoring.Counter(
     "/grain/python/data_sources/api",
@@ -58,37 +58,47 @@ _bytes_read_counter = monitoring.Counter(
 )
 
 T = TypeVar("T")
-ArrayRecordDataSourcePaths = Union[
-    PathLikeOrFileInstruction, Sequence[PathLikeOrFileInstruction]
-]
-
 _SparseArray = collections.namedtuple(
     "SparseArray", ["indices", "values", "dense_shape"]
 )
 
+if system() != "Windows":
+  import array_record.python.array_record_data_source as array_record
 
-class ArrayRecordDataSource(array_record.ArrayRecordDataSource):
-  """Data source for ArrayRecord files."""
+  ArrayRecordDataSourcePaths = Union[
+      array_record.PathLikeOrFileInstruction,
+      Sequence[array_record.PathLikeOrFileInstruction],
+  ]
 
-  def __init__(self, paths: ArrayRecordDataSourcePaths):
-    """Creates a new ArrayRecordDataSource object.
+  class ArrayRecordDataSource(array_record.ArrayRecordDataSource):
+    """Data source for ArrayRecord files."""
 
-    See `array_record.ArrayRecordDataSource` for more details.
+    def __init__(self, paths: ArrayRecordDataSourcePaths):
+      """Creates a new ArrayRecordDataSource object.
 
-    Args:
-      paths: A single path/FileInstruction or list of paths/FileInstructions.
-    """
-    super().__init__(paths)
-    _api_usage_counter.Increment("ArrayRecordDataSource")
+      See `array_record.ArrayRecordDataSource` for more details.
 
-  def __getitem__(self, record_key: SupportsIndex) -> bytes:
-    data = super().__getitem__(record_key)
-    _bytes_read_counter.IncrementBy(len(data), "ArrayRecordDataSource")
-    return data
+      Args:
+        paths: A single path/FileInstruction or list of paths/FileInstructions.
+      """
+      super().__init__(paths)
+      _api_usage_counter.Increment("ArrayRecordDataSource")
 
-  @property
-  def paths(self) -> ArrayRecordDataSourcePaths:
-    return self._paths
+    def __getitem__(self, record_key: SupportsIndex) -> bytes:
+      data = super().__getitem__(record_key)
+      _bytes_read_counter.IncrementBy(len(data), "ArrayRecordDataSource")
+      return data
+
+    @property
+    def paths(self) -> ArrayRecordDataSourcePaths:
+      return self._paths
+
+else:
+  ArrayRecordDataSourcePaths = Any
+
+  class ArrayRecordDataSource:
+    def __init__(self, *args):
+      raise RuntimeError("array_record isn't supported on Windows")
 
 
 @typing.runtime_checkable

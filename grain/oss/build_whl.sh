@@ -29,10 +29,20 @@ main() {
   write_to_bazelrc "build:macos --host_linkopt=-Wl,-undefined,dynamic_lookup"
 
   write_to_bazelrc "build --@rules_python//python/config_settings:python_version=${PYTHON_VERSION}"
-  # Reduce noise during build.
-  write_to_bazelrc "build --cxxopt=-Wno-deprecated-declarations --host_cxxopt=-Wno-deprecated-declarations"
-  write_to_bazelrc "build --cxxopt=-Wno-parentheses --host_cxxopt=-Wno-parentheses"
-  write_to_bazelrc "build --cxxopt=-Wno-sign-compare --host_cxxopt=-Wno-sign-compare"
+
+  # Set platform-wise file extension for extension modules.
+  case "$(uname)" in
+    CYGWIN*|MINGW*|MSYS_NT*)
+      INCLUDE_EXT="*.pyd"
+      ;;
+    *)
+      INCLUDE_EXT="*.so"
+      # Also reduce noise during build.
+      write_to_bazelrc "build --cxxopt=-Wno-deprecated-declarations --host_cxxopt=-Wno-deprecated-declarations"
+      write_to_bazelrc "build --cxxopt=-Wno-parentheses --host_cxxopt=-Wno-parentheses"
+      write_to_bazelrc "build --cxxopt=-Wno-sign-compare --host_cxxopt=-Wno-sign-compare"
+      ;;
+  esac
 
   write_to_bazelrc "test --@rules_python//python/config_settings:python_version=${PYTHON_VERSION}"
   write_to_bazelrc "test --action_env PYTHON_VERSION=${PYTHON_VERSION}"
@@ -71,10 +81,13 @@ main() {
   fi
   cp pyproject.toml "${TMPDIR}"
   cp LICENSE "${TMPDIR}"
-  rsync -avm -L --exclude="__pycache__/*" grain "${TMPDIR}"
-  rsync -avm -L  --include="*.so" --include="*_pb2.py" \
+
+  rsync -avm -L --exclude="__pycache__/*" grain tmp_folder
+  rsync -avm -L  --include="${INCLUDE_EXT}" --include="*_pb2.py" \
     --exclude="*.runfiles" --exclude="*_obj" --include="*/" --exclude="*" \
-    bazel-bin/grain "${TMPDIR}"
+    bazel-bin/grain tmp_folder
+  cp -av -L tmp_folder/. "${TMPDIR}"
+  rm -r tmp_folder
 
   previous_wd="$(pwd)"
   cd "${TMPDIR}"
