@@ -122,7 +122,7 @@ main() {
   else
     PKG_NAME=grain
   fi
-  $PYTHON_BIN -m pip install --find-links=/tmp/grain/all_dist --pre "${PKG_NAME}"
+  $PYTHON_BIN -m pip install --find-links="${OUTPUT_DIR}/all_dist" --pre "${PKG_NAME}"
   $PYTHON_BIN -m pip install jax
   $PYTHON_BIN grain/_src/core/smoke_test_with_jax.py
   # TF is not available on Python 3.13 and above.

@@ -47,22 +47,30 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install rsync for Windows
-        if: ${{ matrix.os == 'windows-2022' }}
+        if: runner.os == 'Windows'
         run: choco install --no-progress rsync
       - uses: "actions/checkout@v3"
-      - name: Create directory
+      - name: Create directory and set TEMP_DIR
+        if: runner.os == 'Linux' || runner.os == 'macOS'
         run: |
           mkdir -p /tmp/grain
           cp -r . /tmp/grain
+          echo "TEMP_DIR=/tmp/grain" >> $GITHUB_ENV
+          echo "WHL_DIR=/tmp/grain" >> $GITHUB_ENV
+      - name: Set TEMP_DIR
+        if: runner.os == 'Windows'
+        run: |
+          echo "TEMP_DIR=${PWD}" >> $GITHUB_ENV
+          echo "WHL_DIR=." >> $GITHUB_ENV
       - name: Build package
         run: |
           set -xe
           export PYTHON_VERSION=${{ matrix.python-version }}
           export PYTHON_MAJOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f1)
           export PYTHON_MINOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f2)
-          export BAZEL_VERSION="7.2.1"
-          export OUTPUT_DIR="/tmp/grain"
-          export SOURCE_DIR="/tmp/grain"
+          export BAZEL_VERSION="${USE_BAZEL_VERSION}"
+          export OUTPUT_DIR="${TEMP_DIR}"
+          export SOURCE_DIR="${TEMP_DIR}"
           export RUN_TESTS=${{ inputs.run_tests }}
           export IS_NIGHTLY=${{ inputs.is_nightly }}
           . "${SOURCE_DIR}"'/grain/oss/runner_common.sh'
@@ -71,7 +79,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: built-grain-wheels-${{ matrix.os }}-${{ matrix.python-version }}
-          path: /tmp/grain/all_dist/*.whl
+          path: "${{ env.WHL_DIR }}/all_dist/*.whl"
 
   publish-wheel:
     runs-on: ubuntu-22.04
