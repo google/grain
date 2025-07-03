@@ -45,6 +45,12 @@ from grain._src.core import monitoring
 # execution stats.
 _iter_weakref_registry = []
 
+# If multiprocessing is enabled, the events are initialized by
+# `MultiprocessPrefetchDatasetIterator`. If not, they are initialized by the
+# first call to `Stats`
+start_profile_event = None
+stop_profile_event = None
+
 _self_time_ns_histogram = monitoring.EventMetric(
     "/grain/python/dataset/self_time_ns",
     metadata=monitoring.Metadata(
@@ -604,6 +610,19 @@ def _running_in_colab() -> bool:
 class _DefaultStats(Stats):
   """Default implementation for statistics collection that does nothing."""
 
+  def __init__(self, config: StatsConfig, parents: Sequence[Stats]):
+    super().__init__(config, parents)
+    global start_profile_event
+    # If multiprocessing is enabled, the start_profile_event is set by now.
+    # Otherwise, we create a threading event.
+    if start_profile_event is None:
+      start_profile_event = threading.Event()
+    if not _start_profiling_monitor_thread.is_alive():
+      try:
+        _start_profiling_monitor_thread.start()
+      except RuntimeError:
+        pass
+
   @contextlib.contextmanager
   def record_self_time(self, offset_ns: int = 0):
     yield
@@ -685,6 +704,16 @@ class _ExecutionStats(_VisualizationStats):
     )
     self._last_update_time = 0
     self._last_report_time = 0
+    global stop_profile_event
+    # If multiprocessing is enabled, the stop_profile_event is set by now.
+    # Otherwise, we create a threading event.
+    if stop_profile_event is None:
+      stop_profile_event = threading.Event()
+    if not _stop_profiling_monitor_thread.is_alive():
+      try:
+        _stop_profiling_monitor_thread.start()
+      except RuntimeError:
+        pass
 
   def __reduce__(self):
     return _ExecutionStats, (self._config, self._parents)

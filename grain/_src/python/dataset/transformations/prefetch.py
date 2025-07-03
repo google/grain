@@ -22,6 +22,7 @@ import copy
 import functools
 import math
 from multiprocessing import queues
+from multiprocessing import synchronize
 import queue
 import sys
 import threading
@@ -134,6 +135,18 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
         (parent_stats,),
         execution_tracking_mode,
     )
+
+  # pylint: disable=protected-access
+  def _reinitialize_stats(self):
+    """Deletes and re-creates the stats object for this iterator."""
+    self._map_parent._reinitialize_stats()
+    orig_stats = self._stats
+    del self._stats
+    _ = self._stats
+    self._stats._config.stats_out_queue = orig_stats._config.stats_out_queue
+    self._stats._config.stats_in_queues = orig_stats._config.stats_in_queues
+
+  # pylint: enable=protected-access
 
   @functools.cached_property
   def _threshold_checker(self):
@@ -406,6 +419,8 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
       *,
       worker_index: int,
       worker_count: int,
+      start_profiling_event: synchronize.Event | None = None,
+      stop_profiling_event: synchronize.Event | None = None,
       stats_out_queue: queues.Queue | None = None,
   ) -> Iterator[tuple[T, Optional[dict[str, Any]]]]:
     if worker_count > 1:
@@ -419,8 +434,12 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
     worker_state = self._state[_WORKERS_STATE][str(worker_index)]
     if worker_state is not None:
       it.set_state(worker_state)
+    # pytype: disable=attribute-error
+    dataset_stats.start_profile_event = start_profiling_event
+    dataset_stats.stop_profile_event = stop_profiling_event
     # Set the stats queue in worker process to send stats to the main process.
-    it._stats._config.stats_out_queue = stats_out_queue  # pytype: disable=attribute-error
+    it._stats._config.stats_out_queue = stats_out_queue
+    # pytype: enable=attribute-error
     # Skip the required number of iterations after the last recorded state.
     for _ in range(self._state[_ITERATIONS_TO_SKIP][str(worker_index)]):
       _ = next(it)
@@ -504,6 +523,11 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         mp.get_context("spawn").Queue(maxsize=5)
         for _ in range(multiprocessing_options.num_workers)
     )
+    self._start_profiling_event = mp.get_context("spawn").Event()
+    self._stop_profiling_event = mp.get_context("spawn").Event()
+    # set the global events for stats.
+    dataset_stats.start_profile_event = self._start_profiling_event
+    dataset_stats.stop_profile_event = self._stop_profiling_event
 
     self._state: dict[str, dict[str, Any] | int] = {
         _WORKERS_STATE: workers_state,
@@ -527,6 +551,17 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
             self._ctx.dataset_options.execution_tracking_mode
         ),
     )
+
+  # pylint: disable=protected-access
+  def _reinitialize_stats(self):
+    """Deletes and re-creates the stats object for this iterator."""
+    orig_stats = self._stats
+    del self._stats
+    _ = self._stats
+    self._stats._config.stats_out_queue = orig_stats._config.stats_out_queue
+    self._stats._config.stats_in_queues = orig_stats._config.stats_in_queues
+
+  # pylint: enable=protected-access
 
   def __iter__(self) -> dataset.DatasetIterator[T]:
     return self
@@ -602,6 +637,8 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         (self._state[_LAST_WORKER_INDEX] + 1)
         % self._multiprocessing_options.num_workers,
         self._worker_init_fn,
+        self._start_profiling_event,
+        self._stop_profiling_event,
         self._stats_in_queues,
     )
 
