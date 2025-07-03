@@ -18,4 +18,8 @@ py_test(
     data = [":index_shuffle_module.so"],
     srcs_version = "PY3",
     deps = ["@abseil-py//absl/testing:absltest"],
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
 )
