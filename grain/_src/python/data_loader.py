@@ -206,13 +206,13 @@ class DataLoader:
     worker_count = _determine_worker_count(worker_count)
     if worker_count > 0:
 
-      # Shared memory should be enabled iff worker_count > 0.
-      if operations and isinstance(operations[-1], BatchOperation):
-        logging.info("Enabling SharedMemoryArray for BatchOperation.")
-        operations[-1]._enable_shared_memory()
-      else:
-        logging.info("Adding CopyNumPyArrayToSharedMemory MapTransform.")
-        operations = list(operations) + [CopyNumPyArrayToSharedMemory()]
+    # Shared memory should be enabled iff worker_count > 0.
+    if operations and isinstance(operations[-1], BatchOperation):
+      logging.info("Enabling SharedMemoryArray for BatchOperation.")
+      operations[-1]._enable_shared_memory()
+    else:
+      logging.info("Adding CopyNumPyArrayToSharedMemory MapTransform.")
+      operations = list(operations) + [CopyNumPyArrayToSharedMemory()]
 
     self._data_source = data_source
     self._sampler = sampler
