@@ -6,7 +6,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features:
-
+  * Allow passing read_kwargs to ParquetIterDataset for configuring parquet file reading.
 * Breaking changes:
 
 * Deprecations:
