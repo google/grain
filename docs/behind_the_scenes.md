@@ -89,7 +89,7 @@ shared memory block. The block is afterwards closed and unlinked to free its
 memory.
 
 Grain provides a shared memory backed class called [SharedMemoryArray](https://github.com/google/grain/tree/main/grain/_src/python/shared_memory_array.py), which is implemented as a subclass of numpy array.
-Depending on what your pipeline's last transform/operation is, Grain handles the usage of `SharedMemoryArray` in two distinct ways. If last operation is the [BatchOperation](https://github.com/google/grain/tree/main/grain/_src/python/operations.py), then the `np.stack` is configured to produce a `SharedMemoryArray` directly. Else, a `CopyNumPyArrayToSharedMemory` MapTransform is automatically appended to the end and the transform copies the regular numpy array to a `SharedMemoryArray`.
+Depending on what your pipeline's last transform/operation is, Grain handles the usage of `SharedMemoryArray` in two distinct ways. If last operation is the [Batch](https://github.com/google/grain/tree/main/grain/_src/core/transforms.py) or [BatchOperation](https://github.com/google/grain/tree/main/grain/_src/python/operations.py)(Deprecated), then the `np.stack` is configured to produce a `SharedMemoryArray` directly. Else, a `CopyNumPyArrayToSharedMemory` MapTransform is automatically appended to the end and the transform copies the regular numpy array to a `SharedMemoryArray`.
 
 As an example, suppose a child process produces the following batch of images:
 
