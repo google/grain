@@ -680,7 +680,9 @@ class DataLoaderTest(absl_parameterized.TestCase):
     np.testing.assert_equal(actual, expected)
 
   @mock.patch.object(data_loader_lib, "CopyNumPyArrayToSharedMemory")
-  def test_shared_memory(self, mock_copy_numpy_array_to_shared_memory):
+  def test_shared_memory_for_batch_operation(
+      self, mock_copy_numpy_array_to_shared_memory
+  ):
     range_data_source = RangeDataSource(start=0, stop=8, step=1)
     sampler = samplers.SequentialSampler(
         num_records=len(range_data_source), shard_options=sharding.NoSharding()
@@ -714,6 +716,44 @@ class DataLoaderTest(absl_parameterized.TestCase):
     )
     batch_operation._enable_shared_memory.assert_called_once()
     self.assertTrue(data_loader._operations[-1], batch_operation)
+
+  @mock.patch.object(BatchOperation, "_enable_shared_memory", autospec=True)
+  def test_shared_memory_for_batch_transform(self, mock_enable_shared_memory):
+    range_data_source = RangeDataSource(start=0, stop=8, step=1)
+    sampler = samplers.SequentialSampler(
+        num_records=len(range_data_source), shard_options=sharding.NoSharding()
+    )
+    operations = [
+        PlusOne(),
+        FilterEven(),
+    ]
+
+    data_loader = data_loader_lib.DataLoader(
+        data_source=range_data_source,
+        sampler=sampler,
+        operations=operations,
+        worker_count=2,
+        read_options=self.read_options,
+    )
+    mock_enable_shared_memory.assert_not_called()
+    self.assertIsInstance(
+        data_loader._operations[-1],
+        data_loader_lib.CopyNumPyArrayToSharedMemory,
+    )
+
+    batch_transform = transforms.Batch(batch_size=2)
+
+    data_loader = data_loader_lib.DataLoader(
+        data_source=range_data_source,
+        sampler=sampler,
+        operations=operations + [batch_transform],
+        worker_count=2,
+        read_options=self.read_options,
+    )
+    mock_enable_shared_memory.assert_called_once_with(
+        data_loader._operations[-1]
+    )
+    self.assertIsInstance(data_loader._operations[-1], BatchOperation)
 
   def test_state_without_in_memory_data(self):
     data_source = list(range(10000))

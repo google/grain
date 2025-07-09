@@ -207,6 +207,18 @@ class DataLoader:
     if worker_count > 0:
 
       # Shared memory should be enabled iff worker_count > 0.
+      # This replaces Batch Transform with a BatchOperation in operations list
+      # if shared memory is enabled.
+      if operations and isinstance(operations[-1], transforms.Batch):
+        logging.info("Creating BatchOperation to enable SharedMemoryArray.")
+        batch_operation = BatchOperation(
+            batch_size=operations[-1].batch_size,
+            drop_remainder=operations[-1].drop_remainder,
+        )
+        batch_operation.disable_deprecation_message()
+        operations = list(operations)
+        operations[-1] = batch_operation
+
       if operations and isinstance(operations[-1], BatchOperation):
         logging.info("Enabling SharedMemoryArray for BatchOperation.")
         operations[-1]._enable_shared_memory()
