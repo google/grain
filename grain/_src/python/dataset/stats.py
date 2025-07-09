@@ -937,6 +937,8 @@ def make_stats(
       return _MPPrefetchExecutionStats(config, parents)
     return _ExecutionStats(config, parents=parents)
   if execution_tracking_mode == base.ExecutionTrackingMode.STAGE_TIMING:
+    if config.stats_in_queues:
+      return _MPPrefetchExecutionStats(config, parents)
     return _ExecutionStats(config, parents=parents)
   if vis_output_dir is not None:
     return _VisualizationStats(config, parents=parents)

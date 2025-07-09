@@ -22,6 +22,7 @@ import copy
 import functools
 import math
 from multiprocessing import queues
+from multiprocessing import synchronize
 import queue
 import sys
 import threading
@@ -117,22 +118,35 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     if self._prefetch_buffer_size > 0:
       self._executor = futures.ThreadPoolExecutor(read_options.num_threads)
 
-  @functools.cached_property
-  def _stats(self):
-    execution_tracking_mode = self._ctx.dataset_options.execution_tracking_mode
-    parent_stats = self._map_parent._initialize_stats(  # pylint: disable=protected-access
-        execution_tracking_mode
+  def _initialize_stats(
+      self, execution_tracking_mode: base.ExecutionTrackingMode
+  ):
+    parent_stats = self._map_parent._initialize_stats(execution_tracking_mode)  # pylint: disable=protected-access
+    config = dataset_stats.StatsConfig(
+        name=str(self),
+        transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
+        is_prefetch=True,
+        iter_weakref=weakref.ref(self),
     )
+    # If the stats object has already been initialized, copy the queues from
+    # the original stats object to the new stats object.
+    if "_stats" in self.__dict__:
+      # pylint: disable=protected-access
+      config.stats_out_queue = self._stats._config.stats_out_queue
+      config.stats_in_queues = self._stats._config.stats_in_queues
+      # pylint: enable=protected-access
     # Connect to `MapDataset` parent stats.
-    return dataset_stats.make_stats(
-        dataset_stats.StatsConfig(
-            name=str(self),
-            transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
-            is_prefetch=True,
-            iter_weakref=weakref.ref(self),
-        ),
+    self._stats = dataset_stats.make_stats(
+        config,
         (parent_stats,),
         execution_tracking_mode,
+    )
+    return self._stats
+
+  @functools.cached_property
+  def _stats(self):
+    return self._initialize_stats(
+        self._ctx.dataset_options.execution_tracking_mode
     )
 
   @functools.cached_property
@@ -406,6 +420,8 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
       *,
       worker_index: int,
       worker_count: int,
+      start_profiling_event: synchronize.Event | None = None,
+      stop_profiling_event: synchronize.Event | None = None,
       stats_out_queue: queues.Queue | None = None,
   ) -> Iterator[tuple[T, Optional[dict[str, Any]]]]:
     if worker_count > 1:
@@ -504,6 +520,8 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         mp.get_context("spawn").Queue(maxsize=5)
         for _ in range(multiprocessing_options.num_workers)
     )
+    self._start_profiling_event = mp.get_context("spawn").Event()
+    self._stop_profiling_event = mp.get_context("spawn").Event()
 
     self._state: dict[str, dict[str, Any] | int] = {
         _WORKERS_STATE: workers_state,
@@ -511,8 +529,9 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         _LAST_WORKER_INDEX: -1,
     }
 
-  @functools.cached_property
-  def _stats(self):
+  def _initialize_stats(
+      self, execution_tracking_mode: base.ExecutionTrackingMode
+  ):
     config = dataset_stats.StatsConfig(
         name=str(self),
         transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
@@ -520,12 +539,24 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         stats_in_queues=self._stats_in_queues,
         iter_weakref=weakref.ref(self),
     )
-    return dataset_stats.make_stats(
+    # If the stats object has already been initialized, copy the queues from
+    # the original stats object to the new stats object.
+    if "_stats" in self.__dict__:
+      # pylint: disable=protected-access
+      config.stats_out_queue = self._stats._config.stats_out_queue
+      config.stats_in_queues = self._stats._config.stats_in_queues
+      # pylint: enable=protected-access
+    self._stats = dataset_stats.make_stats(
         config,
         [],
-        execution_tracking_mode=(
-            self._ctx.dataset_options.execution_tracking_mode
-        ),
+        execution_tracking_mode=execution_tracking_mode,
+    )
+    return self._stats
+
+  @functools.cached_property
+  def _stats(self):
+    return self._initialize_stats(
+        self._ctx.dataset_options.execution_tracking_mode
     )
 
   def __iter__(self) -> dataset.DatasetIterator[T]:
@@ -602,6 +633,8 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         (self._state[_LAST_WORKER_INDEX] + 1)
         % self._multiprocessing_options.num_workers,
         self._worker_init_fn,
+        self._start_profiling_event,
+        self._stop_profiling_event,
         self._stats_in_queues,
     )
 

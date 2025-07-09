@@ -790,6 +790,9 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
   def __iter__(self) -> DatasetIterator[T]:
     return self.to_iter_dataset().__iter__()
 
+  # pytype: disable=attribute-error
+  # pylint: disable=protected-access
+
   def _initialize_stats(
       self, execution_tracking_mode: base.ExecutionTrackingMode
   ) -> dataset_stats.Stats:
@@ -813,22 +816,35 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
     parents_stats = []
     if hasattr(self, "_parents"):
       for p in self._parents:
-        parents_stats.append(p._initialize_stats(execution_tracking_mode))  # pylint: disable=protected-access
+        parents_stats.append(p._initialize_stats(execution_tracking_mode))
+    config = dataset_stats.StatsConfig(
+        name=str(self),
+        transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
+        iter_weakref=weakref.ref(self),
+    )
+    # If the stats object has already been initialized, copy the queues from
+    # the original stats object to the new stats object.
+    output_spec = None
+    if "_stats" in self.__dict__:
+      config.stats_out_queue = self._stats._config.stats_out_queue
+      config.stats_in_queues = self._stats._config.stats_in_queues
+      # output spec is constructed while iterating through the dataset.
+      output_spec = self._stats.output_spec
     self._stats = dataset_stats.make_stats(
-        dataset_stats.StatsConfig(
-            name=str(self),
-            transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
-            iter_weakref=weakref.ref(self),
-        ),
+        config,
         parents_stats,
         execution_tracking_mode=execution_tracking_mode,
     )
+    self._stats._self_output_spec = output_spec
     return self._stats
 
   @functools.cached_property
   def _stats(self) -> dataset_stats.Stats:
     """Returns the Stats object for recording statistics about this dataset."""
     return self._initialize_stats(base.ExecutionTrackingMode.DISABLED)
+
+  # pytype: enable=attribute-error
+  # pylint: enable=protected-access
 
 
 class IterDatasetMeta(abc.ABCMeta):
@@ -1306,21 +1322,60 @@ class DatasetIterator(Iterator[T], abc.ABC):
     """
     raise NotImplementedError
 
-  @functools.cached_property
-  def _stats(self):
-    """Returns the Stats object for recording statistics about this iterator."""
+  # pytype: disable=attribute-error
+  # pylint: disable=protected-access
+
+  def _initialize_stats(
+      self, execution_tracking_mode: base.ExecutionTrackingMode
+  ) -> dataset_stats.Stats:
+    """Eagerly initializes the stats object with given execution tracking mode.
+
+    Sets the `_stats` attribute with specified execution tracking mode,
+    bypassing the `_stats` cached property.
+    This is beneficial when we want to initialize the stats object eagerly from
+    PrefetchDatasetIterator, using the appropriate execution tracking mode from
+    the grain options.
+
+    Args:
+      execution_tracking_mode: The execution tracking mode to use for the stats
+        object.
+
+    Returns:
+      The initialized stats object.
+    """
+    parent_stats = [
+        p._initialize_stats(execution_tracking_mode) for p in self._parents
+    ]
     config = dataset_stats.StatsConfig(
         name=str(self),
         transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
         iter_weakref=weakref.ref(self),
     )
-    return dataset_stats.make_stats(
+    # If the stats object has already been initialized, copy the queues from
+    # the original stats object to the new stats object.
+    output_spec = None
+    if "_stats" in self.__dict__:
+      config.stats_out_queue = self._stats._config.stats_out_queue
+      config.stats_in_queues = self._stats._config.stats_in_queues
+      # output spec is constructed while iterating through the dataset.
+      output_spec = self._stats.output_spec
+    self._stats = dataset_stats.make_stats(
         config,
-        [p._stats for p in self._parents],  # pylint: disable=protected-access
-        execution_tracking_mode=(
-            self._ctx.dataset_options.execution_tracking_mode
-        ),
+        parent_stats,
+        execution_tracking_mode=execution_tracking_mode,
     )
+    self._stats._self_output_spec = output_spec
+    return self._stats
+
+  @functools.cached_property
+  def _stats(self) -> dataset_stats.Stats:
+    """Returns the Stats object for recording statistics about this dataset."""
+    return self._initialize_stats(
+        self._ctx.dataset_options.execution_tracking_mode
+    )
+
+  # pytype: enable=attribute-error
+  # pylint: enable=protected-access
 
   ### BEGIN Orbax checkpointing API.
   # See orbax.checkpoint.v1.handlers.StatefulCheckpointable for more details.
