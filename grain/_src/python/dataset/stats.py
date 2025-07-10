@@ -20,6 +20,7 @@ from collections.abc import Callable, Sequence
 import contextlib
 import dataclasses
 import functools
+import importlib
 from multiprocessing import queues
 import pprint
 import queue
@@ -39,6 +40,21 @@ from grain._src.python.dataset import stats_utils
 from grain.proto import execution_summary_pb2
 
 from grain._src.core import monitoring
+
+# Conditionally import Xprof profiler to avoid importing JAX/XLA/TF if not
+# needed.
+try:
+  profiler = importlib.import_module(
+      "tensorflow.compiler.xla.python._profiler"
+  )
+  TraceAnnotation = profiler.TraceMe
+except ImportError:
+
+  @contextlib.contextmanager
+  def _noop_trace_annotation(_, **__):
+    yield
+
+  TraceAnnotation = _noop_trace_annotation
 
 
 # Registry of weak references to output dataset iterators for collecting
@@ -311,7 +327,11 @@ def record_next_duration_if_output(next_fn):
   @functools.wraps(next_fn)
   def wrapper(iterator):
     start_time = time.perf_counter_ns()
-    result = next_fn(iterator)
+    with TraceAnnotation(
+        f"{iterator.__class__.__name__}.{next_fn.__name__}",
+        _ipl_output=iterator._stats._is_output,  # pylint:disable=protected-access
+    ):
+      result = next_fn(iterator)
 
     if iterator._stats._is_output:  # pylint:disable=protected-access
       next_duration_ns = time.perf_counter_ns() - start_time
