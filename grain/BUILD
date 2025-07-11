@@ -30,7 +30,10 @@ py_library(
         "sources.py",
         "transforms.py",
     ],
-    data = ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
+    data = select({
+        "@platforms//os:windows": ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.pyd"],
+        "//conditions:default": ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
+    }),
     srcs_version = "PY3",
     # Implicit build flag
     visibility = ["//visibility:public"],

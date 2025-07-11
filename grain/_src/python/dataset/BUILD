@@ -28,7 +28,10 @@ py_library(
         "dataset.py",
         "//grain/_src/python/dataset/transformations:core_transformations",
     ],
-    data = ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
+    data = select({
+        "@platforms//os:windows": ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.pyd"],
+        "//conditions:default": ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
+    }),
     srcs_version = "PY3",
     deps = [
         ":base",
