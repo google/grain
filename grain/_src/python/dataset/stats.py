@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 import abc
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 import contextlib
 import dataclasses
 import functools
@@ -676,15 +676,20 @@ class _ExecutionStats(_VisualizationStats):
     self._produced_memory_buffer = []
     self._consumed_memory_buffer = []
     self._reporting_thread = None
-    self._logging_thread = None
+    self._summary_dispatcher_thread = None
     self._reporting_thread_init_lock = threading.Lock()
-    self._logging_thread_init_lock = threading.Lock()
+    self._summary_dispatcher_thread_init_lock = threading.Lock()
     self._summary = execution_summary_pb2.ExecutionSummary.Node(
         min_processing_time_ns=sys.maxsize,
         max_processing_time_ns=0,
     )
     self._last_update_time = 0
     self._last_report_time = 0
+    self._summary_dispatcher = None
+    if self._config.stats_out_queue:
+      self._summary_dispatcher = self._send_stats_to_main_process_loop
+    elif self._config.log_summary:
+      self._summary_dispatcher = self._logging_execution_summary_loop
 
   def __reduce__(self):
     return _ExecutionStats, (self._config, self._parents)
@@ -778,13 +783,6 @@ class _ExecutionStats(_VisualizationStats):
     _populate_wait_time_ratio(result)
     return result
 
-  def _flush_execution_summary_loop(self) -> Callable[[], None]:
-    """Returns the loop function to be executed by the logging thread."""
-    if self._config.stats_out_queue:
-      return self._send_stats_to_main_process_loop
-    else:
-      return self._logging_execution_summary_loop
-
   @contextlib.contextmanager
   def record_self_time(self, offset_ns: int = 0):
     start_time = time.perf_counter_ns()
@@ -807,15 +805,18 @@ class _ExecutionStats(_VisualizationStats):
                   target=self._reporting_loop, daemon=True
               )
               self._reporting_thread.start()
-        if self._config.log_summary and self._logging_thread is None:
-          with self._logging_thread_init_lock:
+        if (
+            self._summary_dispatcher_thread is None
+            and self._summary_dispatcher is not None
+        ):
+          with self._summary_dispatcher_thread_init_lock:
             # Check above together with update would not be atomic -- another
             # thread may have started the logging thread.
-            if self._logging_thread is None:
-              self._logging_thread = threading.Thread(
-                  target=self._flush_execution_summary_loop(), daemon=True
+            if self._summary_dispatcher_thread is None:
+              self._summary_dispatcher_thread = threading.Thread(
+                  target=self._summary_dispatcher, daemon=True
               )
-              self._logging_thread.start()
+              self._summary_dispatcher_thread.start()
 
   def report(self):
     while self._self_times_buffer:
