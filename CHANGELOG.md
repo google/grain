@@ -6,7 +6,10 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features:
-  * Allow passing read_kwargs to ParquetIterDataset for configuring parquet file reading.
+  * Allow passing `read_kwargs` to `ParquetIterDataset` for configuring parquet
+    file reading.
+  * `ThreadPrefetchDatasetIterator` now supports non-Grain iterators that
+    support checkpointing.
 * Breaking changes:
 
 * Deprecations:

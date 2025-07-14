@@ -838,6 +838,49 @@ class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
     refcount_after_iteration = sys.getrefcount(it)
     self.assertEqual(refcount_before_iteration, refcount_after_iteration)
 
+  def test_does_not_hang_after_stop_iteration(self):
+    ds = dataset.MapDataset.source([1, 2, 3]).repeat(100).to_iter_dataset()
+    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=10)
+    it = ds.__iter__()
+    _ = list(it)
+    self.assertEmpty(list(it))
+
+  def test_nonnative_iterator(self):
+
+    class TestIterator:
+
+      def __init__(self):
+        self._counter = 0
+
+      def __iter__(self):
+        return self
+
+      def __next__(self) -> int:
+        self._counter += 1
+        if self._counter > 10:
+          raise StopIteration
+        return self._counter
+
+      def get_state(self):
+        return {'counter': self._counter}
+
+      def set_state(self, state):
+        self._counter = state['counter']
+
+    test_iterator = TestIterator()
+    it = prefetch.ThreadPrefetchDatasetIterator(
+        test_iterator, prefetch_buffer_size=10
+    )
+    elements = []
+    checkpoint_step = 5
+    for _ in range(checkpoint_step):
+      elements.append(next(it))
+    checkpoint = it.get_state()
+    elements.extend(it)
+    self.assertEqual(elements, list(range(1, 11)))
+    it.set_state(checkpoint)
+    self.assertEqual(list(it), elements[checkpoint_step:])
+
 
 if __name__ == '__main__':
   absltest.main()

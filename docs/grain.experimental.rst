@@ -25,6 +25,7 @@ List of Members
     BOSHandling
     ConcatThenSplitIterDataset
     ThreadPrefetchIterDataset
+    ThreadPrefetchDatasetIterator
     WindowShuffleMapDataset
     WindowShuffleIterDataset
     ZipMapDataset

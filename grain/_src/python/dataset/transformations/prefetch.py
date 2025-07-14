@@ -711,6 +711,16 @@ def _put_iterator_elements_in_buffer(
     buffer.put((None, None, e))
 
 
+class CheckpointableIterator(Iterator[T], Protocol[T]):
+  """Iterator that can be checkpointed."""
+
+  def get_state(self) -> StateT:
+    """Returns the current state of the iterator."""
+
+  def set_state(self, state: StateT):
+    """Sets the current state of the iterator."""
+
+
 class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   """Iterator that performs prefetching using a synchronized queue."""
 
@@ -718,10 +728,15 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   def __init__(
       self,
-      parent: dataset.DatasetIterator[T],
+      parent: CheckpointableIterator[T],
       prefetch_buffer_size: int,
   ):
-    super().__init__(parent)
+    if isinstance(parent, dataset.DatasetIterator):
+      super().__init__(parent)
+    else:
+      super().__init__()
+    self._maybe_nonnative_parent = parent
+
     assert prefetch_buffer_size > 0, prefetch_buffer_size
     self._prefetch_buffer_size = prefetch_buffer_size
     self._step_zero_state: StateT = parent.get_state()
@@ -750,7 +765,7 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._prefetch_thread = threading.Thread(
         target=functools.partial(
             _put_iterator_elements_in_buffer,
-            iterator=self._parent,
+            iterator=self._maybe_nonnative_parent,
             buffer=self._buffer,
             should_stop=self._prefetch_should_stop,
         ),
@@ -765,6 +780,7 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     element, state, err = self._buffer.get()
 
     if err is not None:
+      self._stop_prefetch()
       raise err
     self._state = state
     return element
@@ -801,8 +817,8 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   def set_state(self, state: StateT):
     self._stop_prefetch()
-    self._parent.set_state(state)
-    self._state = self._parent.get_state()
+    self._maybe_nonnative_parent.set_state(state)
+    self._state = self._maybe_nonnative_parent.get_state()
 
   def __str__(self) -> str:
     return (
