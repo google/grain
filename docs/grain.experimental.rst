@@ -32,3 +32,4 @@ List of Members
     ZipIterDataset
     PackAndBatchOperation
     assert_equal_output_after_checkpoint
+    device_put

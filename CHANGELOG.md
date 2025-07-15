@@ -10,6 +10,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     file reading.
   * `ThreadPrefetchDatasetIterator` now supports non-Grain iterators that
     support checkpointing.
+  * Introduces API for device prefetch - `grain.experimental.device_put()` for
+    easy CPU and device prefetching.
 * Breaking changes:
 
 * Deprecations:

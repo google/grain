@@ -62,6 +62,7 @@ py_library(
         "//grain/_src/python/dataset/transformations:packing",
         "//grain/_src/python/dataset/transformations:packing_concat_then_split",
         "//grain/_src/python/dataset/transformations:zip",
+        "//grain/_src/python/experimental/device_put",
         "//grain/_src/python/experimental/example_packing:packing",
         "//grain/_src/python/testing:experimental",
         "//grain/proto:execution_summary_py_pb2",
