@@ -434,6 +434,51 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
     ):
       next(iter(ds))
 
+  def test_pack_sequence_longer_than_sequence_length_when_possible(self):
+    ds = dataset.MapDataset.source([
+        {"observation": [1]},
+        {"observation": [4, 4, 4, 4]},
+        {"observation": [2, 2]},
+        {"observation": [3, 3, 3]},
+        {"observation": [2, 2]},
+    ]).to_iter_dataset()
+    # With split_full_length_features=False:
+    # [[1], [4, 4, 4, 4], [2, 2], [3, 3, 3], [2, 2]]
+    # should be packed to:
+    # [1, 4, 4], [4, 4, 2], [2, 2, 2], [3, 3, 3]
+    ds = packing_concat_then_split.ConcatThenSplitIterDataset(
+        ds,
+        length_struct={"observation": 3},
+        split_full_length_features=False,
+        split_large_features=True,
+    )
+    actual_elements = list(ds)
+    self.assert_equal_elements(
+        actual_elements,
+        [
+            {
+                "observation": np.array([1, 4, 4]),
+                "observation_segment_ids": np.array([1, 2, 2]),
+                "observation_positions": np.array([0, 0, 1]),
+            },
+            {
+                "observation": np.array([4, 4, 2]),
+                "observation_segment_ids": np.array([1, 1, 2]),
+                "observation_positions": np.array([0, 1, 0]),
+            },
+            {
+                "observation": np.array([2, 2, 2]),
+                "observation_segment_ids": np.array([1, 2, 2]),
+                "observation_positions": np.array([0, 0, 1]),
+            },
+            {
+                "observation": np.array([3, 3, 3]),
+                "observation_segment_ids": np.array([1, 1, 1]),
+                "observation_positions": np.array([0, 1, 2]),
+            },
+        ],
+    )
+
   def assert_equal_elements(
       self,
       actual_elements: list[dict[str, np.ndarray]],
