@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+import concurrent.futures
 import math
 import pprint
 import sys
@@ -31,15 +32,31 @@ import numpy as np
 T = TypeVar("T")
 S = TypeVar("S")
 
+_MAX_PARALLEL_BATCH_WORKERS = 16
 
-def _make_batch(values: Sequence[T]) -> T:
+
+def _is_parallel_batch_enabled():
+  return False
+
+
+def _make_batch(
+    values: Sequence[T],
+    parallel_executor: concurrent.futures.ThreadPoolExecutor | None = None,
+) -> T:
   """Returns a batch of values with a new batch dimension at the front."""
 
   if not values:
     raise ValueError("Cannot batch 0 values. Please file a bug.")
 
   try:
-    return tree_lib.map_structure(lambda *xs: np.stack(xs), *values)
+    if parallel_executor:
+      return tree_lib.map_structure_parallel(
+          (lambda *xs: (s := np.stack(xs)).reshape(s.shape[1:])),
+          *values,
+          executor=parallel_executor,
+      )
+    else:
+      return tree_lib.map_structure(lambda *xs: np.stack(xs), *values)
 
   except ValueError as e:
     # NumPy error message doesn't include actual shapes and dtypes. Provide a
@@ -129,6 +146,15 @@ class BatchMapDataset(dataset.MapDataset[T]):
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
     self._batch_fn = _make_batch if batch_fn is None else batch_fn
+    self._parallel_batch_executor = None
+    if _is_parallel_batch_enabled() and (batch_fn is None):
+      self._parallel_batch_executor = concurrent.futures.ThreadPoolExecutor(
+          max_workers=_MAX_PARALLEL_BATCH_WORKERS
+      )
+      self._batch_fn = lambda values: _make_batch(
+          values, self._parallel_batch_executor
+      )
+
     if self._drop_remainder:
       self._length = len(self._parent) // self._batch_size
     else:
@@ -169,6 +195,14 @@ class BatchMapDataset(dataset.MapDataset[T]):
         f" drop_remainder={self._drop_remainder})"
     )
 
+  def __del__(self):
+    if (
+        hasattr(self, "_parallel_batch_executor")
+        and self._parallel_batch_executor
+    ):
+      self._parallel_batch_executor.shutdown(wait=False, cancel_futures=True)
+      self._parallel_batch_executor = None
+
 
 class BatchIterDataset(dataset.IterDataset[T]):
   """Batch transformation for IterDatasets."""
@@ -194,6 +228,14 @@ class BatchIterDataset(dataset.IterDataset[T]):
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
     self._batch_fn = _make_batch if batch_fn is None else batch_fn
+    self._parallel_batch_executor = None
+    if _is_parallel_batch_enabled() and (batch_fn is None):
+      self._parallel_batch_executor = concurrent.futures.ThreadPoolExecutor(
+          max_workers=_MAX_PARALLEL_BATCH_WORKERS
+      )
+      self._batch_fn = lambda values: _make_batch(
+          values, self._parallel_batch_executor
+      )
 
   def __iter__(self) -> _BatchDatasetIterator[T]:
     parent_iter = self._parent.__iter__()
@@ -209,3 +251,11 @@ class BatchIterDataset(dataset.IterDataset[T]):
         f"BatchIterDataset(batch_size={self._batch_size},"
         f" drop_remainder={self._drop_remainder})"
     )
+
+  def __del__(self):
+    if (
+        hasattr(self, "_parallel_batch_executor")
+        and self._parallel_batch_executor
+    ):
+      self._parallel_batch_executor.shutdown(wait=False, cancel_futures=True)
+      self._parallel_batch_executor = None
