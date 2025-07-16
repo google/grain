@@ -13,6 +13,7 @@
 # limitations under the License.
 """Testes for tree_lib.py with JAX dependency present."""
 
+import concurrent.futures
 from absl.testing import absltest
 import attrs
 from grain._src.core import tree_lib
@@ -45,13 +46,31 @@ class MyAttrs:
 
 class TreeJaxTest(tree_lib_test.TreeTest):
 
-  def test_map_custom_tree(self):
+  @classmethod
+  def setUpClass(cls):
+    super().setUpClass()
     jax.tree_util.register_pytree_node(
         MyTree, lambda t: ((t.a, t.b), None), lambda _, args: MyTree(*args)
     )
+
+  def test_map_custom_tree(self):
     self.assertEqual(
         tree_lib.map_structure(lambda x: x + 1, MyTree(1, 2)), MyTree(2, 3)
     )
+
+  def test_map_custom_tree_parallel(self):
+    def wrapper_f(f, x):
+      return f(*x)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+      self.assertEqual(
+          tree_lib.map_structure_parallel(
+              [MyTree(1, 2), MyTree(3, 4), MyTree(5, 6), MyTree(7, 8)],
+              f=(lambda x: wrapper_f(lambda x: x + 1, x)),
+              executor=executor,
+          ),
+          [MyTree(2, 3), MyTree(4, 5), MyTree(6, 7), MyTree(8, 9)],
+      )
 
   def test_spec_like_with_class(self):
     self.assertIn(

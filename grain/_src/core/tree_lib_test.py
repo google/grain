@@ -17,6 +17,7 @@ Since the tree_lib.py only re-directs the actual implementations this test does
 not try to cover the actual functionality, but rather the re-direction
 correctness.
 """
+import concurrent.futures
 import dataclasses
 from typing import Protocol, runtime_checkable
 
@@ -30,6 +31,9 @@ import numpy as np
 class TreeImpl(Protocol):
 
   def map_structure(self, f, *structures):
+    ...
+
+  def map_structure_parallel(self, structure, *rest, f, executor):
     ...
 
   def map_structure_with_path(self, f, *structures):
@@ -76,6 +80,20 @@ class TreeTest(parameterized.TestCase):
         ),
         ({"B": 11, "A": 21}, [2, 3], 4),
     )
+
+  def test_map_structure_parallel(self):
+    def wrapper_f(f, x):
+      return f(*x)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+      self.assertEqual(
+          tree_lib.map_structure_parallel(
+              ({"B": 10, "A": 20}, [1, 2], 3, (6, 7)),
+              f=(lambda x: wrapper_f(lambda x: x + 1, x)),
+              executor=executor,
+          ),
+          ({"B": 11, "A": 21}, [2, 3], 4, (7, 8)),
+      )
 
   def test_map_structure_with_path(self):
     self.assertEqual(

@@ -26,9 +26,11 @@ py_test(
     srcs_version = "PY3",
     deps = [
         "//grain/_src/python/dataset",
+        "//grain/google/experiment_framework:experiment_mock_utils",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
         "@pypi//dm_tree:pkg",
+        "@pypi//jax:pkg",  # buildcleaner: keep
         "@pypi//numpy:pkg",
     ],
 )
