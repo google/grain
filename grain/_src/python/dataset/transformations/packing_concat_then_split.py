@@ -87,6 +87,7 @@ class _CtsConfig:
   length_struct: Mapping[str, int]
   meta_features: Collection[str]
   split_full_length_features: bool
+  split_large_features: bool
   bos_handling: BOSHandling
   bos_features: Collection[str]
   bos_token_id: int | None
@@ -140,8 +141,10 @@ class _CtsElement:
     parent_state: The state of the parent iterator *before* __next__() was
       called.
     features: Features as returned by calling __next__() on the parent iterator.
-    slices: If set then maps the feature name to the `slice` object for the
-      split features.
+    slices: Maps the feature name to a tuple (start, stop) representing the
+      slice of the feature to use (in case this element represents a partial
+      element resulting from a split). A slice of (-1, -1) represents the whole
+      feature.
   """
 
   parent_state: dict[str, Any]
@@ -151,7 +154,15 @@ class _CtsElement:
   def split(
       self, split_points: Mapping[str, int]
   ) -> tuple[_CtsElement | None, _CtsElement]:
-    """Splits the element into two elements."""
+    """Splits the element into two elements.
+
+    Args:
+      split_points: A mapping from feature name to the desired split index.
+
+    Returns:
+      The left and right elements. If the element is not split, returns None
+      for the left element and the original element for the right element.
+    """
     # We split at the very beginning.
     if all(x == 0 for x in split_points.values()):
       return None, self
@@ -260,7 +271,10 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
         continue
       if sequence_length == target_sequence_length:
         return True
-      if sequence_length > target_sequence_length:
+      if (
+          sequence_length > target_sequence_length
+          and not self._config.split_large_features
+      ):
         raise exceptions.PyGrainInternalError(
             f"Feature '{key}' has {sequence_length} tokens but target length is"
             f" only {target_sequence_length}. The element should be split."
@@ -371,7 +385,10 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
       else:
         if sequence_length > available_tokens:
           needs_splitting = True
-          split_points[key] = available_tokens
+          start_index = 0
+          if element.slices[key] != _EMPTY_SLICE:
+            start_index = element.slices[key][0]
+          split_points[key] = start_index + available_tokens
           new_tokens_in_buffer[key] = available_tokens
         else:
           # No splitting.
@@ -600,6 +617,7 @@ class ConcatThenSplitIterDataset(dataset.IterDataset):
       length_struct: Mapping[str, int],
       meta_features: Collection[str] = (),
       split_full_length_features: bool = True,
+      split_large_features: bool = False,
       bos_handling: BOSHandling = BOSHandling.DO_NOTHING,
       bos_features: Collection[str] = (),
       bos_token_id: int | None = None,
@@ -619,6 +637,8 @@ class ConcatThenSplitIterDataset(dataset.IterDataset):
         split_full_length_features=False is an optimization when some sequences
         already have the target length, and you don't want them to be split.
         This optimization is not used by default.
+      split_large_features: Whether to split sequences that are longer than the
+        target sequence length. If False, we raise an error in this case.
       bos_handling: The instructions for handling BOS tokens (by default, no BOS
         token is added).
       bos_features: The features to which BOS handling is applied in case BOS is
@@ -630,6 +650,7 @@ class ConcatThenSplitIterDataset(dataset.IterDataset):
         length_struct=length_struct,
         meta_features=meta_features,
         split_full_length_features=split_full_length_features,
+        split_large_features=split_large_features,
         bos_handling=bos_handling,
         bos_token_id=bos_token_id,
         bos_features=bos_features,
