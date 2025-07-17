@@ -140,8 +140,10 @@ class _CtsElement:
     parent_state: The state of the parent iterator *before* __next__() was
       called.
     features: Features as returned by calling __next__() on the parent iterator.
-    slices: If set then maps the feature name to the `slice` object for the
-      split features.
+    slices: Maps the feature name to a tuple (start, stop) representing the
+      slice of the feature to use (in case this element represents a partial
+      element resulting from a split). A slice of (-1, -1) represents the whole
+      feature.
   """
 
   parent_state: dict[str, Any]
@@ -151,7 +153,15 @@ class _CtsElement:
   def split(
       self, split_points: Mapping[str, int]
   ) -> tuple[_CtsElement | None, _CtsElement]:
-    """Splits the element into two elements."""
+    """Splits the element into two elements.
+
+    Args:
+      split_points: A mapping from feature name to the desired split index.
+
+    Returns:
+      The left and right elements. If the element is not split, returns None
+      for the left element and the original element for the right element.
+    """
     # We split at the very beginning.
     if all(x == 0 for x in split_points.values()):
       return None, self
@@ -256,15 +266,8 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
     for key, target_sequence_length in self._config.length_struct.items():
       feature = element.get_sliced_features(key)
       sequence_length = 1 if np.ndim(feature) == 0 else len(feature)
-      if sequence_length < target_sequence_length:
-        continue
       if sequence_length == target_sequence_length:
         return True
-      if sequence_length > target_sequence_length:
-        raise exceptions.PyGrainInternalError(
-            f"Feature '{key}' has {sequence_length} tokens but target length is"
-            f" only {target_sequence_length}. The element should be split."
-        )
     return False
 
   def _pack_elements(
@@ -371,7 +374,11 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
       else:
         if sequence_length > available_tokens:
           needs_splitting = True
-          split_points[key] = available_tokens
+          if element.slices[key] == _EMPTY_SLICE:
+            start_index = 0
+          else:
+            start_index = element.slices[key][0]
+          split_points[key] = start_index + available_tokens
           new_tokens_in_buffer[key] = available_tokens
         else:
           # No splitting.

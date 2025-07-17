@@ -17,7 +17,6 @@ from typing import Any
 
 from absl.testing import absltest
 from absl.testing import parameterized
-from grain._src.core import exceptions
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import packing_concat_then_split
 from grain._src.python.dataset.transformations import source
@@ -43,11 +42,14 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
 
   # observations will be [
   #   [1], [2, 2], [3, 3, 3], [4, 4, 4, 4], [5, 5, 5, 5, 5],
-  #   [6, 6, 6, 6, 6, 6], [1], [2, 2], [3, 3, 3], ...
+  #   [6, 6, 6, 6, 6, 6], [7, 7, 7, 7, 7, 7, 7], [1], [2, 2], [3, 3, 3], ...
   # ].
   def dummy_iter_dataset(self, *, num_observations: int) -> dataset.IterDataset:
     return (
-        source.RangeMapDataset(1, 7)
+        # On purpose, we have observations longer (length=7) than the packing
+        # sequence length of most test cases (6), so we can test splitting long
+        # features.
+        source.RangeMapDataset(1, 8)
         .repeat()
         .map_with_index(
             lambda index, value: {
@@ -92,16 +94,22 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
                 "index": np.asarray([5, 6, 0, 0, 0, 0]),
             },
             {
-                "observation": np.asarray([6, 6, 6, 1, 2, 2]),
-                "observation_segment_ids": np.asarray([1, 1, 1, 2, 3, 3]),
-                "observation_positions": np.asarray([0, 1, 2, 0, 0, 1]),
-                "index": np.asarray([6, 7, 8, 0, 0, 0]),
+                "observation": np.asarray([6, 6, 6, 7, 7, 7]),
+                "observation_segment_ids": np.asarray([1, 1, 1, 2, 2, 2]),
+                "observation_positions": np.asarray([0, 1, 2, 0, 1, 2]),
+                "index": np.asarray([6, 7, 0, 0, 0, 0]),
+            },
+            {
+                "observation": np.asarray([7, 7, 7, 7, 1, 2]),
+                "observation_segment_ids": np.asarray([1, 1, 1, 1, 2, 3]),
+                "observation_positions": np.asarray([0, 1, 2, 3, 0, 0]),
+                "index": np.asarray([7, 8, 9, 0, 0, 0]),
             },
             # Reached end.
             {
-                "observation": np.asarray([3, 3, 3, 0, 0, 0]),
-                "observation_segment_ids": np.asarray([1, 1, 1, 0, 0, 0]),
-                "observation_positions": np.asarray([0, 1, 2, 0, 0, 0]),
+                "observation": np.asarray([2, 0, 0, 0, 0, 0]),
+                "observation_segment_ids": np.asarray([1, 0, 0, 0, 0, 0]),
+                "observation_positions": np.asarray([0, 0, 0, 0, 0, 0]),
                 "index": np.asarray([9, 0, 0, 0, 0, 0]),
             },
         ],
@@ -132,10 +140,10 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
                 "index": np.asarray([4, 5, 0, 0, 0, 0]),
             },
             {
-                "observation": np.asarray([5, 5, 5, 1, 2, 2]),
-                "observation_segment_ids": np.asarray([1, 1, 1, 2, 3, 3]),
-                "observation_positions": np.asarray([0, 1, 2, 0, 0, 1]),
-                "index": np.asarray([5, 7, 8, 0, 0, 0]),
+                "observation": np.asarray([5, 5, 5, 7, 7, 7]),
+                "observation_segment_ids": np.asarray([1, 1, 1, 2, 2, 2]),
+                "observation_positions": np.asarray([0, 1, 2, 0, 1, 2]),
+                "index": np.asarray([5, 7, 0, 0, 0, 0]),
             },
             # Fully packed example comes without being split.
             {
@@ -144,11 +152,17 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
                 "observation_positions": np.asarray([0, 1, 2, 3, 4, 5]),
                 "index": np.asarray([6, 0, 0, 0, 0, 0]),
             },
+            {
+                "observation": np.asarray([7, 7, 7, 7, 1, 2]),
+                "observation_segment_ids": np.asarray([1, 1, 1, 1, 2, 3]),
+                "observation_positions": np.asarray([0, 1, 2, 3, 0, 0]),
+                "index": np.asarray([7, 8, 9, 0, 0, 0]),
+            },
             # Reached end.
             {
-                "observation": np.asarray([3, 3, 3, 0, 0, 0]),
-                "observation_segment_ids": np.asarray([1, 1, 1, 0, 0, 0]),
-                "observation_positions": np.asarray([0, 1, 2, 0, 0, 0]),
+                "observation": np.asarray([2, 0, 0, 0, 0, 0]),
+                "observation_segment_ids": np.asarray([1, 0, 0, 0, 0, 0]),
+                "observation_positions": np.asarray([0, 0, 0, 0, 0, 0]),
                 "index": np.asarray([9, 0, 0, 0, 0, 0]),
             },
         ],
@@ -191,15 +205,21 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
                 "index": np.asarray([6, 0]),
             },
             {
-                "observation": np.asarray([1, 2, 2, 0, 0, 0]),
-                "observation_segment_ids": np.asarray([1, 2, 2, 0, 0, 0]),
-                "observation_positions": np.asarray([0, 0, 1, 0, 0, 0]),
+                "observation": np.asarray([7, 7, 7, 7, 7, 7]),
+                "observation_segment_ids": np.asarray([1, 1, 1, 1, 1, 1]),
+                "observation_positions": np.asarray([0, 1, 2, 3, 4, 5]),
+                "index": np.asarray([7, 0]),
+            },
+            {
+                "observation": np.asarray([7, 1, 0, 0, 0, 0]),
+                "observation_segment_ids": np.asarray([1, 2, 0, 0, 0, 0]),
+                "observation_positions": np.asarray([0, 0, 0, 0, 0, 0]),
                 "index": np.asarray([7, 8]),
             },
             {
-                "observation": np.asarray([3, 3, 3, 0, 0, 0]),
-                "observation_segment_ids": np.asarray([1, 1, 1, 0, 0, 0]),
-                "observation_positions": np.asarray([0, 1, 2, 0, 0, 0]),
+                "observation": np.asarray([2, 2, 0, 0, 0, 0]),
+                "observation_segment_ids": np.asarray([1, 1, 0, 0, 0, 0]),
+                "observation_positions": np.asarray([0, 1, 0, 0, 0, 0]),
                 "index": np.asarray([9, 0]),
             },
         ],
@@ -233,10 +253,10 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
                 "index": np.asarray([4, 5, 0, 0, 0, 0]),
             },
             {
-                "observation": np.asarray([1000, 5, 5, 1000, 1000, 2]),
-                "observation_segment_ids": np.asarray([1, 1, 1, 2, 3, 3]),
-                "observation_positions": np.asarray([0, 1, 2, 0, 0, 1]),
-                "index": np.asarray([5, 7, 8, 0, 0, 0]),
+                "observation": np.asarray([1000, 5, 5, 1000, 7, 7]),
+                "observation_segment_ids": np.asarray([1, 1, 1, 2, 2, 2]),
+                "observation_positions": np.asarray([0, 1, 2, 0, 1, 2]),
+                "index": np.asarray([5, 7, 0, 0, 0, 0]),
             },
             # Fully packed example comes without being split.
             {
@@ -245,11 +265,17 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
                 "observation_positions": np.asarray([0, 1, 2, 3, 4, 5]),
                 "index": np.asarray([6, 0, 0, 0, 0, 0]),
             },
+            {
+                "observation": np.asarray([1000, 7, 7, 7, 1000, 1000]),
+                "observation_segment_ids": np.asarray([1, 1, 1, 1, 2, 3]),
+                "observation_positions": np.asarray([0, 1, 2, 3, 0, 0]),
+                "index": np.asarray([7, 8, 9, 0, 0, 0]),
+            },
             # Reached end.
             {
-                "observation": np.asarray([1000, 3, 3, 0, 0, 0]),
-                "observation_segment_ids": np.asarray([1, 1, 1, 0, 0, 0]),
-                "observation_positions": np.asarray([0, 1, 2, 0, 0, 0]),
+                "observation": np.asarray([1000, 0, 0, 0, 0, 0]),
+                "observation_segment_ids": np.asarray([1, 0, 0, 0, 0, 0]),
+                "observation_positions": np.asarray([0, 0, 0, 0, 0, 0]),
                 "index": np.asarray([9, 0, 0, 0, 0, 0]),
             },
         ],
@@ -320,28 +346,82 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
                 "index": np.asarray([4, 5, 6, 0, 0, 0]),
             },
             {
-                "observation": np.asarray([6, 6, 6, 6, 6, 1, 2, 2]),
-                "observation_segment_ids": np.asarray([1, 1, 1, 1, 1, 2, 3, 3]),
-                "observation_positions": np.asarray([0, 1, 2, 3, 4, 0, 0, 1]),
-                "index": np.asarray([6, 7, 8, 0, 0, 0]),
+                "observation": np.asarray([6, 6, 6, 6, 6, 7, 7, 7]),
+                "observation_segment_ids": np.asarray([1, 1, 1, 1, 1, 2, 2, 2]),
+                "observation_positions": np.asarray([0, 1, 2, 3, 4, 0, 1, 2]),
+                "index": np.asarray([6, 7, 0, 0, 0, 0]),
             },
             {
-                "observation": np.asarray([3, 3, 3, 4, 4, 4, 4, 5]),
-                "observation_segment_ids": np.asarray([1, 1, 1, 2, 2, 2, 2, 3]),
-                "observation_positions": np.asarray([0, 1, 2, 0, 1, 2, 3, 0]),
-                "index": np.asarray([9, 10, 11, 0, 0, 0]),
+                "observation": np.asarray([7, 7, 7, 7, 1, 2, 2, 3]),
+                "observation_segment_ids": np.asarray([1, 1, 1, 1, 2, 3, 3, 4]),
+                "observation_positions": np.asarray([0, 1, 2, 3, 0, 0, 1, 0]),
+                "index": np.asarray([7, 8, 9, 10, 0, 0]),
             },
             {
-                "observation": np.asarray([5, 5, 5, 5, 6, 6, 6, 6]),
-                "observation_segment_ids": np.asarray([1, 1, 1, 1, 2, 2, 2, 2]),
-                "observation_positions": np.asarray([0, 1, 2, 3, 0, 1, 2, 3]),
-                "index": np.asarray([11, 12, 0, 0, 0, 0]),
+                "observation": np.asarray([3, 3, 4, 4, 4, 4, 5, 5]),
+                "observation_segment_ids": np.asarray([1, 1, 2, 2, 2, 2, 3, 3]),
+                "observation_positions": np.asarray([0, 1, 0, 1, 2, 3, 0, 1]),
+                "index": np.asarray([10, 11, 12, 0, 0, 0]),
             },
             {
-                "observation": np.asarray([6, 6, 0, 0, 0, 0, 0, 0]),
-                "observation_segment_ids": np.asarray([1, 1, 0, 0, 0, 0, 0, 0]),
-                "observation_positions": np.asarray([0, 1, 0, 0, 0, 0, 0, 0]),
+                "observation": np.asarray([5, 5, 5, 0, 0, 0, 0, 0]),
+                "observation_segment_ids": np.asarray([1, 1, 1, 0, 0, 0, 0, 0]),
+                "observation_positions": np.asarray([0, 1, 2, 0, 0, 0, 0, 0]),
                 "index": np.asarray([12, 0, 0, 0, 0, 0]),
+            },
+        ],
+    )
+
+  def test_split_element_multiple_times(self):
+    ds = dataset.MapDataset.source([
+        {"observation": np.arange(7)},
+        {"observation": np.arange(25)},
+    ]).to_iter_dataset()
+    ds = packing_concat_then_split.ConcatThenSplitIterDataset(
+        ds,
+        length_struct={"observation": 10},
+    )
+    actual_elements = list(ds)
+    self.assert_equal_elements(
+        actual_elements,
+        [
+            {
+                "observation": np.asarray([0, 1, 2, 3, 4, 5, 6, 0, 1, 2]),
+                "observation_segment_ids": np.asarray(
+                    [1, 1, 1, 1, 1, 1, 1, 2, 2, 2]
+                ),
+                "observation_positions": np.asarray(
+                    [0, 1, 2, 3, 4, 5, 6, 0, 1, 2]
+                ),
+            },
+            {
+                "observation": np.asarray([3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),
+                "observation_segment_ids": np.asarray(
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+                ),
+                "observation_positions": np.asarray(
+                    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+                ),
+            },
+            {
+                "observation": np.asarray(
+                    [13, 14, 15, 16, 17, 18, 19, 20, 21, 22]
+                ),
+                "observation_segment_ids": np.asarray(
+                    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+                ),
+                "observation_positions": np.asarray(
+                    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+                ),
+            },
+            {
+                "observation": np.asarray([23, 24, 0, 0, 0, 0, 0, 0, 0, 0]),
+                "observation_segment_ids": np.asarray(
+                    [1, 1, 0, 0, 0, 0, 0, 0, 0, 0]
+                ),
+                "observation_positions": np.asarray(
+                    [0, 1, 0, 0, 0, 0, 0, 0, 0, 0]
+                ),
             },
         ],
     )
@@ -405,34 +485,6 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
             split_full_length_features=split_full_length_features,
         )
     )
-
-  @parameterized.product(
-      bos_handling=list(BOSHandling),
-  )
-  def test_pack_sequence_longer_than_sequence_length(self, bos_handling):
-    sequence_length = 10
-    if bos_handling == BOSHandling.REPLACE_FIRST_TOKEN_WITH_BOS:
-      bos_token_id = 1000
-      bos_features = {"observation"}
-    else:
-      bos_token_id = None
-      bos_features = {}
-    ds = dataset.MapDataset.source([
-        {"observation": np.repeat(1, 100)},  # 100 > sequence_length
-    ]).to_iter_dataset()
-    ds = packing_concat_then_split.ConcatThenSplitIterDataset(
-        ds,
-        length_struct={"observation": sequence_length},
-        split_full_length_features=False,
-        bos_handling=bos_handling,
-        bos_token_id=bos_token_id,
-        bos_features=bos_features,
-    )
-    with self.assertRaisesWithPredicateMatch(
-        exceptions.PyGrainInternalError,
-        lambda _: "Feature 'observation' has 100 tokens",
-    ):
-      next(iter(ds))
 
   def assert_equal_elements(
       self,
