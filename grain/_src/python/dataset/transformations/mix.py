@@ -19,7 +19,7 @@ import bisect
 from collections.abc import Sequence
 import dataclasses
 import sys
-from typing import Any, TypeVar
+from typing import Any, Callable, TypeVar
 
 from grain._src.core import exceptions
 from grain._src.python.dataset import base
@@ -28,6 +28,36 @@ from grain._src.python.dataset import stats
 
 Element = Any
 T = TypeVar("T")  # pylint: disable=invalid-name
+
+
+def bisect_largest_true(
+    search_range: Sequence[int],
+    criterion: Callable[[int], bool],
+) -> int | None:
+  """Finds the largest value in a sorted range for which a criterion is True.
+
+  Args:
+      search_range: A sorted list of values.
+      criterion: A function that takes a value from search_range and returns
+        True or False.
+
+  Returns:
+      The largest value in search_range for which the criterion is True, or None
+      if no such value exists.
+  """
+
+  if not search_range:
+    return None
+  # Find the insertion index for the first value where the criterion is False.
+  index_to_insert_false = bisect.bisect_left(
+      search_range, True, key=lambda x: not criterion(x)
+  )
+
+  if index_to_insert_false == 0:
+    # All elements return False for the criterion.
+    return None
+  else:
+    return search_range[index_to_insert_false - 1]
 
 
 @dataclasses.dataclass
@@ -49,14 +79,36 @@ class SelectionWithProportionsMap(base.DatasetSelectionMap):
     assert len(parents) == len(proportions)
     self._proportions = tuple(proportions)
 
-    # Compute length such that elements of constituent datasets appear at most
-    # once.
-    weight_sum = sum(proportions)
-    lengths = [
-        len(parent) / (weight / weight_sum)
-        for parent, weight in zip(parents, proportions)
-    ]
-    self._length = min(sys.maxsize, int(min(lengths)))
+    # Compute maximal length of mixture -- the mixture ends when we request
+    # an example from an already-exhausted parent iterator.
+    parent_lengths = [len(parent) for parent in parents]
+    search_range_min = min(parent_lengths)
+    if search_range_min == sys.maxsize:
+      # All parent datasets are infinite.
+      length = sys.maxsize
+    else:
+      # We have at least one dataset which is finite.
+      # We need to add up only the finite parent lengths.
+      # This trick will fail if we have finite datasets that are close to
+      # sys.maxsize.
+      search_range_max = sum(
+          parent_length
+          for parent_length in parent_lengths
+          if parent_length < sys.maxsize
+      )
+
+      def criterion(l: int) -> bool:
+        counts = _counts_per_dataset(l, self._proportions)
+        return all(
+            [count <= length for count, length in zip(counts, parent_lengths)]
+        )
+
+      length = bisect_largest_true(
+          search_range=range(search_range_min, search_range_max + 1),
+          criterion=criterion,
+      )
+
+    self._length = min(sys.maxsize, length) if length is not None else 0
 
   def __len__(self) -> int:
     return self._length
