@@ -285,7 +285,6 @@ py_test(
     srcs_version = "PY3",
     deps = [
         ":packing_concat_then_split",
-        "//grain/_src/core:exceptions",
         "//grain/_src/python/dataset",
         "//grain/_src/python/testing:experimental",
         "@abseil-py//absl/testing:absltest",
