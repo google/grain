@@ -13,6 +13,8 @@
 # limitations under the License.
 """Tests for base.py."""
 
+from platform import system
+
 from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.python import data_sources
