@@ -53,5 +53,6 @@ within Grain will be done on the CPU by default.
 
 Grain is used by [MaxText](https://github.com/google/maxtext/tree/main),
 [Gemma](https://github.com/google-deepmind/gemma),
-[kauldron](https://github.com/google-research/kauldron) and multiple internal
-Google projects.
+[kauldron](https://github.com/google-research/kauldron),
+[maxdiffusion](https://github.com/AI-Hypercomputer/maxdiffusion) and multiple
+internal Google projects.
