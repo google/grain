@@ -13,22 +13,38 @@ compile_pip_requirements_3_10(
     name = "requirements_3_10",
     requirements_in = "test_requirements.in",
     requirements_txt = "test_requirements_lock_3_10.txt",
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
 )
 
 compile_pip_requirements_3_11(
     name = "requirements_3_11",
     requirements_in = "test_requirements.in",
     requirements_txt = "test_requirements_lock_3_11.txt",
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
 )
 
 compile_pip_requirements_3_12(
     name = "requirements_3_12",
     requirements_in = "test_requirements.in",
     requirements_txt = "test_requirements_lock_3_12.txt",
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
 )
 
 compile_pip_requirements_3_13(
     name = "requirements_3_13",
     requirements_in = "test_requirements.in",
     requirements_txt = "test_requirements_lock_3_13.txt",
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
 )
