@@ -106,6 +106,10 @@ py_test(
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
     ],
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
 )
 
 py_library(
@@ -139,20 +143,6 @@ py_test(
     srcs_version = "PY3",
     deps = [
         ":tree_test_lib",
-    ],
-)
-
-py_test(
-    name = "tree_lib_jax_test",
-    srcs = ["tree_lib_jax_test.py"],
-    srcs_version = "PY3",
-    deps = [
-        ":tree_lib",
-        ":tree_test_lib",
-        "@abseil-py//absl/testing:absltest",
-        "@pypi//attrs:pkg",
-        "@pypi//jax:pkg",
-        "@pypi//numpy:pkg",
     ],
 )
 

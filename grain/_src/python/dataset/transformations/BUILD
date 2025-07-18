@@ -154,16 +154,6 @@ py_library(
     ],
 )
 
-py_test(
-    name = "packing_test",
-    srcs = ["packing_test.py"],
-    srcs_version = "PY3",
-    deps = [
-        ":testing_util",
-        "@abseil-py//absl/testing:absltest",
-    ],
-)
-
 py_library(
     name = "packing_packed_batch",
     srcs = ["packing_packed_batch.py"],

@@ -23,7 +23,6 @@ py_test(
         "//grain/_src/core:tree_lib",
         "//grain/_src/python:record",
         "@abseil-py//absl/testing:absltest",
-        "@pypi//jax:pkg",
         "@pypi//numpy:pkg",
     ],
 )

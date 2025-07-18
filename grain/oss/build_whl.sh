@@ -120,6 +120,16 @@ main() {
   $PYTHON_BIN -m pip install ${OUTPUT_DIR}/all_dist/grain*.whl
   $PYTHON_BIN -m pip install jax
   $PYTHON_BIN grain/_src/core/smoke_test_with_jax.py
+  $PYTHON_BIN grain/_src/core/tree_lib_jax_test.py
+  $PYTHON_BIN grain/_src/python/dataset/transformations/packing_test.py
+  case "$(uname)" in
+    CYGWIN*|MINGW*|MSYS_NT*)
+      # shared_memory_array_test timeouts on Windows
+      ;;
+    *)
+      $PYTHON_BIN grain/_src/python/shared_memory_array_test.py
+      ;;
+  esac
   # TF is not available on Python 3.13 and above.
   if (( "${PYTHON_MINOR_VERSION}" < 13 )); then
     $PYTHON_BIN -m pip install tensorflow==2.20.0rc0
