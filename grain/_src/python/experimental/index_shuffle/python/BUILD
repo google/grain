@@ -15,7 +15,17 @@ pybind_extension(
 py_test(
     name = "index_shuffle_test",
     srcs = ["index_shuffle_test.py"],
-    data = [":index_shuffle_module.so"],
     srcs_version = "PY3",
-    deps = ["@abseil-py//absl/testing:absltest"],
+    data = select({
+        "@platforms//os:windows": [":index_shuffle_module.pyd"],
+        "//conditions:default": [":index_shuffle_module.so"],
+    }),
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        ":index_shuffle_module",
+        "@abseil-py//absl/testing:absltest",
+    ],
 )
