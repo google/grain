@@ -20,7 +20,9 @@ from typing import TypeVar
 
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
-from grain._src.python.experimental.index_shuffle.python import index_shuffle_module as index_shuffle
+from grain._src.python.experimental.index_shuffle.python import (
+    index_shuffle_module as index_shuffle,
+)
 
 
 T = TypeVar("T")
