@@ -82,6 +82,9 @@ main() {
   cp pyproject.toml "${TMPDIR}"
   cp LICENSE "${TMPDIR}"
 
+  # rsync on Windows runner can't correctly figure out absolute paths
+  # so we use an intermediate folder for rsync execution, and after that
+  # copy to the destination folder.
   rsync -avm -L --exclude="__pycache__/*" grain tmp_folder
   rsync -avm -L  --include="${INCLUDE_EXT}" --include="*_pb2.py" \
     --exclude="*.runfiles" --exclude="*_obj" --include="*/" --exclude="*" \

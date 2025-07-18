@@ -18,12 +18,11 @@ from __future__ import annotations
 import copy
 from typing import TypeVar
 
-from etils import epy
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
-
-with epy.lazy_imports():
-  from grain._src.python.experimental.index_shuffle.python import index_shuffle_module as index_shuffle
+from grain._src.python.experimental.index_shuffle.python import (
+    index_shuffle_module as index_shuffle
+)
 
 
 T = TypeVar("T")
