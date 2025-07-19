@@ -98,6 +98,7 @@ class MapMapDataset(dataset.MapDataset[T]):
   def __str__(self) -> str:
     return f"MapMapDataset(transform={self._transform_name})"
 
+  @stats.trace_input_pipeline(stage_category=stats.IPL_CAT_PREPROCESSING)
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
@@ -147,6 +148,7 @@ class RandomMapMapDataset(dataset.MapDataset[T]):
   def __str__(self) -> str:
     return f"RandomMapMapDataset(transform={self._transform_name})"
 
+  @stats.trace_input_pipeline(stage_category=stats.IPL_CAT_PREPROCESSING)
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
@@ -187,6 +189,7 @@ class MapWithIndexMapDataset(dataset.MapDataset[T]):
   def __str__(self) -> str:
     return f"MapWithIndexMapDataset(transform={self._transform_name})"
 
+  @stats.trace_input_pipeline(stage_category=stats.IPL_CAT_PREPROCESSING)
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)

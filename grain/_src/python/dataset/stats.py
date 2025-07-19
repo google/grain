@@ -341,6 +341,46 @@ def record_next_duration_if_output(next_fn):
   return wrapper
 
 
+# Input pipeline stage categories.
+IPL_CAT_PREPROCESSING = "preprocessing"
+IPL_CAT_READ = "read"
+IPL_CAT_ENQUEUE = "enqueue"
+IPL_CAT_UNKNOWN = "unknown"
+
+
+def trace_input_pipeline(stage_category: str = IPL_CAT_UNKNOWN, **trace_kwargs):
+  """Decorator to trace input pipeline stages, on __getitem__ methods.
+
+  Args:
+    stage_category: The category of the input pipeline stage.
+    **trace_kwargs: Keyword arguments to pass to the TraceAnnotation.
+
+  Returns:
+    The wrapped function.
+  """
+
+  def inner_wrapper(func):
+
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+      if _TRACE_ANNOTATION is not None and _TRACE_ANNOTATION.is_enabled():
+        with _TRACE_ANNOTATION(
+            f"{self.__class__.__name__}.{func.__name__}",
+            _ipl_stage_name=str(self),
+            _ipl_stage_id=id(self),
+            _ipl_stage_cat=stage_category,
+            **trace_kwargs,
+        ):
+          result = func(self, *args, **kwargs)
+      else:
+        result = func(self, *args, **kwargs)
+      return result
+
+    return wrapper
+
+  return inner_wrapper
+
+
 class _Table:
   """Table class for pretty printing tabular data."""
 

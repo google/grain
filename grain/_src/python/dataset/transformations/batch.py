@@ -194,6 +194,7 @@ class BatchMapDataset(dataset.MapDataset[T]):
   def __len__(self):
     return self._length
 
+  @stats.trace_input_pipeline(stage_category=stats.IPL_CAT_PREPROCESSING)
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
