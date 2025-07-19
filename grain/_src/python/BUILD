@@ -1,3 +1,5 @@
+load("@bazel_skylib//lib:selects.bzl", "selects")
+
 package(default_visibility = ["//grain:__subpackages__"])
 
 licenses(["notice"])
@@ -12,9 +14,11 @@ py_library(
         "//grain/_src/core:monitoring",
         "//grain/_src/core:usage_logging",
         "@abseil-py//absl/logging",
-        "@pypi//array_record:pkg",
         "@pypi//etils:pkg",
-    ],
+    ] + select({
+        "@platforms//os:windows": [],
+        "//conditions:default": ["@pypi//array_record:pkg"],
+    }),
 )
 
 py_test(
@@ -35,6 +39,10 @@ py_test(
         "@abseil-py//absl/testing:parameterized",
         "@pypi//etils:pkg",
     ],
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
 )
 
 py_library(
@@ -195,6 +203,10 @@ py_test(
         "@pypi//numpy:pkg",
         "@pypi//parameterized:pkg",
     ],
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
 )
 
 py_library(
@@ -234,6 +246,10 @@ py_test(
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
     ],
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
 )
 
 py_library(
@@ -308,21 +324,6 @@ py_library(
     srcs = ["shared_memory_array.py"],
     srcs_version = "PY3",
     deps = [
-        "@pypi//numpy:pkg",
-    ],
-)
-
-py_test(
-    name = "shared_memory_array_test",
-    srcs = ["shared_memory_array_test.py"],
-    srcs_version = "PY3",
-    deps = [
-        ":operations",
-        ":record",
-        ":shared_memory_array",
-        "@abseil-py//absl/testing:absltest",
-        "@abseil-py//absl/testing:parameterized",
-        "@pypi//jax:pkg",
         "@pypi//numpy:pkg",
     ],
 )

@@ -20,6 +20,10 @@ py_test(
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
     ],
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
 )
 
 py_library(
@@ -28,7 +32,10 @@ py_library(
         "dataset.py",
         "//grain/_src/python/dataset/transformations:core_transformations",
     ],
-    data = ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
+    data = select({
+        "@platforms//os:windows": ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.pyd"],
+        "//conditions:default": ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
+    }),
     srcs_version = "PY3",
     deps = [
         ":base",
@@ -95,6 +102,10 @@ py_test(
         "@abseil-py//absl/testing:absltest",
         "@pypi//numpy:pkg",
     ],
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
 )
 
 py_library(
@@ -155,6 +166,10 @@ py_test(
         "@pypi//cloudpickle:pkg",
         "@pypi//numpy:pkg",
     ],
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
 )
 
 py_library(
@@ -183,4 +198,8 @@ py_test(
         "@abseil-py//absl/testing:parameterized",
         "@pypi//numpy:pkg",
     ],
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
 )
