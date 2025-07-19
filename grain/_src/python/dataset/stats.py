@@ -19,7 +19,9 @@ import abc
 from collections.abc import Sequence
 import contextlib
 import dataclasses
+import enum
 import functools
+import importlib
 from multiprocessing import queues
 import pprint
 import queue
@@ -39,6 +41,24 @@ from grain._src.python.dataset import stats_utils
 from grain.proto import execution_summary_pb2
 
 from grain._src.core import monitoring
+
+# Conditionally import Xprof profiler to avoid importing JAX/XLA/TF if not
+# needed.
+try:
+  profiler = importlib.import_module(
+      "tensorflow.compiler.xla.python._profiler"
+  )
+  TraceAnnotation = profiler.TraceMe
+except ImportError:
+  logging.warning(
+      "Xprof profiler is not available. TraceAnnotation will be a no-op."
+  )
+
+  @contextlib.contextmanager
+  def _noop_trace_annotation(_, **__):
+    yield
+
+  TraceAnnotation = _noop_trace_annotation
 
 
 # Registry of weak references to output dataset iterators for collecting
@@ -310,8 +330,14 @@ def record_next_duration_if_output(next_fn):
 
   @functools.wraps(next_fn)
   def wrapper(iterator):
-    start_time = time.perf_counter_ns()
-    result = next_fn(iterator)
+    with TraceAnnotation(
+        f"{iterator.__class__.__name__}.{next_fn.__name__}",
+        _ipl_stage_name=str(iterator),
+        _ipl_stage_id=id(iterator),
+        _ipl_stage_cat="preprocessing",
+    ):
+      start_time = time.perf_counter_ns()
+      result = next_fn(iterator)
 
     if iterator._stats._is_output:  # pylint:disable=protected-access
       next_duration_ns = time.perf_counter_ns() - start_time
@@ -319,6 +345,57 @@ def record_next_duration_if_output(next_fn):
     return result
 
   return wrapper
+
+
+class InputPipelineStageCategory(enum.Enum):
+  """Category of the input pipeline stage."""
+
+  PREPROCESSING = "preprocessing"
+  READ = "read"
+  ADVANCED_READ = "advanced_read"
+  ENQUEUE = "enqueue"
+  UNKNOWN = "unknown"
+
+
+def trace_input_pipeline(**trace_kwargs):
+  """Decorator to trace input pipeline stages.
+
+  Args:
+    **trace_kwargs: Keyword arguments to pass to the TraceAnnotation.
+
+  Returns:
+    The wrapped function.
+  """
+  # stage_category = trace_kwargs.get(
+  #     "stage_category", InputPipelineStageCategory.UNKNOWN.value
+  # )
+  # func_name = trace_kwargs.get("func_name", None)
+  # if isinstance(trace_me_or_stage, InputPipelineStageCategory):
+  #   stage_category = trace_me_or_stage.value
+
+  def inner_wrapper(func):
+    @functools.wraps(func)
+    def wrapped(self, *args, **kwargs):
+      stage_category = trace_kwargs.get(
+          "stage_category", InputPipelineStageCategory.UNKNOWN.value
+      )
+      name = (
+          trace_kwargs.get("name", None)
+          or f"{self.__class__.__name__}.{func.__name__}"
+      )
+      with TraceAnnotation(
+          name,
+          _ipl_stage_name=str(self),
+          _ipl_stage_id=id(self),
+          _ipl_stage_cat=stage_category,
+          **trace_kwargs,
+      ):
+        result = func(self, *args, **kwargs)
+      return result
+
+    return wrapped
+
+  return inner_wrapper
 
 
 class _Table:
