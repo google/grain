@@ -5,7 +5,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.0
+    jupytext_version: 1.17.2
 kernelspec:
   display_name: Python 3
   name: python3
@@ -311,4 +311,63 @@ ds2 = grain.MapDataset.source(source2).seed(43).shuffle().repeat()
 
 ds = grain.MapDataset.mix([ds1, ds2], weights=[1, 2])
 print(f"Mixed dataset length = {len(ds)}")  # sys.maxsize
+```
+
++++ {"id": "DLsJtcAE8FPu"}
+
+## Prefetching
+
+Grain offers prefetching mechanisms for potential performance improvements.
+
+### Multithread prefetching
+
+`ThreadPrefetchIterDataset` allows to process the buffer of size N on the
+CPU ahead of time.
+
+```{code-cell}
+:id: Uq4EOb8DAMX6
+
+import grain
+import jax
+import tensorflow_datasets as tfds
+
+cpu_buffer_size = 3
+source = tfds.data_source(name="mnist", split="train")
+ds = grain.MapDataset.source(source).to_iter_dataset()
+ds.map(lambda x: x)  # Dummy map to illustrate the usage.
+ds = grain.experimental.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=cpu_buffer_size)
+ds = ds.map(jax.device_put)
+```
+
++++ {"id": "5hfinzxFAOcA"}
+
+`grain.experimental.device_put` allows for processing the buffer of size
+cpu_buffer_size on the CPU ahead of time and transferring the buffer of size
+tpu_buffer_size on the device which can be `jax.Device` or
+`jax.sharding.Sharding`.
+
+```{code-cell}
+:id: SAZz4YMMAPX5
+
+import jax
+import numpy as np
+
+cpu_buffer_size = 3
+tpu_buffer_size = 2
+source = tfds.data_source(name="mnist", split="train")
+ds = grain.MapDataset.source(source).to_iter_dataset()
+ds.map(lambda x: x)  # Dummy map to illustrate the usage.
+
+devices = jax.devices()
+
+mesh = jax.sharding.Mesh(np.array(devices), axis_names=('data',))
+p = jax.sharding.PartitionSpec('data')
+sharding = jax.sharding.NamedSharding(mesh, p)
+
+ds = grain.experimental.device_put(
+        ds=ds,
+        device=sharding,
+        cpu_buffer_size=cpu_buffer_size,
+        device_buffer_size=tpu_buffer_size,
+    )
 ```
