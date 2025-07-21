@@ -76,7 +76,7 @@ _next_duration_ns_histogram = monitoring.EventMetric(
 
 T = TypeVar("T")
 # Time between two consecutive monitoring reports.
-_REPORTING_PERIOD_SEC = 10
+_REPORTING_PERIOD_SEC = 5
 _LOG_EXECUTION_SUMMARY_PERIOD_SEC = 60
 _WORKER_QUEUE_TIMEOUT_SEC = 2
 # Stop reporting if there has been no statistics updates for this long.
@@ -715,7 +715,7 @@ class _ExecutionStats(_VisualizationStats):
           "Worker failed to report summary, `stats_out_queue` is None"
       )
     while self._should_report():
-      time.sleep(_LOG_EXECUTION_SUMMARY_PERIOD_SEC)
+      time.sleep(_REPORTING_PERIOD_SEC)
       try:
         stats_queue.put(self._get_execution_summary())
       except queue.Full:
