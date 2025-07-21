@@ -128,7 +128,7 @@ main() {
   $PYTHON_BIN grain/_src/core/smoke_test_with_jax.py
   # TF is not available on Python 3.13 and above.
   if (( "${PYTHON_MINOR_VERSION}" < 13 )); then
-    $PYTHON_BIN -m pip install tensorflow
+    $PYTHON_BIN -m pip install --pre tf-nightly
     $PYTHON_BIN grain/_src/core/smoke_test_with_tf.py
   fi
 }

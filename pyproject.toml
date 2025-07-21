@@ -11,14 +11,14 @@ authors = [
     {name = "Grain team", email = "grain-dev@google.com"},
 ]
 dependencies = [
-    'absl-py',
-    'array-record',
-    'cloudpickle',
-    'dm-tree',
-    'etils[epath,epy]',
-    'more-itertools>=9.1.0',
-    'numpy',
-    'protobuf>=3.20.3',
+    "absl-py",
+    "array-record>=0.8.0; sys_platform != 'win32'",
+    "cloudpickle",
+    "dm-tree",
+    "etils[epath,epy]",
+    "more-itertools>=9.1.0",
+    "numpy",
+    "protobuf>=5.28.3",
 ]
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -31,16 +31,16 @@ classifiers = [
 
 [project.optional-dependencies]
 testing = [
-    'attrs',
-    'dill',
-    'jax',
-    'jaxlib',
-    'jaxtyping',
-    'pyarrow',
-    'tensorflow-datasets',
+    "attrs",
+    "dill",
+    "jax",
+    "jaxlib",
+    "jaxtyping",
+    "pyarrow",
+    "tensorflow-datasets",
 ]
 parquet = [
-    'pyarrow',
+    "pyarrow",
 ]
 
 [project.urls]
