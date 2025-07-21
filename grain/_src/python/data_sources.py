@@ -26,19 +26,29 @@ from collections.abc import Sequence
 import math
 from multiprocessing import shared_memory
 import os
+import platform
 import threading
 import time
 import typing
-from typing import Any, Generic, Optional, Protocol, SupportsIndex, TypeVar, Union
+from typing import Any, Generic, Optional, Protocol, SupportsIndex, TypeVar
 
 from absl import logging
-import array_record.python.array_record_data_source as array_record
 from etils import epath
+from etils import epy
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import usage_logging
 
 from grain._src.core import monitoring  # pylint: disable=g-bad-import-order
-from array_record.python.array_record_data_source import PathLikeOrFileInstruction
+
+# pylint: disable=g-import-not-at-top, g-importing-member
+with epy.lazy_imports():
+  import array_record.python.array_record_data_source as array_record
+
+if platform.system() == "Windows":
+  PathLikeOrFileInstruction = Any
+else:
+  from array_record.python.array_record_data_source import PathLikeOrFileInstruction
+# pylint: enable=g-import-not-at-top, g-importing-member
 
 _api_usage_counter = monitoring.Counter(
     "/grain/python/data_sources/api",
@@ -58,9 +68,9 @@ _bytes_read_counter = monitoring.Counter(
 )
 
 T = TypeVar("T")
-ArrayRecordDataSourcePaths = Union[
-    PathLikeOrFileInstruction, Sequence[PathLikeOrFileInstruction]
-]
+ArrayRecordDataSourcePaths = (
+    PathLikeOrFileInstruction | Sequence[PathLikeOrFileInstruction]
+)
 
 _SparseArray = collections.namedtuple(
     "SparseArray", ["indices", "values", "dense_shape"]

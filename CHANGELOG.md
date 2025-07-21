@@ -12,6 +12,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     support checkpointing.
   * Introduces API for device prefetch - `grain.experimental.device_put()` for
     easy CPU and device prefetching.
+  * Adds Windows build.
+
 * Breaking changes:
 
 * Deprecations:

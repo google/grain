@@ -10,11 +10,13 @@ py_library(
     srcs_version = "PY3",
     deps = [
         "//grain/_src/core:monitoring",
-        "//grain/_src/core:usage_logging",
-        "@abseil-py//absl/logging",
-        "@pypi//array_record:pkg",
         "@pypi//etils:pkg",
-    ],
+        "@abseil-py//absl/logging",
+        "//grain/_src/core:usage_logging",
+    ] + select({
+        "@platforms//os:windows": [],
+        "//conditions:default": ["@pypi//array_record:pkg"],
+    }),
 )
 
 py_test(
@@ -28,6 +30,10 @@ py_test(
         "//grain/_src/python/testdata:digits.array_record-00001-of-00002",
     ],
     srcs_version = "PY3",
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
     deps = [
         ":data_sources",
         "@abseil-py//absl/flags",
@@ -180,6 +186,10 @@ py_test(
     ],
     shard_count = 20,
     srcs_version = "PY3",
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
     deps = [
         ":data_loader",
         ":data_sources",
