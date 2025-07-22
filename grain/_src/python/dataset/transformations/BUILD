@@ -89,6 +89,18 @@ py_library(
     ],
 )
 
+py_library(
+    name = "prefetch_autotune",
+    srcs = ["prefetch_autotune.py"],
+    srcs_version = "PY3",
+    deps = [
+        "//grain/_src/python:options",
+        "//grain/_src/python/dataset",
+        "@abseil-py//absl/logging",
+        "@pypi//numpy:pkg",
+    ],
+)
+
 py_test(
     name = "flatmap_test",
     srcs = ["flatmap_test.py"],

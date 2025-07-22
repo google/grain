@@ -33,3 +33,5 @@ List of Members
     PackAndBatchOperation
     assert_equal_output_after_checkpoint
     device_put
+    PerformanceConfig
+    pick_performance_config
