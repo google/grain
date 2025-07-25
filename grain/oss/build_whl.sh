@@ -124,12 +124,14 @@ main() {
     PKG_NAME=grain
   fi
   $PYTHON_BIN -m pip install --force --find-links="${OUTPUT_DIR}/all_dist" --pre "${PKG_NAME}"
-  $PYTHON_BIN -m pip install jax
+  $PYTHON_BIN -m pip uninstall -y array-record
+  $PYTHON_BIN -m pip install array-record pytest pyarrow==20.0.0 jax==0.6.0 parameterized
   if (( "${PYTHON_MINOR_VERSION}" < 13 )); then
     $PYTHON_BIN -m pip install tensorflow
   fi
 
-  pushd "${OUTPUT_DIR}"
+  pushd "${OUTPUT_DIR}/all_dist"
+  # TODO: remove `-k` option and execute all tests with pytest
   $PYTHON_BIN -m pytest --pyargs grain -k "TreeJaxTest or FirstFitPackIterDatasetTest or JaxImportTest or TFImportTest"
   popd
 }
