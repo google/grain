@@ -30,7 +30,7 @@ import platform
 import threading
 import time
 import typing
-from typing import Any, Generic, Optional, Protocol, SupportsIndex, TypeVar
+from typing import Any, Generic, Optional, Protocol, SupportsIndex, TypeVar, Union
 
 from absl import logging
 from etils import epath
@@ -40,14 +40,15 @@ from grain._src.core import usage_logging
 
 from grain._src.core import monitoring  # pylint: disable=g-bad-import-order
 
-# pylint: disable=g-import-not-at-top, g-importing-member
-with epy.lazy_imports():
-  import array_record.python.array_record_data_source as array_record
-
 if platform.system() == "Windows":
   PathLikeOrFileInstruction = Any
+  class ARDataSource:
+    def __init__(self, paths):
+      raise RuntimeError("array_record isn't supported on Windows")
 else:
-  from array_record.python.array_record_data_source import PathLikeOrFileInstruction
+  from array_record.python.array_record_data_source import (
+    ArrayRecordDataSource as ARDataSource, PathLikeOrFileInstruction
+  )
 # pylint: enable=g-import-not-at-top, g-importing-member
 
 _api_usage_counter = monitoring.Counter(
@@ -68,16 +69,16 @@ _bytes_read_counter = monitoring.Counter(
 )
 
 T = TypeVar("T")
-ArrayRecordDataSourcePaths = (
-    PathLikeOrFileInstruction | Sequence[PathLikeOrFileInstruction]
-)
+ArrayRecordDataSourcePaths = Union[
+    PathLikeOrFileInstruction, Sequence[PathLikeOrFileInstruction]
+]
 
 _SparseArray = collections.namedtuple(
     "SparseArray", ["indices", "values", "dense_shape"]
 )
 
 
-class ArrayRecordDataSource(array_record.ArrayRecordDataSource):
+class ArrayRecordDataSource(ARDataSource):
   """Data source for ArrayRecord files."""
 
   def __init__(self, paths: ArrayRecordDataSourcePaths):
