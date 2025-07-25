@@ -326,6 +326,21 @@ py_library(
     ],
 )
 
+py_test(
+    name = "shared_memory_array_test",
+    srcs = ["shared_memory_array_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":operations",
+        ":record",
+        ":shared_memory_array",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+        "@pypi//jax:pkg",
+        "@pypi//numpy:pkg",
+    ],
+)
+
 py_library(
     name = "checkpointing",
     srcs = ["checkpointing.py"],

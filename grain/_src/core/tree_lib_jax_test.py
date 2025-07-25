@@ -58,7 +58,7 @@ class TreeJaxTest(tree_lib_test.TreeTest):
         tree_lib.spec_like({"B": 1232.4, "C": MyClass(1)}),
         {
             "B": "<class 'float'>[]",
-            "C": "<class '__main__.MyClass'>[]",
+            "C": "<class 'tree_lib_jax_test.MyClass'>[]",
         },
     )
 
@@ -96,7 +96,7 @@ class TreeJaxTest(tree_lib_test.TreeTest):
   def test_spec_like_with_attrs(self):
     self.assertEqual(
         tree_lib.spec_like(MyAttrs(d=1, e="v2")),
-        "<class '__main__.MyAttrs'>\n"
+        "<class 'tree_lib_jax_test.MyAttrs'>\n"
         "{'d': \"<class 'int'>[]\", 'e': \"<class 'str'>[]\"}[]",
     )
 

@@ -13,6 +13,7 @@
 # limitations under the License.
 """Tests for shared memory array."""
 from multiprocessing import shared_memory
+import platform
 import threading
 import time
 from unittest import mock
@@ -44,6 +45,7 @@ def _wait_for_deletion(metadata: SharedMemoryArrayMetadata) -> None:
       break
 
 
+@absltest.skipIf(platform.system() == "Windows", "Timeouts on Windows.")
 class SharedMemoryArrayTest(parameterized.TestCase):
 
   @parameterized.parameters([
