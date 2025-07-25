@@ -321,8 +321,8 @@ Grain offers prefetching mechanisms for potential performance improvements.
 
 ### Multithread prefetching
 
-`ThreadPrefetchIterDataset` allows to process the buffer of size N on the
-CPU ahead of time.
+`ThreadPrefetchIterDataset` allows to process the buffer of size
+`cpu_buffer_size` on the CPU ahead of time.
 
 ```{code-cell}
 :id: Uq4EOb8DAMX6
@@ -369,5 +369,64 @@ ds = grain.experimental.device_put(
         device=sharding,
         cpu_buffer_size=cpu_buffer_size,
         device_buffer_size=tpu_buffer_size,
+    )
+```
+
++++ {"id": "SRbSK9rkAtDC"}
+
+### Multiprocess Prefetch
+
+`MultiprocessPrefetchIterDataset` allows to process the IterDataset in parallel
+on multiple processes. The `MultiprocessingOptions` allows to specify
+`num_workers`, `per_worker_buffer_size`, `enable_profiling`.
+
+Multiple processes can speed up the pipeline if it's compute bound and
+bottlenecked on the CPython's GIL. The default value of 0 means no Python
+multiprocessing, and as a result all data loading and transformation will run in
+the main Python process.
+
+`per_worker_buffer_size`: Size of the buffer for preprocessed elements that each
+worker maintains. These are elements after all transformations. If your
+transformations include batching this means a single element is a batch.
+
+```{code-cell}
+:id: G80HqEJDCbZU
+
+import grain
+import tensorflow_datasets as tfds
+
+source = tfds.data_source(name="mnist", split="train")
+ds = grain.MapDataset.source(source).to_iter_dataset()
+
+prefetch_lazy_iter_ds = ds.mp_prefetch(
+        grain.MultiprocessingOptions(num_workers=3, per_worker_buffer_size=10),
+    )
+```
+
++++ {"id": "pMMpw2LLNDii"}
+
+### Multiprocess Prefetch Autotune
+
+`MultiprocessPrefetchIterDataset` can leverage the autotuning feature to
+automatically choose the number of workers based on the user provided RAM memory
+constraint and element size.
+
+```{code-cell}
+:id: wvEDL_b7M-S1
+
+import grain
+import tensorflow_datasets as tfds
+
+source = tfds.data_source(name="mnist", split="train")
+ds = grain.MapDataset.source(source).to_iter_dataset()
+
+performance_config = grain.experimental.pick_performance_config(
+        ds=ds,
+        ram_budget_mb=1024,
+        max_workers=None,
+    )
+
+prefetch_lazy_iter_ds = ds.mp_prefetch(
+        performance_config.multiprocessing_options,
     )
 ```

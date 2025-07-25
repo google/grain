@@ -44,5 +44,5 @@ from grain._src.python.dataset.dataset import (
     MapDataset,
 )
 from grain._src.python.load import load
-from grain._src.python.options import ReadOptions
+from grain._src.python.options import ReadOptions, MultiprocessingOptions
 from grain._src.python.record import Record, RecordMetadata
