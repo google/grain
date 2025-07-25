@@ -37,6 +37,7 @@ from etils import epath
 from etils import epy
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import usage_logging
+from grain._src.python.dataset import stats as dataset_stats
 
 from grain._src.core import monitoring  # pylint: disable=g-bad-import-order
 
@@ -91,6 +92,9 @@ class ArrayRecordDataSource(array_record.ArrayRecordDataSource):
     super().__init__(paths)
     _api_usage_counter.Increment("ArrayRecordDataSource")
 
+  @dataset_stats.trace_input_pipeline(
+      stage_category=dataset_stats.InputPipelineStageCategory.READ.value
+  )
   def __getitem__(self, record_key: SupportsIndex) -> bytes:
     data = super().__getitem__(record_key)
     _bytes_read_counter.IncrementBy(len(data), "ArrayRecordDataSource")
@@ -145,6 +149,9 @@ class RangeDataSource:
   def __len__(self) -> int:
     return self._len
 
+  @dataset_stats.trace_input_pipeline(
+      stage_category=dataset_stats.InputPipelineStageCategory.READ.value
+  )
   def __getitem__(self, record_key: SupportsIndex) -> int:
     record_key = record_key.__index__()
     if record_key < 0 or record_key >= self._len:
