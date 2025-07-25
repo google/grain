@@ -244,6 +244,10 @@ py_test(
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
     ],
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
 )
 
 py_library(
