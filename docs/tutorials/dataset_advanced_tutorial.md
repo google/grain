@@ -409,7 +409,9 @@ prefetch_lazy_iter_ds = ds.mp_prefetch(
 
 `MultiprocessPrefetchIterDataset` can leverage the autotuning feature to
 automatically choose the number of workers based on the user provided RAM memory
-constraint and element size.
+constraint and element size. Note that the number workers in the config may
+change with the hardware. To preserve the grain determinism, it is recommended
+to use the method to obtain the config and pass it to the pipeline.
 
 ```{code-cell}
 :id: wvEDL_b7M-S1
