@@ -46,9 +46,11 @@ class PrefetchAutotuneTest(absltest.TestCase):
         ds=ds,
         ram_budget_mb=1024,
         max_workers=None,  # Should default to cpu_count
+        max_threads=None,
     )
     mock_cpu_count.assert_called_once()
     self.assertEqual(performance_config.multiprocessing_options.num_workers, 10)
+    self.assertEqual(performance_config.read_options.num_threads, 16)
 
   def test_autotune_respects_max_workers_cap(self):
     # 10 MB per element. Budget allows for 102 workers, but cap is 8.
@@ -59,6 +61,7 @@ class PrefetchAutotuneTest(absltest.TestCase):
         ds=ds,
         ram_budget_mb=1024,
         max_workers=8,
+        max_threads=None,
     )
     # The calculated value (102) is capped at max_workers (8).
     self.assertEqual(performance_config.multiprocessing_options.num_workers, 8)
@@ -74,12 +77,13 @@ class PrefetchAutotuneTest(absltest.TestCase):
         ds=ds,
         ram_budget_mb=1024,
         max_workers=None,
+        max_threads=None,
     )
     # Should default to cpu_count when sampling fails.
     mock_cpu_count.assert_called_once()
     self.assertEqual(performance_config.multiprocessing_options.num_workers, 12)
 
-  def test_get_max_workers_calculates_from_mean_element_size(self):
+  def test_get_num_workers_calculates_from_mean_element_size(self):
     # Create elements of different sizes (100MB, 200MB, 300MB) to test the
     # averaging logic. The expected average size is 200MB.
     elements = [
@@ -96,7 +100,7 @@ class PrefetchAutotuneTest(absltest.TestCase):
     # Mock cpu_count to be higher than the expected result to ensure our
     # calculation is the limiting factor.
     with mock.patch.object(prefetch_autotune, 'cpu_count', return_value=32):
-      num_workers = prefetch_autotune._get_max_workers(
+      num_workers = prefetch_autotune._get_num_workers(
           ds,
           ram_budget_mb=1024,
           max_workers=None,
@@ -107,18 +111,70 @@ class PrefetchAutotuneTest(absltest.TestCase):
   def test_autotune_passes_worker_init_fn(self):
     ds = dataset.MapDataset.source([1, 2, 3]).to_iter_dataset()
 
-    # Mock _get_max_workers to avoid actual calculation.
+    # Mock _get_num_workers to avoid actual calculation.
     with mock.patch.object(
-        prefetch_autotune, '_get_max_workers', return_value=4
+        prefetch_autotune, '_get_num_workers', return_value=4
     ) as mock_get_max:
       performance_config = prefetch_autotune.pick_performance_config(
           ds=ds,
           ram_budget_mb=512,
           max_workers=8,
+          max_threads=None,
       )
       mock_get_max.assert_called_once()
 
     self.assertEqual(performance_config.multiprocessing_options.num_workers, 4)
+
+  def test_get_num_threads_calculates_correctly(self):
+    # Each element is 10MB. prefetch_buffer_size is 2, so each buffer is 20MB.
+    element = np.zeros(10 * 1024 * 1024, dtype=np.uint8)
+    # We need at least samples_to_check + prefetch_buffer_size elements.
+    ds = dataset.MapDataset.source([element] * 10).to_iter_dataset()
+
+    # With a 100MB budget and 20MB buffers, we expect 5 threads.
+    read_options = prefetch_autotune._get_num_threads(
+        ds,
+        ram_budget_mb=100,
+        max_threads=10,
+        prefetch_buffer_size=2,
+        samples_to_check=5,
+    )
+    self.assertEqual(read_options.num_threads, 5)
+    self.assertEqual(read_options.prefetch_buffer_size, 2)
+
+  def test_get_num_threads_respects_max_threads_cap(self):
+    element = np.zeros(10 * 1024 * 1024, dtype=np.uint8)
+    ds = dataset.MapDataset.source([element] * 10).to_iter_dataset()
+
+    # Calculation would yield 5 threads, but it should be capped at 3.
+    read_options = prefetch_autotune._get_num_threads(
+        ds,
+        ram_budget_mb=100,
+        max_threads=3,
+        prefetch_buffer_size=2,
+        samples_to_check=5,
+    )
+    self.assertEqual(read_options.num_threads, 3)
+    self.assertEqual(read_options.prefetch_buffer_size, 2)
+
+  @mock.patch.object(prefetch_autotune, 'logging')
+  def test_get_num_threads_with_insufficient_samples_defaults_to_max_threads(
+      self, mock_logging
+  ):
+    # Dataset has 5 elements, but we need samples_to_check (5) +
+    # prefetch_buffer_size (2) = 7 elements.
+    ds = dataset.MapDataset.source([1] * 5).to_iter_dataset()
+
+    read_options = prefetch_autotune._get_num_threads(
+        ds,
+        ram_budget_mb=100,
+        max_threads=8,
+        prefetch_buffer_size=2,
+        samples_to_check=5,
+    )
+    self.assertEqual(read_options.num_threads, 8)
+    self.assertEqual(read_options.prefetch_buffer_size, 2)
+    mock_logging.warning.assert_called_once()
 
 
 if __name__ == '__main__':
