@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# TODO: b/434264566 - Remove this once the bug is fixed.
+# pytype: skip-file
 """Tools for recording statistics about dataset transformations."""
 
 from __future__ import annotations
@@ -603,6 +605,9 @@ def _running_in_colab() -> bool:
 
 class _DefaultStats(Stats):
   """Default implementation for statistics collection that does nothing."""
+
+  def __init__(self, config: StatsConfig, parents: Sequence[Stats]):
+    super().__init__(config, parents)
 
   @contextlib.contextmanager
   def record_self_time(self, offset_ns: int = 0):
