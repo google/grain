@@ -81,6 +81,7 @@ py_library(
     srcs_version = "PY3",
     deps = [
         ":dataset",
+        ":stats",
         "//grain/_src/core:tree_lib",
         "//grain/_src/python:options",
     ],

@@ -13,6 +13,7 @@ py_library(
         "@pypi//etils:pkg",
         "@abseil-py//absl/logging",
         "//grain/_src/core:usage_logging",
+        "//grain/_src/python/dataset:stats",
     ] + select({
         "@platforms//os:windows": [],
         "//conditions:default": ["@pypi//array_record:pkg"],
@@ -73,6 +74,7 @@ py_library(
         "multiprocessing_common.py",
     ],
     srcs_version = "PY3",
+    deps = ["//grain/_src/python/dataset:stats"],
 )
 
 py_test(
@@ -128,6 +130,7 @@ py_library(
         "//grain/_src/core:monitoring",
         "//grain/_src/core:sharding",
         "//grain/_src/python/dataset",
+        "//grain/_src/python/dataset:stats",
         "@pypi//numpy:pkg",
     ],
 )
@@ -221,6 +224,7 @@ py_library(
         "//grain/_src/core:monitoring",
         "//grain/_src/core:parallel",
         "//grain/_src/core:tree_lib",
+        "//grain/_src/python/dataset:stats",
         "@abseil-py//absl/flags",
         "@abseil-py//absl/logging",
         "@pypi//cloudpickle:pkg",

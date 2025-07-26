@@ -19,6 +19,7 @@ from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import sharding
 from grain._src.python import record
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset import stats as dataset_stats
 import numpy as np
 
 from grain._src.core import monitoring
@@ -72,6 +73,9 @@ class SequentialSampler:
         f"shard_options={self._shard_options!r})"
     )
 
+  @dataset_stats.trace_input_pipeline(
+      stage_category=dataset_stats.InputPipelineStageCategory.PREPROCESSING.value
+  )
   def __getitem__(self, index: int) -> record.RecordMetadata:
     if index < 0 or index >= self._max_index:
       raise IndexError(
@@ -98,6 +102,9 @@ class _ShardMapDataset(dataset.MapDataset):
   def __len__(self) -> int:
     return self._end - self._start
 
+  @dataset_stats.trace_input_pipeline(
+      stage_category=dataset_stats.InputPipelineStageCategory.PREPROCESSING.value
+  )
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
@@ -175,6 +182,9 @@ class IndexSampler:
         f"seed={self._seed})"
     )
 
+  @dataset_stats.trace_input_pipeline(
+      stage_category=dataset_stats.InputPipelineStageCategory.PREPROCESSING.value
+  )
   def __getitem__(self, index: int) -> record.RecordMetadata:
     if index < 0 or (self._max_index is not None and index >= self._max_index):
       raise IndexError(

@@ -21,6 +21,7 @@ from absl import logging
 from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset import stats as dataset_stats
 
 
 class SourceMapDataset(dataset.MapDataset):
@@ -36,6 +37,9 @@ class SourceMapDataset(dataset.MapDataset):
   def __str__(self) -> str:
     return f"SourceMapDataset(source={self._source.__class__.__name__})"
 
+  @dataset_stats.trace_input_pipeline(
+      stage_category=dataset_stats.InputPipelineStageCategory.READ.value
+  )
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
@@ -83,6 +87,9 @@ class RangeMapDataset(dataset.MapDataset[int]):
         f" step={self.step})"
     )
 
+  @dataset_stats.trace_input_pipeline(
+      stage_category=dataset_stats.InputPipelineStageCategory.READ.value
+  )
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
