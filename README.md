@@ -49,6 +49,22 @@ within Grain will be done on the CPU by default.
 
 - [Basic `Dataset` tutorial](https://google-grain.readthedocs.io/en/latest/tutorials/dataset_basic_tutorial.html)
 
+## Citing Grain
+
+To cite this repository:
+
+```
+@software{grain2023github,
+  author = {Marvin Ritter and Ihor Indyk and Aayush Singh and Andrew Audibert and Anoosha Seelam and Camelia Hanes and Eric Lau and Jacek Olesiak and Jiyang Kang and Xihui Wu},
+  title = {{Grain} - Feeding JAX Models},
+  url = {http://github.com/google/grain},
+  version = {0.2.12},
+  year = {2023},
+}
+```
+
+The version number is intended to be that from [pyproject.toml](https://github.com/google/grain/blob/main/pyproject.toml), and the year corresponds to the project's open-source release.
+
 ## Existing users
 
 Grain is used by [MaxText](https://github.com/google/maxtext/tree/main),
