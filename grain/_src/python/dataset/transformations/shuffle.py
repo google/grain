@@ -57,6 +57,9 @@ class ShuffleMapDataset(dataset.MapDataset[T]):
   def __str__(self) -> str:
     return "ShuffleMapDataset"
 
+  @stats.trace_input_pipeline(
+      stage_category=stats.InputPipelineStageCategory.PREPROCESSING.value
+  )
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
@@ -97,6 +100,9 @@ class WindowShuffleMapDataset(dataset.MapDataset[T]):
   def __str__(self) -> str:
     return "WindowShuffleMapDataset"
 
+  @stats.trace_input_pipeline(
+      stage_category=stats.InputPipelineStageCategory.PREPROCESSING.value
+  )
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
