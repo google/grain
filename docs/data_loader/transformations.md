@@ -18,7 +18,7 @@ Example of transformation which implements `MapTransform` (for elements of type
 `int`):
 
 ```python
-class PlusOne(transforms.MapTransform):
+class PlusOne(grain.MapTransform):
 
   def map(self, x: int) -> int:
     return x + 1
@@ -50,7 +50,7 @@ function.
 Example of a `RandomMapTransform`:
 
 ```python
-class PlusRandom(transforms.RandomMapTransform):
+class PlusRandom(grain.RandomMapTransform):
 
   def random_map(self, x: int, rng: np.random.Generator) -> int:
     return x + rng.integers(100_000)
@@ -65,7 +65,7 @@ Please consult the code for detailed info.
 Example of a `FlatMapTransform`:
 
 ```python
-class FlatMapTransformExample(transforms.FlatMapTransform):
+class FlatMapTransformExample(grain.experimental.FlatMapTransform):
   max_fan_out: int
 
   def flat_map(self, element: int):
@@ -81,7 +81,7 @@ which the filter function returns False will be removed.
 Example of a `FilterTransform` that removes all even elements:
 
 ```python
-class RemoveEvenElements(FilterTransform):
+class RemoveEvenElements(grain.FilterTransform):
 
   def filter(self, element: int) -> bool:
     return element % 2
