@@ -48,6 +48,7 @@ import numpy as np
 T = TypeVar("T")
 
 
+@dataset_stats.trace_input_pipeline_prefetch(name="SynchroThreadPrefetch")
 def _getitem(
     stats: dataset_stats.Stats, parent: dataset.MapDataset[T], index: int
 ) -> T:
@@ -415,6 +416,7 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
     self._state = state
     self._ds = ds
 
+  @dataset_stats.trace_input_pipeline_prefetch(name="WorkerPrefetch")
   def __call__(
       self,
       *,
@@ -697,6 +699,7 @@ def _get_iterator_next_and_state(
   return iterator.__next__(), iterator.get_state()
 
 
+@dataset_stats.trace_input_pipeline_prefetch(name="ThreadPrefetch")
 def _put_iterator_elements_in_buffer(
     iterator: dataset.DatasetIterator[T],
     buffer: queue.Queue[tuple[T, StateT, Exception | None]],

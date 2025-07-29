@@ -61,6 +61,9 @@ class SelectionWithProportionsMap(base.DatasetSelectionMap):
   def __len__(self) -> int:
     return self._length
 
+  @stats.trace_input_pipeline(
+      stage_category=stats.InputPipelineStageCategory.PREPROCESSING.value
+  )
   def __getitem__(self, index: int):
     input_index, index = _dataset_and_key_of_next_element(
         index, self._proportions
@@ -105,6 +108,9 @@ class MixedMapDataset(dataset.MapDataset[T]):
   def __str__(self):
     return f"MixedMapDataset[{len(self._parents)} parents]"
 
+  @stats.trace_input_pipeline(
+      stage_category=stats.InputPipelineStageCategory.PREPROCESSING
+  )
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
@@ -292,6 +298,9 @@ class _ConcatSelectionMap(base.DatasetSelectionMap):
   def __len__(self) -> int:
     return self._cumulative_dataset_sizes[-1]
 
+  @stats.trace_input_pipeline(
+      stage_category=stats.InputPipelineStageCategory.PREPROCESSING.value
+  )
   def __getitem__(self, index: int) -> tuple[int, int]:
     epoch, index_in_epoch = divmod(index, len(self))
     dataset_index = (

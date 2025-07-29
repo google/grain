@@ -51,6 +51,9 @@ class FlatMapMapDataset(dataset.MapDataset[T]):
         f"transform={transforms.get_pretty_transform_name(self._transform)})"
     )
 
+  @dataset_stats.trace_input_pipeline(
+      stage_category=dataset_stats.InputPipelineStageCategory.PREPROCESSING.value
+  )
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
