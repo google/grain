@@ -23,6 +23,7 @@ pipelines.
 
 import collections
 from collections.abc import Sequence
+import inspect
 import math
 from multiprocessing import shared_memory
 import os
@@ -35,6 +36,7 @@ from typing import Any, Generic, Optional, Protocol, SupportsIndex, TypeVar
 from absl import logging
 from etils import epath
 from etils import epy
+
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import usage_logging
 
@@ -76,19 +78,41 @@ _SparseArray = collections.namedtuple(
     "SparseArray", ["indices", "values", "dense_shape"]
 )
 
+ArrayRecordReaderOptions = dict[str, str] | None
+
 
 class ArrayRecordDataSource(array_record.ArrayRecordDataSource):
   """Data source for ArrayRecord files."""
 
-  def __init__(self, paths: ArrayRecordDataSourcePaths):
+  def __init__(
+      self,
+      paths: ArrayRecordDataSourcePaths,
+      reader_options: ArrayRecordReaderOptions = None,
+  ):
     """Creates a new ArrayRecordDataSource object.
 
     See `array_record.ArrayRecordDataSource` for more details.
 
     Args:
       paths: A single path/FileInstruction or list of paths/FileInstructions.
+      reader_options: a dict[str, str] to be passed when creating a reader. For
+        example, {index_storage_option:"in_memory"} stores the reader indices in
+        memory versus {index_storage_option:"offloaded"} stores the indices on
+        disk to save memory usage.
     """
-    super().__init__(paths)
+    array_record_signature = inspect.signature(
+        array_record.ArrayRecordDataSource.__init__
+    )
+    if "reader_options" in array_record_signature.parameters:
+      super().__init__(paths, reader_options)
+    elif reader_options is not None:
+      # Reader options should not be set if they are not supported by the
+      # current version of ArrayRecord.
+      raise ValueError(
+          "reader_options is not supported in this version of ArrayRecord."
+      )
+    else:
+      super().__init__(paths)
     _api_usage_counter.Increment("ArrayRecordDataSource")
 
   def __getitem__(self, record_key: SupportsIndex) -> bytes:

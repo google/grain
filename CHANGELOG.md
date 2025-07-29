@@ -16,6 +16,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * Introduces API for autotuning -- finds number of processes for
     `mp_prefetch`, given the user provided RAM restrictions
     and specific `IterDataset`.
+  * Allow passing `reader_options` to `ArrayRecordDataSource` for configuring
+    array record file reading.
 
 * Breaking changes:
 
