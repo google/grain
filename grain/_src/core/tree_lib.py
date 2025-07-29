@@ -22,10 +22,13 @@ direct dependency on JAX, we check if it's already present and resort to the
 
 We should be able to remove this module once b/257971667 is resolved.
 """
+
+import concurrent.futures
 import dataclasses
 import pprint
 
 import numpy as np
+
 
 try:
   # `attrs` is not a native package, avoid explicit dependency and only check if
@@ -56,6 +59,13 @@ try:
 
   map_structure = tree_util.tree_map
   map_structure_with_path = tree_util.tree_map_with_path
+
+  def map_structure_parallel(
+      f, structure, *rest, executor: concurrent.futures.ThreadPoolExecutor
+  ):
+    leaves, treedef = tree_util.tree_flatten(structure)
+    all_leaves = [leaves] + [treedef.flatten_up_to(r) for r in rest]
+    return treedef.unflatten(list(executor.map(f, zip(*all_leaves))))
 
   def assert_same_structure(a, b):
     a_structure = tree_util.tree_structure(a)
@@ -137,6 +147,16 @@ except ImportError:
   flatten = tree.flatten
   flatten_with_path = tree.flatten_with_path
   unflatten_as = tree.unflatten_as
+
+  def map_structure_parallel(
+      f, structure, *rest, executor: concurrent.futures.ThreadPoolExecutor
+  ):
+    leaves = tree.flatten(structure)
+    all_leaves = [leaves] + [tree.flatten_up_to(structure, r) for r in rest]
+    return tree.unflatten_as(
+        structure,
+        list(executor.map(f, zip(*all_leaves))),
+    )
 
   def spec_like(structure):
     """Infers specification of a tree structure.
