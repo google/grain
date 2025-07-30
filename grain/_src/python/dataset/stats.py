@@ -40,6 +40,17 @@ from grain.proto import execution_summary_pb2
 
 from grain._src.core import monitoring
 
+# Conditionally import profiler from JAX.
+# TODO: refactor this to conditionally import profiler from all
+# supported frameworks (e.g. TF/JAX/PyTorch)
+try:
+  from jax import profiler  # pylint: disable=g-import-not-at-top # pytype: disable=import-error
+
+  _TRACE_ANNOTATION = profiler.TraceAnnotation
+except ImportError:
+  logging.warning("Failed to import TraceAnnotation.")
+  _TRACE_ANNOTATION = None
+
 
 # Registry of weak references to output dataset iterators for collecting
 # execution stats.
@@ -310,8 +321,17 @@ def record_next_duration_if_output(next_fn):
 
   @functools.wraps(next_fn)
   def wrapper(iterator):
-    start_time = time.perf_counter_ns()
-    result = next_fn(iterator)
+    if _TRACE_ANNOTATION is not None and _TRACE_ANNOTATION.is_enabled():
+      with _TRACE_ANNOTATION(
+          f"{iterator.__class__.__name__}.{next_fn.__name__}",
+          _ipl_stage_name=str(iterator),
+          _ipl_stage_id=id(iterator),
+      ):
+        start_time = time.perf_counter_ns()
+        result = next_fn(iterator)
+    else:
+      start_time = time.perf_counter_ns()
+      result = next_fn(iterator)
 
     if iterator._stats._is_output:  # pylint:disable=protected-access
       next_duration_ns = time.perf_counter_ns() - start_time
