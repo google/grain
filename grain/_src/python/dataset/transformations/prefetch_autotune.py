@@ -31,7 +31,7 @@ def _get_element_size_bytes(element):
   return size
 
 
-def _get_max_workers(
+def _get_num_workers(
     ds: dataset.IterDataset,
     *,
     ram_budget_mb: int,
@@ -77,8 +77,18 @@ def pick_performance_config(
     max_workers: int | None,
     samples_to_check: int = 5,
 ) -> PerformanceConfig:
-  """Analyzes element size to choose an optimal number of workers, then creates a MultiprocessPrefetchIterDataset."""
-  num_workers = _get_max_workers(
+  """Analyzes element size to choose an optimal number of workers for a MultiprocessPrefetchIterDataset.
+
+  Args:
+    ds: The input dataset.
+    ram_budget_mb: The RAM budget in megabytes.
+    max_workers: The maximum number of processes to use.
+    samples_to_check: The number of samples to check to estimate element size.
+
+  Returns:
+    A PerformanceConfig object containing the optimal number of workers.
+  """
+  num_workers = _get_num_workers(
       ds,
       ram_budget_mb=ram_budget_mb,
       max_workers=max_workers,
