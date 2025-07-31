@@ -35,3 +35,4 @@ List of Members
     device_put
     PerformanceConfig
     pick_performance_config
+    batch_and_pad

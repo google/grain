@@ -18,6 +18,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     and specific `IterDataset`.
   * Allow passing `reader_options` to `ArrayRecordDataSource` for configuring
     array record file reading.
+  * Introduces `grain.experimental.batch_and_pad` for padding a partial batch to
+    avoid dropping batch remainder data.
 
 * Breaking changes:
 

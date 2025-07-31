@@ -31,7 +31,7 @@ from grain._src.python.dataset.dataset import (
     WithOptionsIterDataset,
 )
 from grain._src.python.dataset.sources.parquet_dataset import ParquetIterDataset
-
+from grain._src.python.dataset.transformations.batch import batch_and_pad
 from grain._src.python.dataset.transformations.flatmap import (
     FlatMapMapDataset,
     FlatMapIterDataset,

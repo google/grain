@@ -19,7 +19,7 @@ from collections.abc import Sequence
 import math
 import pprint
 import sys
-from typing import Callable, TypeVar
+from typing import Any, Callable, TypeVar
 
 from grain._src.core import tree_lib
 from grain._src.python.dataset import dataset
@@ -41,6 +41,63 @@ def _make_batch(values: Sequence[T]) -> T:
   try:
     return tree_lib.map_structure(lambda *xs: np.stack(xs), *values)
 
+  except ValueError as e:
+    # NumPy error message doesn't include actual shapes and dtypes. Provide a
+    # more helpful error message.
+    raise ValueError(
+        "Expected all input elements to have the same structure but got:\n"
+        f"{pprint.pformat(tree_lib.spec_like(values))}"
+    ) from e
+
+
+def batch_and_pad(
+    values: Sequence[T], *, batch_size: int, pad_value: Any = 0
+) -> T:
+  """Batches the given values and, if needed, pads the batch to the given size.
+
+  Can be passed to `ds.batch` as `batch_fn` to avoid the need to drop the
+  remainder data and pad it instead.
+
+  Example usage::
+
+    ds = grain.MapDataset.range(1, 5)
+    batch_size = 3
+    batch_fn = functools.partial(
+        grain.experimental.batch_and_pad, batch_size=batch_size)
+    ds = ds.batch(batch_size, batch_fn=batch_fn)
+    list(ds) == [np.ndarray([1, 2, 3]), np.ndarray([4, 0, 0])]
+
+  Args:
+    values: The values to batch.
+    batch_size: Target batch size. If the number of values is smaller than this,
+      the batch is padded with `pad_value` to the given size.
+    pad_value: The value to use for padding.
+
+  Returns:
+    A batch of values with a new batch dimension at the front.
+  """
+  if not values:
+    raise ValueError("Cannot batch 0 values.")
+  elif len(values) > batch_size:
+    raise ValueError(f"Cannot batch {len(values)} values to {batch_size}.")
+  elif len(values) == batch_size:
+    return _make_batch(values)
+  expanded_values = tree_lib.map_structure(
+      lambda x: np.expand_dims(x, axis=0), values
+  )
+  padding_size = batch_size - len(values)
+  padding = tree_lib.map_structure(
+      lambda x: np.full(
+          shape=(padding_size,) + x.shape[1:],
+          fill_value=pad_value,
+          dtype=x.dtype,
+      ),
+      expanded_values[0],
+  )
+  try:
+    return tree_lib.map_structure(
+        lambda *xs: np.concatenate(xs, axis=0), *expanded_values, padding
+    )
   except ValueError as e:
     # NumPy error message doesn't include actual shapes and dtypes. Provide a
     # more helpful error message.

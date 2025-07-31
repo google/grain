@@ -13,6 +13,8 @@
 # limitations under the License.
 """Tests for batch transformation."""
 
+import functools
+
 from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.python.dataset import dataset
@@ -39,6 +41,118 @@ class MakeBatchTest(absltest.TestCase):
     values = [np.asarray([1, 2, 3]), np.asarray([4, 5, 6])]
     batched_values = batch._make_batch(values)
     self.assertEqual(batched_values.shape, (2, 3))
+
+  def test_different_shape(self):
+    values = [{"a": np.asarray([1, 2, 3])}, {"a": np.asarray([4, 5])}]
+    with self.assertRaisesRegex(
+        ValueError,
+        "Expected all input elements to have the same structure but got:",
+    ):
+      batch._make_batch(values)
+
+  def test_different_structure(self):
+    values = [{"a": np.asarray([1, 2, 3])}, {"b": np.asarray(0.5)}]
+    with self.assertRaisesRegex(
+        ValueError,
+        "Expected all input elements to have the same structure but got:",
+    ):
+      batch._make_batch(values)
+    values = [
+        {"a": np.asarray([1, 2, 3])},
+        {"b": np.asarray(0.5)},
+        {"c": np.asarray(True)},
+    ]
+    with self.assertRaisesRegex(
+        ValueError,
+        "Expected all input elements to have the same structure but got:",
+    ):
+      batch._make_batch(values)
+
+
+class BatchAndPadTest(parameterized.TestCase):
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name="scalar_values_no_padding",
+          values=[1, 2, 3],
+          batch_size=3,
+          pad_value=0,
+          expected=np.array([1, 2, 3]),
+      ),
+      dict(
+          testcase_name="scalar_values_with_padding",
+          values=[1, 2, 3],
+          batch_size=5,
+          pad_value=1,
+          expected=np.array([1, 2, 3, 1, 1]),
+      ),
+      dict(
+          testcase_name="dicts_with_padding",
+          values=[
+              {
+                  "a": np.array([1, 2, 3]),
+                  "b": np.array([[1.2], [0.2]], dtype=np.float32),
+              },
+              {
+                  "a": np.array([4, 5, 6]),
+                  "b": np.array([[323.1], [2222.3]], dtype=np.float32),
+              },
+          ],
+          batch_size=4,
+          pad_value=0,
+          expected={
+              "a": np.array([[1, 2, 3], [4, 5, 6], [0, 0, 0], [0, 0, 0]]),
+              "b": np.array(
+                  [
+                      [[1.2], [0.2]],
+                      [[323.1], [2222.3]],
+                      [[0.0], [0.0]],
+                      [[0.0], [0.0]],
+                  ],
+                  dtype=np.float32,
+              ),
+          },
+      ),
+      dict(
+          testcase_name="nested_dicts_with_padding",
+          values=[
+              {
+                  "aa": {"a": np.array([1, 2, 3])},
+                  "b": np.array([[1.2], [0.2]], dtype=np.float32),
+              },
+              {
+                  "aa": {"a": np.array([4, 5, 6])},
+                  "b": np.array([[323.1], [2222.3]], dtype=np.float32),
+              },
+          ],
+          batch_size=4,
+          pad_value=0,
+          expected={
+              "aa": {
+                  "a": np.array([[1, 2, 3], [4, 5, 6], [0, 0, 0], [0, 0, 0]])
+              },
+              "b": np.array(
+                  [
+                      [[1.2], [0.2]],
+                      [[323.1], [2222.3]],
+                      [[0.0], [0.0]],
+                      [[0.0], [0.0]],
+                  ],
+                  dtype=np.float32,
+              ),
+          },
+      ),
+  )
+  def test_correct_output(self, values, batch_size, pad_value, expected):
+    np.testing.assert_equal(
+        batch.batch_and_pad(values, batch_size=batch_size, pad_value=pad_value),
+        expected,
+    )
+
+  def test_zero_values(self):
+    values = []
+    with self.assertRaises(ValueError):
+      batch.batch_and_pad(values, batch_size=1)
 
   def test_different_shape(self):
     values = [{"a": np.asarray([1, 2, 3])}, {"a": np.asarray([4, 5])}]
@@ -193,6 +307,21 @@ class BatchMapDatasetTest(parameterized.TestCase):
     ):
       _ = batch.BatchMapDataset(ds, batch_size=3, drop_remainder=True)
 
+  def test_batch_with_padding(self):
+    ds = dataset.MapDataset.range(1, 10).map(lambda x: {"x": x})
+    batch_size = 4
+    batch_fn = functools.partial(batch.batch_and_pad, batch_size=batch_size)
+    ds = batch.BatchMapDataset(ds, batch_size=batch_size, batch_fn=batch_fn)
+    self.assertLen(ds, 3)
+    np.testing.assert_equal(
+        list(ds),
+        [
+            {"x": np.array([1, 2, 3, 4])},
+            {"x": np.array([5, 6, 7, 8])},
+            {"x": np.array([9, 0, 0, 0])},
+        ],
+    )
+
 
 class BatchIterDatasetTest(absltest.TestCase):
 
@@ -241,6 +370,24 @@ class BatchIterDatasetTest(absltest.TestCase):
     self.assertLen(actual, 3)
     expected = [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
     np.testing.assert_allclose(actual, expected)
+
+  def test_batch_with_padding(self):
+    ds = (
+        dataset.MapDataset.range(1, 10)
+        .map(lambda x: {"x": x})
+        .to_iter_dataset()
+    )
+    batch_size = 4
+    batch_fn = functools.partial(batch.batch_and_pad, batch_size=batch_size)
+    ds = batch.BatchIterDataset(ds, batch_size=batch_size, batch_fn=batch_fn)
+    np.testing.assert_equal(
+        list(ds),
+        [
+            {"x": np.array([1, 2, 3, 4])},
+            {"x": np.array([5, 6, 7, 8])},
+            {"x": np.array([9, 0, 0, 0])},
+        ],
+    )
 
 
 if __name__ == "__main__":
