@@ -123,14 +123,17 @@ main() {
   else
     PKG_NAME=grain
   fi
-  $PYTHON_BIN -m pip install --find-links="${OUTPUT_DIR}/all_dist" --pre "${PKG_NAME}"
-  $PYTHON_BIN -m pip install jax
-  $PYTHON_BIN grain/_src/core/smoke_test_with_jax.py
-  # TF is not available on Python 3.13 and above.
+  $PYTHON_BIN -m pip install --force --find-links="${OUTPUT_DIR}/all_dist" --pre "${PKG_NAME}"
+  $PYTHON_BIN -m pip uninstall -y array-record
+  $PYTHON_BIN -m pip install array-record pytest pyarrow==20.0.0 jax==0.6.0 parameterized
   if (( "${PYTHON_MINOR_VERSION}" < 13 )); then
     $PYTHON_BIN -m pip install tensorflow
-    $PYTHON_BIN grain/_src/core/smoke_test_with_tf.py
   fi
+
+  pushd "${OUTPUT_DIR}/all_dist"
+  # TODO: remove `-k` option and execute all tests with pytest
+  $PYTHON_BIN -m pytest --pyargs grain -k "TreeJaxTest or FirstFitPackIterDatasetTest or JaxImportTest or TFImportTest"
+  popd
 }
 
 main "$@"
