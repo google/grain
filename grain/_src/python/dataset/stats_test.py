@@ -30,6 +30,7 @@ from grain._src.python import options
 from grain._src.python import shared_memory_array
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
+from grain.google.experiment_framework import experiment_mock_utils
 from grain.proto import execution_summary_pb2
 import numpy as np
 
