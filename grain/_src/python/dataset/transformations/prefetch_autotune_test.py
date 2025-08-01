@@ -120,6 +120,11 @@ class PrefetchAutotuneTest(absltest.TestCase):
 
     self.assertEqual(performance_config.multiprocessing_options.num_workers, 4)
 
+  def test_find_root_dataset_returns_root_dataset(self):
+    root = dataset.MapDataset.source([1, 2, 3])
+    ds = root.to_iter_dataset().map(lambda x: x + 1).batch(2)
+    self.assertIs(prefetch_autotune._find_root_dataset(ds), root)
+
 
 if __name__ == '__main__':
   absltest.main()
