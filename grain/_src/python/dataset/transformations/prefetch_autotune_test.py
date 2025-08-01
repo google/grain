@@ -79,7 +79,7 @@ class PrefetchAutotuneTest(absltest.TestCase):
     mock_cpu_count.assert_called_once()
     self.assertEqual(performance_config.multiprocessing_options.num_workers, 12)
 
-  def test_get_max_workers_calculates_from_mean_element_size(self):
+  def test_get_num_workers_calculates_from_mean_element_size(self):
     # Create elements of different sizes (100MB, 200MB, 300MB) to test the
     # averaging logic. The expected average size is 200MB.
     elements = [
@@ -96,7 +96,7 @@ class PrefetchAutotuneTest(absltest.TestCase):
     # Mock cpu_count to be higher than the expected result to ensure our
     # calculation is the limiting factor.
     with mock.patch.object(prefetch_autotune, 'cpu_count', return_value=32):
-      num_workers = prefetch_autotune._get_max_workers(
+      num_workers = prefetch_autotune._get_num_workers(
           ds,
           ram_budget_mb=1024,
           max_workers=None,
@@ -107,9 +107,9 @@ class PrefetchAutotuneTest(absltest.TestCase):
   def test_autotune_passes_worker_init_fn(self):
     ds = dataset.MapDataset.source([1, 2, 3]).to_iter_dataset()
 
-    # Mock _get_max_workers to avoid actual calculation.
+    # Mock _get_num_workers to avoid actual calculation.
     with mock.patch.object(
-        prefetch_autotune, '_get_max_workers', return_value=4
+        prefetch_autotune, '_get_num_workers', return_value=4
     ) as mock_get_max:
       performance_config = prefetch_autotune.pick_performance_config(
           ds=ds,
