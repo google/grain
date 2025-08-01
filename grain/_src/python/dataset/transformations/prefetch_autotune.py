@@ -99,3 +99,12 @@ def pick_performance_config(
           num_workers=num_workers
       )
   )
+
+
+def _find_root_dataset(
+    ds: dataset.IterDataset | dataset.MapDataset,
+) -> dataset.IterDataset | dataset.MapDataset:
+  """Finds the root dataset of the given dataset."""
+  while ds.parents:
+    ds = ds.parents[0]
+  return ds
