@@ -624,6 +624,9 @@ def _running_in_colab() -> bool:
 class _DefaultStats(Stats):
   """Default implementation for statistics collection that does nothing."""
 
+  def __init__(self, config: StatsConfig, parents: Sequence[Stats]):
+    super().__init__(config, parents)
+
   @contextlib.contextmanager
   def record_self_time(self, offset_ns: int = 0):
     yield
