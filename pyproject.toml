@@ -12,7 +12,7 @@ authors = [
 ]
 dependencies = [
     "absl-py",
-    "array-record>=0.8.0; sys_platform != 'win32'",
+    "array-record>=0.8.0a1; sys_platform != 'win32'",
     "cloudpickle",
     "dm-tree",
     "etils[epath,epy]",
