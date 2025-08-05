@@ -8,6 +8,7 @@ import sys
 from absl import logging
 from grain._src.python import options as grain_options
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset.transformations import prefetch
 import numpy as np
 
 
