@@ -92,6 +92,7 @@ py_library(
     name = "transforms",
     srcs = ["transforms.py"],
     srcs_version = "PY3",
+    visibility = ["//google/pygrain/python/transformations:__pkg__"],
     deps = [
         "@pypi//numpy:pkg",
     ],
