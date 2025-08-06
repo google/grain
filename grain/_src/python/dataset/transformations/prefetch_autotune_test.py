@@ -128,11 +128,12 @@ class PrefetchAutotuneTest(absltest.TestCase):
         .to_iter_dataset()
         .batch(2)
     )
-    parent_prefetch_ds = prefetch_autotune._find_prefetch_iter_dataset_parent(
+    parent_prefetch_ds = prefetch_autotune._find_prefetch_iter_dataset_parents(
         ds
     )
     # Verify the type as the instance accounts for inheritance.
-    self.assertEqual(type(parent_prefetch_ds), MapMapDataset)
+    self.assertLen(parent_prefetch_ds, 1)
+    self.assertEqual(type(parent_prefetch_ds[0]), MapMapDataset)
 
   def test_find_prefetch_iter_dataset_parent_no_prefetch_iter_dataset(self):
     ds = (
@@ -140,25 +141,68 @@ class PrefetchAutotuneTest(absltest.TestCase):
         .map(lambda x: x + 1)
         .batch(2)
     )
-    parent_prefetch_ds = prefetch_autotune._find_prefetch_iter_dataset_parent(
+    parent_prefetch_ds = prefetch_autotune._find_prefetch_iter_dataset_parents(
         ds
     )
-    self.assertIsNone(parent_prefetch_ds)
+    self.assertEmpty(parent_prefetch_ds)
 
-  def test_find_prefetch_iter_dataset_parent_multiple_parents_raises_error(
-      self,
-  ):
+  def test_find_prefetch_iter_dataset_parent_multiple_parents(self):
     ds1 = (
         dataset.MapDataset.source([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
         .map(lambda x: x + 1)
+        .to_iter_dataset()
+        .batch(2)
+    )
+    ds2 = (
+        dataset.MapDataset.source([1, 2, 3, 4, 5])
+        .map(lambda x: x + 2)
+        .to_iter_dataset()
+        .batch(5)
+    )
+    ds3 = (
+        dataset.MapDataset.source([1, 2, 3, 4, 5])
+        .map(lambda x: x + 3)
+        .to_iter_dataset()
+        .batch(2)
+    )
+    ds4 = dataset.IterDataset.mix([ds1, ds2])
+    mixed_dataset = dataset.IterDataset.mix([ds3, ds4])
+    parents_prefetch_ds = prefetch_autotune._find_prefetch_iter_dataset_parents(
+        mixed_dataset
+    )
+    self.assertLen(parents_prefetch_ds, 3)
+    self.assertEqual(list(parents_prefetch_ds[0]), [4, 5, 6, 7, 8])
+    self.assertEqual(
+        list(parents_prefetch_ds[1]), [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    )
+    self.assertEqual(list(parents_prefetch_ds[2]), [3, 4, 5, 6, 7])
+
+  def test_find_prefetch_iter_dataset_parent_multiple_parents_and_none(self):
+    ds1 = (
+        dataset.MapDataset.source([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        .map(lambda x: x + 1)
+        .to_iter_dataset()
         .batch(2)
     )
     ds2 = (
         dataset.MapDataset.source([1, 2, 3, 4, 5]).map(lambda x: x + 2).batch(5)
     )
-    mixed_dataset = dataset.IterDataset.mix([ds1, ds2])
-    with self.assertRaises(NotImplementedError):
-      prefetch_autotune._find_prefetch_iter_dataset_parent(mixed_dataset)
+    ds3 = (
+        dataset.MapDataset.source([1, 2, 3, 4, 5])
+        .map(lambda x: x + 3)
+        .to_iter_dataset()
+        .batch(2)
+    )
+    ds4 = dataset.IterDataset.mix([ds1, ds2])
+    mixed_dataset = dataset.IterDataset.mix([ds3, ds4])
+    parents_prefetch_ds = prefetch_autotune._find_prefetch_iter_dataset_parents(
+        mixed_dataset
+    )
+    self.assertLen(parents_prefetch_ds, 2)
+    self.assertEqual(list(parents_prefetch_ds[0]), [4, 5, 6, 7, 8])
+    self.assertEqual(
+        list(parents_prefetch_ds[1]), [2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    )
 
 
 if __name__ == '__main__':
