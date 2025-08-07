@@ -14,11 +14,11 @@ kernelspec:
 
 # Using Bagz Files
 
-This tutorial gives an overview of integrating [Bagz](https://github.com/google-deepmind/bagz/) file format into Grain pipeline. Bagz, an alternative to ArrayRecord, is a novel file format which supports per-record compression and fast index-based lookup. It can also integrate with Apache Beam, a feature that we're also going to present in this tutorial.
+This tutorial gives an overview of integrating [Bagz](https://github.com/google-deepmind/bagz/) file format into Grain pipeline. Bagz, an alternative to ArrayRecord, is a novel file format which supports per-record compression and fast index-based lookup. It can also integrate with Apache Beam, a feature that we're going to present in this tutorial first.
 
 ## Setup
 
-First we need to make sure we have all required packages. We pin JAX's version as the latest Apache Beam doesn't support NumPy 2.0 yet.
+To start we need to make sure we have all required packages. We pin JAX's version as the latest Apache Beam doesn't support NumPy 2.0 yet.
 
 ```{code-cell} ipython3
 %pip install grain bagz apache-beam jax==0.4.38
@@ -36,6 +36,28 @@ import apache_beam as beam
 
 ```{code-cell} ipython3
 assert np.__version__[0] == "1", "Apache Beam requires NumPy<2"
+```
+
+## Apache Beam
+
+Likewise ArrayRecord, Bagz package can also integrate with the Apache Beam library to build ETL pipelines. In the example below we construct a pipeline which consumes some in-memory list, performs simple transformations, and loads outputs to a Bagz file with a `bagzio` module. `@*` in the filename indicates that we will have an unspecified number of shards this pipeline. To learn more about sharding in Bagz, please see [Bagz docs](https://github.com/google-deepmind/bagz/tree/main?tab=readme-ov-file#sharding).
+
+```{code-cell} ipython3
+with beam.Pipeline() as pipeline:
+  data = ["record1", "record2", "record3"]
+  _ = (
+      pipeline
+      | 'CreateData' >> beam.Create(data)
+      | 'Capitalize' >> beam.Map(lambda x: x.upper())
+      | 'Encode' >> beam.Map(lambda x: x.encode())
+      | 'WriteData' >> bagzio.WriteToBagz('beam_data@*.bagz')
+  )
+```
+
+```{code-cell} ipython3
+file = pathlib.Path("beam_data-00000-of-00001.bagz")
+reader = bagz.Reader(file)
+print(list(reader))
 ```
 
 ## Creating and reading Bagz files
@@ -87,26 +109,4 @@ print(f"Filtered out: {len(reader) - len(list(dataset))} records.")
 list(dataset)
 ```
 
-## Apache Beam
-
-Likewise ArrayRecord, Bagz package can also integrate with the Apache Beam library to build ETL pipelines. In the example below we construct a pipeline which consumes some in-memory list, performs simple transformations, and loads outputs to a Bagz file with a `bagzio` module. `@0` in the filename indicates that we don't want sharding for this pipeline. To learn more about sharding in Bagz, please see [Bagz docs](https://github.com/google-deepmind/bagz/tree/main?tab=readme-ov-file#sharding).
-
-```{code-cell} ipython3
-with beam.Pipeline() as pipeline:
-  data = ["record1", "record2", "record3"]
-  _ = (
-      pipeline
-      | 'CreateData' >> beam.Create(data)
-      | 'Capitalize' >> beam.Map(lambda x: x.upper())
-      | 'Encode' >> beam.Map(lambda x: x.encode())
-      | 'WriteData' >> bagzio.WriteToBagz('beam_data@0.bagz')
-  )
-```
-
-```{code-cell} ipython3
-file = pathlib.Path("beam_data.bagz")
-reader = bagz.Reader(file)
-print(list(reader))
-```
-
-In this tutorial we've learned about Bagz format.
+In this tutorial we've learned about Bagz format - how to create files (incl. Apache Beam pipeline) and how to make them useful with a Grain transformations.
