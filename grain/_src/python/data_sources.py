@@ -27,30 +27,32 @@ import inspect
 import math
 from multiprocessing import shared_memory
 import os
-import platform
 import threading
 import time
 import typing
-from typing import Any, Generic, Optional, Protocol, SupportsIndex, TypeVar
+from typing import Any, Generic, Optional, Protocol, SupportsIndex, TypeVar, Union
 
 from absl import logging
 from etils import epath
-from etils import epy
 
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import usage_logging
 
 from grain._src.core import monitoring  # pylint: disable=g-bad-import-order
 
-# pylint: disable=g-import-not-at-top, g-importing-member
-with epy.lazy_imports():
-  import array_record.python.array_record_data_source as array_record
-
+# pylint: disable=g-import-not-at-top, g-importing-member, g-bad-import-order
+import platform
 if platform.system() == "Windows":
   PathLikeOrFileInstruction = Any
+  class ARDataSource:
+    def __init__(self, *args, **kwargs):
+      raise RuntimeError("array_record isn't supported on Windows")
 else:
-  from array_record.python.array_record_data_source import PathLikeOrFileInstruction
-# pylint: enable=g-import-not-at-top, g-importing-member
+  from array_record.python.array_record_data_source import (
+      ArrayRecordDataSource as ARDataSource,
+      PathLikeOrFileInstruction,
+  )
+# pylint: enable=g-import-not-at-top, g-importing-member, g-bad-import-order
 
 _api_usage_counter = monitoring.Counter(
     "/grain/python/data_sources/api",
@@ -70,9 +72,9 @@ _bytes_read_counter = monitoring.Counter(
 )
 
 T = TypeVar("T")
-ArrayRecordDataSourcePaths = (
-    PathLikeOrFileInstruction | Sequence[PathLikeOrFileInstruction]
-)
+ArrayRecordDataSourcePaths = Union[
+    PathLikeOrFileInstruction, Sequence[PathLikeOrFileInstruction]
+]
 
 _SparseArray = collections.namedtuple(
     "SparseArray", ["indices", "values", "dense_shape"]
@@ -81,7 +83,7 @@ _SparseArray = collections.namedtuple(
 ArrayRecordReaderOptions = dict[str, str] | None
 
 
-class ArrayRecordDataSource(array_record.ArrayRecordDataSource):
+class ArrayRecordDataSource(ARDataSource):
   """Data source for ArrayRecord files."""
 
   def __init__(
@@ -100,9 +102,7 @@ class ArrayRecordDataSource(array_record.ArrayRecordDataSource):
         memory versus {index_storage_option:"offloaded"} stores the indices on
         disk to save memory usage.
     """
-    array_record_signature = inspect.signature(
-        array_record.ArrayRecordDataSource.__init__
-    )
+    array_record_signature = inspect.signature(ARDataSource.__init__)
     if "reader_options" in array_record_signature.parameters:
       super().__init__(paths, reader_options)
     elif reader_options is not None:

@@ -117,18 +117,12 @@ main() {
 
   printf '%s : "=== Output wheel file is in: %s\n' "$(date)" "${DEST}"
 
-  # Install grain from the wheel and run smoke tests.
-  if [ "$IS_NIGHTLY" == true ]; then
-    PKG_NAME=grain-nightly
-  else
-    PKG_NAME=grain
-  fi
-  $PYTHON_BIN -m pip install --find-links="${OUTPUT_DIR}/all_dist" --pre "${PKG_NAME}"
+  $PYTHON_BIN -m pip install ${OUTPUT_DIR}/all_dist/grain*.whl
   $PYTHON_BIN -m pip install jax
   $PYTHON_BIN grain/_src/core/smoke_test_with_jax.py
   # TF is not available on Python 3.13 and above.
   if (( "${PYTHON_MINOR_VERSION}" < 13 )); then
-    $PYTHON_BIN -m pip install tensorflow
+    $PYTHON_BIN -m pip install tensorflow==2.20.0rc0
     $PYTHON_BIN grain/_src/core/smoke_test_with_tf.py
   fi
 }

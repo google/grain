@@ -20,6 +20,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     array record file reading.
   * Introduces `grain.experimental.batch_and_pad` for padding a partial batch to
     avoid dropping batch remainder data.
+  * Upgrades `array_record` and `protobuf`.
 
 * Breaking changes:
 
