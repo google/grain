@@ -48,10 +48,10 @@ This is our recommended Sampler. It supports:
     state.
 
 ```python
-index_sampler = pygrain.IndexSampler(
+index_sampler = grain.samplers.IndexSampler(
   num_records=5,
   num_epochs=2,
-  shard_options=pygrain.ShardOptions(shard_index=0, shard_count=1, drop_remainder=True),
+  shard_options=grain.sharding.ShardOptions(shard_index=0, shard_count=1, drop_remainder=True),
   shuffle=True,
   seed=0)
 for record_metadata in index_sampler:
