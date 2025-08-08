@@ -319,7 +319,7 @@ print(f"Mixed dataset length = {len(ds)}")  # sys.maxsize
 
 Grain offers prefetching mechanisms for potential performance improvements.
 
-### Multithread prefetching
+### Thread prefetching
 
 `ThreadPrefetchIterDataset` allows to process the buffer of size
 `cpu_buffer_size` on the CPU ahead of time.
@@ -349,6 +349,7 @@ tpu_buffer_size on the device which can be `jax.Device` or
 ```{code-cell}
 :id: SAZz4YMMAPX5
 
+import grain
 import jax
 import numpy as np
 
@@ -370,6 +371,53 @@ ds = grain.experimental.device_put(
         cpu_buffer_size=cpu_buffer_size,
         device_buffer_size=tpu_buffer_size,
     )
+```
+
++++ {"id": "xgtjqFqq7fJI"}
+
+### Multithread prefetching
+
+`PrefetchIterDataset` allows to use the pool of threads to prefetch the buffer
+(defined by `ReadOptions`) while supporting random access.
+
+```{code-cell}
+:id: qJLCdyXa76Oy
+
+import grain
+import jax
+import numpy as np
+
+# If not set defaults to 16 threads and buffer 500.
+read_options = grain.ReadOptions(num_threads=32, prefetch_buffer_size=400)
+
+source = tfds.data_source(name="mnist", split="train")
+ds = grain.MapDataset.source(source).to_iter_dataset(read_options=read_options)
+```
+
++++ {"id": "-3MILYgy-j2M"}
+
+### Multithread prefetch Autotune
+
+`PrefetchIterDataset` (invoked via `to_iter_dataset` in the example) can
+leverage the autotuning feature to automatically choose the buffer size based
+on the user provided RAM memory constraint and dataset.
+
+```{code-cell}
+:id: RIgnPrak-4gl
+
+import grain
+import jax
+import numpy as np
+
+source = tfds.data_source(name="mnist", split="train")
+ds = grain.MapDataset.source(source)
+performance_config = grain.experimental.pick_performance_config(
+        ds=ds,
+        ram_budget_mb=1024,
+        max_workers=None,
+        max_buffer_size=None
+    )
+ds = ds.to_iter_dataset(read_options=performance_config.read_options)
 ```
 
 +++ {"id": "SRbSK9rkAtDC"}
@@ -427,6 +475,7 @@ performance_config = grain.experimental.pick_performance_config(
         ds=ds,
         ram_budget_mb=1024,
         max_workers=None,
+        max_buffer_size=None
     )
 
 prefetch_lazy_iter_ds = ds.mp_prefetch(
