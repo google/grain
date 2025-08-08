@@ -15,6 +15,7 @@
 from typing import TypeVar
 
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset import stats as dataset_stats
 
 T = TypeVar("T")
 
@@ -34,6 +35,9 @@ class SliceMapDataset(dataset.MapDataset[T]):
   def __len__(self) -> int:
     return self._length
 
+  @dataset_stats.trace_input_pipeline(
+      stage_category=dataset_stats.InputPipelineStageCategory.PREPROCESSING.value
+  )
   def __getitem__(self, index):
     if isinstance(index, slice):
       return SliceMapDataset(self, index)

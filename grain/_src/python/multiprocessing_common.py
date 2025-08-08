@@ -17,7 +17,9 @@ import dataclasses
 import multiprocessing
 from multiprocessing import pool
 import queue
-from typing import TypeVar, Union, Callable
+from typing import Callable, TypeVar, Union
+
+from grain._src.python.dataset import stats
 
 T = TypeVar('T')
 
@@ -33,6 +35,9 @@ class _SystemTerminated:
 SYSTEM_TERMINATED = _SystemTerminated()
 
 
+@stats.trace_input_pipeline(
+    stage_category=stats.InputPipelineStageCategory.PREPROCESSING.value
+)
 def add_element_to_queue(
     element: T,
     elements_queue: queue.Queue[T],
