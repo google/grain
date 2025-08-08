@@ -13,9 +13,9 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * Introduces API for device prefetch - `grain.experimental.device_put()` for
     easy CPU and device prefetching.
   * Adds Windows build.
-  * Introduces API for autotuning -- finds number of processes for
-    `mp_prefetch`, given the user provided RAM restrictions
-    and specific `IterDataset`.
+  * Introduces API for autotuning -- given the user provided RAM restrictions
+    and specific `IterDataset`, finds number of processes for `mp_prefetch`
+    and buffer size for `PrefetchDatasetIterator`.
   * Allow passing `reader_options` to `ArrayRecordDataSource` for configuring
     array record file reading.
   * Introduces `grain.experimental.batch_and_pad` for padding a partial batch to
