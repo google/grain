@@ -16,6 +16,7 @@ import sys
 from typing import Optional, TypeVar
 
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset import stats as dataset_stats
 
 T = TypeVar("T")
 
@@ -57,6 +58,9 @@ class RepeatMapDataset(dataset.MapDataset[T]):
   def __str__(self) -> str:
     return f"RepeatMapDataset(num_epochs={self._num_epochs})"
 
+  @dataset_stats.trace_input_pipeline(
+      stage_category=dataset_stats.InputPipelineStageCategory.PREPROCESSING.value
+  )
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
