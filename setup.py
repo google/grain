@@ -6,6 +6,7 @@ Most project configs are in `pyproject.toml` -- prefer to modify
 
 import setuptools
 from setuptools import dist
+from setuptools.command.build import build
 
 
 class BinaryDistribution(dist.Distribution):
@@ -15,6 +16,13 @@ class BinaryDistribution(dist.Distribution):
     return True
 
 
+class BuildToBuildSetuptools(build):
+    def initialize_options(self):
+        super().initialize_options()
+        self.build_base = 'build_setuptools'
+   
+
 setuptools.setup(
     distclass=BinaryDistribution,
+    cmdclass={'build': BuildToBuildSetuptools}
 )
