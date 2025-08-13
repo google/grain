@@ -19,7 +19,9 @@ import abc
 from collections.abc import Sequence
 import contextlib
 import dataclasses
+import enum
 import functools
+import importlib
 from multiprocessing import queues
 import pprint
 import queue
@@ -50,6 +52,25 @@ try:
 except ImportError:
   logging.warning("Failed to import TraceAnnotation.")
   _TRACE_ANNOTATION = None
+
+
+# Conditionally import Xprof profiler to avoid importing JAX/XLA/TF if not
+# needed.
+try:
+  profiler = importlib.import_module(
+      "tensorflow.compiler.xla.python._profiler"
+  )
+  TraceAnnotation = profiler.TraceMe
+except ImportError:
+  logging.warning(
+      "Xprof profiler is not available. TraceAnnotation will be a no-op."
+  )
+
+  @contextlib.contextmanager
+  def _noop_trace_annotation(_, **__):
+    yield
+
+  TraceAnnotation = _noop_trace_annotation
 
 
 # Registry of weak references to output dataset iterators for collecting
@@ -339,6 +360,94 @@ def record_next_duration_if_output(next_fn):
     return result
 
   return wrapper
+
+
+class InputPipelineStageCategory(enum.Enum):
+  """Category of the input pipeline stage."""
+
+  PREPROCESSING = "preprocessing"
+  READ = "read"
+  ENQUEUE = "enqueue"
+  UNKNOWN = "unknown"
+
+
+INPUT_PIPELINE_TRACE_PREFIX = "ipl"
+
+
+def trace_input_pipeline_prefetch(**trace_kwargs):
+  """Decorator to trace _getitem methods in prefetch."""
+
+  def inner_wrapper(func):
+    @functools.wraps(func)
+    def wrapped_get_item(*args, **kwargs):
+      stats, parent, index = args  # pylint: disable=unused-variable
+      name = (
+          trace_kwargs.get("name", None)
+          or f"{parent.__class__.__name__}.{func.__name__}"
+      )
+      with TraceAnnotation(
+          f"{INPUT_PIPELINE_TRACE_PREFIX}.{name}",
+          _ipl_stage_name="prefetch",
+          _ipl_stage_index=index,
+      ):
+        result = func(*args, **kwargs)
+      return result
+
+    return wrapped_get_item
+
+  return inner_wrapper
+
+
+def trace_input_pipeline(**trace_kwargs):
+  """Decorator to trace input pipeline stages, on __getitem__ methods.
+
+  Args:
+    **trace_kwargs: Keyword arguments to pass to the TraceAnnotation.
+
+  Returns:
+    The wrapped function.
+  """
+  stage_category = trace_kwargs.get(
+      "stage_category", InputPipelineStageCategory.UNKNOWN.value
+  )
+
+  def inner_wrapper(func):
+    @functools.wraps(func)
+    def wrapped_get_item(self, index):
+      index_str = str(index)
+      name = (
+          trace_kwargs.get("name", None)
+          or f"{self.__class__.__name__}.{func.__name__}"
+      )
+      with TraceAnnotation(
+          f"{INPUT_PIPELINE_TRACE_PREFIX}.{name}",
+          _ipl_stage_name=str(self),
+          _ipl_stage_id=id(self),
+          _ipl_stage_cat=stage_category,
+          _ipl_get_index=index_str,
+      ):
+        result = func(self, index)
+      return result
+
+    @functools.wraps(func)
+    def wrapped(self, *args, **kwargs):
+      name = (
+          trace_kwargs.get("name", None)
+          or f"{self.__class__.__name__}.{func.__name__}"
+      )
+      with TraceAnnotation(
+          f"{INPUT_PIPELINE_TRACE_PREFIX}.{name}",
+          _ipl_stage_name=str(self),
+          _ipl_stage_id=id(self),
+          _ipl_stage_cat=stage_category,
+      ):
+        result = func(self, *args, **kwargs)
+      return result
+
+    # prefetch has a _getitem method instead.
+    return wrapped_get_item if func.__name__ == "__getitem__" else wrapped
+
+  return inner_wrapper
 
 
 class _Table:

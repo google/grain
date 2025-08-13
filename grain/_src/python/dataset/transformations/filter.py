@@ -53,6 +53,9 @@ class FilterMapDataset(dataset.MapDataset[T]):
   def __len__(self) -> int:
     return len(self._parent)
 
+  @dataset_stats.trace_input_pipeline(
+      stage_category=dataset_stats.InputPipelineStageCategory.PREPROCESSING.value
+  )
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
