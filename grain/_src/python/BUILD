@@ -13,6 +13,7 @@ py_library(
         "@pypi//etils:pkg",
         "@abseil-py//absl/logging",
         "//grain/_src/core:usage_logging",
+        "//grain/_src/python/dataset:stats",
     ] + select({
         "@platforms//os:windows": [],
         "//conditions:default": ["@pypi//array_record:pkg"],

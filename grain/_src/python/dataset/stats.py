@@ -321,7 +321,7 @@ def record_next_duration_if_output(next_fn):
 
   @functools.wraps(next_fn)
   def wrapper(iterator):
-    if _TRACE_ANNOTATION is not None and _TRACE_ANNOTATION.is_enabled():
+    if _TRACE_ANNOTATION and _TRACE_ANNOTATION.is_enabled():
       with _TRACE_ANNOTATION(
           f"{iterator.__class__.__name__}.{next_fn.__name__}",
           _ipl_stage_name=str(iterator),
@@ -339,6 +339,69 @@ def record_next_duration_if_output(next_fn):
     return result
 
   return wrapper
+
+
+# Input pipeline stage categories.
+IPL_CAT_PREPROCESSING = "preprocessing"
+IPL_CAT_READ = "read"
+IPL_CAT_ENQUEUE = "enqueue"
+IPL_CAT_UNKNOWN = "unknown"
+
+
+def trace_input_pipeline(stage_category: str = IPL_CAT_UNKNOWN, **trace_kwargs):
+  """Decorator to trace input pipeline stages, on __getitem__ methods.
+
+  Args:
+    stage_category: The category of the input pipeline stage.
+    **trace_kwargs: Keyword arguments to pass to the TraceAnnotation.
+
+  Returns:
+    The wrapped function.
+  """
+
+  def inner_wrapper(func):
+
+    @functools.wraps(func)
+    def wrapped(self, *args, **kwargs):
+      if _TRACE_ANNOTATION and _TRACE_ANNOTATION.is_enabled():
+        with _TRACE_ANNOTATION(
+            f"{self.__class__.__name__}.{func.__name__}",
+            _ipl_stage_name=str(self),
+            _ipl_stage_id=id(self),
+            _ipl_stage_cat=stage_category,
+            **trace_kwargs,
+        ):
+          result = func(self, *args, **kwargs)
+      else:
+        result = func(self, *args, **kwargs)
+      return result
+
+    return wrapped
+
+  return inner_wrapper
+
+
+def trace_input_pipeline_prefetch(func):
+  """Decorator to trace _getitem methods in prefetch."""
+
+  @functools.wraps(func)
+  def wrapped_get_item(*args, **kwargs):
+    stats, parent, index = args  # pylint: disable=unused-variable
+    if _TRACE_ANNOTATION and _TRACE_ANNOTATION.is_enabled():
+      with _TRACE_ANNOTATION(
+          f"Prefetch.{func.__name__}",
+          _ipl_dataset_name=str(parent),
+          _ipl_dataset_index=index,
+          _ipl_stage_id=id(parent),
+          _ipl_stage_cat=IPL_CAT_PREPROCESSING,
+          _ipl_stage_name=stats._config.name,  # pylint: disable=protected-access
+      ):
+        result = func(*args, **kwargs)
+    else:
+      result = func(*args, **kwargs)
+    return result
+
+  return wrapped_get_item
 
 
 class _Table:

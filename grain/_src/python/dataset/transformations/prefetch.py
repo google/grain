@@ -48,6 +48,7 @@ import numpy as np
 T = TypeVar("T")
 
 
+@dataset_stats.trace_input_pipeline_prefetch
 def _getitem(
     stats: dataset_stats.Stats, parent: dataset.MapDataset[T], index: int
 ) -> T:
