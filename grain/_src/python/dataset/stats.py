@@ -483,11 +483,9 @@ class Stats(abc.ABC):
     # Mark parent nodes as non-outputs. Nodes that are not updated are the
     # output nodes.
     self._is_output = True
-    _iter_weakref_registry.append(config.iter_weakref)
+    # TODO: Fix adding weakrefs to registry for on-demand prism.
     for p in parents:
       p._is_output = False
-      if p._config.iter_weakref in _iter_weakref_registry:
-        _iter_weakref_registry.remove(p._config.iter_weakref)
 
   @property
   def output_spec(self) -> Any:
