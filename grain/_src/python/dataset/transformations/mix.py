@@ -30,7 +30,7 @@ Element = Any
 T = TypeVar("T")  # pylint: disable=invalid-name
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False)
 class SelectionWithProportionsMap(base.DatasetSelectionMap):
   """A map mixing datasets according to their proportions."""
 
@@ -68,7 +68,7 @@ class SelectionWithProportionsMap(base.DatasetSelectionMap):
     return input_index, index
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False)
 class MixedMapDataset(dataset.MapDataset[T]):
   """LazyDataset for mixtures."""
 
@@ -123,7 +123,7 @@ class MixedMapDataset(dataset.MapDataset[T]):
       raise e
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False)
 class _MixedDatasetIterator(dataset.DatasetIterator[T]):
   """Iterator that mixes elements from iterators based on given proportions.
 
@@ -266,7 +266,7 @@ def _dataset_and_key_of_next_element(
   )
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False)
 class _ConcatSelectionMap(base.DatasetSelectionMap):
   """Concatenated datasets selection map.
 
@@ -304,7 +304,7 @@ class _ConcatSelectionMap(base.DatasetSelectionMap):
     return dataset_index, index_in_dataset_in_epoch + epochs_offset
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False)
 class ConcatenateMapDataset(MixedMapDataset[T]):
   """MapDataset for concatenating the elements from a sequence of datasets."""
 
