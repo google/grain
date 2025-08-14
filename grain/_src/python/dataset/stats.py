@@ -54,7 +54,7 @@ except ImportError:
 
 # Registry of weak references to output dataset iterators for collecting
 # execution stats.
-_iter_weakref_registry = []
+_iter_weakref_registry = set()
 
 _self_time_ns_histogram = monitoring.EventMetric(
     "/grain/python/dataset/self_time_ns",
@@ -483,9 +483,10 @@ class Stats(abc.ABC):
     # Mark parent nodes as non-outputs. Nodes that are not updated are the
     # output nodes.
     self._is_output = True
-    # TODO: Fix adding weakrefs to registry for on-demand prism.
+    _iter_weakref_registry.add(config.iter_weakref)
     for p in parents:
       p._is_output = False
+      _iter_weakref_registry.discard(p._config.iter_weakref)
 
   @property
   def output_spec(self) -> Any:
