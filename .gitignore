@@ -59,7 +59,13 @@ __pypackages__/
 .venv
 
 # Bazel outputs
+.bazelrc
 bazel-bin/
 bazel-grain/
 bazel-out/
 bazel-testlogs/
+bazel-bin
+bazel-grain
+bazel-out
+bazel-testlogs
+MODULE.bazel.lock

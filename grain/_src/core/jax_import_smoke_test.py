@@ -12,19 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Checks that OSS Grain Package works end-to-end with JAX."""
-from typing import Sequence
-from absl import app
+
+from absl.testing import absltest
 import grain
-import jax.numpy as jnp
 
 
-def main(argv: Sequence[str]) -> None:
-  del argv
-  ds = grain.MapDataset.source(jnp.arange(10)).map(lambda x: x + 1)
+class JaxImportTest(absltest.TestCase):
 
-  for _ in ds:
-    pass
+  def test_with_jax(self):
+    import jax.numpy as jnp  # pylint: disable=g-import-not-at-top
+
+    ds = grain.MapDataset.source(jnp.arange(10)).map(lambda x: x + 1)
+
+    for _ in ds:
+      pass
 
 
 if __name__ == "__main__":
-  app.run(main)
+  absltest.main()

@@ -14,6 +14,10 @@ py_test(
     name = "base_test",
     srcs = ["base_test.py"],
     srcs_version = "PY3",
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
     deps = [
         ":base",
         "//grain/_src/python:data_sources",
@@ -90,6 +94,10 @@ py_test(
     name = "visualize_test",
     srcs = ["visualize_test.py"],
     srcs_version = "PY3",
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
     deps = [
         ":dataset",
         ":visualize",
@@ -145,6 +153,10 @@ py_test(
     name = "stats_test",
     srcs = ["stats_test.py"],
     srcs_version = "PY3",
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
     deps = [
         ":dataset",
         ":stats",
@@ -174,6 +186,10 @@ py_library(
 py_test(
     name = "elastic_iterator_test",
     srcs = ["elastic_iterator_test.py"],
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
     shard_count = 10,
     srcs_version = "PY3",
     deps = [

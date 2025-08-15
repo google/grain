@@ -12,19 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Checks that OSS Grain Package works end-to-end with TF."""
-from typing import Sequence
-from absl import app
+
+import os
+
+from absl.testing import absltest
 import grain
-import tensorflow as tf
 
 
-def main(argv: Sequence[str]) -> None:
-  del argv
-  ds = grain.MapDataset.source(range(10)).map(tf.convert_to_tensor)
+@absltest.skipIf(
+    os.getenv("PYTHON_MINOR_VERSION") >= "13",
+    "TF is not available on Python 3.13 and above.",
+)
+class TFImportTest(absltest.TestCase):
 
-  for _ in ds:
-    pass
+  def test_with_tf(self):
+    import tensorflow as tf  # pylint: disable=g-import-not-at-top
+
+    ds = grain.MapDataset.source(range(10)).map(tf.convert_to_tensor)
+
+    for _ in ds:
+      pass
 
 
 if __name__ == "__main__":
-  app.run(main)
+  absltest.main()
