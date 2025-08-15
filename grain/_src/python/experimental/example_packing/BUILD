@@ -25,4 +25,8 @@ py_test(
         "@abseil-py//absl/testing:absltest",
         "@pypi//numpy:pkg",
     ],
+    target_compatible_with = select({
+        "@platforms//os:linux": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
 )

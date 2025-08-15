@@ -146,6 +146,23 @@ py_test(
     ],
 )
 
+py_test(
+    name = "tree_lib_jax_test",
+    srcs = ["tree_lib_jax_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":tree_lib",
+        ":tree_test_lib",
+        "@abseil-py//absl/testing:absltest",
+        "@pypi//attrs:pkg",
+        "@pypi//jax:pkg",
+        "@pypi//numpy:pkg",
+    ],
+    target_compatible_with = select({
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+)
+
 py_library(
     name = "version",
     srcs = ["version.py"],

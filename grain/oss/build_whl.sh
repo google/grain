@@ -117,15 +117,15 @@ main() {
 
   printf '%s : "=== Output wheel file is in: %s\n' "$(date)" "${DEST}"
 
-  $PYTHON_BIN -m pip install ${OUTPUT_DIR}/all_dist/grain*.whl
-  $PYTHON_BIN -m pip install jax pytest parameterized pyarrow==20.0.0
+  $PYTHON_BIN -m pip install --force ${OUTPUT_DIR}/all_dist/grain*.whl
+  $PYTHON_BIN -m pip install jax pyarrow==20.0.0 pytest parameterized
   if (( "${PYTHON_MINOR_VERSION}" < 13 )); then
-    $PYTHON_BIN -m pip install tensorflow==2.20.0rc0
+    $PYTHON_BIN -m pip install tensorflow
   fi
 
   pushd "${OUTPUT_DIR}/all_dist"
   # TODO: remove `-k` option and execute all tests with pytest
-  $PYTHON_BIN -m pytest --pyargs grain -k "TreeJaxTest or FirstFitPackIterDatasetTest or JaxImportTest or TFImportTest or SharedMemoryArrayTest"
+  $PYTHON_BIN -m pytest --pyargs grain -k "TreeJaxTest or FirstFitPackIterDatasetTest or JaxImportTest or TFImportTest or SharedMemoryArrayTest or PackingTest"
   popd
 }
 
