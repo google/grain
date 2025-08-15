@@ -155,13 +155,17 @@ py_library(
 )
 
 py_test(
-    name = "packing_test",
-    srcs = ["packing_test.py"],
+    name = "packing_iter_test",
+    srcs = ["packing_iter_test.py"],
     srcs_version = "PY3",
     deps = [
         ":testing_util",
         "@abseil-py//absl/testing:absltest",
     ],
+    target_compatible_with = select({
+        "@platforms//os:linux": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
 )
 
 py_library(

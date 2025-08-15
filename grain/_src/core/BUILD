@@ -106,6 +106,10 @@ py_test(
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
     ],
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
 )
 
 py_library(
@@ -154,6 +158,9 @@ py_test(
         "@pypi//jax:pkg",
         "@pypi//numpy:pkg",
     ],
+    target_compatible_with = select({
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
 )
 
 py_library(
