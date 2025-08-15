@@ -21,6 +21,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * Introduces `grain.experimental.batch_and_pad` for padding a partial batch to
     avoid dropping batch remainder data.
   * Upgrades `array_record` and `protobuf`.
+  * Grain interleave optimization - allow creating more threads to parallelly
+    keep starting iterators and prefetching elements.
 
 * Breaking changes:
 
