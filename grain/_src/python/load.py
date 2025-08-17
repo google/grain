@@ -1,6 +1,9 @@
 """High level APIs that serve as a single endpoint for very common use cases."""
 
+from typing import Any
+from typing import Callable
 from typing import Optional
+from typing import Sequence
 
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import sharding
@@ -32,6 +35,7 @@ def load(
     transformations: transforms.Transformations = (),
     batch_size: Optional[int] = None,
     drop_remainder: bool = False,
+    batch_fn: Optional[Callable[[Sequence[Any]], Any]] = None,
     worker_count: Optional[int] = 0,
     read_options: Optional[options.ReadOptions] = None,
 ) -> data_loader.DataLoader:
@@ -47,6 +51,8 @@ def load(
     shard_options: See IndexSampler.
     transformations: List of local (stateless) transformations:
     batch_size: Optional batch size. If provided will apply BatchOperation().
+    batch_fn: Optional function that takes a list of elements and returns a
+      batch. If provided will apply BatchOperation().
     drop_remainder: Whether to drop partial batches.
     worker_count: Number of child processes launched to parallelize the
       transformations among. Zero means processing runs in the same process.
@@ -67,7 +73,11 @@ def load(
   if batch_size is not None:
     transformations = list(transformations)
     transformations.append(
-        transforms.Batch(batch_size, drop_remainder=drop_remainder)
+        transforms.Batch(
+          batch_size,
+          drop_remainder=drop_remainder,
+          batch_fn=batch_fn,
+        )
     )
   return data_loader.DataLoader(
       data_source=source,

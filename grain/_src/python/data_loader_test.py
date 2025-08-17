@@ -14,6 +14,7 @@
 """Tests for data loader."""
 
 from collections.abc import Sequence
+import functools
 import pathlib
 import sys
 from typing import Union
@@ -33,6 +34,7 @@ from grain._src.python import shared_memory_array
 from grain._src.python.data_sources import ArrayRecordDataSource
 from grain._src.python.data_sources import RangeDataSource
 from grain._src.python.data_sources import SharedMemoryDataSource
+from grain._src.python.dataset.transformations.batch import batch_and_pad
 from grain._src.python.operations import BatchOperation
 from grain._src.python.operations import FilterOperation
 from grain._src.python.operations import MapOperation
@@ -765,6 +767,24 @@ class DataLoaderTest(absl_parameterized.TestCase):
     it = loader.__iter__()
     state = it.get_state()
     self.assertLess(len(state), 1000)
+
+  def test_data_loader_batch_fn(self):
+    # Map transforms elements to be [1, 2, 3, 4, 5, 6, 7, 8]
+    # Filter keeps only even elements [2, 4, 6, 8]
+    # Batching batches each 3 consective elements with batch_and_pad fn,
+    # producing [np.array([2, 4, 6]), np.array([8, 0, 0])]
+    transformations = [
+        PlusOne(),
+        FilterEven(),
+        BatchOperation(
+          batch_size=3,
+          batch_fn=functools.partial(batch_and_pad, batch_size=3),
+        ),
+    ]
+    data_loader = self._create_data_loader_for_short_sequence(transformations)
+    expected = [np.array([2, 4, 6]), np.array([8, 0, 0])]
+    actual = list(data_loader)
+    np.testing.assert_equal(actual, expected)
 
 
 class PyGrainDatasetIteratorTest(absltest.TestCase):
