@@ -2,8 +2,6 @@ from absl import flags
 from absl.testing import absltest
 from grain._src.python.dataset.sources import parquet_dataset
 import grain.python as grain
-import pyarrow as pa
-import pyarrow.parquet as pq
 
 flags.FLAGS.mark_as_parsed()
 
@@ -46,6 +44,11 @@ WINDOWSHUFFLED_TEXT = [
 class ParquetIterDatasetTest(absltest.TestCase):
 
   def setUp(self):
+    # pylint: disable=g-import-not-at-top
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    # pylint: enable=g-import-not-at-top
+
     super().setUp()
     self.filenames = []
     for i in range(len(SOME_TEXT)):

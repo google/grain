@@ -212,6 +212,10 @@ py_library(
     name = "grain_pool",
     srcs = ["grain_pool.py"],
     srcs_version = "PY3",
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
     deps = [
         ":grain_logging",
         ":multiprocessing_common",
@@ -327,6 +331,10 @@ py_test(
     name = "shared_memory_array_test",
     srcs = ["shared_memory_array_test.py"],
     srcs_version = "PY3",
+    # Skip bazel test due to JAX installation issue. This is tested with pytest instead.
+    target_compatible_with = select({
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
     deps = [
         ":operations",
         ":record",

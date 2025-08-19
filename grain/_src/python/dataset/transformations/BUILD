@@ -158,6 +158,10 @@ py_test(
     name = "packing_test",
     srcs = ["packing_test.py"],
     srcs_version = "PY3",
+    # Skip bazel test due to JAX installation issue. This is tested with pytest instead.
+    target_compatible_with = select({
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
     deps = [
         ":testing_util",
         "@abseil-py//absl/testing:absltest",

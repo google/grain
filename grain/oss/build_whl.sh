@@ -117,14 +117,16 @@ main() {
 
   printf '%s : "=== Output wheel file is in: %s\n' "$(date)" "${DEST}"
 
-  $PYTHON_BIN -m pip install ${OUTPUT_DIR}/all_dist/grain*.whl
-  $PYTHON_BIN -m pip install jax
-  $PYTHON_BIN grain/_src/core/smoke_test_with_jax.py
-  # TF is not available on Python 3.13 and above.
+  $PYTHON_BIN -m pip install --force ${OUTPUT_DIR}/all_dist/grain*.whl
+  $PYTHON_BIN -m pip install jax pyarrow==20.0.0 pytest parameterized
   if (( "${PYTHON_MINOR_VERSION}" < 13 )); then
-    $PYTHON_BIN -m pip install tensorflow==2.20.0rc0
-    $PYTHON_BIN grain/_src/core/smoke_test_with_tf.py
+    $PYTHON_BIN -m pip install tensorflow
   fi
+
+  pushd "${OUTPUT_DIR}/all_dist"
+  # TODO: remove `-k` option and execute all tests with pytest
+  $PYTHON_BIN -m pytest --pyargs grain -k "TreeJaxTest or FirstFitPackIterDatasetTest or JaxImportTest or TFImportTest or SharedMemoryArrayTest or PackingTest"
+  popd
 }
 
 main "$@"
