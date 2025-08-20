@@ -640,6 +640,70 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
     with self.assertRaises(Exception):
       list(ds)
 
+  def test_multiprocess_prefetch_with_sequential_slice(self):
+    ds = (
+        dataset.MapDataset.source([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+        .shuffle(seed=0)
+        .to_iter_dataset()
+    )
+    ds = prefetch.MultiprocessPrefetchIterDataset(
+        ds,
+        options.MultiprocessingOptions(num_workers=3, per_worker_buffer_size=1),
+        sequential_slicing=True,
+    )
+    self.assertEqual(list(ds), [0, 3, 6, 2, 5, 9, 1, 4, 7, 8])
+
+  def test_multiprocess_prefetch_with_default_slice(self):
+    ds = (
+        dataset.MapDataset.source([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+        .shuffle(seed=0)
+        .to_iter_dataset()
+    )
+    ds_sequential_off = prefetch.MultiprocessPrefetchIterDataset(
+        ds,
+        options.MultiprocessingOptions(num_workers=3, per_worker_buffer_size=1),
+        sequential_slicing=False,
+    )
+    ds_sequential_default = prefetch.MultiprocessPrefetchIterDataset(
+        ds,
+        options.MultiprocessingOptions(num_workers=3, per_worker_buffer_size=1),
+    )
+    elements_sequential_off = list(ds_sequential_off)
+    elements_sequential_default = list(ds_sequential_default)
+    self.assertEqual(
+        [0, 4, 6, 7, 8, 3, 1, 9, 5, 2],
+        elements_sequential_off,
+        elements_sequential_default,
+    )
+
+  def test_multiprocess_prefetch_preserves_order(self):
+    ds = dataset.MapDataset.source(
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    ).to_iter_dataset()
+    ds_sequential_off = prefetch.MultiprocessPrefetchIterDataset(
+        ds,
+        options.MultiprocessingOptions(num_workers=3, per_worker_buffer_size=1),
+        sequential_slicing=False,
+    )
+    ds_sequential_on = prefetch.MultiprocessPrefetchIterDataset(
+        ds,
+        options.MultiprocessingOptions(num_workers=3, per_worker_buffer_size=1),
+        sequential_slicing=True,
+    )
+    ds_sequential_default = prefetch.MultiprocessPrefetchIterDataset(
+        ds,
+        options.MultiprocessingOptions(num_workers=3, per_worker_buffer_size=1),
+    )
+    elements_sequential_off = list(ds_sequential_off)
+    elements_sequential_default = list(ds_sequential_default)
+    elements_sequential_on = list(ds_sequential_on)
+    self.assertEqual(
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+        elements_sequential_off,
+        elements_sequential_default,
+    )
+    self.assertEqual([0, 3, 6, 1, 4, 7, 2, 5, 8, 9], elements_sequential_on)
+
   def test_options_after_prefetch(self):
     ds = dataset.MapDataset.source([1, 2, 3]).repeat(1000)
     ds = ds.filter(lambda x: x > 2)

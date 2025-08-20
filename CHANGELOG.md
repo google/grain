@@ -32,6 +32,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     avoid dropping batch remainder data.
   * Grain interleave optimization - allow creating more threads to parallelly
     keep starting iterators and prefetching elements.
+  * Allow for alternative slicing of the data for
+    `MultiprocessPrefetchIterDataset`.
 
 * Breaking changes:
   * Upgrades `array_record` and `protobuf`.
