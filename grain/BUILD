@@ -1,5 +1,6 @@
 
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load("@rules_python//python:defs.bzl", "py_library")
 
 package(default_visibility = ["//grain:__subpackages__"])
 
