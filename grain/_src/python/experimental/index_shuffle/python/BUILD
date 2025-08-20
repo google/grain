@@ -1,5 +1,3 @@
-load("@rules_python//python:defs.bzl", "py_library", "py_test")
-
 load("@pybind11_bazel//:build_defs.bzl", "pybind_extension")
 
 package(default_visibility = ["//grain:__subpackages__"])

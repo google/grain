@@ -2,7 +2,6 @@ load("@python//3.10:defs.bzl", compile_pip_requirements_3_10 = "compile_pip_requ
 load("@python//3.11:defs.bzl", compile_pip_requirements_3_11 = "compile_pip_requirements")
 load("@python//3.12:defs.bzl", compile_pip_requirements_3_12 = "compile_pip_requirements")
 load("@python//3.13:defs.bzl", compile_pip_requirements_3_13 = "compile_pip_requirements")
-load("@rules_python//python:defs.bzl", "py_library")
 
 py_library(
     name = "setup",
