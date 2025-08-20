@@ -241,6 +241,7 @@ py_library(
     srcs = ["interleave.py"],
     srcs_version = "PY3",
     deps = [
+        "//grain/_src/python:options",
         "//grain/_src/python/dataset",
         "//grain/_src/python/dataset:stats",
     ],

@@ -14,24 +14,30 @@
 """Implements dataset interleaving."""
 
 from collections.abc import Sequence
+import functools
 from typing import TypeVar
 
+from grain._src.python import options as grain_options
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
 from grain._src.python.dataset.transformations import prefetch
+
 
 T = TypeVar("T")
 
 
 def _add_prefetch_and_make_iterator(
     ds: dataset.IterDataset[T] | dataset.MapDataset[T],
+    prefetch_buffer_size: int,
 ) -> dataset.DatasetIterator[T]:
   if isinstance(ds, dataset.MapDataset):
     # Prefetch is automatically added in `MapDataset.__iter__`.
     return ds.__iter__()
-  return prefetch.ThreadPrefetchIterDataset(
-      ds, prefetch_buffer_size=1
+  iterator = prefetch.ThreadPrefetchIterDataset(
+      ds, prefetch_buffer_size=prefetch_buffer_size
   ).__iter__()
+  iterator.start_prefetch()
+  return iterator
 
 
 class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
@@ -41,11 +47,33 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
       self,
       datasets: Sequence[dataset.IterDataset[T] | dataset.MapDataset[T]],
       cycle_length: int,
+      num_make_iter_threads: int = 1,
+      make_iter_buffer_size: int = 1,
+      iter_buffer_size: int = 1,
   ):
     # `datasets` is allowed to be a lazily evaluated `MapDataset`. We avoid
     # passing it as `parents` to not trigger evaluation early.
     super().__init__()
     self._datasets = datasets
+    self._num_make_iter_threads = num_make_iter_threads
+    self._make_iter_buffer_size = make_iter_buffer_size
+    self._iter_buffer_size = iter_buffer_size
+    self._prefetch_ds_iter = (
+        dataset.MapDataset.source(datasets)
+        .map(
+            functools.partial(
+                _add_prefetch_and_make_iterator,
+                prefetch_buffer_size=self._iter_buffer_size,
+            )
+        )
+        .to_iter_dataset(
+            grain_options.ReadOptions(
+                num_threads=self._num_make_iter_threads,
+                prefetch_buffer_size=self._make_iter_buffer_size,
+            )
+        )
+        .__iter__()
+    )
     self._cycle_length: int = min(cycle_length, len(datasets))
     self._next_index_in_cycle: int = 0
     self._next_index_in_datasets: int = 0
@@ -68,10 +96,8 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
           self._iterators_in_use[self._next_index_in_cycle] = None
           continue
       if self._next_index_in_datasets < len(self._datasets):
-        self._iterators_in_use[self._next_index_in_cycle] = (
-            _add_prefetch_and_make_iterator(
-                self._datasets[self._next_index_in_datasets]
-            )
+        self._iterators_in_use[self._next_index_in_cycle] = next(
+            self._prefetch_ds_iter
         )
         self._iterators_in_use_indices[self._next_index_in_cycle] = (
             self._next_index_in_datasets
@@ -86,6 +112,7 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
 
   def get_state(self):
     return {
+        "prefetch_ds_iter_states": self._prefetch_ds_iter.get_state(),
         "next_index_in_cycle": self._next_index_in_cycle,
         "next_index_in_datasets": self._next_index_in_datasets,
         "iterators_in_use_indices": self._iterators_in_use_indices.copy(),
@@ -96,6 +123,7 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     }
 
   def set_state(self, state):
+    self._prefetch_ds_iter.set_state(state["prefetch_ds_iter_states"])
     self._next_index_in_cycle = state["next_index_in_cycle"]
     self._next_index_in_datasets = state["next_index_in_datasets"]
     if not self._next_index_in_datasets and not self._next_index_in_cycle:
@@ -123,10 +151,10 @@ class InterleaveIterDataset(dataset.IterDataset[T]):
 
   The sequence can be a `MapDataset`.
 
-  Creates at most `cycle_length` iterators at a time that are processed
-  concurrently and interleives their elements. If `cycle_length` is larger than
-  the number of datasets, then the behavior is similar to mixing the datasets
-  with equal proportions. If `cycle_length` is 1, the datasets are chained.
+  Concurrently processes at most `cycle_length` iterators and interleaves their
+  elements. If `cycle_length` is larger than the number of datasets, then the
+  behavior is similar to mixing the datasets with equal proportions. If
+  `cycle_length` is 1, the datasets are chained.
 
   Can be used with `mp_prefetch` to parallelize reading from sources that do not
   support random access and are implemented as `IterDataset`::
@@ -147,15 +175,45 @@ class InterleaveIterDataset(dataset.IterDataset[T]):
       datasets: Sequence[dataset.IterDataset[T] | dataset.MapDataset[T]],
       *,
       cycle_length: int,
+      num_make_iter_threads: int = 1,
+      make_iter_buffer_size: int = 1,
+      iter_buffer_size: int = 1,
   ):
+    """Initializes the InterleaveIterDataset.
+
+    Args:
+      datasets: A sequence of `IterDataset` or `MapDataset` objects, or a
+        `MapDataset` of datasets to be interleaved.
+      cycle_length: The maximum number of input datasets from which elements
+        will be processed concurrently. If `cycle_length` is greater than the
+        total number of datasets, all available datasets will be interleaved. If
+        `cycle_length` is 1, the datasets will be processed sequentially.
+      num_make_iter_threads: Optional. The number of threads to use for
+        asynchronously creating new iterators and starting prefetching elements
+        (for each iterator) from the underlying datasets. Default value is 1,
+        with this we'll create one background thread to asynchronously create
+        iterators.
+      make_iter_buffer_size: Optional. The number of iterators to create and
+        keep ready in advance in each preparation thread. This helps in reducing
+        latency by ensuring iterators are available when needed. Default value
+        is 1, with this we'll always keep the next iterator ready in advance.
+      iter_buffer_size: Optional. The number of elements to prefetch from each
+        iterator. Default value is 1.
+    """
     super().__init__()
     self._datasets = datasets
     self._cycle_length = cycle_length
+    self._num_make_iter_threads = num_make_iter_threads
+    self._make_iter_buffer_size = make_iter_buffer_size
+    self._iter_buffer_size = iter_buffer_size
 
   def __iter__(self) -> _InterleaveDatasetIterator[T]:
     return _InterleaveDatasetIterator(
         self._datasets,
         cycle_length=self._cycle_length,
+        num_make_iter_threads=self._num_make_iter_threads,
+        make_iter_buffer_size=self._make_iter_buffer_size,
+        iter_buffer_size=self._iter_buffer_size,
     )
 
   def set_slice(self, sl: slice):

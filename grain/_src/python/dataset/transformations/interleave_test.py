@@ -94,6 +94,31 @@ class MixedIterDatasetTest(parameterized.TestCase):
           list(ds_iter), expected[i:], msg=f"Failed at checkpoint {i}."
       )
 
+  @parameterized.named_parameters(*_INTERLEAVE_TEST_CASES)
+  def test_checkpoint_with_extra_threads_creating_iterators(
+      self, to_mix, cycle_length, expected
+  ):
+    datasets = [
+        dataset.MapDataset.source(elements).to_iter_dataset()
+        for elements in to_mix
+    ]
+    ds = interleave.InterleaveIterDataset(
+        datasets,
+        cycle_length=cycle_length,
+        num_make_iter_threads=10,
+        make_iter_buffer_size=10,
+    )
+    ds_iter = ds.__iter__()
+    checkpoints = {}
+    for i in range(len(expected)):
+      checkpoints[i] = ds_iter.get_state()
+      _ = next(ds_iter)
+    for i, state in checkpoints.items():
+      ds_iter.set_state(state)
+      self.assertEqual(
+          list(ds_iter), expected[i:], msg=f"Failed at checkpoint {i}."
+      )
+
   def test_with_map_dataset_of_datasets(self):
 
     def make_dummy_source(filename):
