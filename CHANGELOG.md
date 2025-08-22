@@ -6,6 +6,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features
+  * Introduces `grain.experimental.RebatchIterDataset` for efficient rebatch.
 
 * Breaking changes:
 
