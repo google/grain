@@ -30,6 +30,7 @@ class SourceMapDataset(dataset.MapDataset):
   def __init__(self, source: base.RandomAccessDataSource):
     super().__init__()
     self._source = source
+    self._original_source_map_dataset = None
 
   def __len__(self) -> int:
     return len(self._source)
@@ -43,6 +44,26 @@ class SourceMapDataset(dataset.MapDataset):
       return self.slice(index)
     with self._stats.record_self_time():
       return self._stats.record_output_spec(self._source[index % len(self)])
+
+  def _get_sequential_slice(self, sl: slice) -> slice:
+    """Returns the sequential slice per worker."""
+    worker_index = sl.start
+    workers_count = sl.step
+    remainder = 0
+    if worker_index == workers_count - 1:  # last worker
+      remainder = self.__len__() % workers_count
+    slice_len = self.__len__() // workers_count
+    slice_start = slice_len * worker_index
+    slice_stop = slice_start + slice_len + remainder
+    return slice(slice_start, slice_stop)
+
+  def set_slice(self, sl: slice, sequential: bool = False) -> None:
+    if not sequential:
+      raise ValueError("Only sequential slicing is supported.")
+    if not self._original_source_map_dataset:
+      self._original_source_map_dataset = SourceMapDataset(self._source)
+    new_slice = self._get_sequential_slice(sl)
+    self._source = self._original_source_map_dataset.slice(new_slice)
 
   def log_lineage(self):
     pass
