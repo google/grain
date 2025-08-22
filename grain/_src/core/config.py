@@ -157,7 +157,7 @@ class Config:
     flag_name = f"grain_{name}"
     if any(f.name == flag_name for f in _GRAIN_FLAGS):
       value = getattr(flags.FLAGS, flag_name)
-      if isinstance(value, int):
+      if isinstance(value, int) and not isinstance(value, bool):
         int_value = value
       else:
         int_value = int(value != flags.FLAGS[flag_name].default)
