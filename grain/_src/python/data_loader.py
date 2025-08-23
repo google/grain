@@ -215,6 +215,7 @@ class DataLoader:
         batch_operation = BatchOperation(
             batch_size=operations[-1].batch_size,
             drop_remainder=operations[-1].drop_remainder,
+            batch_fn=operations[-1].batch_fn,
         )
         batch_operation.disable_deprecation_message()
         operations = list(operations)
@@ -599,6 +600,7 @@ def _apply_transform(
     batch_op = BatchOperation(
         batch_size=transform.batch_size,
         drop_remainder=transform.drop_remainder,
+        batch_fn=transform.batch_fn,
     )
     batch_op.disable_deprecation_message()
     for r in batch_op(input_iterator):
