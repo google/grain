@@ -751,6 +751,46 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         maxsize=self._prefetch_buffer_size
     )
 
+  # pytype: disable=attribute-error
+  # pylint: disable=protected-access
+
+  def _initialize_stats(
+      self, execution_tracking_mode: base.ExecutionTrackingMode
+  ):
+    parent_stats = [
+        p._initialize_stats(execution_tracking_mode) for p in self._parents
+    ]
+    config = dataset_stats.StatsConfig(
+        name=str(self),
+        transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
+        is_prefetch=True,
+        iter_weakref=weakref.ref(self),
+    )
+    # If the stats object has already been initialized, copy the queues from
+    # the original stats object to the new stats object.
+    output_spec = None
+    if "_stats" in self.__dict__:
+      config.stats_out_queue = self._stats._config.stats_out_queue
+      config.stats_in_queues = self._stats._config.stats_in_queues
+      # output spec is constructed while iterating through the dataset.
+      output_spec = self._stats.output_spec
+    self._stats = dataset_stats.make_stats(
+        config,
+        parent_stats,
+        execution_tracking_mode=execution_tracking_mode,
+    )
+    self._stats._self_output_spec = output_spec
+    return self._stats
+
+  @functools.cached_property
+  def _stats(self):
+    return self._initialize_stats(
+        self._ctx.dataset_options.execution_tracking_mode
+    )
+
+  # pytype: enable=attribute-error
+  # pylint: enable=protected-access
+
   def start_prefetch(self):
     """Starts prefetching elements in background.
 
@@ -777,14 +817,19 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   @dataset_stats.record_next_duration_if_output
   def __next__(self):
-    self.start_prefetch()
-    element, state, err = self._buffer.get()
+    timer = dataset_stats.Timer()
+    with timer:
+      _ = self._stats
+      self.start_prefetch()
+      element, state, err = self._buffer.get()
 
     if err is not None:
       self._stop_prefetch()
       raise err
     self._state = state
-    return element
+    with self._stats.record_self_time(offset_ns=timer.value()):
+      element = self._stats.record_bytes_produced(element)
+      return self._stats.record_output_spec(element)
 
   def close(self):
     """Stops the iterator. No further calls to the iterator are expected."""
