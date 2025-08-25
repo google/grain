@@ -156,6 +156,25 @@ class RandomAccessDataSource(Protocol, Generic[T]):
     """
 
 
+@typing.runtime_checkable
+class RandomAccessDataSourceWithBatchedRead(
+    RandomAccessDataSource[T], Protocol, Generic[T]
+):
+  """Interface for datasources that support batched reads."""
+
+  def getitems(self, record_keys: Sequence[SupportsIndex]) -> Sequence[T]:
+    """Returns the values for the given record_keys.
+
+    This method must be threadsafe and deterministic.
+
+    Arguments:
+      record_keys: A sequence of integers in [0, len(self)-1].
+
+    Returns:
+      The sequence of corresponding records.
+    """
+
+
 class RangeDataSource:
   """Range data source, similar to python range() function."""
 
