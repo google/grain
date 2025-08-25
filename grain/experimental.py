@@ -73,3 +73,7 @@ from grain._src.python.experimental.index_shuffle.python.index_shuffle_module im
 from grain._src.python.testing.experimental import (
     assert_equal_output_after_checkpoint,
 )
+
+from grain._src.python.experimental.device_put.device_put import (
+    device_put,
+)
