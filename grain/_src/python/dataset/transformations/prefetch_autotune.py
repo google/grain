@@ -4,14 +4,13 @@ import dataclasses
 import itertools
 import math
 import multiprocessing
+import os
 import sys
-
 from absl import logging
 from grain._src.python import options as grain_options
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import prefetch
 import numpy as np
-
 
 cpu_count = multiprocessing.cpu_count
 
@@ -57,7 +56,7 @@ def _get_average_element_size_mb(
       )
   )
   if len(elements_to_sample) < samples_to_check:
-    logging.warning("Warning: Not enough elements to sample.")
+    logging.warning('Warning: Not enough elements to sample.')
     return 0
 
   avg_size_bytes = np.mean(
@@ -84,7 +83,7 @@ def _get_num_workers(
 
   if average_elem_size_mb <= 0:
     logging.warning(
-        "Warning: Average element size is zero. Defaulting to max workers."
+        'Warning: Average element size is zero. Defaulting to max workers.'
     )
     return max_workers
   num_workers = int(ram_budget_mb / average_elem_size_mb)
@@ -110,7 +109,7 @@ def _get_buffer_size(
 
   if average_elem_size_mb <= 0:
     logging.warning(
-        "Warning: Average element size is zero. Defaulting to max threads."
+        'Warning: Average element size is zero. Defaulting to max threads.'
     )
     return grain_options.ReadOptions(prefetch_buffer_size=max_buffer_size)
 
@@ -133,7 +132,7 @@ class PerformanceConfig:
 def pick_performance_config(
     ds: dataset.IterDataset,
     *,
-    ram_budget_mb: int,
+    ram_budget_mb: int | None,
     max_workers: int | None,
     max_buffer_size: int | None,
     samples_to_check: int = 5,
@@ -142,7 +141,7 @@ def pick_performance_config(
 
   Args:
     ds: The input dataset.
-    ram_budget_mb: The RAM budget in megabytes.
+    ram_budget_mb: The user predicted RAM budget in megabytes.
     max_workers: The maximum number of processes to use.
     max_buffer_size: The maximum buffer size to use.
     samples_to_check: The number of samples to check to estimate element size.
@@ -150,6 +149,7 @@ def pick_performance_config(
   Returns:
     A PerformanceConfig object containing the optimal number of workers.
   """
+
   num_workers = _get_num_workers(
       ds,
       ram_budget_mb=ram_budget_mb,
