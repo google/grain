@@ -101,10 +101,12 @@ class PackedBatch(Generic[_T]):
       num_packing_bins: int,
       length_struct: Any,  # PyTree[int]
       meta_features: Sequence[str] = (),
+      max_sequences_per_bin: int | None = None
   ):
     self._num_packing_bins = num_packing_bins
     self._length_struct = length_struct
     self._meta_features = meta_features
+    self._max_sequences_per_bin = max_sequences_per_bin
 
     # Define the main buffers we will pack the data into.
     def make_packed_buffer(length: int, x: np.ndarray | int):
@@ -142,7 +144,8 @@ class PackedBatch(Generic[_T]):
     )
 
     # Tracks the number of examples already packed into row of the batch. Used
-    # to fill the segmentation values for each feature.
+    # to fill the segmentation values for each feature and to make sure that
+    # the maximum batches per row is not exceeded
     self._num_examples_per_row = [0 for _ in range(num_packing_bins)]
 
   def get_packed_batch(self):
@@ -166,8 +169,8 @@ class PackedBatch(Generic[_T]):
         meta_features=self._meta_features,
     )
 
-  @classmethod
   def can_add_at_row(
+      self,
       cls,
       element_feature_lengths: Any,  # PyTree[int]
       num_packing_bins: int,
@@ -221,9 +224,11 @@ class PackedBatch(Generic[_T]):
 
     # Pick first row (if exists) where element can be added.
     for i in range(num_packing_bins):  # For each row.
-      if all(free[i] for _, free in is_row_free_struct):
-        # All components are free at that row.
-        return SuccessfulRowOrFailingComponents(row=i, failing_components=None)
+      if ((self._max_sequences_per_bin is None) or
+          (self._num_examples_per_row[i] < self._max_sequences_per_bin)):
+        if all(free[i] for _, free in is_row_free_struct):
+          # All components are free at that row.
+          return SuccessfulRowOrFailingComponents(row=i, failing_components=None)
 
     # There is no guarantee we have a single failing component, since one
     # component could be the reason an element could not fit in one row
