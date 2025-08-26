@@ -10,7 +10,9 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 * Breaking changes:
 
 * Deprecations:
-
+  * Graduate `grain.experimental.apply_transformations` to
+   `grain.{MapDataset|IterDataset}.apply`. The experimental API will soon be
+    deprecated.
 * Bug fixes
 
 ## Grain 0.2.12 (August 21, 2025)

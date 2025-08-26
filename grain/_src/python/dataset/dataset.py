@@ -374,6 +374,28 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
   def __getitem__(self, index):
     """Returns the element for the index or None if missing."""
 
+  def apply(
+      self,
+      transformations: transforms.Transformation | transforms.Transformations,
+  ) -> MapDataset:
+    """Returns a dataset with the given transformation(s) applied.
+
+    Syntactic sugar to avoid dispatch by transformation type.
+
+    Example usage::
+
+      ds = grain.MapDataset.range(5)
+      ds = ds.apply([AddOne(), grain.transforms.Batch(2)])
+      list(ds) == [np.ndarray([1, 2]), np.ndarray([3, 4]), np.ndarray([5])]
+
+    Args:
+      transformations: one or more transformations to apply.
+
+    Returns:
+      Dataset with the given transformations applied.
+    """
+    return apply_transformations(self, transformations)
+
   def batch(
       self,
       batch_size: int,
@@ -916,6 +938,28 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
   def _parent(self) -> MapDataset | IterDataset:
     assert len(self._parents) == 1, self._parents
     return self._parents[0]
+
+  def apply(
+      self,
+      transformations: transforms.Transformation | transforms.Transformations,
+  ) -> IterDataset:
+    """Returns a dataset with the given transformation(s) applied.
+
+    Syntactic sugar to avoid dispatch by transformation type.
+
+    Example usage::
+
+      ds = grain.MapDataset.range(5).to_iter_dataset()
+      ds = ds.apply([AddOne(), grain.transforms.Batch(2)])
+      list(ds) == [np.ndarray([1, 2]), np.ndarray([3, 4]), np.ndarray([5])]
+
+    Args:
+      transformations: one or more transformations to apply.
+
+    Returns:
+      Dataset with the given transformations applied.
+    """
+    return apply_transformations(self, transformations)
 
   def batch(
       self,
@@ -1514,6 +1558,8 @@ def apply_transformations(
     transformations: transforms.Transformation | transforms.Transformations,
 ) -> _ConsistentDatasetType:
   """Applies transformations to a dataset.
+
+  DEPRECATED: Use `ds.apply(transformations)` instead.
 
   Args:
     ds: `MapDataset` or `IterDataset` to apply the transformations to.
