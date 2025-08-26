@@ -52,7 +52,6 @@ import functools
 import json
 from typing import Any, Generic, TypeVar, Union, cast, overload
 import warnings
-import weakref
 
 from etils import epath
 from grain._src.core import monitoring as grain_monitoring
@@ -842,7 +841,7 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
     config = dataset_stats.StatsConfig(
         name=str(self),
         transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
-        iter_weakref=weakref.ref(self),
+        iter_weakref=dataset_stats.HashableWeakRef(self),
     )
     # If the stats object has already been initialized, copy the queues from
     # the original stats object to the new stats object.
@@ -1393,7 +1392,7 @@ class DatasetIterator(Iterator[T], abc.ABC):
     config = dataset_stats.StatsConfig(
         name=str(self),
         transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
-        iter_weakref=weakref.ref(self),
+        iter_weakref=dataset_stats.HashableWeakRef(self),
     )
     # If the stats object has already been initialized, copy the queues from
     # the original stats object to the new stats object.
