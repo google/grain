@@ -13,6 +13,8 @@
 # limitations under the License.
 """Tests for load()."""
 
+import functools
+
 from absl import flags
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -20,6 +22,7 @@ from grain._src.core import transforms
 import multiprocessing as mp
 from grain._src.python import data_sources
 from grain._src.python import load
+from grain._src.python.dataset.transformations.batch import batch_and_pad
 import numpy as np
 
 
@@ -66,6 +69,23 @@ class DataLoaderTest(parameterized.TestCase):
         num_epochs=1,
     )
     expected = [np.array([2, 4]), np.array([6, 8])]
+    actual = list(data_loader)
+    np.testing.assert_equal(actual, expected)
+  
+  def test_with_range_source_with_batch_fn(self):
+    range_data_source = data_sources.RangeDataSource(start=0, stop=8, step=1)
+    transformations = [
+        PlusOne(),
+        FilterEven(),
+    ]
+    data_loader = load.load(
+        range_data_source,
+        transformations=transformations,
+        batch_size=3,
+        batch_fn=functools.partial(batch_and_pad, batch_size=3),
+        num_epochs=1,
+    )
+    expected = [np.array([2, 4, 6]), np.array([8, 0, 0])]
     actual = list(data_loader)
     np.testing.assert_equal(actual, expected)
 
