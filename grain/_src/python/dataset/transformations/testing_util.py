@@ -39,6 +39,7 @@ def _common_test_body(
     shuffle_bins_group_by_feature: str | None = None,
     meta_features: Sequence[str] = (),
     convert_input_to_np: bool = True,
+    max_sequences_per_bin: int | None = None,
     kwargs: dict[str, Any] | None = None,
 ):
   """Factor out common test operations in a separate function."""
@@ -57,6 +58,7 @@ def _common_test_body(
       shuffle_bins=shuffle_bins,
       shuffle_bins_group_by_feature=shuffle_bins_group_by_feature,
       meta_features=meta_features,
+      max_sequences_per_bin=max_sequences_per_bin,
       **(kwargs if kwargs else {}),
   )
   actual_elements = list(ld)
@@ -1041,6 +1043,51 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
           " as a meta feature?",
       ):
         _ = next(iter(ld))
+
+  def test_pack_max_segments_per_bin(self):
+    input_elements = [
+        {
+            "inputs": [1, 2, 3],
+            "targets": [10],
+        },
+        {
+            "inputs": [4, 5],
+            "targets": [20, 30, 40],
+        },
+        {
+            "inputs": [6],
+            "targets": [50, 60],
+        },
+    ]
+    length_struct = {"inputs": 6, "targets": 6}
+
+    expected_elements = [
+        {
+            "inputs": [1, 2, 3, 4, 5, 0],
+            "targets": [10, 20, 30, 40, 0, 0],
+            "inputs_segment_ids": [1, 1, 1, 2, 2, 0],
+            "targets_segment_ids": [1, 2, 2, 2, 0, 0],
+            "inputs_positions": [0, 1, 2, 0, 1, 0],
+            "targets_positions": [0, 0, 1, 2, 0, 0],
+        },
+        {
+            "inputs": [6, 0, 0, 0, 0, 0],
+            "targets": [50, 60, 0, 0, 0, 0],
+            "inputs_segment_ids": [1, 0, 0, 0, 0, 0],
+            "targets_segment_ids": [1, 1, 0, 0, 0, 0],
+            "inputs_positions": [0, 0, 0, 0, 0, 0],
+            "targets_positions": [0, 1, 0, 0, 0, 0],
+        },
+    ]
+
+    _common_test_body(
+        input_elements,
+        expected_elements,
+        length_struct,
+        kwargs=self.kwargs,
+        num_packing_bins=2,
+        max_sequences_per_bin=2,
+    )
 
 
 if __name__ == "__main__":
