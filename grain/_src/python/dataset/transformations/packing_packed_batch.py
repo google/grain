@@ -171,7 +171,6 @@ class PackedBatch(Generic[_T]):
 
   def can_add_at_row(
       self,
-      cls,
       element_feature_lengths: Any,  # PyTree[int]
       num_packing_bins: int,
       length_struct: Any,  # PyTree[int]
