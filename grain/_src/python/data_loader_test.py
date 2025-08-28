@@ -165,7 +165,7 @@ class DataLoaderTest(absl_parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.testdata_dir = pathlib.Path(FLAGS.test_srcdir) / "testdata"
+    self.testdata_dir = pathlib.Path(FLAGS.test_srcdir) / "grain" / "_src" / "python" /"testdata"
     self.read_options = (
         options.ReadOptions(num_threads=self.num_threads_per_worker)
         if (self.num_threads_per_worker is not None)
