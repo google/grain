@@ -11,6 +11,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * Introduces `grain.experimental.RebatchIterDataset` for efficient rebatch.
 
 * Breaking changes:
+  * Migrates data loader to use dataset API under the hood.
 
 * Deprecations:
   * Graduate `grain.experimental.apply_transformations` to
