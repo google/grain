@@ -125,7 +125,8 @@ main() {
 
   pushd "${OUTPUT_DIR}/all_dist"
   # TODO: remove `-k` option and execute all tests with pytest
-  $PYTHON_BIN -m pytest --pyargs grain -k "TreeJaxTest or FirstFitPackIterDatasetTest or JaxImportTest or TFImportTest or SharedMemoryArrayTest or PackingTest"
+  #$PYTHON_BIN -m pytest --pyargs grain -k "TreeJaxTest or FirstFitPackIterDatasetTest or JaxImportTest or TFImportTest or SharedMemoryArrayTest or PackingTest"
+  $PYTHON_BIN -m pytest --pyargs grain -v
   popd
 }
 
