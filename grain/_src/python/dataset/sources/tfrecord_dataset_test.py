@@ -10,7 +10,7 @@ class TFRecordIterDatasetTest(absltest.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.testdata_dir = pathlib.Path(flags.FLAGS.test_srcdir)
+    self.testdata_dir = pathlib.Path(flags.FLAGS.test_srcdir) / "grain" / "_src" / "python" /"testdata"
     self.testdata_file_path = self.testdata_dir
     self.testdata_file_path /= "morris_sequence_first_5.tfrecord"
     self.expected_data = [
