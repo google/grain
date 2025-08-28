@@ -25,7 +25,7 @@ py_test(
     srcs = [
         "data_sources_test.py",
     ],
-    args = ["--test_srcdir=grain/_src/python"],
+    args = ["--test_srcdir=grain/_src/python/testdata"],
     data = [
         "//grain/_src/python/testdata:digits.array_record-00000-of-00002",
         "//grain/_src/python/testdata:digits.array_record-00001-of-00002",
@@ -180,7 +180,7 @@ py_test(
     srcs = [
         "data_loader_test.py",
     ],
-    args = ["--test_srcdir=grain/_src/python"],
+    args = ["--test_srcdir=grain/_src/python/testdata"],
     data = [
         "//grain/_src/python/testdata:digits.array_record-00000-of-00002",
         "//grain/_src/python/testdata:digits.array_record-00001-of-00002",

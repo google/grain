@@ -132,12 +132,14 @@ class DatasetTest(parameterized.TestCase):
     self.assertIsInstance(ds, dataset.MapDataset)
     self.assertLen(ds, 15)
     self.assertEqual(list(ds), list(range(15)))
+    self.assertEqual(ds.getitems(range(15)), list(range(15)))
 
   def test_range_with_stop(self):
     n = 34
     ds = dataset.MapDataset.range(n)
     self.assertLen(ds, n)
     self.assertEqual(list(ds), list(range(n)))
+    self.assertEqual(ds.getitems(range(n)), list(range(n)))
 
   def test_range_with_start_and_stop(self):
     start = 3
@@ -145,6 +147,7 @@ class DatasetTest(parameterized.TestCase):
     ds = dataset.MapDataset.range(start, stop)
     self.assertLen(ds, stop - start)
     self.assertEqual(list(ds), list(range(start, stop)))
+    self.assertEqual(ds.getitems(range(stop - start)), list(range(start, stop)))
 
   def test_range_with_start_and_stop_and_step(self):
     start = 3
@@ -153,6 +156,10 @@ class DatasetTest(parameterized.TestCase):
     ds = dataset.MapDataset.range(start, stop, step)
     self.assertLen(ds, len(range(start, stop, step)))
     self.assertEqual(list(ds), list(range(start, stop, step)))
+    self.assertEqual(
+        ds.getitems(range(len(range(start, stop, step)))),
+        list(range(start, stop, step)),
+    )
 
   @parameterized.parameters(
       # pyformat: disable
@@ -175,6 +182,7 @@ class DatasetTest(parameterized.TestCase):
     self.assertIsInstance(ds, dataset.MapDataset)
     self.assertLen(ds, len(expected))
     self.assertEqual(list(ds), expected)
+    self.assertEqual(ds.getitems(range(len(expected))), expected)
 
   @parameterized.parameters(
       # pyformat: disable
@@ -207,6 +215,9 @@ class DatasetTest(parameterized.TestCase):
     self.assertIsInstance(ds, dataset.MapDataset)
     self.assertLen(ds, 10)
     self.assertEqual(list(ds), [100, 0, 101, 1, 102, 2, 103, 3, 104, 4])
+    self.assertEqual(
+        ds.getitems(range(10)), [100, 0, 101, 1, 102, 2, 103, 3, 104, 4]
+    )
 
   @parameterized.parameters(
       dict(initial_ds=dataset.MapDataset.range(15)),
