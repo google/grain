@@ -44,6 +44,14 @@ import parameterized
 FLAGS = flags.FLAGS
 
 
+def setup_module():
+    # Set the path to test data when run via pytest. Otherswise,
+    # FLAGS.test_srcdir is set in `__main__` when run directly (or via bazel)
+    import grain
+    srcdir = pathlib.Path(grain.__file__).parents[0] / "_src" / "python"
+    FLAGS["test_srcdir"].parse(str(srcdir))
+
+
 def map_function(data):
   return data + 1
 
@@ -165,15 +173,7 @@ class DataLoaderTest(absl_parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
-
-    import grain
-    if grain.__file__ is None:
-        # tests run under bazel
-        self.testdata_dir = pathlib.Path(FLAGS.test_srcdir) / "testdata"
-    else:
-        # tests run under pytest
-        self.testdata_dir = pathlib.Path(grain.__file__).parents[0] / "_src" / "python" / "testdata"
-
+    self.testdata_dir = pathlib.Path(FLAGS.test_srcdir) / "testdata"
     self.read_options = (
         options.ReadOptions(num_threads=self.num_threads_per_worker)
         if (self.num_threads_per_worker is not None)
