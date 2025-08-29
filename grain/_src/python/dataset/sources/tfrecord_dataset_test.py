@@ -6,17 +6,19 @@ from grain._src.python.dataset.sources import tfrecord_dataset
 import grain.python as pygrain
 
 
+def setup_module():
+    # Set the path to test data when run via pytest. Otherswise,
+    # FLAGS.test_srcdir is set in `__main__` when run directly (or via bazel)
+    import grain
+    srcdir = pathlib.Path(grain.__file__).parents[0] / "_src" / "python" / "testdata"
+    flags.FLAGS["test_srcdir"].parse(str(srcdir))
+
+
 class TFRecordIterDatasetTest(absltest.TestCase):
 
   def setUp(self):
     super().setUp()
-
-    import grain
-    if grain.__file__ is None:
-        self.testdata_dir = pathlib.Path(flags.FLAGS.test_srcdir)
-    else:
-        self.testdata_dir = pathlib.Path(grain.__file__).parents[0] / "_src" / "python" / "testdata"
-
+    self.testdata_dir = pathlib.Path(flags.FLAGS.test_srcdir)
     self.testdata_file_path = self.testdata_dir
     self.testdata_file_path /= "morris_sequence_first_5.tfrecord"
     self.expected_data = [
