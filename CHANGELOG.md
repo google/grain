@@ -6,6 +6,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features
+  * Add `reseed_each_epoch` option to `MapDataset.repeat` that allows to replay
+    the first epoch exactly if set to False (True by default).
 
 * Breaking changes:
 

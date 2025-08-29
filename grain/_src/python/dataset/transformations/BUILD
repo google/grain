@@ -205,10 +205,12 @@ py_test(
 py_test(
     name = "repeat_test",
     srcs = ["repeat_test.py"],
+    shard_count = 5,
     srcs_version = "PY3",
     deps = [
         "//grain/_src/python/dataset",
         "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
         "@pypi//typing_extensions:pkg",
     ],
 )
