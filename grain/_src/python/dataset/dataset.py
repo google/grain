@@ -373,6 +373,10 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
   def __getitem__(self, index):
     """Returns the element for the index or None if missing."""
 
+  def getitems(self, indices: Sequence[int]) -> Sequence[T | None]:
+    """Returns the elements for the indices or None if missing."""
+    return [self[i] for i in indices]
+
   def apply(
       self,
       transformations: transforms.Transformation | transforms.Transformations,
