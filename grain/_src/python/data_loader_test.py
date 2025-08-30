@@ -44,6 +44,14 @@ import parameterized
 FLAGS = flags.FLAGS
 
 
+def setup_module():
+    # Set the path to test data when run via pytest. Otherswise,
+    # FLAGS.test_srcdir is set in `__main__` when run directly (or via bazel)
+    import grain
+    srcdir = pathlib.Path(grain.__file__).parents[0] / "_src" / "python"
+    FLAGS["test_srcdir"].parse(str(srcdir))
+
+
 def map_function(data):
   return data + 1
 
