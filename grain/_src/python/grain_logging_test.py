@@ -1,3 +1,4 @@
+import sys
 import logging
 import re
 from absl import logging as absl_logging
@@ -7,6 +8,7 @@ from absl.testing import absltest
 
 class GrainLoggingTest(absltest.TestCase):
 
+  @absltest.expectedFailureIf("pytest" in sys.argv[0], reason="logging broken under pytest")
   def test_prefix_is_part_of_message(self):
     # self.assertLogs() doesn't format the messages, so we have to resort to
     # formatting directly with the absl handler to test whether the
@@ -20,6 +22,7 @@ class GrainLoggingTest(absltest.TestCase):
         'foo prefix', absl_logging.get_absl_handler().format(log_record)
     )
 
+  @absltest.expectedFailureIf("pytest" in sys.argv[0], reason="logging broken under pytest")
   def test_message_is_kept(self):
     grain_logging.set_process_identifier_prefix('Foo')
     with self.assertLogs() as cm:
