@@ -122,7 +122,6 @@ main() {
   $PYTHON_BIN -m pip install tensorflow  --only-binary h5py
 
   pushd "${OUTPUT_DIR}/all_dist"
-  # TODO: remove `-k` option and execute all tests with pytest
 #  $PYTHON_BIN -m pytest --pyargs grain -v -k "TreeJaxTest or FirstFitPackIterDatasetTest or JaxImportTest or TFImportTest or SharedMemoryArrayTest or PackingTest or DataLoaderTest or TFRecordIterDatasetTest"
   $PYTHON_BIN -m pytest --pyargs grain -v
   popd
