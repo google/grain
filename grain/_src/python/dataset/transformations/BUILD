@@ -29,6 +29,7 @@ py_test(
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
         "@pypi//dm_tree:pkg",
+        "@pypi//jax:pkg",  # buildcleaner: keep
         "@pypi//numpy:pkg",
     ],
 )

@@ -16,10 +16,11 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+import concurrent.futures
 import math
 import pprint
 import sys
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, TypeVar, cast
 
 from grain._src.core import tree_lib
 from grain._src.python.dataset import dataset
@@ -30,6 +31,65 @@ import numpy as np
 
 T = TypeVar("T")
 S = TypeVar("S")
+
+_MAX_PARALLEL_BATCH_WORKERS = 4
+
+
+def _is_parallel_batch_experiment_enabled():
+  return False
+
+
+class _MakeBatchParallel:
+  """Helper class to batch values in parallel."""
+
+  def __init__(self):
+    self._parallel_batch_executor = concurrent.futures.ThreadPoolExecutor(
+        max_workers=_MAX_PARALLEL_BATCH_WORKERS
+    )
+
+  def __call__(self, values: Sequence[T]) -> T:
+    def _batch_fn(*xs: Sequence[T]) -> T:
+      if (self._parallel_batch_executor is None) or not isinstance(
+          xs[0], np.ndarray
+      ):
+        return np.stack(xs)
+      xs = cast(Sequence[np.ndarray], xs)
+      out = np.empty([len(xs), *xs[0].shape], dtype=xs[0].dtype)
+      fs = []
+      for i, x in enumerate(xs):
+        fs.append(self._parallel_batch_executor.submit(out.__setitem__, i, x))
+      for f in fs:
+        f.result()
+      return out
+
+    if not values:
+      raise ValueError("Cannot batch 0 values. Please file a bug.")
+
+    try:
+      return tree_lib.map_structure(_batch_fn, *values)
+    except ValueError as e:
+      # NumPy error message doesn't include actual shapes and dtypes. Provide a
+      # more helpful error message.
+      raise ValueError(
+          "Expected all input elements to have the same structure but got:\n"
+          f"{pprint.pformat(tree_lib.spec_like(values))}"
+      ) from e
+
+  def __getstate__(self):
+    state = self.__dict__.copy()
+    del state["_parallel_batch_executor"]
+    return state
+
+  def __setstate__(self, state):
+    self.__dict__.update(state)
+    self._parallel_batch_executor = concurrent.futures.ThreadPoolExecutor(
+        max_workers=_MAX_PARALLEL_BATCH_WORKERS
+    )
+
+  def __del__(self):
+    if self._parallel_batch_executor:
+      self._parallel_batch_executor.shutdown(wait=False, cancel_futures=True)
+      self._parallel_batch_executor = None
 
 
 def _make_batch(values: Sequence[T]) -> T:
@@ -186,6 +246,8 @@ class BatchMapDataset(dataset.MapDataset[T]):
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
     self._batch_fn = _make_batch if batch_fn is None else batch_fn
+    if _is_parallel_batch_experiment_enabled() and batch_fn is None:
+      self._batch_fn = _MakeBatchParallel()
     if self._drop_remainder:
       self._length = len(self._parent) // self._batch_size
     else:
@@ -251,6 +313,8 @@ class BatchIterDataset(dataset.IterDataset[T]):
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
     self._batch_fn = _make_batch if batch_fn is None else batch_fn
+    if _is_parallel_batch_experiment_enabled() and batch_fn is None:
+      self._batch_fn = _MakeBatchParallel()
 
   def __iter__(self) -> _BatchDatasetIterator[T]:
     parent_iter = self._parent.__iter__()
