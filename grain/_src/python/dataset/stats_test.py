@@ -20,7 +20,6 @@ import sys
 import threading
 import time
 from unittest import mock
-import weakref
 
 from absl import flags
 from absl.testing import flagsaver
@@ -333,7 +332,7 @@ class DebugModeStatsTest(absltest.TestCase):
     mock_iter = mock.Mock()
     s = stats.make_stats(
         stats.StatsConfig(
-            name="test_stats", iter_weakref=weakref.ref(mock_iter)
+            name="test_stats", iter_weakref=stats.HashableWeakRef(mock_iter)
         ),
         (),
     )

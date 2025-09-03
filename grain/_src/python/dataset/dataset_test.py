@@ -785,6 +785,21 @@ class DatasetTest(parameterized.TestCase):
         [0, 1, 2, 3, 4, 5, 6, 7],
     )
 
+  @parameterized.parameters(
+      (dataset.MapDataset.range(5),),
+      (dataset.MapDataset.range(5).to_iter_dataset(),),
+  )
+  def test_apply(self, ds):
+    ds = ds.apply([MapTransformAddingOne(), transforms.Batch(2)])
+    np.testing.assert_equal(
+        list(ds),
+        [
+            np.array([1, 2]),
+            np.array([3, 4]),
+            np.array([5]),
+        ],
+    )
+
 
 class TfRandomMapAlwaysAddingOne(transforms.TfRandomMapTransform):
 

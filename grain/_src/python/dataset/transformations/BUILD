@@ -13,6 +13,7 @@ filegroup(
         "map.py",
         "mix.py",
         "prefetch.py",
+        "rebatch.py",
         "repeat.py",
         "shuffle.py",
         "slice.py",
@@ -205,10 +206,12 @@ py_test(
 py_test(
     name = "repeat_test",
     srcs = ["repeat_test.py"],
+    shard_count = 5,
     srcs_version = "PY3",
     deps = [
         "//grain/_src/python/dataset",
         "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
         "@pypi//typing_extensions:pkg",
     ],
 )
@@ -307,6 +310,20 @@ py_test(
         "//grain/_src/python/testing:experimental",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
+        "@pypi//numpy:pkg",
+    ],
+)
+
+py_test(
+    name = "rebatch_test",
+    srcs = ["rebatch_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        "//grain/_src/python/dataset",
+        "//grain/_src/python/testing:experimental",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+        "@pypi//dm_tree:pkg",
         "@pypi//numpy:pkg",
     ],
 )

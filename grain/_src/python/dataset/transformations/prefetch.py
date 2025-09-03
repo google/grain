@@ -29,7 +29,6 @@ import threading
 import time
 import typing
 from typing import Any, Generic, Optional, Protocol, TypeVar
-import weakref
 
 import cloudpickle
 from concurrent import futures
@@ -127,7 +126,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
         name=str(self),
         transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
         is_prefetch=True,
-        iter_weakref=weakref.ref(self),
+        iter_weakref=dataset_stats.HashableWeakRef(self),
     )
     # If the stats object has already been initialized, copy the queues from
     # the original stats object to the new stats object.
@@ -538,7 +537,7 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
         is_prefetch=True,
         stats_in_queues=self._stats_in_queues,
-        iter_weakref=weakref.ref(self),
+        iter_weakref=dataset_stats.HashableWeakRef(self),
     )
     # If the stats object has already been initialized, copy the queues from
     # the original stats object to the new stats object.

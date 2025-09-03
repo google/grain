@@ -54,7 +54,7 @@ except ImportError:
 
 # Registry of weak references to output dataset iterators for collecting
 # execution stats.
-_iter_weakref_registry = []
+_iter_weakref_registry = set()
 
 _self_time_ns_histogram = monitoring.EventMetric(
     "/grain/python/dataset/self_time_ns",
@@ -404,6 +404,25 @@ def trace_input_pipeline_prefetch(func):
   return wrapped_get_item
 
 
+class HashableWeakRef:
+  """A weak reference that is hashable, using the object's ID."""
+
+  def __init__(self, obj):
+    self._obj_id = id(obj)
+    self._weakref = weakref.ref(obj)
+
+  def __call__(self):
+    return self._weakref()
+
+  def __hash__(self):
+    return self._obj_id
+
+  def __eq__(self, other):
+    if not isinstance(other, HashableWeakRef):
+      return False
+    return self._obj_id == other._obj_id
+
+
 class _Table:
   """Table class for pretty printing tabular data."""
 
@@ -520,7 +539,7 @@ class StatsConfig:
   # in the pipeline within the child process.
   stats_out_queue: queues.Queue | None = None
   # Weak reference to the iterator that this stats object is associated with.
-  iter_weakref: weakref.ReferenceType | None = None
+  iter_weakref: HashableWeakRef | None = None
 
   def __getstate__(self):
     state = self.__dict__.copy()
@@ -546,9 +565,10 @@ class Stats(abc.ABC):
     # Mark parent nodes as non-outputs. Nodes that are not updated are the
     # output nodes.
     self._is_output = True
-    # TODO: Fix adding weakrefs to registry for on-demand prism.
+    _iter_weakref_registry.add(config.iter_weakref)
     for p in parents:
       p._is_output = False
+      _iter_weakref_registry.discard(p._config.iter_weakref)
 
   @property
   def output_spec(self) -> Any:

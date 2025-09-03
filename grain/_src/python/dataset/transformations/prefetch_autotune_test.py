@@ -297,6 +297,5 @@ class PrefetchAutotuneTest(absltest.TestCase):
     )
     self.assertEqual(performance_config.read_options.prefetch_buffer_size, 71)
 
-
 if __name__ == '__main__':
   absltest.main()

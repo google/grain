@@ -54,6 +54,7 @@ from grain._src.python.dataset.transformations.prefetch import (
     ThreadPrefetchIterDataset,
     ThreadPrefetchDatasetIterator,
 )
+from grain._src.python.dataset.transformations.rebatch import RebatchIterDataset
 from grain._src.python.dataset.transformations.shuffle import (
     WindowShuffleMapDataset,
     WindowShuffleIterDataset,
@@ -72,4 +73,8 @@ from grain._src.python.experimental.index_shuffle.python.index_shuffle_module im
 # This should eventually live under grain.testing.
 from grain._src.python.testing.experimental import (
     assert_equal_output_after_checkpoint,
+)
+
+from grain._src.python.experimental.device_put.device_put import (
+    device_put,
 )
