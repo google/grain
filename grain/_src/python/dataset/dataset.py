@@ -884,6 +884,61 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
   # pylint: enable=protected-access
 
 
+def is_thread_prefetch_injection_enabled() -> bool:
+  """Returns whether thread prefetch injection is enabled."""
+  return False
+
+
+def thread_prefetch_injector(func: Callable[..., DatasetIterator]):
+  """Injects a ThreadPrefetch if not already using prefetching.
+
+  This decorator is used to wrap __init__ of `IterDataset` to automatically
+  introduce a `ThreadPrefetchIterDataset` in the pipeline if the current
+  dataset is not already one of the prefetch types.
+
+  Args:
+    func: The function to wrap.
+
+  Returns:
+    The wrapped function.
+  """
+
+  @functools.wraps(func)
+  def wrapper(self, *args, **kwargs):
+    if not is_thread_prefetch_injection_enabled():
+      return func(self, *args, **kwargs)
+
+    # Loaded lazily due to a circular dependency (dataset <-> prefetch).
+    # pylint: disable=g-import-not-at-top
+    from grain._src.python.dataset.transformations import prefetch
+
+    # pylint: enable=g-import-not-at-top
+    def has_immediate_prefetch_parent(ds: IterDataset) -> bool:
+      """Returns whether the dataset has a prefetch parent."""
+      if isinstance(ds, prefetch.PrefetchIterDataset):
+        return True
+      if isinstance(ds, prefetch.ThreadPrefetchIterDataset):
+        return True
+      if isinstance(ds, prefetch.MultiprocessPrefetchIterDataset):
+        return True
+      if isinstance(ds, WithOptionsIterDataset):
+        return any(
+            has_immediate_prefetch_parent(parent) for parent in ds.parents
+        )
+      return False
+
+    if (
+        hasattr(self, "has_child")
+        and not self.has_child
+        and not has_immediate_prefetch_parent(self)
+    ):
+      ds = prefetch.ThreadPrefetchIterDataset(self, prefetch_buffer_size=100)
+      return ds.__iter__()
+    return func(self, *args, **kwargs)
+
+  return wrapper
+
+
 class IterDatasetMeta(abc.ABCMeta):
   """Metaclass for ``IterDataset`` containing factory transformations."""
 
@@ -942,6 +997,13 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
     self._parents = cast(
         Sequence[Union[MapDataset, IterDataset]], self._parents
     )
+
+    # For checking if node is output for thread prefetch injection optimization.
+    self.has_child = False
+    for parent in self._parents:
+      if isinstance(parent, IterDataset) and hasattr(parent, "has_child"):
+        parent.has_child = True
+
     usage_logging.log_event("IterDataset", tag_3="PyGrain")
     _api_usage_counter.Increment("IterDataset")
 
@@ -1296,6 +1358,10 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
         multiprocessing_options=options,
         worker_init_fn=worker_init_fn,
     )
+
+  def __init_subclass__(cls, **kwargs):
+    super().__init_subclass__(**kwargs)
+    cls.__iter__ = thread_prefetch_injector(cls.__iter__)
 
   @abc.abstractmethod
   def __iter__(self) -> DatasetIterator[T]:
