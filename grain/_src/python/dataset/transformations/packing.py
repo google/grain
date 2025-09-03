@@ -13,8 +13,9 @@
 # limitations under the License.
 """Implements packing transformations."""
 
+from collections import defaultdict, deque
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Type
 
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
@@ -23,94 +24,167 @@ import numpy as np
 import tree
 
 
-class FirstFitPackIterDataset(dataset.IterDataset):
-  """Implements first-fit packing of sequences.
+class _SegmentTree:
+  """A segment tree data structure for efficiently finding the best-fitting bin."""
 
-  Packing, compared to concat-and-split, avoids splitting sequences by padding
-  instead. Larger number of packing bins reduce the amount of padding. If the
-  number of bins is large, this can cause epoch leakage (data points from
-  multiple epochs getting packed together).
+  def __init__(self, maxval: int):
+    """Initializes the segment tree.
 
-  This uses a simple first-fit packing algorithm that:
-  1. Creates N bins.
-  2. Adds elements (in the order coming from the parent) to the first bin that
-  has enough space.
-  3. Once an element doesn't fit, emits all N bins as elements.
-  4. (optional) Shuffles bins.
-  5. Loops back to 1 and starts with the element that didn't fit.
+    Args:
+      maxval: The maximum value that can be stored in the tree.
+    """
+    self.maxval = maxval
+    # Tree size is 2 * maxval to accommodate leaves and internal nodes.
+    self.tree = [0] * (2 * maxval)
 
-  This iterator is easy to make deterministic, but it has the downside that some
-  bins (usually the bottom bins) have a lot of padding. To avoid this pattern,
-  we add an option to shuffle the bins before emitting.
+  def add(self, val: int):
+    """Adds a value to the tree."""
+    assert 0 < val <= self.maxval
+    i = self.maxval + val - 1
+    self.tree[i] = val
+    # Propagate the change up to the root.
+    while i > 1:
+      i >>= 1
+      left, right = self.tree[i << 1], self.tree[(i << 1) + 1]
+      self.tree[i] = left if left >= right else right
+
+  def remove(self, val: int):
+    """Removes a value from the tree."""
+    assert 0 < val <= self.maxval
+    i = self.maxval + val - 1
+    self.tree[i] = 0
+    # Propagate the change up to the root.
+    while i > 1:
+      i >>= 1
+      left, right = self.tree[i << 1], self.tree[(i << 1) + 1]
+      self.tree[i] = left if left >= right else right
+
+  def search(self, val: int) -> int:
+    """Finds the smallest value in the tree that is >= val."""
+    assert 0 < val <= self.maxval
+    i = 1
+    # Traverse down the tree to find the best fit.
+    while i < self.maxval:
+      # If the left child has a value large enough, go left.
+      if self.tree[i << 1] >= val:
+        i <<= 1
+      # Otherwise, go right.
+      else:
+        i = (i << 1) + 1
+    return self.tree[i]
+
+
+class _BestFitPackedBatch(packing_packed_batch.PackedBatch):
+  """Helper class that packs elements using the best-fit algorithm.
+
+  This packer finds the bin with the smallest remaining space that can still
+  accommodate the new element. This strategy aims to minimize padding by leaving
+  larger contiguous blocks of space for future elements.
   """
 
   def __init__(
       self,
-      parent: dataset.IterDataset,
-      *,
-      length_struct: Any,
+      element_for_shapes: Any,
       num_packing_bins: int,
-      seed: int = 0,
-      shuffle_bins: bool = True,
-      shuffle_bins_group_by_feature: str | None = None,
+      length_struct: Any,
       meta_features: Sequence[str] = (),
   ):
-    """Creates a dataset that packs sequences from the parent dataset.
+    """Initializes the BestFitPackedBatch.
 
     Args:
-      parent: Parent dataset with variable length sequences. Sequence cannot be
-        longer than their length_struct value.
-      length_struct: Target sequence length for each feature.
+      element_for_shapes: An element to infer shapes and dtypes from.
       num_packing_bins: Number of bins to pack sequences into.
-      seed: Random seed for shuffling bins, if shuffling is enabled.
-      shuffle_bins: Whether to shuffle bins after packing.
-      shuffle_bins_group_by_feature: No-op if shuffle_bins is False. When
-        shuffle_bins is True, if shuffle_bins_group_by_feature is set to
-        something non-None, we will group the bins by this feature name and
-        shuffle within each group. If None, the entire batch is shuffled without
-        regard to this feature. The primary use case for this is to only shuffle
-        within each epoch to avoid epoch leakage.
-      meta_features: Meta features that do not need *_segment_ids and
-        *_positions features.
+      length_struct: Target sequence length for each feature.
+      meta_features: Meta features that do not need packing logic.
     """
-    super().__init__(parent)
-    self._length_struct = length_struct
-    self._num_packing_bins = num_packing_bins
-    self._seed = seed
-    self._shuffle_bins = shuffle_bins
-    self._shuffle_bins_group_by_feature = shuffle_bins_group_by_feature
-    self._meta_features = meta_features
-
-  def __str__(self) -> str:
-    return "FirstFitPackIterDataset"
-
-  def __iter__(self) -> dataset.DatasetIterator:
-    return FirstFitPackDatasetIterator(
-        self._parent.__iter__(),
-        num_packing_bins=self._num_packing_bins,
-        length_struct=self._length_struct,
-        seed=self._seed,
-        shuffle_bins=self._shuffle_bins,
-        shuffle_bins_group_by_feature=self._shuffle_bins_group_by_feature,
-        meta_features=self._meta_features,
+    super().__init__(
+        element_for_shapes,
+        num_packing_bins,
+        length_struct,
+        meta_features=meta_features,
     )
+    flat_lengths = tree.flatten(length_struct)
+    if not any(l is not None for l in flat_lengths):
+      raise ValueError("length_struct must contain at least one length.")
+    self._max_length = max(l for l in flat_lengths if l is not None)
+
+    # Use a segment tree to efficiently find the best-fitting bin.
+    self._segment_tree = _SegmentTree(self._max_length)
+    # Map remaining space to the list of bin indices with that space.
+    self._space_to_bin_indices = defaultdict(deque)
+
+    # Initialize all bins with the maximum available length.
+    for i in range(num_packing_bins):
+      self._segment_tree.add(self._max_length)
+      self._space_to_bin_indices[self._max_length].append(i)
+
+  def try_add_to_batch(self, element: Any) -> Any | None:
+    """Tries to add an element to the batch using the best-fit strategy."""
+    element_lengths = self._get_element_lengths(element)
+    max_element_length = max(element_lengths.values())
+
+    # Search for the smallest available space that fits the element.
+    best_fit_space = self._segment_tree.search(max_element_length)
+
+    # If no bin has enough space, return the failing components.
+    if not best_fit_space or best_fit_space < max_element_length:
+      return {k: v for k, v in element_lengths.items() if v > best_fit_space}
+
+    # Get the index of the bin to use.
+    bin_index = self._space_to_bin_indices[best_fit_space].popleft()
+
+    # If this was the last bin with this specific amount of space, remove it.
+    if not self._space_to_bin_indices[best_fit_space]:
+      self._segment_tree.remove(best_fit_space)
+
+    # Add the element to the selected bin.
+    self._add_element_to_bin(element, bin_index, element_lengths)
+
+    # Update the data structures with the new remaining space of the bin.
+    new_space = self._remaining_lengths[bin_index]
+    if new_space > 0:
+      self._segment_tree.add(new_space)
+      self._space_to_bin_indices[new_space].append(bin_index)
+
+    return None
 
 
-class FirstFitPackDatasetIterator(dataset.DatasetIterator):
-  """Iterator for the first-fit packing transformation."""
+class PackingDatasetIterator(dataset.DatasetIterator):
+  """A generic iterator for packing transformations.
+
+  This iterator implements the core packing loop and state management but
+  delegates the specific packing strategy (e.g., first-fit, best-fit) to a
+  `packer_cls` provided at initialization. This allows for flexible packing
+  algorithms while reusing the same iteration and batching logic.
+  """
 
   def __init__(
       self,
       parent: dataset.DatasetIterator,
       *,
+      packer_cls: Type[packing_packed_batch.PackedBatch],
       num_packing_bins: int,
-      length_struct: Any,  # PyTree[int | None],
+      length_struct: Any,
       seed: int,
       shuffle_bins: bool,
       shuffle_bins_group_by_feature: str | None,
       meta_features: Sequence[str],
   ):
+    """Initializes the generic packing iterator.
+
+    Args:
+      parent: The parent iterator.
+      packer_cls: The class responsible for the packing logic. Must be a
+        subclass of `packing_packed_batch.PackedBatch`.
+      num_packing_bins: Number of bins to pack sequences into.
+      length_struct: Target sequence length for each feature.
+      seed: Random seed for shuffling.
+      shuffle_bins: Whether to shuffle bins after packing.
+      shuffle_bins_group_by_feature: Feature to group by for shuffling.
+      meta_features: Meta features that do not require packing.
+    """
     super().__init__(parent)
+    self._packer_cls = packer_cls
     self._num_packing_bins = num_packing_bins
     self._length_struct = length_struct
     self._seed = seed
@@ -121,22 +195,18 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
 
   def _reset(self):
     self._current_batch = None  # Not yet fully packed.
-    # The parent state to restore to get back to our current state, i.e. the
-    # state that the parent was in after producing all elements used in the last
-    # fully emitted batch. We only advance this when we finish emitting a packed
-    # batch.
+    # The parent state to restore to get back to our current state.
     self._last_emitted_batch_parent_state = self._parent.get_state()
-    # The parent state after constructing the current completed packed batch,
-    # right before adding the element that failed to fit.
+    # The parent state after constructing the current completed packed batch.
     self._current_batch_parent_state = None
     # If available, fully packed but rows [:self._next_row] were already
     # emitted.
     self._packed_batch = None
-    # The last packed batch can be partial and have few bins with elements.
+    # The last packed batch can be partial.
     self._packed_batch_num_bins = None
     # _next_row gets reset between batches.
-    # _counter is a global counter for rows emitted, does not get reset.
     self._next_row = 0
+    # _counter is a global counter for rows emitted.
     self._counter = 0  # Used for RNG seed.
     self._shuffled_rows = None
 
@@ -192,7 +262,8 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
     if element_for_shapes is None:
       self._current_batch = None
     else:
-      self._current_batch = packing_packed_batch.PackedBatch(
+      # Use the provided packer class to create the new batch manager.
+      self._current_batch = self._packer_cls(
           element_for_shapes,
           self._num_packing_bins,
           self._length_struct,
@@ -228,13 +299,13 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
         element = next(self._parent)
       except StopIteration as e:
         if self._current_batch:
+          # Finalize and yield the last partial batch.
           with timer:
             self._finalize_current_batch(None)
             self._current_batch_parent_state = prior_iterator_state
           return next(self)
         else:
-          # The inner iterator is exhausted and there is no current batch, so
-          # the packed iterator is also exhausted.
+          # The inner iterator is exhausted and there is no current batch.
           raise StopIteration() from e
 
       with timer:
@@ -243,10 +314,9 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
             self._length_struct, lambda x: x, element
         )
 
-        if self._current_batch is None:  # pytype: disable=attribute-error
-          # Use `element` to set dtypes + trailing dimensions.
-          # We are not adding the element to the batch, just initializing it.
-          self._current_batch = packing_packed_batch.PackedBatch(
+        if self._current_batch is None:
+          # Initialize the batch manager with the specific packer class.
+          self._current_batch = self._packer_cls(
               element,
               self._num_packing_bins,
               self._length_struct,
@@ -256,8 +326,7 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
         # Try adding element to the current packed batch.
         failing_components = self._current_batch.try_add_to_batch(element)
 
-      # When we have a full batch, yield the current packed data,
-      # and then start a new batch with this element.
+      # When the batch is full, yield the packed data and start a new batch.
       if failing_components is not None:
         with timer:
           self._finalize_current_batch(element)
@@ -265,16 +334,168 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
           assert self._current_batch is not None
 
           if self._current_batch.try_add_to_batch(element) is not None:
-            # If we can't pack a single example into an empty batch then we
-            # can't continue at all.
+            # If a single example can't fit in an empty batch, it's an error.
             element_shape = tree.map_structure(lambda x: x.shape, element)
             raise ValueError(
                 "Could not add element to empty packed batch! Packed batch has"
                 f" packing sequence_lengths: {self._length_struct} while"
                 f" element has shape: {element_shape}"
             )
-        # We now have packed batch.
+        # We now have a packed batch.
         return next(self)
 
+
+class PackIterDataset(dataset.IterDataset):
+  """A generic dataset for packing transformations.
+
+  This dataset acts as a factory for `PackingDatasetIterator`, allowing different
+  packing strategies to be plugged in via the `packer_cls` argument.
+  """
+
+  def __init__(
+      self,
+      parent: dataset.IterDataset,
+      *,
+      packer_cls: Type[packing_packed_batch.PackedBatch],
+      length_struct: Any,
+      num_packing_bins: int,
+      seed: int = 0,
+      shuffle_bins: bool = True,
+      shuffle_bins_group_by_feature: str | None = None,
+      meta_features: Sequence[str] = (),
+  ):
+    """Initializes the generic packing dataset.
+
+    Args:
+      parent: Parent dataset with variable length sequences.
+      packer_cls: The class implementing the packing algorithm.
+      length_struct: Target sequence length for each feature.
+      num_packing_bins: Number of bins to pack sequences into.
+      seed: Random seed for shuffling bins.
+      shuffle_bins: Whether to shuffle bins after packing.
+      shuffle_bins_group_by_feature: Feature to group by for shuffling.
+      meta_features: Meta features that do not need packing logic.
+    """
+    super().__init__(parent)
+    self._packer_cls = packer_cls
+    self._length_struct = length_struct
+    self._num_packing_bins = num_packing_bins
+    self._seed = seed
+    self._shuffle_bins = shuffle_bins
+    self._shuffle_bins_group_by_feature = shuffle_bins_group_by_feature
+    self._meta_features = meta_features
+
+  def __iter__(self) -> dataset.DatasetIterator:
+    return PackingDatasetIterator(
+        self._parent.__iter__(),
+        packer_cls=self._packer_cls,
+        num_packing_bins=self._num_packing_bins,
+        length_struct=self._length_struct,
+        seed=self._seed,
+        shuffle_bins=self._shuffle_bins,
+        shuffle_bins_group_by_feature=self._shuffle_bins_group_by_feature,
+        meta_features=self._meta_features,
+    )
+
+
+class FirstFitPackIterDataset(PackIterDataset):
+  """Implements first-fit packing of sequences.
+
+  Packing, compared to concat-and-split, avoids splitting sequences by padding
+  instead. Larger number of packing bins reduce the amount of padding. If the
+  number of bins is large, this can cause epoch leakage (data points from
+  multiple epochs getting packed together).
+
+  This uses a simple first-fit packing algorithm that:
+  1. Creates N bins.
+  2. Adds elements (in the order coming from the parent) to the first bin that
+  has enough space.
+  3. Once an element doesn't fit, emits all N bins as elements.
+  4. (optional) Shuffles bins.
+  5. Loops back to 1 and starts with the element that didn't fit.
+  """
+
+  def __init__(
+      self,
+      parent: dataset.IterDataset,
+      *,
+      length_struct: Any,
+      num_packing_bins: int,
+      seed: int = 0,
+      shuffle_bins: bool = True,
+      shuffle_bins_group_by_feature: str | None = None,
+      meta_features: Sequence[str] = (),
+  ):
+    """Creates a dataset that packs sequences using the first-fit strategy.
+
+    Args:
+      parent: Parent dataset with variable length sequences.
+      length_struct: Target sequence length for each feature.
+      num_packing_bins: Number of bins to pack sequences into.
+      seed: Random seed for shuffling bins.
+      shuffle_bins: Whether to shuffle bins after packing.
+      shuffle_bins_group_by_feature: Feature to group by for shuffling.
+      meta_features: Meta features that do not need packing logic.
+    """
+    super().__init__(
+        parent,
+        # Provide the specific packer class for the First-Fit strategy.
+        packer_cls=packing_packed_batch.PackedBatch,
+        length_struct=length_struct,
+        num_packing_bins=num_packing_bins,
+        seed=seed,
+        shuffle_bins=shuffle_bins,
+        shuffle_bins_group_by_feature=shuffle_bins_group_by_feature,
+        meta_features=meta_features,
+    )
+
   def __str__(self) -> str:
-    return "FirstFitPackDatasetIterator"
+    return "FirstFitPackIterDataset"
+
+
+class BestFitPackIterDataset(PackIterDataset):
+  """Implements best-fit packing of sequences.
+
+  The best-fit algorithm attempts to pack elements more efficiently than
+  first-fit by placing each new element into the bin that will leave the
+  smallest remaining space (i.e., the "tightest" fit). This can lead to less
+  overall padding compared to the simpler first-fit approach, especially when
+  element sizes vary significantly.
+  """
+
+  def __init__(
+      self,
+      parent: dataset.IterDataset,
+      *,
+      length_struct: Any,
+      num_packing_bins: int,
+      seed: int = 0,
+      shuffle_bins: bool = True,
+      shuffle_bins_group_by_feature: str | None = None,
+      meta_features: Sequence[str] = (),
+  ):
+    """Creates a dataset that packs sequences using the best-fit strategy.
+
+    Args:
+      parent: Parent dataset with variable length sequences.
+      length_struct: Target sequence length for each feature.
+      num_packing_bins: Number of bins to pack sequences into.
+      seed: Random seed for shuffling bins.
+      shuffle_bins: Whether to shuffle bins after packing.
+      shuffle_bins_group_by_feature: Feature to group by for shuffling.
+      meta_features: Meta features that do not need packing logic.
+    """
+    super().__init__(
+        parent,
+        # Provide the specific packer class for the Best-Fit strategy.
+        packer_cls=_BestFitPackedBatch,
+        length_struct=length_struct,
+        num_packing_bins=num_packing_bins,
+        seed=seed,
+        shuffle_bins=shuffle_bins,
+        shuffle_bins_group_by_feature=shuffle_bins_group_by_feature,
+        meta_features=meta_features,
+    )
+
+  def __str__(self) -> str:
+    return "BestFitPackIterDataset"
