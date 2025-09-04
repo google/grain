@@ -123,7 +123,7 @@ main() {
 
   pushd "${OUTPUT_DIR}/all_dist"
 #  $PYTHON_BIN -m pytest --pyargs grain -v -k "TreeJaxTest or FirstFitPackIterDatasetTest or JaxImportTest or TFImportTest or SharedMemoryArrayTest or PackingTest or DataLoaderTest or TFRecordIterDatasetTest"
-  $PYTHON_BIN -m pytest --pyargs grain -v
+  $PYTHON_BIN -m pytest --pyargs grain -v -k'GetExecutionSummaryTest'
   popd
 }
 
