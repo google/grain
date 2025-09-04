@@ -14,6 +14,9 @@
 """Tests for batch transformation."""
 
 import functools
+import importlib
+import sys
+from unittest import mock
 
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -27,22 +30,34 @@ import tree
 
 class MakeBatchTest(absltest.TestCase):
 
-  def test_zero_values(self):
+  def test_batch_zero_values_error(self):
     values = []
     with self.assertRaises(ValueError):
       batch._make_batch(values)
 
-  def test_single_value(self):
+  def test_batch_single_value_success(self):
     values = [np.asarray([1, 2, 3])]
     batched_values = batch._make_batch(values)
     self.assertEqual(batched_values.shape, (1, 3))
 
-  def test_two_values(self):
+  def test_batch_single_value_parallel_batch_enabled_success(self):
+    values = [np.asarray([1, 2, 3])]
+    make_batch_parallel = batch._MakeBatchParallel()
+    batched_values = make_batch_parallel(values)
+    self.assertEqual(batched_values.shape, (1, 3))
+
+  def test_batch_two_values_success(self):
     values = [np.asarray([1, 2, 3]), np.asarray([4, 5, 6])]
     batched_values = batch._make_batch(values)
     self.assertEqual(batched_values.shape, (2, 3))
 
-  def test_different_shape(self):
+  def test_batch_two_values_parallel_batch_enabled_success(self):
+    values = [np.asarray([1, 2, 3]), np.asarray([4, 5, 6])]
+    make_batch_parallel = batch._MakeBatchParallel()
+    batched_values = make_batch_parallel(values)
+    self.assertEqual(batched_values.shape, (2, 3))
+
+  def test_batch_different_shapes_error(self):
     values = [{"a": np.asarray([1, 2, 3])}, {"a": np.asarray([4, 5])}]
     with self.assertRaisesRegex(
         ValueError,
@@ -50,7 +65,16 @@ class MakeBatchTest(absltest.TestCase):
     ):
       batch._make_batch(values)
 
-  def test_different_structure(self):
+  def test_batch_different_shapes_parallel_batch_enabled_error(self):
+    values = [{"a": np.asarray([1, 2, 3])}, {"a": np.asarray([4, 5])}]
+    make_batch_parallel = batch._MakeBatchParallel()
+    with self.assertRaisesRegex(
+        ValueError,
+        "Expected all input elements to have the same structure but got:",
+    ):
+      make_batch_parallel(values)
+
+  def test_batch_different_structures_error(self):
     values = [{"a": np.asarray([1, 2, 3])}, {"b": np.asarray(0.5)}]
     with self.assertRaisesRegex(
         ValueError,
@@ -67,6 +91,25 @@ class MakeBatchTest(absltest.TestCase):
         "Expected all input elements to have the same structure but got:",
     ):
       batch._make_batch(values)
+
+  def test_batch_different_structures_parallel_batch_enabled_error(self):
+    values = [{"a": np.asarray([1, 2, 3])}, {"b": np.asarray(0.5)}]
+    make_batch_parallel = batch._MakeBatchParallel()
+    with self.assertRaisesRegex(
+        ValueError,
+        "Expected all input elements to have the same structure but got:",
+    ):
+      make_batch_parallel(values)
+      values = [
+          {"a": np.asarray([1, 2, 3])},
+          {"b": np.asarray(0.5)},
+          {"c": np.asarray(True)},
+      ]
+    with self.assertRaisesRegex(
+        ValueError,
+        "Expected all input elements to have the same structure but got:",
+    ):
+      make_batch_parallel(values)
 
 
 class BatchAndPadTest(parameterized.TestCase):
@@ -183,121 +226,165 @@ class BatchAndPadTest(parameterized.TestCase):
 
 class BatchMapDatasetTest(parameterized.TestCase):
 
-  def test_batch_size_2(self):
-    ds = dataset.MapDataset.range(0, 10)
-    ds = batch.BatchMapDataset(ds, batch_size=2)
-    self.assertLen(ds, 5)  # 10 // 2 = 5.
-    actual = [ds[i] for i in range(5)]
-    expected = [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]]
-    np.testing.assert_allclose(actual, expected)
+  def tearDown(self):
+    super().tearDown()
+    importlib.reload(batch.tree_lib)
+    importlib.reload(batch)
+
+  @parameterized.named_parameters(
+      dict(testcase_name="jax", use_jax=True),
+      dict(testcase_name="no_jax", use_jax=False),
+  )
+  def test_batch_size_2(self, use_jax: bool):
+    def test_batch_size_2_actual_equals_expected():
+      ds = dataset.MapDataset.range(0, 10)
+      ds = batch.BatchMapDataset(ds, batch_size=2)
+      self.assertLen(ds, 5)  # 10 // 2 = 5.
+      actual = [ds[i] for i in range(5)]
+      expected = [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]]
+      np.testing.assert_allclose(actual, expected)
+
+    with mock.patch.dict(
+        sys.modules, {"jax": sys.modules["jax"] if use_jax else None}
+    ):
+      importlib.reload(batch.tree_lib)
+      test_batch_size_2_actual_equals_expected()
 
   def test_custom_batch_fn(self):
-    ds = source.SourceMapDataset([{"a": f"element_{i}"} for i in range(10)])
 
-    def _batch_fn(xs):
-      return tree.map_structure(lambda *x: tuple(x), *xs)
+    def custom_batch_fn_actual_equals_expected():
+      ds = source.SourceMapDataset([{"a": f"element_{i}"} for i in range(10)])
 
-    ds = batch.BatchMapDataset(ds, batch_size=2, batch_fn=_batch_fn)
-    self.assertLen(ds, 5)  # 10 // 2 = 5.
-    actual = [ds[i] for i in range(5)]
-    expected = [
-        {"a": ("element_0", "element_1")},
-        {"a": ("element_2", "element_3")},
-        {"a": ("element_4", "element_5")},
-        {"a": ("element_6", "element_7")},
-        {"a": ("element_8", "element_9")},
-    ]
-    self.assertEqual(actual, expected)
+      def _batch_fn(xs):
+        return tree.map_structure(lambda *x: tuple(x), *xs)
+
+      ds = batch.BatchMapDataset(ds, batch_size=2, batch_fn=_batch_fn)
+      self.assertLen(ds, 5)  # 10 // 2 = 5.
+      actual = [ds[i] for i in range(5)]
+      expected = [
+          {"a": ("element_0", "element_1")},
+          {"a": ("element_2", "element_3")},
+          {"a": ("element_4", "element_5")},
+          {"a": ("element_6", "element_7")},
+          {"a": ("element_8", "element_9")},
+      ]
+      self.assertEqual(actual, expected)
+
+    custom_batch_fn_actual_equals_expected()
 
   @parameterized.named_parameters(
       dict(testcase_name="drop_remainder", drop_remainder=True),
       dict(testcase_name="", drop_remainder=False),
   )
   def test_batch_size_3(self, drop_remainder: bool):
-    ds = dataset.MapDataset.range(0, 10)
-    ds = batch.BatchMapDataset(ds, batch_size=3, drop_remainder=drop_remainder)
-    if drop_remainder:
-      self.assertLen(ds, 3)  # 10 // 3.
-      expected = [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
-    else:
-      self.assertLen(ds, 4)  # ceil(10 / 3).
-      expected = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
-    actual = [ds[i] for i in range(len(ds))]
-    for i in range(len(ds)):
-      np.testing.assert_allclose(actual[i], expected[i])
+
+    def test_batch_size_3_actual_equals_expected():
+      ds = dataset.MapDataset.range(0, 10)
+      ds = batch.BatchMapDataset(
+          ds, batch_size=3, drop_remainder=drop_remainder
+      )
+      if drop_remainder:
+        self.assertLen(ds, 3)  # 10 // 3.
+        expected = [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
+      else:
+        self.assertLen(ds, 4)  # ceil(10 / 3).
+        expected = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
+      actual = [ds[i] for i in range(len(ds))]
+      for i in range(len(ds)):
+        np.testing.assert_allclose(actual[i], expected[i])
+
+    test_batch_size_3_actual_equals_expected()
 
   @parameterized.named_parameters(
       dict(testcase_name="drop_remainder", drop_remainder=True),
       dict(testcase_name="", drop_remainder=False),
   )
   def test_epoch_boundaries(self, drop_remainder: bool):
-    num_epochs = 4
-    ds = dataset.MapDataset.range(0, 10)
-    ds = batch.BatchMapDataset(ds, batch_size=3, drop_remainder=drop_remainder)
-    if drop_remainder:
-      self.assertLen(ds, 3)
-      expected = num_epochs * [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
-    else:
-      self.assertLen(ds, 4)
-      expected = num_epochs * [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
-    actual = [ds[i] for i in range(num_epochs * len(ds))]
-    for i in range(len(actual)):
-      np.testing.assert_allclose(actual[i], expected[i])
+
+    def test_epoch_boundaries_actual_equals_expected():
+      num_epochs = 4
+      ds = dataset.MapDataset.range(0, 10)
+      ds = batch.BatchMapDataset(
+          ds, batch_size=3, drop_remainder=drop_remainder
+      )
+      if drop_remainder:
+        self.assertLen(ds, 3)
+        expected = num_epochs * [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
+      else:
+        self.assertLen(ds, 4)
+        expected = num_epochs * [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
+      actual = [ds[i] for i in range(num_epochs * len(ds))]
+      for i in range(len(actual)):
+        np.testing.assert_allclose(actual[i], expected[i])
+
+    test_epoch_boundaries_actual_equals_expected()
 
   @parameterized.named_parameters(
       dict(testcase_name="drop_remainder", drop_remainder=True),
       dict(testcase_name="", drop_remainder=False),
   )
   def test_epoch_boundaries_repeat_after_batch(self, drop_remainder: bool):
-    num_epochs = 2
-    ds = dataset.MapDataset.range(0, 10)
-    ds = batch.BatchMapDataset(ds, batch_size=3, drop_remainder=drop_remainder)
-    ds = repeat.RepeatMapDataset(ds, num_epochs=num_epochs)
-    if drop_remainder:
-      self.assertLen(ds, 6)
-      # Remainder gets dropped in both epochs.
-      expected = num_epochs * [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
-    else:
-      self.assertLen(ds, 8)
-      expected = num_epochs * [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
-    actual = [ds[i] for i in range(len(ds))]
-    for i in range(len(actual)):
-      np.testing.assert_allclose(actual[i], expected[i])
+
+    def test_epoch_boundaries_repeat_after_batch_actual_equals_expected():
+      num_epochs = 2
+      ds = dataset.MapDataset.range(0, 10)
+      ds = batch.BatchMapDataset(
+          ds, batch_size=3, drop_remainder=drop_remainder
+      )
+      ds = repeat.RepeatMapDataset(ds, num_epochs=num_epochs)
+      if drop_remainder:
+        self.assertLen(ds, 6)
+        # Remainder gets dropped in both epochs.
+        expected = num_epochs * [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
+      else:
+        self.assertLen(ds, 8)
+        expected = num_epochs * [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
+      actual = [ds[i] for i in range(len(ds))]
+      for i in range(len(actual)):
+        np.testing.assert_allclose(actual[i], expected[i])
+
+    test_epoch_boundaries_repeat_after_batch_actual_equals_expected()
 
   @parameterized.named_parameters(
       dict(testcase_name="drop_remainder", drop_remainder=True),
       dict(testcase_name="", drop_remainder=False),
   )
   def test_epoch_boundaries_repeat_before_batch(self, drop_remainder: bool):
-    num_epochs = 2
-    ds = dataset.MapDataset.range(0, 10)
-    ds = repeat.RepeatMapDataset(ds, num_epochs=num_epochs)
-    ds = batch.BatchMapDataset(ds, batch_size=3, drop_remainder=drop_remainder)
-    if drop_remainder:
-      self.assertLen(ds, 6)
-      # Remainder of last epoch gets dropped.
-      expected = [
-          [0, 1, 2],
-          [3, 4, 5],
-          [6, 7, 8],
-          [9, 0, 1],
-          [2, 3, 4],
-          [5, 6, 7],
-      ]
-    else:
-      self.assertLen(ds, 7)
-      expected = [
-          [0, 1, 2],
-          [3, 4, 5],
-          [6, 7, 8],
-          [9, 0, 1],
-          [2, 3, 4],
-          [5, 6, 7],
-          [8, 9],
-      ]
-    actual = [ds[i] for i in range(len(ds))]
-    for i in range(len(actual)):
-      np.testing.assert_allclose(actual[i], expected[i])
+
+    def test_epoch_boundaries_repeat_before_batch_actual_equals_expected():
+      num_epochs = 2
+      ds = dataset.MapDataset.range(0, 10)
+      ds = repeat.RepeatMapDataset(ds, num_epochs=num_epochs)
+      ds = batch.BatchMapDataset(
+          ds, batch_size=3, drop_remainder=drop_remainder
+      )
+      if drop_remainder:
+        self.assertLen(ds, 6)
+        # Remainder of last epoch gets dropped.
+        expected = [
+            [0, 1, 2],
+            [3, 4, 5],
+            [6, 7, 8],
+            [9, 0, 1],
+            [2, 3, 4],
+            [5, 6, 7],
+        ]
+      else:
+        self.assertLen(ds, 7)
+        expected = [
+            [0, 1, 2],
+            [3, 4, 5],
+            [6, 7, 8],
+            [9, 0, 1],
+            [2, 3, 4],
+            [5, 6, 7],
+            [8, 9],
+        ]
+      actual = [ds[i] for i in range(len(ds))]
+      for i in range(len(actual)):
+        np.testing.assert_allclose(actual[i], expected[i])
+
+    test_epoch_boundaries_repeat_before_batch_actual_equals_expected()
 
   def test_batch_after_filter_raises_error(self):
     ds = dataset.MapDataset.range(0, 10).filter(lambda x: x % 2 == 0)
@@ -323,53 +410,97 @@ class BatchMapDatasetTest(parameterized.TestCase):
     )
 
 
-class BatchIterDatasetTest(absltest.TestCase):
+class BatchIterDatasetTest(parameterized.TestCase):
 
-  def test_batch_size_2(self):
-    ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
-    ds = batch.BatchIterDataset(ds, batch_size=2)
-    ds_iter = iter(ds)
-    actual = [next(ds_iter) for _ in range(5)]
-    expected = [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]]
-    np.testing.assert_allclose(actual, expected)
+  def tearDown(self):
+    super().tearDown()
+    importlib.reload(batch.tree_lib)
+    importlib.reload(batch)
+
+  @parameterized.named_parameters(
+      dict(testcase_name="jax", use_jax=True),
+      dict(testcase_name="no_jax", use_jax=False),
+  )
+  def test_batch_size_2(self, use_jax: bool):
+    def test_batch_size_2_actual_equals_expected():
+      ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
+      ds = batch.BatchIterDataset(ds, batch_size=2)
+      ds_iter = iter(ds)
+      actual = [next(ds_iter) for _ in range(5)]
+      expected = [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]]
+      np.testing.assert_allclose(actual, expected)
+
+    with mock.patch.dict(
+        sys.modules, {"jax": sys.modules["jax"] if use_jax else None}
+    ):
+      importlib.reload(batch.tree_lib)
+      test_batch_size_2_actual_equals_expected()
 
   def test_custom_batch_fn(self):
-    iter_ds = source.SourceMapDataset(
-        [{"a": f"element_{i}"} for i in range(10)]
-    ).to_iter_dataset()
 
-    def _batch_fn(xs):
-      return tree.map_structure(lambda *x: tuple(x), *xs)
+    def test_custom_batch_fn_actual_equals_expected():
+      iter_ds = source.SourceMapDataset(
+          [{"a": f"element_{i}"} for i in range(10)]
+      ).to_iter_dataset()
 
-    iter_ds = batch.BatchIterDataset(iter_ds, batch_size=2, batch_fn=_batch_fn)
-    is_iter = iter(iter_ds)
-    actual = [next(is_iter) for _ in range(5)]
-    expected = [
-        {"a": ("element_0", "element_1")},
-        {"a": ("element_2", "element_3")},
-        {"a": ("element_4", "element_5")},
-        {"a": ("element_6", "element_7")},
-        {"a": ("element_8", "element_9")},
-    ]
-    self.assertEqual(actual, expected)
+      def _batch_fn(xs):
+        return tree.map_structure(lambda *x: tuple(x), *xs)
 
-  def test_batch_size_3(self):
-    ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
-    # drop_remainder defaults to False
-    ds = batch.BatchIterDataset(ds, batch_size=3)
-    actual = list(ds)
-    self.assertLen(actual, 4)
-    expected = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
-    for i in range(4):
-      np.testing.assert_allclose(actual[i], expected[i])
+      iter_ds = batch.BatchIterDataset(
+          iter_ds, batch_size=2, batch_fn=_batch_fn
+      )
+      is_iter = iter(iter_ds)
+      actual = [next(is_iter) for _ in range(5)]
+      expected = [
+          {"a": ("element_0", "element_1")},
+          {"a": ("element_2", "element_3")},
+          {"a": ("element_4", "element_5")},
+          {"a": ("element_6", "element_7")},
+          {"a": ("element_8", "element_9")},
+      ]
+      self.assertEqual(actual, expected)
 
-  def test_batch_size_3_drop_remainder(self):
-    ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
-    ds = batch.BatchIterDataset(ds, batch_size=3, drop_remainder=True)
-    actual = list(ds)
-    self.assertLen(actual, 3)
-    expected = [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
-    np.testing.assert_allclose(actual, expected)
+    test_custom_batch_fn_actual_equals_expected()
+
+  @parameterized.named_parameters(
+      dict(testcase_name="jax", use_jax=True),
+      dict(testcase_name="no_jax", use_jax=False),
+  )
+  def test_batch_size_3(self, use_jax: bool):
+    def test_batch_size_3_actual_equals_expected():
+      ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
+      # drop_remainder defaults to False
+      ds = batch.BatchIterDataset(ds, batch_size=3)
+      actual = list(ds)
+      self.assertLen(actual, 4)
+      expected = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
+      for i in range(4):
+        np.testing.assert_allclose(actual[i], expected[i])
+
+    with mock.patch.dict(
+        sys.modules, {"jax": sys.modules["jax"] if use_jax else None}
+    ):
+      importlib.reload(batch.tree_lib)
+      test_batch_size_3_actual_equals_expected()
+
+  @parameterized.named_parameters(
+      dict(testcase_name="jax", use_jax=True),
+      dict(testcase_name="no_jax", use_jax=False),
+  )
+  def test_batch_size_3_drop_remainder(self, use_jax: bool):
+    def test_batch_size_3_drop_remainder_actual_equals_expected():
+      ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
+      ds = batch.BatchIterDataset(ds, batch_size=3, drop_remainder=True)
+      actual = list(ds)
+      self.assertLen(actual, 3)
+      expected = [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
+      np.testing.assert_allclose(actual, expected)
+
+    with mock.patch.dict(
+        sys.modules, {"jax": sys.modules["jax"] if use_jax else None}
+    ):
+      importlib.reload(batch.tree_lib)
+      test_batch_size_3_drop_remainder_actual_equals_expected()
 
   def test_batch_with_padding(self):
     ds = (
