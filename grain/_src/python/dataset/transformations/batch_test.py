@@ -30,16 +30,16 @@ class MakeBatchTest(absltest.TestCase):
   def test_zero_values(self):
     values = []
     with self.assertRaises(ValueError):
-      batch._make_batch(values)
+      batch.make_batch(values)
 
   def test_single_value(self):
     values = [np.asarray([1, 2, 3])]
-    batched_values = batch._make_batch(values)
+    batched_values = batch.make_batch(values)
     self.assertEqual(batched_values.shape, (1, 3))
 
   def test_two_values(self):
     values = [np.asarray([1, 2, 3]), np.asarray([4, 5, 6])]
-    batched_values = batch._make_batch(values)
+    batched_values = batch.make_batch(values)
     self.assertEqual(batched_values.shape, (2, 3))
 
   def test_different_shape(self):
@@ -48,7 +48,7 @@ class MakeBatchTest(absltest.TestCase):
         ValueError,
         "Expected all input elements to have the same structure but got:",
     ):
-      batch._make_batch(values)
+      batch.make_batch(values)
 
   def test_different_structure(self):
     values = [{"a": np.asarray([1, 2, 3])}, {"b": np.asarray(0.5)}]
@@ -56,7 +56,7 @@ class MakeBatchTest(absltest.TestCase):
         ValueError,
         "Expected all input elements to have the same structure but got:",
     ):
-      batch._make_batch(values)
+      batch.make_batch(values)
     values = [
         {"a": np.asarray([1, 2, 3])},
         {"b": np.asarray(0.5)},
@@ -66,7 +66,7 @@ class MakeBatchTest(absltest.TestCase):
         ValueError,
         "Expected all input elements to have the same structure but got:",
     ):
-      batch._make_batch(values)
+      batch.make_batch(values)
 
 
 class BatchAndPadTest(parameterized.TestCase):
@@ -160,7 +160,7 @@ class BatchAndPadTest(parameterized.TestCase):
         ValueError,
         "Expected all input elements to have the same structure but got:",
     ):
-      batch._make_batch(values)
+      batch.make_batch(values)
 
   def test_different_structure(self):
     values = [{"a": np.asarray([1, 2, 3])}, {"b": np.asarray(0.5)}]
@@ -168,7 +168,7 @@ class BatchAndPadTest(parameterized.TestCase):
         ValueError,
         "Expected all input elements to have the same structure but got:",
     ):
-      batch._make_batch(values)
+      batch.make_batch(values)
     values = [
         {"a": np.asarray([1, 2, 3])},
         {"b": np.asarray(0.5)},
@@ -178,7 +178,7 @@ class BatchAndPadTest(parameterized.TestCase):
         ValueError,
         "Expected all input elements to have the same structure but got:",
     ):
-      batch._make_batch(values)
+      batch.make_batch(values)
 
 
 class BatchMapDatasetTest(parameterized.TestCase):

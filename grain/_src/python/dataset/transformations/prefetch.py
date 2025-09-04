@@ -113,7 +113,9 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._next_index = 0
     self._buffer = None
     self._lock = threading.Lock()
-    self._prefetch_buffer_size = read_options.prefetch_buffer_size
+    self._prefetch_buffer_size = (
+        read_options.prefetch_buffer_size if read_options.num_threads > 0 else 0
+    )
     self._allow_nones = allow_nones
     if self._prefetch_buffer_size > 0:
       self._executor = futures.ThreadPoolExecutor(read_options.num_threads)
@@ -254,6 +256,7 @@ class MultiprocessPrefetchIterDataset(dataset.IterDataset[T]):
       parent: dataset.IterDataset[T],
       multiprocessing_options: grain_options.MultiprocessingOptions,
       worker_init_fn: Callable[[int, int], None] | None = None,
+      always_report_worker_state: bool = False,
   ):
     if multiprocessing_options.num_workers < 0:
       raise ValueError(
@@ -264,6 +267,7 @@ class MultiprocessPrefetchIterDataset(dataset.IterDataset[T]):
     self._multiprocessing_options = multiprocessing_options
     self._worker_init_fn = worker_init_fn
     self._validate_parent_dataset()
+    self._always_report_worker_state = always_report_worker_state
 
   def __str__(self) -> str:
     return (
@@ -287,7 +291,10 @@ class MultiprocessPrefetchIterDataset(dataset.IterDataset[T]):
     if self._multiprocessing_options.num_workers == 0:
       return self._parent.__iter__()
     return _MultiprocessPrefetchDatasetIterator(
-        self._parent, self._multiprocessing_options, self._worker_init_fn
+        self._parent,
+        self._multiprocessing_options,
+        self._worker_init_fn,
+        self._always_report_worker_state,
     )
 
 
@@ -411,9 +418,11 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
       self,
       state: dict[str, dict[str, Any] | int],
       ds: dataset.IterDataset[T],
+      always_report_worker_state: bool = False,
   ):
     self._state = state
     self._ds = ds
+    self._always_report_worker_state = always_report_worker_state
 
   def __call__(
       self,
@@ -448,7 +457,10 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
       # __next__ method.
       if not it._stats._config.is_prefetch:
         it._stats.record_bytes_produced(element)
-      if now - last_recorded_state_time >= _RECORD_STATE_INTERVAL_S:
+      if (
+          self._always_report_worker_state
+          or now - last_recorded_state_time >= _RECORD_STATE_INTERVAL_S
+      ):
         last_recorded_state_time = now
         yield (element, it.get_state())  # pytype: disable=attribute-error
       else:
@@ -493,6 +505,7 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       parent: dataset.IterDataset[T],
       multiprocessing_options: grain_options.MultiprocessingOptions,
       worker_init_fn: Callable[[int, int], None] | None = None,
+      always_report_worker_state: bool = False,
   ):
     super().__init__()
     self._iter_parent = parent
@@ -528,6 +541,8 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         _ITERATIONS_TO_SKIP: iterations_to_skip,
         _LAST_WORKER_INDEX: -1,
     }
+
+    self._always_report_worker_state = always_report_worker_state
 
   def _initialize_stats(
       self, execution_tracking_mode: base.ExecutionTrackingMode
@@ -625,7 +640,9 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     ds = dataset.WithOptionsIterDataset(
         self._iter_parent, self._ctx.dataset_options
     )
-    get_element_producer_fn = GetElementProducerFn(self._state, ds)
+    get_element_producer_fn = GetElementProducerFn(
+        self._state, ds, self._always_report_worker_state
+    )
 
     return grain_pool.MultiProcessIterator(
         get_element_producer_fn,
