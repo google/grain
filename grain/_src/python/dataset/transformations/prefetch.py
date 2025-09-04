@@ -691,12 +691,6 @@ class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
 StateT = dict[str, Any]
 
 
-def _get_iterator_next_and_state(
-    iterator: dataset.DatasetIterator[T],
-) -> tuple[T, StateT]:
-  return iterator.__next__(), iterator.get_state()
-
-
 def _put_iterator_elements_in_buffer(
     iterator: dataset.DatasetIterator[T],
     buffer: queue.Queue[tuple[T, StateT, Exception | None]],
@@ -705,7 +699,7 @@ def _put_iterator_elements_in_buffer(
   """Fetches elements from the iterator and puts them in the buffer."""
   try:
     while not should_stop.is_set():
-      element, state = _get_iterator_next_and_state(iterator)
+      element, state = iterator.__next__(), iterator.get_state()
       buffer.put((element, state, None))
   except Exception as e:  # pylint: disable=broad-except
     buffer.put((None, None, e))
