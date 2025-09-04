@@ -114,9 +114,10 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._buffer = None
     self._lock = threading.Lock()
     self._prefetch_buffer_size = read_options.prefetch_buffer_size
+    self._num_threads = read_options.num_threads
     self._allow_nones = allow_nones
     if self._prefetch_buffer_size > 0:
-      self._executor = futures.ThreadPoolExecutor(read_options.num_threads)
+      self._executor = futures.ThreadPoolExecutor(self._num_threads)
 
   def _initialize_stats(
       self, execution_tracking_mode: base.ExecutionTrackingMode
@@ -233,6 +234,18 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
         f"PrefetchDatasetIterator(read_options={self._read_options},"
         f" allow_nones={self._allow_nones})"
     )
+
+  def set_num_threads(self, num_threads: int) -> None:
+    self._num_threads = num_threads
+    old_executor = None
+    if hasattr(self, "_executor"):
+      old_executor = self._executor
+    if self._num_threads > 0:
+      self._executor = futures.ThreadPoolExecutor(self._num_threads)
+    else:
+      delattr(self, "_executor")
+    if old_executor is not None:
+      old_executor.shutdown(wait=True)
 
 
 def _iterator_with_context(
