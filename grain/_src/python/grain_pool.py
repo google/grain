@@ -76,7 +76,7 @@ T = TypeVar("T")
 
 # Maximum number of threads for starting and stopping processes.
 _PROCESS_MANAGEMENT_MAX_THREADS = 64
-_PROCESS_JOIN_TIMEOUT = 10
+_PROCESS_JOIN_TIMEOUT = 25
 _QUEUE_WAIT_TIMEOUT = 1
 # Input queues contain small structures (record metadata), thus they are safe
 # to have a big size.
