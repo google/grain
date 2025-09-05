@@ -17,6 +17,7 @@ import functools
 import threading
 from typing import Any, Callable, TypeVar
 
+from grain._src.core import config
 from grain._src.core import transforms
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
@@ -358,6 +359,34 @@ class RandomMapIterDataset(dataset.IterDataset[T]):
     return f"RandomMapIterDataset(transform={self._transform_name})"
 
 
+def _get_fused_map_and_transform_name(
+    map_datasets: list["MapIterDataset"],
+) -> tuple[Callable[[Any], Any], str]:
+  """Gets the fused map and new transform name from the chain of map datasets."""
+
+  if len(map_datasets) == 1:
+    # If there is only one `MapIterDataset` to fuse, we just return the
+    # original function as-is to not introduce extra overhead.
+    return map_datasets[0]._map_fn, map_datasets[0]._transform_name  # pylint: disable=protected-access
+
+  map_funcs = []
+  transform_names = []
+
+  # Functions need to be applied in reverse order
+  for ds in map_datasets[::-1]:
+    map_funcs.append(ds._map_fn)  # pylint: disable=protected-access
+    transform_names.append(ds._transform_name)  # pylint: disable=protected-access
+
+  def fused_map(element: Any):
+    result = element
+    for f in map_funcs:
+      result = f(result)
+    return result
+
+  new_transform_name = "fused_map:" + "|".join(transform_names)
+  return fused_map, new_transform_name
+
+
 class MapIterDataset(dataset.IterDataset[T]):
   """Map transformation for IterDatasets."""
 
@@ -380,10 +409,15 @@ class MapIterDataset(dataset.IterDataset[T]):
     return transforms.get_pretty_transform_name(self._map_fn)
 
   def __iter__(self) -> _MapDatasetIterator[T]:
+
+    parent_dataset = self._parent
+    map_fn = self._map_fn
+    transform_name = self._transform_name
+
     return _MapDatasetIterator(
-        self._parent.__iter__(),
-        map_fn=self._map_fn,
-        transform_name=self._transform_name,
+        parent_dataset.__iter__(),
+        map_fn=map_fn,
+        transform_name=transform_name,
     )
 
   def __str__(self) -> str:
