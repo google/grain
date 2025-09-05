@@ -190,21 +190,30 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
                 for i in indices
             )
           element = self._buffer.popleft()
-          if (
-              self._next_index + self._prefetch_buffer_size
-              < self._dataset_length
+          # Prefetch elements until the buffer is full again.
+          for idx in range(
+              self._next_index + len(self._buffer) + 1,
+              min(
+                  self._next_index + self._prefetch_buffer_size + 1,
+                  self._dataset_length,
+              ),
           ):
             self._buffer.append(
                 self._executor.submit(
                     functools.partial(_getitem, self._stats, self._map_parent),
-                    self._next_index + self._prefetch_buffer_size,
+                    idx,
                 )
             )
           element = element.result()
         else:
-          element = self._stats.record_bytes_consumed(
-              self._map_parent[self._next_index]
-          )
+          # In case prefetch buffer size was decreased, we still want to consume
+          # the already prefetched elements.
+          if self._buffer:
+            element = self._buffer.popleft().result()
+          else:
+            element = self._stats.record_bytes_consumed(
+                self._map_parent[self._next_index]
+            )
         self._next_index += 1
       return_element = self._allow_nones or element is not None
       self._threshold_checker.check(return_element)
@@ -233,6 +242,24 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
         f"PrefetchDatasetIterator(read_options={self._read_options},"
         f" allow_nones={self._allow_nones})"
     )
+
+  def set_prefetch_buffer_size(self, buffer_size: int):
+    self._prefetch_buffer_size = buffer_size
+    # The executor is created in the constructor only if the prefetch buffer
+    # size is greater than 0. If the user changes the prefetch buffer size, we
+    # need to create or destroy the executor accordingly.
+    if self._prefetch_buffer_size > 0 and not hasattr(self, "_executor"):
+      if self._read_options.num_threads == 0:
+        raise ValueError(
+            "num_threads must be greater than 0 when prefetch buffer size is"
+            " greater than 0."
+        )
+      self._executor = futures.ThreadPoolExecutor(
+          self._read_options.num_threads
+      )
+    elif self._prefetch_buffer_size == 0 and hasattr(self, "_executor"):
+      self._executor.shutdown()
+      delattr(self, "_executor")
 
 
 def _iterator_with_context(
