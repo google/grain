@@ -31,6 +31,7 @@ py_library(
         "sharding.py",
         "sources.py",
         "transforms.py",
+        "conftest.py",
     ],
     srcs_version = "PY3",
     data = select({

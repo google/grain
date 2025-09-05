@@ -326,6 +326,7 @@ py_test(
     srcs_version = "PY3",
     deps = [
         ":grain_logging",
+        "//grain",
         "@abseil-py//absl/logging",
         "@abseil-py//absl/testing:absltest",
     ],
