@@ -31,7 +31,6 @@ py_library(
         "sharding.py",
         "sources.py",
         "transforms.py",
-        "conftest.py",
     ],
     srcs_version = "PY3",
     data = select({
@@ -74,4 +73,13 @@ py_library(
         "//grain/_src/python/testing:experimental",
         "//grain/proto:execution_summary_py_pb2",
     ],
+)
+
+
+py_library(
+    name = "conftest",
+    srcs = [
+         "conftest.py",
+    ],
+    srcs_version = "PY3",
 )
