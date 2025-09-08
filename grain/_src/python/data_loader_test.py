@@ -98,6 +98,14 @@ class ExitingTransform(transforms.MapTransform):
     raise sys.exit(123)
 
 
+class FlatMap(transforms.FlatMapTransform):
+  max_fan_out = 10
+
+  def flat_map(self, x):
+    for _ in range(10):
+      yield x
+
+
 class RandomTripletSource:
 
   def __len__(self) -> int:
@@ -765,6 +773,14 @@ class DataLoaderTest(absl_parameterized.TestCase):
     it = loader.__iter__()
     state = it.get_state()
     self.assertLess(len(state), 1000)
+
+  def test_raises_with_flatmap_transform(self):
+    with self.assertRaises(NotImplementedError):
+      data_loader_lib.DataLoader(
+          data_source=list(range(100)),
+          sampler=samplers.SequentialSampler(num_records=100),
+          operations=[FlatMap()],
+      )
 
 
 class PyGrainDatasetIteratorTest(absltest.TestCase):
