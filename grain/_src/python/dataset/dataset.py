@@ -1273,7 +1273,6 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
     prefetch workers, consider moving many-to-one and stateful transformations
     to after ``mp_prefetch`` or outside of the Grain pipeline.
 
-
     Args:
       options: options for the prefetching processes. ``options.num_workers``
         must be greater than or equal to 0. If ``options.num_workers`` is 0,
