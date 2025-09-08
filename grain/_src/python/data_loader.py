@@ -581,6 +581,13 @@ def _apply_transform(
   # pytype: disable=attribute-error
   if isinstance(transform, transforms.MapTransform):
     fn = lambda r: (record.Record(r.metadata, transform.map(r.data)), True)
+  elif isinstance(transform, transforms.FlatMapTransform):
+    for input_record in input_iterator:
+      output_records = transform.flat_map(input_record.data)
+      for output_record in output_records:
+        yield record.Record(input_record.metadata, output_record)
+    for r in transform.flat_map(input_iterator):
+      yield r
   elif isinstance(transform, transforms.RandomMapTransform):
     fn = lambda r: (
         record.Record(r.metadata, transform.random_map(r.data, r.metadata.rng)),
