@@ -24,56 +24,6 @@ import numpy as np
 import tree
 
 
-class _SegmentTree:
-  """A segment tree data structure for efficiently finding the best-fitting bin."""
-
-  def __init__(self, maxval: int):
-    """Initializes the segment tree.
-
-    Args:
-      maxval: The maximum value that can be stored in the tree.
-    """
-    self.maxval = maxval
-    # Tree size is 2 * maxval to accommodate leaves and internal nodes.
-    self.tree = [0] * (2 * maxval)
-
-  def add(self, val: int):
-    """Adds a value to the tree."""
-    assert 0 < val <= self.maxval
-    i = self.maxval + val - 1
-    self.tree[i] = val
-    # Propagate the change up to the root.
-    while i > 1:
-      i >>= 1
-      left, right = self.tree[i << 1], self.tree[(i << 1) + 1]
-      self.tree[i] = left if left >= right else right
-
-  def remove(self, val: int):
-    """Removes a value from the tree."""
-    assert 0 < val <= self.maxval
-    i = self.maxval + val - 1
-    self.tree[i] = 0
-    # Propagate the change up to the root.
-    while i > 1:
-      i >>= 1
-      left, right = self.tree[i << 1], self.tree[(i << 1) + 1]
-      self.tree[i] = left if left >= right else right
-
-  def search(self, val: int) -> int:
-    """Finds the smallest value in the tree that is >= val."""
-    assert 0 < val <= self.maxval
-    i = 1
-    # Traverse down the tree to find the best fit.
-    while i < self.maxval:
-      # If the left child has a value large enough, go left.
-      if self.tree[i << 1] >= val:
-        i <<= 1
-      # Otherwise, go right.
-      else:
-        i = (i << 1) + 1
-    return self.tree[i]
-
-
 class _BestFitPackedBatch(packing_packed_batch.PackedBatch):
   """Helper class that packs elements using the best-fit algorithm.
 
@@ -103,50 +53,113 @@ class _BestFitPackedBatch(packing_packed_batch.PackedBatch):
         length_struct,
         meta_features=meta_features,
     )
-    flat_lengths = tree.flatten(length_struct)
+    # Only keep packable features (not meta-features) for length_struct.
+    if isinstance(length_struct, dict):
+      self._packable_length_struct = {
+          k: v for k, v in length_struct.items() if k not in self._meta_features
+      }
+    else:
+      self._packable_length_struct = length_struct  # fallback for non-dict
+    # Only keep packable features for free cells.
+    if isinstance(self._first_free_cell_per_row, dict):
+      self._packable_free_cells = {
+          k: v
+          for k, v in self._first_free_cell_per_row.items()
+          if k not in self._meta_features
+      }
+    else:
+      self._packable_free_cells = self._first_free_cell_per_row  # fallback
+    flat_lengths = tree.flatten(self._packable_length_struct)
     if not any(l is not None for l in flat_lengths):
       raise ValueError("length_struct must contain at least one length.")
-    self._max_length = max(l for l in flat_lengths if l is not None)
 
-    # Use a segment tree to efficiently find the best-fitting bin.
-    self._segment_tree = _SegmentTree(self._max_length)
-    # Map remaining space to the list of bin indices with that space.
-    self._space_to_bin_indices = defaultdict(deque)
+  def _get_element_lengths(self, element: Any) -> dict[str, int]:
+    # Only calculate lengths for features that are meant to be packed.
+    if isinstance(element, dict):
+      packable_element = {
+          k: v for k, v in element.items() if k not in self._meta_features
+      }
+    else:
+      packable_element = element  # fallback for non-dict
+    return tree.map_structure(
+        lambda x: 1 if np.ndim(x) == 0 else len(x), packable_element
+    )
 
-    # Initialize all bins with the maximum available length.
-    for i in range(num_packing_bins):
-      self._segment_tree.add(self._max_length)
-      self._space_to_bin_indices[self._max_length].append(i)
+  def _can_add_to_bin(
+      self, element_lengths: dict[str, int], bin_index: int
+  ) -> bool:
+    """Checks if an element can fit into a specific bin across all features."""
+
+    def _check(capacity, elem_len, free_cells):
+      return free_cells[bin_index] + elem_len <= capacity
+
+    try:
+      # Only use packable features for checking.
+      capacities = tree.map_structure_up_to(
+          self._packable_length_struct, lambda x: x, self._length_struct
+      )
+      free_cells = tree.map_structure_up_to(
+          self._packable_length_struct, lambda x: x, self._first_free_cell_per_row
+      )
+      # Align element_lengths to packable features.
+      element_lengths_packable = tree.map_structure_up_to(
+          self._packable_length_struct, lambda x: x, element_lengths
+      )
+      results = tree.map_structure(_check, capacities, element_lengths_packable, free_cells)
+      return all(tree.flatten(results))
+    except (TypeError, ValueError, KeyError):
+      return False
 
   def try_add_to_batch(self, element: Any) -> Any | None:
-    """Tries to add an element to the batch using the best-fit strategy."""
+    """Tries to add an element to the batch using a robust best-fit strategy.
+
+    This method finds the bin that, after adding the new element, will have the
+    minimum total remaining space across all features. This is the "best-fit"
+    or "tightest fit" heuristic. In case of a tie in remaining space, `min()`
+    on the tuple `(score, bin_index)` ensures the bin with the lower index is
+    chosen.
+    """
     element_lengths = self._get_element_lengths(element)
-    max_element_length = max(element_lengths.values())
+    fittable_bins = []
 
-    # Search for the smallest available space that fits the element.
-    best_fit_space = self._segment_tree.search(max_element_length)
+    for i in range(self._num_packing_bins):
+      if self._can_add_to_bin(element_lengths, i):
+        # To determine the best fit, we calculate a score for each fittable
+        # bin. The score is the total remaining space across all features
+        # after the element is added. A lower score indicates a tighter fit.
+        capacities = tree.map_structure_up_to(
+            self._packable_length_struct, lambda x: x, self._length_struct
+        )
+        free_cells = tree.map_structure_up_to(
+            self._packable_length_struct,
+            lambda x: x,
+            self._first_free_cell_per_row,
+        )
+        element_lengths_packable = tree.map_structure_up_to(
+            self._packable_length_struct, lambda x: x, element_lengths
+        )
 
-    # If no bin has enough space, return the failing components.
-    if not best_fit_space or best_fit_space < max_element_length:
-      return {k: v for k, v in element_lengths.items() if v > best_fit_space}
+        def _get_remaining_space(capacity, elem_len, current_free_cells):
+          return capacity - (current_free_cells[i] + elem_len)
 
-    # Get the index of the bin to use.
-    bin_index = self._space_to_bin_indices[best_fit_space].popleft()
+        scores = tree.map_structure(
+            _get_remaining_space,
+            capacities,
+            element_lengths_packable,
+            free_cells,
+        )
+        score = sum(tree.flatten(scores))
+        fittable_bins.append((score, i))
 
-    # If this was the last bin with this specific amount of space, remove it.
-    if not self._space_to_bin_indices[best_fit_space]:
-      self._segment_tree.remove(best_fit_space)
+    if not fittable_bins:
+      return element_lengths  # Return lengths of features that cannot fit.
 
-    # Add the element to the selected bin.
-    self._add_element_to_bin(element, bin_index, element_lengths)
-
-    # Update the data structures with the new remaining space of the bin.
-    new_space = self._remaining_lengths[bin_index]
-    if new_space > 0:
-      self._segment_tree.add(new_space)
-      self._space_to_bin_indices[new_space].append(bin_index)
-
+    # Find the bin with the minimum score (i.e., the tightest fit).
+    _, best_bin_index = min(fittable_bins)
+    self.add_element_to_batch(element, best_bin_index)
     return None
+
+
 
 
 class PackingDatasetIterator(dataset.DatasetIterator):
@@ -346,11 +359,7 @@ class PackingDatasetIterator(dataset.DatasetIterator):
 
 
 class PackIterDataset(dataset.IterDataset):
-  """A generic dataset for packing transformations.
-
-  This dataset acts as a factory for `PackingDatasetIterator`, allowing different
-  packing strategies to be plugged in via the `packer_cls` argument.
-  """
+  """A generic dataset for packing transformations."""
 
   def __init__(
       self,
@@ -439,7 +448,6 @@ class FirstFitPackIterDataset(PackIterDataset):
     """
     super().__init__(
         parent,
-        # Provide the specific packer class for the First-Fit strategy.
         packer_cls=packing_packed_batch.PackedBatch,
         length_struct=length_struct,
         num_packing_bins=num_packing_bins,
@@ -487,7 +495,6 @@ class BestFitPackIterDataset(PackIterDataset):
     """
     super().__init__(
         parent,
-        # Provide the specific packer class for the Best-Fit strategy.
         packer_cls=_BestFitPackedBatch,
         length_struct=length_struct,
         num_packing_bins=num_packing_bins,
