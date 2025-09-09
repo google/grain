@@ -23,5 +23,13 @@ class FirstFitPackIterDatasetTest(testing_util.BaseFirstFitPackIterDatasetTest):
     super().setUp()
     self.kwargs = {}
 
+
+class BestFitPackIterDatasetTest(testing_util.BaseBestFitPackIterDatasetTest):
+
+  def setUp(self):
+    super().setUp()
+    self.kwargs = {}
+
+
 if __name__ == "__main__":
   absltest.main()
