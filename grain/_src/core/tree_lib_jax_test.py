@@ -73,8 +73,8 @@ class TreeJaxTest(tree_lib_test.TreeTest):
         tree_lib.spec_like({
             "B": 1232.4,
             "C": [
-                tree_lib_test.TestClass(a=1, b="v2"),
-                tree_lib_test.TestClass(a=2, b="v2"),
+                tree_lib_test._TestClass(a=1, b="v2"),
+                tree_lib_test._TestClass(a=2, b="v2"),
             ],
         }),
         {
@@ -94,7 +94,7 @@ class TreeJaxTest(tree_lib_test.TreeTest):
 
   def test_spec_like_with_dataclass(self):
     self.assertEqual(
-        tree_lib.spec_like(tree_lib_test.TestClass(a=1, b="v2")),
+        tree_lib.spec_like(tree_lib_test._TestClass(a=1, b="v2")),
         "<class 'grain._src.core.tree_lib_test.TestClass'>\n"
         "{'a': \"<class 'int'>[]\", 'b': \"<class 'str'>[]\"}[]",
     )
