@@ -13,7 +13,6 @@
 # limitations under the License.
 """Implements packing transformations."""
 
-from collections import defaultdict, deque
 from collections.abc import Sequence
 from typing import Any, Type
 
