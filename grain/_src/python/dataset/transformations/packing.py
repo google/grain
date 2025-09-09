@@ -159,8 +159,6 @@ class _BestFitPackedBatch(packing_packed_batch.PackedBatch):
     return None
 
 
-
-
 class PackingDatasetIterator(dataset.DatasetIterator):
   """A generic iterator for packing transformations.
 
