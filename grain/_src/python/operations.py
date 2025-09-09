@@ -130,6 +130,7 @@ class BatchOperation(Generic[_IN, _OUT]):
 
   batch_size: int
   drop_remainder: bool = False
+  batch_fn: Callable[[Sequence[_IN]], _OUT] | None = None
 
   def __post_init__(self):
     if self.batch_size <= 0:
@@ -138,6 +139,7 @@ class BatchOperation(Generic[_IN, _OUT]):
       )
     self._use_shared_memory = False
     self._display_deprecation_message = True
+    self.batch_fn = self._batch if self.batch_fn is None else self.batch_fn
 
   def __call__(
       self, input_iterator: Iterator[record.Record[_IN]]
@@ -153,13 +155,13 @@ class BatchOperation(Generic[_IN, _OUT]):
       last_record_metadata = input_record.metadata
       records_to_batch.append(input_record.data)
       if len(records_to_batch) == self.batch_size:
-        batch = self._batch(records_to_batch)
+        batch = self.batch_fn(records_to_batch)
         records_to_batch = []
         yield record.Record(last_record_metadata.remove_record_key(), batch)
     if records_to_batch and not self.drop_remainder:
       yield record.Record(
           last_record_metadata.remove_record_key(),  # pytype: disable=attribute-error
-          self._batch(records_to_batch),
+          self.batch_fn(records_to_batch),
       )
 
   def _enable_shared_memory(self):
