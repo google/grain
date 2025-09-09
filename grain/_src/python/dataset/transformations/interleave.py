@@ -216,7 +216,8 @@ class InterleaveIterDataset(dataset.IterDataset[T]):
         iter_buffer_size=self._iter_buffer_size,
     )
 
-  def set_slice(self, sl: slice):
+  def set_slice(self, sl: slice, sequential_slice: bool = False):
+    del sequential_slice
     self._datasets = self._datasets[sl]
 
   def __str__(self) -> str:

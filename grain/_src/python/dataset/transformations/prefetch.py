@@ -59,7 +59,7 @@ def _getitem(
 class SupportsInPlaceSlicing(Protocol):
   """Datasets that support mutation by setting the processed data slice."""
 
-  def set_slice(self, sl: slice) -> None:
+  def set_slice(self, sl: slice, sequential_slice: bool = False) -> None:
     ...
 
 
@@ -77,10 +77,13 @@ class PrefetchIterDataset(dataset.IterDataset[T]):
     self._read_options = read_options
     self._allow_nones = allow_nones
 
-  def set_slice(self, sl: slice) -> None:
+  def set_slice(self, sl: slice, sequential_slice: bool = False) -> None:
     """Replaces `MapDataset` parents with their sliced versions."""
     assert isinstance(self._parent, dataset.MapDataset), self._parent
-    self._parents = (self._parent.slice(sl),)
+    if not sequential_slice:
+      self._parents = (self._parent.slice(sl),)
+    else:
+      _set_slice_map_dataset(self._parent, sl, sequential_slice)
 
   def __str__(self) -> str:
     return (
@@ -281,6 +284,7 @@ class MultiprocessPrefetchIterDataset(dataset.IterDataset[T]):
       parent: dataset.IterDataset[T],
       multiprocessing_options: grain_options.MultiprocessingOptions,
       worker_init_fn: Callable[[int, int], None] | None = None,
+      sequential_slice: bool = False,
   ):
     if multiprocessing_options.num_workers < 0:
       raise ValueError(
@@ -290,6 +294,7 @@ class MultiprocessPrefetchIterDataset(dataset.IterDataset[T]):
     super().__init__(parent)
     self._multiprocessing_options = multiprocessing_options
     self._worker_init_fn = worker_init_fn
+    self._sequential_slice = sequential_slice
     self._validate_parent_dataset()
 
   def __str__(self) -> str:
@@ -314,7 +319,10 @@ class MultiprocessPrefetchIterDataset(dataset.IterDataset[T]):
     if self._multiprocessing_options.num_workers == 0:
       return self._parent.__iter__()
     return _MultiprocessPrefetchDatasetIterator(
-        self._parent, self._multiprocessing_options, self._worker_init_fn
+        self._parent,
+        self._multiprocessing_options,
+        self._worker_init_fn,
+        self._sequential_slice,
     )
 
 
@@ -371,31 +379,60 @@ def _open_struct_from_shm(struct: Any) -> Any:
   return tree_lib.map_structure(_open_leaf_from_shm, struct)
 
 
-def _set_slice(ds: dataset.IterDataset, sl: slice) -> None:
-  """Sets data slice for the given dataset in place.
+def _set_slice_iter_dataset(
+    ds: dataset.IterDataset,
+    sl: slice,
+    sequential_slice: bool = False,
+) -> None:
+  """Sets data slice for the given dataset.IterDataset in place.
 
   WARNING: mutates the dataset object. Must only be used on dataset object copy.
 
-  Applies recursively for `IterDataset` parents.
+  Applies recursively for parents.
 
   Args:
-   ds: dataset to apply slice to.
+   ds: dataset.IterDataset to apply slice to.
    sl: slice to apply.
+   sequential_slice: whether to apply sequential slicing.
   """
   if isinstance(ds, SupportsInPlaceSlicing):
-    ds.set_slice(sl)
+    ds.set_slice(sl, sequential_slice)
     return
   if not ds.parents:
-    raise ValueError("Cannot slice `IterDataset` source.")
+    raise ValueError(f"Cannot slice `IterDataset` source. {type(ds)}")
   for parent in ds.parents:
     if isinstance(parent, dataset.MapDataset):
-      raise NotImplementedError(
-          "Slicing required by multiprocess prefetch is not implemented for"
-          f" {ds}."
-      )
+      _set_slice_map_dataset(parent, sl, sequential_slice)
     else:
-      assert isinstance(parent, dataset.IterDataset), parent
-      _set_slice(parent, sl)
+      _set_slice_iter_dataset(parent, sl, sequential_slice)
+
+
+def _set_slice_map_dataset(
+    ds: dataset.MapDataset,
+    sl: slice,
+    sequential_slice: bool = False,
+) -> None:
+  """Sets data slice for the given dataset.MapDataset in place.
+
+  WARNING: mutates the dataset object. Must only be used on dataset object copy.
+
+  Applies recursively for parents.
+
+  Args:
+   ds: dataset.MapDataset to apply slice to.
+   sl: slice to apply.
+   sequential_slice: whether to apply sequential slicing.
+  """
+  if isinstance(ds, SupportsInPlaceSlicing):
+    ds.set_slice(sl, sequential_slice)
+    return
+  if not ds.parents:
+    raise ValueError(f"Cannot slice `MapDataset` source. {type(ds)}")
+  for parent in ds.parents:
+    if isinstance(parent, dataset.MapDataset):
+      _set_slice_map_dataset(parent, sl, sequential_slice)
+    else:
+      _set_slice_iter_dataset(parent, sl, sequential_slice)
 
 
 def _check_picklable(
@@ -438,9 +475,11 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
       self,
       state: dict[str, dict[str, Any] | int],
       ds: dataset.IterDataset[T],
+      sequential_slice: bool = False,
   ):
     self._state = state
     self._ds = ds
+    self._sequential_slice = sequential_slice
 
   def __call__(
       self,
@@ -452,7 +491,11 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
       stats_out_queue: queues.Queue | None = None,
   ) -> Iterator[tuple[T, Optional[dict[str, Any]]]]:
     if worker_count > 1:
-      _set_slice(self._ds, slice(worker_index, None, worker_count))
+      _set_slice_iter_dataset(
+          self._ds,
+          slice(worker_index, None, worker_count),
+          self._sequential_slice,
+      )
     it = self._ds.__iter__()
     it._ctx.mp_context = base.MultiprocessingContext(
         process_index=worker_index, process_count=worker_count
@@ -520,6 +563,7 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       parent: dataset.IterDataset[T],
       multiprocessing_options: grain_options.MultiprocessingOptions,
       worker_init_fn: Callable[[int, int], None] | None = None,
+      sequential_slice: bool = False,
   ):
     super().__init__()
     self._iter_parent = parent
@@ -529,6 +573,7 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._ctx.dataset_options = _get_dataset_options(parent)
     self._multiprocessing_options = multiprocessing_options
     self._worker_init_fn = worker_init_fn
+    self._sequential_slice = sequential_slice
     # The underlying iterator producing elements and workers state.
     self._iterator = None
     # Raw reference to the underlying iterator that can be used to determine the
@@ -652,7 +697,9 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     ds = dataset.WithOptionsIterDataset(
         self._iter_parent, self._ctx.dataset_options
     )
-    get_element_producer_fn = GetElementProducerFn(self._state, ds)
+    get_element_producer_fn = GetElementProducerFn(
+        self._state, ds, self._sequential_slice
+    )
 
     return grain_pool.MultiProcessIterator(
         get_element_producer_fn,

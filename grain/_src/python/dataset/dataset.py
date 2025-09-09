@@ -1260,6 +1260,7 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
       self,
       options: grain_options.MultiprocessingOptions | None = None,
       worker_init_fn: Callable[[int, int], None] | None = None,
+      sequential_slice: bool = False,
   ) -> IterDataset[T]:
     """Returns a dataset prefetching elements in multiple processes.
 
@@ -1281,6 +1282,11 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
       worker_init_fn: A function that is called in each worker process before
         the data is processed. The function takes two arguments: the current
         worker index and the total worker count.
+      sequential_slice: a boolean indicating whether the slice for the worker
+        should be sequential (consecutive at the source dataset). It is an
+        experimental feature, introduced to improve performance. Note that if
+        enabled, effectively shuffle is applied on the slice/worker level and
+        not globally).
 
     Returns:
       A dataset prefetching input elements in separate processes.
@@ -1294,6 +1300,7 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
         self,
         multiprocessing_options=options,
         worker_init_fn=worker_init_fn,
+        sequential_slice=sequential_slice,
     )
 
   @abc.abstractmethod

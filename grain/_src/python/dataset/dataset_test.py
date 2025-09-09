@@ -459,6 +459,33 @@ class DatasetTest(parameterized.TestCase):
     it.start_prefetch()
     self.assertSequenceEqual(list(it), list(range(15)))
 
+  def test_prefetch_with_slice_source(self):
+    ds = (
+        dataset.MapDataset.source(range(15))
+        .to_iter_dataset()
+        .mp_prefetch(
+            options.MultiprocessingOptions(num_workers=4), sequential_slice=True
+        )
+    )
+    it = ds.__iter__()
+    it.start_prefetch()
+    self.assertSequenceEqual(
+        list(it), [0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11]
+    )
+
+  def test_prefetch_with_slice_source_off_by_default(self):
+    ds = (
+        dataset.MapDataset.source(range(15))
+        .to_iter_dataset()
+        .mp_prefetch(
+            options.MultiprocessingOptions(num_workers=4),
+            sequential_slice=False,
+        )
+    )
+    it = ds.__iter__()
+    it.start_prefetch()
+    self.assertSequenceEqual(list(it), list(range(15)))
+
   @parameterized.parameters(
       dict(initial_ds=dataset.MapDataset.range(15)),
       dict(initial_ds=dataset.MapDataset.range(15).to_iter_dataset()),
