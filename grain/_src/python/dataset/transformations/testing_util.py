@@ -31,8 +31,8 @@ def _assert_trees_equal(actual, expected):
 class BasePackIterDatasetTest(parameterized.TestCase):
   """A base class for packing algorithm tests to avoid code duplication.
 
-  This class should be inherited by a class that also inherits from
-  parameterized.TestCase. Subclasses must override the `packer_cls` attribute.
+  This class should be inherited by a class. 
+  Subclasses must override the `packer_cls` attribute.
   """
 
   # The specific packing.PackIterDataset class to be tested (e.g., FirstFit).
