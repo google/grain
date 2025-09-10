@@ -14,184 +14,12 @@
 """Implements packing transformations."""
 
 from collections.abc import Sequence
-from typing import Any, Type, List, Tuple
-
+from typing import Any, Type
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
 from grain._src.python.dataset.transformations import packing_packed_batch
 import numpy as np
 import tree
-
-
-class _BestFitPackedBatch(packing_packed_batch.PackedBatch):
-  """Helper class that packs elements using the best-fit algorithm.
-
-  This packer finds the bin with the smallest remaining space that can still
-  accommodate the new element. This strategy aims to minimize padding by leaving
-  larger contiguous blocks of space for future elements.
-  """
-
-  def __init__(
-      self,
-      element_for_shapes: Any,
-      num_packing_bins: int,
-      length_struct: Any,
-      meta_features: Sequence[str] = (),
-  ):
-    """Initializes the BestFitPackedBatch.
-
-    Args:
-      element_for_shapes: An element to infer shapes and dtypes from.
-      num_packing_bins: Number of bins to pack sequences into.
-      length_struct: Target sequence length for each feature.
-      meta_features: Meta features that do not need packing logic.
-    """
-    super().__init__(
-        element_for_shapes,
-        num_packing_bins,
-        length_struct,
-        meta_features=meta_features,
-    )
-
-    # Only keep packable features (not meta-features) for length_struct.
-    if isinstance(length_struct, dict):
-      self._packable_length_struct = {
-          k: v for k, v in length_struct.items() if k not in self._meta_features
-      }
-    else:
-      self._packable_length_struct = length_struct  # fallback for non-dict
-
-    # Precompute deterministic packable paths and capacity vector aligned to them.
-    self._pack_paths, self._C = self._build_pack_paths_and_caps(
-        self._packable_length_struct
-    )
-    if self._C.size == 0:
-      raise ValueError("length_struct must contain at least one length.")
-
-  @staticmethod
-  def _get_from_path(root: Any, path: Tuple[str, ...]) -> Any:
-    """Retrieves a nested value by a tuple path. Empty path returns root."""
-    cur = root
-    for p in path:
-      cur = cur[p]
-    return cur
-
-  def _build_pack_paths_and_caps(
-      self, packable_struct: Any
-  ) -> Tuple[List[Tuple[str, ...]], np.ndarray]:
-    """Builds a stable list of paths to packable leaves and the capacity vector.
-
-    Args:
-      packable_struct: Nested dict (or scalar) of capacities for packable features.
-
-    Returns:
-      pack_paths: List of tuple paths to each leaf feature (empty path for scalar).
-      C:          np.ndarray[int64] of capacities, aligned with pack_paths.
-    """
-
-    pack_paths: List[Tuple[str, ...]] = []
-    caps: List[int] = []
-
-    def _walk(obj: Any, path: Tuple[str, ...]):
-      if isinstance(obj, dict):
-        # Sort keys for deterministic traversal order.
-        for k in sorted(obj.keys()):
-          _walk(obj[k], path + (k,))
-      else:
-        if obj is None:
-          # Enforce at least one valid capacity.
-          raise ValueError(
-              "length_struct must contain at least one length (found None)."
-          )
-        pack_paths.append(path)
-        caps.append(int(obj))
-
-    _walk(packable_struct, ())
-    return pack_paths, np.asarray(caps, dtype=np.int64)
-
-  def _get_element_lengths(self, element: Any) -> Any:
-    """Computes per-feature lengths for packable features, matching input shape.
-    """
-    if isinstance(element, dict):
-      packable_element = {
-          k: v for k, v in element.items() if k not in self._meta_features
-      }
-      return tree.map_structure(
-          lambda x: 1 if np.ndim(x) == 0 else len(x), packable_element
-      )
-    else:
-      return 1 if np.ndim(element) == 0 else len(element)
-
-  def _element_lengths_vec(self, element: Any) -> np.ndarray:
-    """Computes a flat vector of lengths aligned with self._pack_paths."""
-    # Filter meta-features when dict; otherwise use the element directly.
-    if isinstance(element, dict):
-      elem = {k: v for k, v in element.items() if k not in self._meta_features}
-    else:
-      elem = element
-
-    lens: List[int] = []
-    if isinstance(self._packable_length_struct, dict):
-      # Multiple packable features: follow stored paths.
-      for path in self._pack_paths:
-        x = self._get_from_path(elem, path)
-        lens.append(1 if np.ndim(x) == 0 else len(x))
-    else:
-      # Single packable feature.
-      x = elem
-      lens.append(1 if np.ndim(x) == 0 else len(x))
-    return np.asarray(lens, dtype=np.int64)
-
-  def try_add_to_batch(self, element: Any) -> Any | None:
-    """Tries to add an element to the batch using a memory-lean best-fit strategy.
-
-    This method finds the bin that, after adding the new element, will have the
-    minimum total remaining space across all features (tightest fit). In case of
-    a tie, the lower bin index is chosen.
-    """
-    # Compute per-feature lengths aligned with capacity vector.
-    L = self._element_lengths_vec(element)
-    C = self._C
-    B = self._num_packing_bins
-
-    # Running feasibility mask across bins (start with all bins fittable).
-    fittable = np.ones(B, dtype=bool)
-
-    # For scoring: we maximize sum of free cells among fittable bins, which is
-    # equivalent to minimizing total remaining space after placement:
-    #   score(b) = sum(C) - sum(L) - sum(Free[:, b]).
-    bin_free_sums = np.zeros(B, dtype=np.int64)
-
-    if isinstance(self._packable_length_struct, dict):
-      # Multiple features: iterate features and update mask/sums.
-      for f, path in enumerate(self._pack_paths):
-        row_list = self._get_from_path(self._first_free_cell_per_row, path)
-        # free positions per bin for this feature.
-        row = np.asarray(row_list, dtype=np.int64)
-        # Update feasibility for this feature: Free[f, :] + L[f] <= C[f]
-        fittable &= (row + L[f]) <= C[f]
-        # Accumulate free cells (non-fittable bins will be filtered at the end).
-        bin_free_sums += row
-    else:
-      # Single feature case.
-      row_list = self._first_free_cell_per_row
-      row = np.asarray(row_list, dtype=np.int64)
-      fittable &= (row + L[0]) <= C[0]
-      bin_free_sums += row
-
-    # No bin can accommodate this element -> surface failing lengths.
-    if not np.any(fittable):
-      return self._get_element_lengths(element)
-
-    # Choose fittable bin maximizing sum(Free[:, b]) (tie -> lowest index).
-    candidate_idxs = np.flatnonzero(fittable)
-    cand_scores = bin_free_sums[candidate_idxs]
-    best_idx_in_candidates = int(np.argmax(cand_scores))
-    best_bin_index = int(candidate_idxs[best_idx_in_candidates])
-
-    # Place element and update internal batch state using the base class method.
-    self.add_element_to_batch(element, best_bin_index)
-    return None
 
 
 class PackingDatasetIterator(dataset.DatasetIterator):
@@ -479,7 +307,7 @@ class FirstFitPackIterDataset(PackIterDataset):
     """
     super().__init__(
         parent,
-        packer_cls=packing_packed_batch.PackedBatch,
+        packer_cls=packing_packed_batch.FirstFitPackedBatch,
         length_struct=length_struct,
         num_packing_bins=num_packing_bins,
         seed=seed,
@@ -526,7 +354,7 @@ class BestFitPackIterDataset(PackIterDataset):
     """
     super().__init__(
         parent,
-        packer_cls=_BestFitPackedBatch,
+        packer_cls=packing_packed_batch.BestFitPackedBatch,
         length_struct=length_struct,
         num_packing_bins=num_packing_bins,
         seed=seed,
