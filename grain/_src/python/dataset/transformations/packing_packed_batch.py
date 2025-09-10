@@ -18,10 +18,9 @@ from __future__ import annotations
 import abc
 import copy
 import dataclasses
-from typing import Any, Generic, List, Sequence, TypeVar
+from typing import Any, Generic, Sequence, TypeVar
 
 import numpy as np
-import tree
 
 from grain._src.core import tree_lib
 
