@@ -22,10 +22,13 @@ direct dependency on JAX, we check if it's already present and resort to the
 
 We should be able to remove this module once b/257971667 is resolved.
 """
+
+import concurrent.futures
 import dataclasses
 import pprint
 
 import numpy as np
+
 
 try:
   # `attrs` is not a native package, avoid explicit dependency and only check if
@@ -56,6 +59,32 @@ try:
 
   map_structure = tree_util.tree_map
   map_structure_with_path = tree_util.tree_map_with_path
+
+  def map_structure_parallel(
+      structure, *rest, f, executor: concurrent.futures.ThreadPoolExecutor
+  ):
+    """Applies a function to the leaves of a pytree in parallel.
+
+    This function traverses one or more nested data structures (pytrees)
+    and applies a function `f` to corresponding leaf elements using a
+    provided thread pool executor for parallel execution.
+
+    Args:
+      structure: The pytree to be mapped over.
+      *rest: Additional pytrees to map over. These pytrees must have the same
+        structure as `structure`.
+      f: The function to be applied to the leaves.
+      executor: A `concurrent.futures.ThreadPoolExecutor` instance used to run
+        the function `f` on the leaves in parallel.
+
+    Returns:
+      A new pytree with the same structure as `structure`, but with its leaves
+      transformed by the function `f`.
+    """
+
+    leaves, treedef = tree_util.tree_flatten(structure)
+    all_leaves = [leaves] + [treedef.flatten_up_to(r) for r in rest]
+    return treedef.unflatten(executor.map(f, zip(*all_leaves)))
 
   def assert_same_structure(a, b):
     a_structure = tree_util.tree_structure(a)
@@ -137,6 +166,34 @@ except ImportError:
   flatten = tree.flatten
   flatten_with_path = tree.flatten_with_path
   unflatten_as = tree.unflatten_as
+
+  def map_structure_parallel(
+      structure, *rest, f, executor: concurrent.futures.ThreadPoolExecutor
+  ):
+    """Applies a function to the leaves of a pytree in parallel.
+
+    This function traverses one or more nested data structures (pytrees)
+    and applies a function `f` to corresponding leaf elements using a
+    provided thread pool executor for parallel execution.
+
+    Args:
+      structure: The pytree to be mapped over.
+      *rest: Additional pytrees to map over. These pytrees must have the same
+        structure as `structure`.
+      f: The function to be applied to the leaves.
+      executor: A `concurrent.futures.ThreadPoolExecutor` instance used to run
+        the function `f` on the leaves in parallel.
+
+    Returns:
+      A new pytree with the same structure as `structure`, but with its leaves
+      transformed by the function `f`.
+    """
+    leaves = tree.flatten(structure)
+    all_leaves = [leaves] + [tree.flatten_up_to(structure, r) for r in rest]
+    return tree.unflatten_as(
+        structure,
+        list(executor.map(f, zip(*all_leaves))),
+    )
 
   def spec_like(structure):
     """Infers specification of a tree structure.
