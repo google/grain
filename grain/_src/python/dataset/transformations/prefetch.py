@@ -117,9 +117,10 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._buffer = None
     self._lock = threading.Lock()
     self._prefetch_buffer_size = read_options.prefetch_buffer_size
+    self._num_threads = read_options.num_threads
     self._allow_nones = allow_nones
     if self._prefetch_buffer_size > 0:
-      self._executor = futures.ThreadPoolExecutor(read_options.num_threads)
+      self._executor = futures.ThreadPoolExecutor(self._num_threads)
 
   def _initialize_stats(
       self, execution_tracking_mode: base.ExecutionTrackingMode
@@ -252,17 +253,31 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     # size is greater than 0. If the user changes the prefetch buffer size, we
     # need to create or destroy the executor accordingly.
     if self._prefetch_buffer_size > 0 and not hasattr(self, "_executor"):
-      if self._read_options.num_threads == 0:
+      if self._num_threads == 0:
         raise ValueError(
             "num_threads must be greater than 0 when prefetch buffer size is"
             " greater than 0."
         )
-      self._executor = futures.ThreadPoolExecutor(
-          self._read_options.num_threads
-      )
+      self._executor = futures.ThreadPoolExecutor(self._num_threads)
     elif self._prefetch_buffer_size == 0 and hasattr(self, "_executor"):
       self._executor.shutdown()
       delattr(self, "_executor")
+
+  def set_num_threads(self, num_threads: int) -> None:
+    self._num_threads = num_threads
+    old_executor = None
+    # Accounts for the case where the executor does not exit. This can
+    # happen if the prefetch buffer size is set to 0.
+    if hasattr(self, "_executor"):
+      old_executor = self._executor
+    if self._num_threads > 0:
+      self._executor = futures.ThreadPoolExecutor(self._num_threads)
+    else:
+      delattr(self, "_executor")
+    if old_executor is not None:
+      # Allows the old executor to finish running the tasks it was already
+      # assigned asynchronously.
+      old_executor.shutdown(wait=False)
 
 
 def _iterator_with_context(

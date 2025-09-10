@@ -321,6 +321,70 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
       next(ds_iter)
       self.assertEqual(sys.getrefcount(ds_iter), ref_count_before)
 
+  def test_set_num_threads_decrease_threads(self):
+    ds_iter = iter(self.prefetch_lazy_iter_ds)
+    self.assertIsInstance(ds_iter, prefetch.PrefetchDatasetIterator)
+    ds_iter = cast(prefetch.PrefetchDatasetIterator, ds_iter)
+    self.assertEqual(ds_iter._num_threads, options.ReadOptions().num_threads)
+    self.assertEqual(
+        ds_iter._executor._max_workers, options.ReadOptions().num_threads
+    )
+    self.assertEqual([next(ds_iter) for _ in range(5)], list(range(5)))
+
+    # Decrease threads
+    ds_iter.set_num_threads(5)
+    self.assertEqual(ds_iter._num_threads, 5)
+    self.assertEqual(ds_iter._executor._max_workers, 5)
+    self.assertEqual([next(ds_iter) for _ in range(15)], list(range(5, 20)))
+
+  def test_set_num_threads_increase_threads(self):
+    ds = prefetch.PrefetchIterDataset(
+        self.range_ds, read_options=options.ReadOptions(num_threads=5)
+    )
+    ds_iter = iter(ds)
+    self.assertIsInstance(ds_iter, prefetch.PrefetchDatasetIterator)
+    ds_iter = cast(prefetch.PrefetchDatasetIterator, ds_iter)
+    self.assertEqual(ds_iter._num_threads, 5)
+    self.assertEqual(ds_iter._executor._max_workers, 5)
+    self.assertEqual([next(ds_iter) for _ in range(5)], list(range(5)))
+
+    # Increase threads
+    ds_iter.set_num_threads(10)
+    self.assertEqual(ds_iter._num_threads, 10)
+    self.assertEqual(ds_iter._executor._max_workers, 10)
+    self.assertEqual([next(ds_iter) for _ in range(15)], list(range(5, 20)))
+
+  def test_set_num_threads_decrease_to_zero(self):
+    ds_iter = iter(self.prefetch_lazy_iter_ds)
+    self.assertIsInstance(ds_iter, prefetch.PrefetchDatasetIterator)
+    ds_iter = cast(prefetch.PrefetchDatasetIterator, ds_iter)
+    self.assertEqual(ds_iter._num_threads, options.ReadOptions().num_threads)
+    self.assertEqual(
+        ds_iter._executor._max_workers, options.ReadOptions().num_threads
+    )
+    self.assertEqual([next(ds_iter) for _ in range(5)], list(range(5)))
+    # Decrease threads to 0
+    ds_iter.set_num_threads(0)
+    self.assertEqual(ds_iter._num_threads, 0)
+    self.assertFalse(hasattr(ds_iter, '_executor'))
+    self.assertEqual([next(ds_iter) for _ in range(15)], list(range(5, 20)))
+
+  def test_set_num_threads_increase_from_zero(self):
+    ds_iter = iter(self.prefetch_lazy_iter_ds)
+    self.assertIsInstance(ds_iter, prefetch.PrefetchDatasetIterator)
+    ds_iter = cast(prefetch.PrefetchDatasetIterator, ds_iter)
+    self.assertEqual([next(ds_iter) for _ in range(5)], list(range(5)))
+    ds_iter.set_num_threads(0)
+    self.assertEqual(ds_iter._num_threads, 0)
+    self.assertFalse(hasattr(ds_iter, '_executor'))
+    self.assertEqual([next(ds_iter) for _ in range(5)], list(range(5, 10)))
+
+    # Increase threads from 0
+    ds_iter.set_num_threads(5)
+    self.assertEqual(ds_iter._num_threads, 5)
+    self.assertEqual(ds_iter._executor._max_workers, 5)
+    self.assertEqual([next(ds_iter) for _ in range(10)], list(range(10, 20)))
+
 
 class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
 
