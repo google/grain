@@ -150,32 +150,32 @@ class _BestFitPackedBatch(packing_packed_batch.PackedBatch):
     a tie, the lower bin index is chosen.
     """
     # Compute per-feature lengths aligned with capacity vector.
-    L = self._element_lengths_vec(element)   # shape (F,)
-    C = self._C                              # shape (F,)
+    L = self._element_lengths_vec(element)
+    C = self._C
     B = self._num_packing_bins
 
     # Running feasibility mask across bins (start with all bins fittable).
-    fittable = np.ones(B, dtype=bool)        # shape (B,)
+    fittable = np.ones(B, dtype=bool)
 
     # For scoring: we maximize sum of free cells among fittable bins, which is
     # equivalent to minimizing total remaining space after placement:
     #   score(b) = sum(C) - sum(L) - sum(Free[:, b]).
-    bin_free_sums = np.zeros(B, dtype=np.int64)  # shape (B,)
+    bin_free_sums = np.zeros(B, dtype=np.int64)
 
     if isinstance(self._packable_length_struct, dict):
       # Multiple features: iterate features and update mask/sums.
       for f, path in enumerate(self._pack_paths):
         row_list = self._get_from_path(self._first_free_cell_per_row, path)
         # free positions per bin for this feature.
-        row = np.asarray(row_list, dtype=np.int64)  # shape (B,)
+        row = np.asarray(row_list, dtype=np.int64)
         # Update feasibility for this feature: Free[f, :] + L[f] <= C[f]
         fittable &= (row + L[f]) <= C[f]
         # Accumulate free cells (non-fittable bins will be filtered at the end).
         bin_free_sums += row
     else:
       # Single feature case.
-      row_list = self._first_free_cell_per_row       # list/array length B
-      row = np.asarray(row_list, dtype=np.int64)     # shape (B,)
+      row_list = self._first_free_cell_per_row
+      row = np.asarray(row_list, dtype=np.int64)
       fittable &= (row + L[0]) <= C[0]
       bin_free_sums += row
 
@@ -184,7 +184,7 @@ class _BestFitPackedBatch(packing_packed_batch.PackedBatch):
       return self._get_element_lengths(element)
 
     # Choose fittable bin maximizing sum(Free[:, b]) (tie -> lowest index).
-    candidate_idxs = np.flatnonzero(fittable)            # ascending indices
+    candidate_idxs = np.flatnonzero(fittable)
     cand_scores = bin_free_sums[candidate_idxs]
     best_idx_in_candidates = int(np.argmax(cand_scores))
     best_bin_index = int(candidate_idxs[best_idx_in_candidates])
@@ -244,8 +244,7 @@ class PackingDatasetIterator(dataset.DatasetIterator):
     self._last_emitted_batch_parent_state = self._parent.get_state()
     # The parent state after constructing the current completed packed batch.
     self._current_batch_parent_state = None
-    # If available, fully packed but rows [:self._next_row] were already
-    # emitted.
+    # If available, fully packed but rows [:self._next_row] were already emitted.
     self._packed_batch = None
     # The last packed batch can be partial.
     self._packed_batch_num_bins = None
