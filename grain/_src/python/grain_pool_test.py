@@ -385,7 +385,7 @@ class MultiProcessIteratorTest(parameterized.TestCase):
         MultiprocessingOptions(num_workers=2),
         0,
     ) as iterator:
-      with self.assertRaisesRegex(gp.RemoteWorkerError, error_msg):
+      with self.assertRaisesRegex(ValueError, error_msg):
         list(iterator)
 
   def test_reports_worker_crash(self):

@@ -72,6 +72,20 @@ class SourceMapDatasetTest(absltest.TestCase):
     actual_data = [self.lazy_dataset_source[i] for i in indices_to_read]
     self.assertEqual(expected_data, actual_data)
 
+  def test_set_slice_raises_for_non_sequential_slice(self):
+    ds = source.SourceMapDataset(range(3))
+    with self.assertRaises(AssertionError):
+      ds.set_slice(slice(0, 1, 1), sequential_slice=False)
+
+  def test_set_slice(self):
+    ds = source.SourceMapDataset(range(21))
+    worker_index = 2
+    workers_count = 3
+    ds.set_slice(
+        slice(worker_index, None, workers_count), sequential_slice=True
+    )
+    self.assertEqual(list(ds), [14, 15, 16, 17, 18, 19, 20])
+
 
 class RangeMapDatasetTest(absltest.TestCase):
 
@@ -112,6 +126,20 @@ class RangeMapDatasetTest(absltest.TestCase):
     ds_iter = iter(ds)
     elements = [next(ds_iter) for _ in range(4)]
     self.assertEqual(elements, [2, 4, 6, 8])
+
+  def test_set_slice_raises_for_non_sequential_slice(self):
+    ds = source.RangeMapDataset(10)
+    with self.assertRaises(AssertionError):
+      ds.set_slice(slice(0, 1, 1), sequential_slice=False)
+
+  def test_set_slice(self):
+    ds = source.RangeMapDataset(21)
+    worker_index = 2
+    workers_count = 3
+    ds.set_slice(
+        slice(worker_index, None, workers_count), sequential_slice=True
+    )
+    self.assertEqual(list(ds), [14, 15, 16, 17, 18, 19, 20])
 
 
 if __name__ == "__main__":

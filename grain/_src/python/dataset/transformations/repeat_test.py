@@ -15,6 +15,7 @@
 import sys
 
 from absl.testing import absltest
+from absl.testing import parameterized
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import repeat
 from typing_extensions import override
@@ -34,7 +35,7 @@ class EmptyMapDataset(dataset.MapDataset[int]):
     raise IndexError("Index out of range")
 
 
-class RepeatMapDatasetTest(absltest.TestCase):
+class RepeatMapDatasetTest(parameterized.TestCase):
 
   def test_finite_num_epochs_changes_length(self):
     ds = dataset.MapDataset.range(6)
@@ -72,6 +73,33 @@ class RepeatMapDatasetTest(absltest.TestCase):
     ds = EmptyMapDataset()
     ds = repeat.RepeatMapDataset(ds, num_epochs=None)
     self.assertEmpty(ds)
+
+  @parameterized.product(
+      num_epochs=[2, None],
+      reseed_each_epoch=[True, False],
+      explicit_seed=[True, False],
+  )
+  def test_random_transforms_across_epochs(
+      self, num_epochs: int | None, reseed_each_epoch: bool, explicit_seed: bool
+  ):
+    num_examples = 1000
+    ds = dataset.MapDataset.range(num_examples)
+    if explicit_seed:
+      ds = ds.shuffle(seed=42).random_map(
+          lambda x, rng: x + rng.integers(10), seed=43
+      )
+    else:
+      ds = ds.seed(42).shuffle().random_map(lambda x, rng: x + rng.integers(10))
+    ds = repeat.RepeatMapDataset(
+        ds, num_epochs=num_epochs, reseed_each_epoch=reseed_each_epoch
+    )
+    first_epoch = list(ds[:num_examples])
+    second_epoch = list(ds[num_examples : num_examples * 2])
+    if reseed_each_epoch:
+      self.assertNotEqual(first_epoch, second_epoch)
+      self.assertNotEqual(set(first_epoch), set(second_epoch))
+    else:
+      self.assertEqual(first_epoch, second_epoch)
 
 
 if __name__ == "__main__":

@@ -55,7 +55,7 @@ import queue
 import sys
 import threading
 import traceback
-from typing import Any, Callable, Protocol, TypeVar, Union, runtime_checkable
+from typing import Any, Callable, Protocol, Type, TypeVar, Union, runtime_checkable
 
 from absl import flags
 from absl import logging
@@ -76,7 +76,7 @@ T = TypeVar("T")
 
 # Maximum number of threads for starting and stopping processes.
 _PROCESS_MANAGEMENT_MAX_THREADS = 64
-_PROCESS_JOIN_TIMEOUT = 10
+_PROCESS_JOIN_TIMEOUT = 25
 _QUEUE_WAIT_TIMEOUT = 1
 # Input queues contain small structures (record metadata), thus they are safe
 # to have a big size.
@@ -99,22 +99,24 @@ class GrainPoolElement:
   worker_index: Any
 
 
-class RemoteWorkerError(Exception):
+@dataclasses.dataclass(slots=True, frozen=True)
+class RemoteWorkerError:
   """Grain worker exception that can be pickled and sent over a queue."""
+  error_cls: Type[Exception]
+  error: str
+  worker_index: int
 
-  def __init__(self, error: str, worker_index: int):
-    super().__init__(
-        f"Grain worker {worker_index} failed with the following"
-        f" error:\n\n{error}"
+  @property
+  def original_error(self) -> Exception:
+    msg = (
+        f"Grain worker {self.worker_index} failed with the following"
+        f" error:\n\n{self.error}"
     )
-    self._error = error
-    self._worker_index = worker_index
-
-  def __reduce__(self):
-    # Note that during pickling the RemoteWorkerError loses __traceback__ and
-    # __cause__ attributes because they are irrelevant. Only the original error
-    # attributes are preserved in the string form.
-    return RemoteWorkerError, (self._error, self._worker_index)
+    # Custom exception classes can have different c'tor arguments.
+    try:
+      return self.error_cls(msg)
+    except Exception:  # pylint: disable=broad-except
+      return RuntimeError(msg)
 
 
 def _print_profile(preamble: str, profile: cProfile.Profile):
@@ -280,6 +282,7 @@ def _worker_loop(
         "Error occurred in child process with worker_index: %i", worker_index
     )
     remote_error = RemoteWorkerError(
+        error_cls=e.__class__,
         error="".join(
             traceback.format_exception(e.__class__, e, e.__traceback__)
         ),
@@ -511,7 +514,8 @@ class GrainPool(Iterator[T]):
       self._shutdown()
 
       try:
-        raise self.worker_error_queue.get(timeout=_QUEUE_WAIT_TIMEOUT)
+        remote_error = self.worker_error_queue.get(timeout=_QUEUE_WAIT_TIMEOUT)
+        raise remote_error.original_error
       except queue.Empty:
         # Worker did not report any error. This means that either an exception
         # was raised outside of the worker loop (e.g. during flag parsing) or

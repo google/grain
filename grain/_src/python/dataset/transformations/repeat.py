@@ -34,6 +34,8 @@ class RepeatMapDataset(dataset.MapDataset[T]):
       self,
       parent: dataset.MapDataset[T],
       num_epochs: Optional[int] = None,
+      *,
+      reseed_each_epoch: bool = True,
   ):
     super().__init__(parent)
     if num_epochs is not None and num_epochs <= 0:
@@ -43,13 +45,15 @@ class RepeatMapDataset(dataset.MapDataset[T]):
           f"Repeating already infinite dataset {parent} does nothing."
       )
     self._num_epochs = num_epochs
+    self._parent_length = len(parent)
     if num_epochs is None:
-      if len(parent) == 0:  # pylint: disable=g-explicit-length-test
+      if self._parent_length == 0:  # pylint: disable=g-explicit-length-test
         self._length: int = 0
       else:
         self._length: int = sys.maxsize
     else:
-      self._length = num_epochs * len(parent)
+      self._length = num_epochs * self._parent_length
+    self._reseed_each_epoch = reseed_each_epoch
 
   def __len__(self) -> int:
     return self._length
@@ -60,4 +64,7 @@ class RepeatMapDataset(dataset.MapDataset[T]):
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
+    if not self._reseed_each_epoch:
+      # Use elements from the first epoch.
+      index = index % self._parent_length
     return self._stats.record_output_spec(self._parent[index])

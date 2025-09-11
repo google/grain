@@ -29,7 +29,6 @@ import threading
 import time
 import typing
 from typing import Any, Generic, Optional, Protocol, TypeVar
-import weakref
 
 import cloudpickle
 from concurrent import futures
@@ -60,7 +59,7 @@ def _getitem(
 class SupportsInPlaceSlicing(Protocol):
   """Datasets that support mutation by setting the processed data slice."""
 
-  def set_slice(self, sl: slice) -> None:
+  def set_slice(self, sl: slice, sequential_slice: bool = False) -> None:
     ...
 
 
@@ -78,10 +77,13 @@ class PrefetchIterDataset(dataset.IterDataset[T]):
     self._read_options = read_options
     self._allow_nones = allow_nones
 
-  def set_slice(self, sl: slice) -> None:
+  def set_slice(self, sl: slice, sequential_slice: bool = False) -> None:
     """Replaces `MapDataset` parents with their sliced versions."""
     assert isinstance(self._parent, dataset.MapDataset), self._parent
-    self._parents = (self._parent.slice(sl),)
+    if not sequential_slice:
+      self._parents = (self._parent.slice(sl),)
+    else:
+      _set_slice_map_dataset(self._parent, sl, sequential_slice)
 
   def __str__(self) -> str:
     return (
@@ -114,10 +116,13 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._next_index = 0
     self._buffer = None
     self._lock = threading.Lock()
-    self._prefetch_buffer_size = read_options.prefetch_buffer_size
+    self._prefetch_buffer_size = (
+        read_options.prefetch_buffer_size if read_options.num_threads > 0 else 0
+    )
+    self._num_threads = read_options.num_threads
     self._allow_nones = allow_nones
     if self._prefetch_buffer_size > 0:
-      self._executor = futures.ThreadPoolExecutor(read_options.num_threads)
+      self._executor = futures.ThreadPoolExecutor(self._num_threads)
 
   def _initialize_stats(
       self, execution_tracking_mode: base.ExecutionTrackingMode
@@ -127,7 +132,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
         name=str(self),
         transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
         is_prefetch=True,
-        iter_weakref=weakref.ref(self),
+        iter_weakref=dataset_stats.HashableWeakRef(self),
     )
     # If the stats object has already been initialized, copy the queues from
     # the original stats object to the new stats object.
@@ -191,21 +196,30 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
                 for i in indices
             )
           element = self._buffer.popleft()
-          if (
-              self._next_index + self._prefetch_buffer_size
-              < self._dataset_length
+          # Prefetch elements until the buffer is full again.
+          for idx in range(
+              self._next_index + len(self._buffer) + 1,
+              min(
+                  self._next_index + self._prefetch_buffer_size + 1,
+                  self._dataset_length,
+              ),
           ):
             self._buffer.append(
                 self._executor.submit(
                     functools.partial(_getitem, self._stats, self._map_parent),
-                    self._next_index + self._prefetch_buffer_size,
+                    idx,
                 )
             )
           element = element.result()
         else:
-          element = self._stats.record_bytes_consumed(
-              self._map_parent[self._next_index]
-          )
+          # In case prefetch buffer size was decreased, we still want to consume
+          # the already prefetched elements.
+          if self._buffer:
+            element = self._buffer.popleft().result()
+          else:
+            element = self._stats.record_bytes_consumed(
+                self._map_parent[self._next_index]
+            )
         self._next_index += 1
       return_element = self._allow_nones or element is not None
       self._threshold_checker.check(return_element)
@@ -235,6 +249,38 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
         f" allow_nones={self._allow_nones})"
     )
 
+  def set_prefetch_buffer_size(self, buffer_size: int):
+    self._prefetch_buffer_size = buffer_size
+    # The executor is created in the constructor only if the prefetch buffer
+    # size is greater than 0. If the user changes the prefetch buffer size, we
+    # need to create or destroy the executor accordingly.
+    if self._prefetch_buffer_size > 0 and not hasattr(self, "_executor"):
+      if self._num_threads == 0:
+        raise ValueError(
+            "num_threads must be greater than 0 when prefetch buffer size is"
+            " greater than 0."
+        )
+      self._executor = futures.ThreadPoolExecutor(self._num_threads)
+    elif self._prefetch_buffer_size == 0 and hasattr(self, "_executor"):
+      self._executor.shutdown()
+      delattr(self, "_executor")
+
+  def set_num_threads(self, num_threads: int) -> None:
+    self._num_threads = num_threads
+    old_executor = None
+    # Accounts for the case where the executor does not exit. This can
+    # happen if the prefetch buffer size is set to 0.
+    if hasattr(self, "_executor"):
+      old_executor = self._executor
+    if self._num_threads > 0:
+      self._executor = futures.ThreadPoolExecutor(self._num_threads)
+    else:
+      delattr(self, "_executor")
+    if old_executor is not None:
+      # Allows the old executor to finish running the tasks it was already
+      # assigned asynchronously.
+      old_executor.shutdown(wait=False)
+
 
 def _iterator_with_context(
     iterator: contextlib.AbstractContextManager[Iterator[T]],
@@ -255,6 +301,8 @@ class MultiprocessPrefetchIterDataset(dataset.IterDataset[T]):
       parent: dataset.IterDataset[T],
       multiprocessing_options: grain_options.MultiprocessingOptions,
       worker_init_fn: Callable[[int, int], None] | None = None,
+      sequential_slice: bool = False,
+      always_report_worker_state: bool = False,
   ):
     if multiprocessing_options.num_workers < 0:
       raise ValueError(
@@ -264,7 +312,9 @@ class MultiprocessPrefetchIterDataset(dataset.IterDataset[T]):
     super().__init__(parent)
     self._multiprocessing_options = multiprocessing_options
     self._worker_init_fn = worker_init_fn
+    self._sequential_slice = sequential_slice
     self._validate_parent_dataset()
+    self._always_report_worker_state = always_report_worker_state
 
   def __str__(self) -> str:
     return (
@@ -288,7 +338,11 @@ class MultiprocessPrefetchIterDataset(dataset.IterDataset[T]):
     if self._multiprocessing_options.num_workers == 0:
       return self._parent.__iter__()
     return _MultiprocessPrefetchDatasetIterator(
-        self._parent, self._multiprocessing_options, self._worker_init_fn
+        self._parent,
+        self._multiprocessing_options,
+        self._worker_init_fn,
+        self._sequential_slice,
+        self._always_report_worker_state,
     )
 
 
@@ -345,31 +399,60 @@ def _open_struct_from_shm(struct: Any) -> Any:
   return tree_lib.map_structure(_open_leaf_from_shm, struct)
 
 
-def _set_slice(ds: dataset.IterDataset, sl: slice) -> None:
-  """Sets data slice for the given dataset in place.
+def _set_slice_iter_dataset(
+    ds: dataset.IterDataset,
+    sl: slice,
+    sequential_slice: bool = False,
+) -> None:
+  """Sets data slice for the given dataset.IterDataset in place.
 
   WARNING: mutates the dataset object. Must only be used on dataset object copy.
 
-  Applies recursively for `IterDataset` parents.
+  Applies recursively for parents.
 
   Args:
-   ds: dataset to apply slice to.
+   ds: dataset.IterDataset to apply slice to.
    sl: slice to apply.
+   sequential_slice: whether to apply sequential slicing.
   """
   if isinstance(ds, SupportsInPlaceSlicing):
-    ds.set_slice(sl)
+    ds.set_slice(sl, sequential_slice)
     return
   if not ds.parents:
-    raise ValueError("Cannot slice `IterDataset` source.")
+    raise ValueError(f"Cannot slice `IterDataset` source. {type(ds)}")
   for parent in ds.parents:
     if isinstance(parent, dataset.MapDataset):
-      raise NotImplementedError(
-          "Slicing required by multiprocess prefetch is not implemented for"
-          f" {ds}."
-      )
+      _set_slice_map_dataset(parent, sl, sequential_slice)
     else:
-      assert isinstance(parent, dataset.IterDataset), parent
-      _set_slice(parent, sl)
+      _set_slice_iter_dataset(parent, sl, sequential_slice)
+
+
+def _set_slice_map_dataset(
+    ds: dataset.MapDataset,
+    sl: slice,
+    sequential_slice: bool = False,
+) -> None:
+  """Sets data slice for the given dataset.MapDataset in place.
+
+  WARNING: mutates the dataset object. Must only be used on dataset object copy.
+
+  Applies recursively for parents.
+
+  Args:
+   ds: dataset.MapDataset to apply slice to.
+   sl: slice to apply.
+   sequential_slice: whether to apply sequential slicing.
+  """
+  if isinstance(ds, SupportsInPlaceSlicing):
+    ds.set_slice(sl, sequential_slice)
+    return
+  if not ds.parents:
+    raise ValueError(f"Cannot slice `MapDataset` source. {type(ds)}")
+  for parent in ds.parents:
+    if isinstance(parent, dataset.MapDataset):
+      _set_slice_map_dataset(parent, sl, sequential_slice)
+    else:
+      _set_slice_iter_dataset(parent, sl, sequential_slice)
 
 
 def _check_picklable(
@@ -412,9 +495,13 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
       self,
       state: dict[str, dict[str, Any] | int],
       ds: dataset.IterDataset[T],
+      sequential_slice: bool = False,
+      always_report_worker_state: bool = False,
   ):
     self._state = state
     self._ds = ds
+    self._sequential_slice = sequential_slice
+    self._always_report_worker_state = always_report_worker_state
 
   def __call__(
       self,
@@ -426,7 +513,11 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
       stats_out_queue: queues.Queue | None = None,
   ) -> Iterator[tuple[T, Optional[dict[str, Any]]]]:
     if worker_count > 1:
-      _set_slice(self._ds, slice(worker_index, None, worker_count))
+      _set_slice_iter_dataset(
+          self._ds,
+          slice(worker_index, None, worker_count),
+          self._sequential_slice,
+      )
     it = self._ds.__iter__()
     it._ctx.mp_context = base.MultiprocessingContext(
         process_index=worker_index, process_count=worker_count
@@ -449,7 +540,10 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
       # __next__ method.
       if not it._stats._config.is_prefetch:
         it._stats.record_bytes_produced(element)
-      if now - last_recorded_state_time >= _RECORD_STATE_INTERVAL_S:
+      if (
+          self._always_report_worker_state
+          or now - last_recorded_state_time >= _RECORD_STATE_INTERVAL_S
+      ):
         last_recorded_state_time = now
         yield (element, it.get_state())  # pytype: disable=attribute-error
       else:
@@ -494,6 +588,8 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       parent: dataset.IterDataset[T],
       multiprocessing_options: grain_options.MultiprocessingOptions,
       worker_init_fn: Callable[[int, int], None] | None = None,
+      sequential_slice: bool = False,
+      always_report_worker_state: bool = False,
   ):
     super().__init__()
     self._iter_parent = parent
@@ -503,6 +599,7 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._ctx.dataset_options = _get_dataset_options(parent)
     self._multiprocessing_options = multiprocessing_options
     self._worker_init_fn = worker_init_fn
+    self._sequential_slice = sequential_slice
     # The underlying iterator producing elements and workers state.
     self._iterator = None
     # Raw reference to the underlying iterator that can be used to determine the
@@ -530,6 +627,8 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         _LAST_WORKER_INDEX: -1,
     }
 
+    self._always_report_worker_state = always_report_worker_state
+
   def _initialize_stats(
       self, execution_tracking_mode: base.ExecutionTrackingMode
   ):
@@ -538,7 +637,7 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
         is_prefetch=True,
         stats_in_queues=self._stats_in_queues,
-        iter_weakref=weakref.ref(self),
+        iter_weakref=dataset_stats.HashableWeakRef(self),
     )
     # If the stats object has already been initialized, copy the queues from
     # the original stats object to the new stats object.
@@ -626,7 +725,12 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     ds = dataset.WithOptionsIterDataset(
         self._iter_parent, self._ctx.dataset_options
     )
-    get_element_producer_fn = GetElementProducerFn(self._state, ds)
+    get_element_producer_fn = GetElementProducerFn(
+        self._state,
+        ds,
+        self._sequential_slice,
+        self._always_report_worker_state,
+    )
 
     return grain_pool.MultiProcessIterator(
         get_element_producer_fn,
@@ -692,12 +796,6 @@ class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
 StateT = dict[str, Any]
 
 
-def _get_iterator_next_and_state(
-    iterator: dataset.DatasetIterator[T],
-) -> tuple[T, StateT]:
-  return iterator.__next__(), iterator.get_state()
-
-
 def _put_iterator_elements_in_buffer(
     iterator: dataset.DatasetIterator[T],
     buffer: queue.Queue[tuple[T, StateT, Exception | None]],
@@ -706,7 +804,7 @@ def _put_iterator_elements_in_buffer(
   """Fetches elements from the iterator and puts them in the buffer."""
   try:
     while not should_stop.is_set():
-      element, state = _get_iterator_next_and_state(iterator)
+      element, state = iterator.__next__(), iterator.get_state()
       buffer.put((element, state, None))
   except Exception as e:  # pylint: disable=broad-except
     buffer.put((None, None, e))

@@ -14,10 +14,10 @@
 """LazyDataset data sources."""
 from __future__ import annotations
 
-import functools
 from typing import Sequence, Union
 
 from absl import logging
+from grain._src.core import sharding
 from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
@@ -30,6 +30,7 @@ class SourceMapDataset(dataset.MapDataset):
   def __init__(self, source: base.RandomAccessDataSource):
     super().__init__()
     self._source = source
+    self._original_source_map_dataset = None
 
   def __len__(self) -> int:
     return len(self._source)
@@ -43,6 +44,25 @@ class SourceMapDataset(dataset.MapDataset):
       return self.slice(index)
     with self._stats.record_self_time():
       return self._stats.record_output_spec(self._source[index % len(self)])
+
+  def _get_sequential_slice(self, sl: slice) -> slice:
+    """Returns the sequential slice per worker."""
+    worker_index = sl.start
+    workers_count = sl.step
+    shard_options = sharding.ShardOptions(
+        shard_index=worker_index,
+        shard_count=workers_count,
+        drop_remainder=False,
+    )
+    shard_start, shard_end = sharding.even_split(self.__len__(), shard_options)
+    return slice(shard_start, shard_end)
+
+  def set_slice(self, sl: slice, sequential_slice: bool = False) -> None:
+    assert sequential_slice, "Only sequential slicing is supported."
+    if not self._original_source_map_dataset:
+      self._original_source_map_dataset = SourceMapDataset(self._source)
+    new_slice = self._get_sequential_slice(sl)
+    self._source = self._original_source_map_dataset.slice(new_slice)
 
   def log_lineage(self):
     pass
@@ -71,10 +91,9 @@ class RangeMapDataset(dataset.MapDataset[int]):
     self.start = 0 if stop is None else start
     self.stop = start if stop is None else stop
     self.step = step
-
-  @functools.cached_property
-  def _length(self) -> int:
-    return len(range(self.start, self.stop, self.step))
+    self.original_start = self.start
+    self.original_len = len(range(self.start, self.stop, self.step))
+    self._length = self.original_len
 
   def __len__(self) -> int:
     return self._length
@@ -84,6 +103,24 @@ class RangeMapDataset(dataset.MapDataset[int]):
         f"RangeMapDataset(start={self.start}, stop={self.stop},"
         f" step={self.step})"
     )
+
+  def set_slice(self, sl: slice, sequential_slice: bool = False) -> None:
+    assert (
+        sequential_slice
+    ), "Only sequential slicing is supported for RangeMapDataset."
+    worker_index = sl.start
+    workers_count = sl.step
+    shard_options = sharding.ShardOptions(
+        shard_index=worker_index,
+        shard_count=workers_count,
+        drop_remainder=False,
+    )
+    shard_start, shard_end = sharding.even_split(
+        self.original_len, shard_options
+    )
+    self.start = self.original_start + shard_start * self.step
+    self.stop = self.original_start + shard_end * self.step
+    self._length = len(range(self.start, self.stop, self.step))
 
   @dataset_stats.trace_input_pipeline(stage_category=dataset_stats.IPL_CAT_READ)
   def __getitem__(self, index):

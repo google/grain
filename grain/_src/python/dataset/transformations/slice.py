@@ -28,7 +28,8 @@ class SliceMapDataset(dataset.MapDataset[T]):
     super().__init__(parent)
     if not isinstance(sl, slice):
       raise ValueError(f"sl is not a slice: {type(sl)}")
-    self._start, self._stop, self._step = sl.indices(len(parent))
+    self._parent_length = len(parent)
+    self._start, self._stop, self._step = sl.indices(self._parent_length)
     self._length = len(range(self._start, self._stop, self._step))
 
   def __len__(self) -> int:
@@ -38,7 +39,12 @@ class SliceMapDataset(dataset.MapDataset[T]):
     if isinstance(index, slice):
       return SliceMapDataset(self, index)
     with self._stats.record_self_time():
-      parent_index = self._start + (index % len(self)) * self._step
+      parent_epoch, relative_offset = divmod(index, len(self))
+      parent_index = (
+          self._start
+          + relative_offset * self._step
+          + parent_epoch * self._parent_length
+      )
     return self._parent[parent_index]
 
   def __str__(self) -> str:

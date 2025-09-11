@@ -148,6 +148,92 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     _ = [next(ds_iter) for _ in range(5)]
     self.assertEmpty(ds_iter._buffer)  # iterated through all elements
 
+  def test_set_prefetch_buffer_size_0_to_positive(self):
+    prefetch_lazy_iter_ds = prefetch.PrefetchIterDataset(
+        self.range_ds, read_options=options.ReadOptions(prefetch_buffer_size=0)
+    )
+    ds_iter = iter(prefetch_lazy_iter_ds)
+    self.assertIsInstance(ds_iter, prefetch.PrefetchDatasetIterator)
+    ds_iter = cast(prefetch.PrefetchDatasetIterator, ds_iter)
+
+    # With prefetch_buffer_size=0, executor is not created.
+    self.assertFalse(hasattr(ds_iter, '_executor'))
+    self.assertEqual(ds_iter._prefetch_buffer_size, 0)
+    self.assertEqual(next(ds_iter), 0)
+
+    # Setting prefetch_buffer_size to 2.
+    ds_iter.set_prefetch_buffer_size(2)
+    self.assertEqual(ds_iter._prefetch_buffer_size, 2)
+    self.assertEqual(next(ds_iter), 1)
+    self.assertTrue(hasattr(ds_iter, '_executor'))
+    self.assertLen(ds_iter._buffer, 2)
+    self.assertEqual(next(ds_iter), 2)
+    self.assertLen(ds_iter._buffer, 2)
+
+  def test_set_prefetch_buffer_size_positive_to_0(self):
+    prefetch_lazy_iter_ds = prefetch.PrefetchIterDataset(
+        self.range_ds, read_options=options.ReadOptions(prefetch_buffer_size=2)
+    )
+    ds_iter = iter(prefetch_lazy_iter_ds)
+    self.assertIsInstance(ds_iter, prefetch.PrefetchDatasetIterator)
+    ds_iter = cast(prefetch.PrefetchDatasetIterator, ds_iter)
+
+    self.assertEqual(ds_iter._prefetch_buffer_size, 2)
+    self.assertEqual(next(ds_iter), 0)
+    self.assertLen(ds_iter._buffer, 2)
+
+    # Setting prefetch_buffer_size to 0.
+    ds_iter.set_prefetch_buffer_size(0)
+    self.assertEqual(ds_iter._prefetch_buffer_size, 0)
+    # Should consume buffer first.
+    self.assertEqual(next(ds_iter), 1)
+    self.assertLen(ds_iter._buffer, 1)
+    self.assertEqual(next(ds_iter), 2)
+    self.assertEmpty(ds_iter._buffer)
+    # Buffer empty, should read without prefetching.
+    self.assertEqual(next(ds_iter), 3)
+    self.assertEmpty(ds_iter._buffer)
+
+  def test_set_prefetch_buffer_size_increase(self):
+    prefetch_lazy_iter_ds = prefetch.PrefetchIterDataset(
+        self.range_ds, read_options=options.ReadOptions(prefetch_buffer_size=1)
+    )
+    ds_iter = iter(prefetch_lazy_iter_ds)
+    self.assertIsInstance(ds_iter, prefetch.PrefetchDatasetIterator)
+    ds_iter = cast(prefetch.PrefetchDatasetIterator, ds_iter)
+
+    self.assertEqual(ds_iter._prefetch_buffer_size, 1)
+    self.assertEqual(next(ds_iter), 0)
+    self.assertLen(ds_iter._buffer, 1)
+
+    # Setting prefetch_buffer_size to 2.
+    ds_iter.set_prefetch_buffer_size(2)
+    self.assertEqual(ds_iter._prefetch_buffer_size, 2)
+    self.assertEqual(next(ds_iter), 1)
+    self.assertLen(ds_iter._buffer, 2)
+    self.assertEqual(next(ds_iter), 2)
+    self.assertLen(ds_iter._buffer, 2)
+
+  def test_set_prefetch_buffer_size_decrease(self):
+    prefetch_lazy_iter_ds = prefetch.PrefetchIterDataset(
+        self.range_ds, read_options=options.ReadOptions(prefetch_buffer_size=2)
+    )
+    ds_iter = iter(prefetch_lazy_iter_ds)
+    self.assertIsInstance(ds_iter, prefetch.PrefetchDatasetIterator)
+    ds_iter = cast(prefetch.PrefetchDatasetIterator, ds_iter)
+
+    self.assertEqual(ds_iter._prefetch_buffer_size, 2)
+    self.assertEqual(next(ds_iter), 0)
+    self.assertLen(ds_iter._buffer, 2)
+
+    # Setting prefetch_buffer_size to 1.
+    ds_iter.set_prefetch_buffer_size(1)
+    self.assertEqual(ds_iter._prefetch_buffer_size, 1)
+    self.assertEqual(next(ds_iter), 1)
+    self.assertLen(ds_iter._buffer, 1)
+    self.assertEqual(next(ds_iter), 2)
+    self.assertLen(ds_iter._buffer, 1)
+
   def test_checkpoint(self):
     ds_iter = iter(self.prefetch_lazy_iter_ds)
 
@@ -234,6 +320,70 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     for _ in range(1000):
       next(ds_iter)
       self.assertEqual(sys.getrefcount(ds_iter), ref_count_before)
+
+  def test_set_num_threads_decrease_threads(self):
+    ds_iter = iter(self.prefetch_lazy_iter_ds)
+    self.assertIsInstance(ds_iter, prefetch.PrefetchDatasetIterator)
+    ds_iter = cast(prefetch.PrefetchDatasetIterator, ds_iter)
+    self.assertEqual(ds_iter._num_threads, options.ReadOptions().num_threads)
+    self.assertEqual(
+        ds_iter._executor._max_workers, options.ReadOptions().num_threads
+    )
+    self.assertEqual([next(ds_iter) for _ in range(5)], list(range(5)))
+
+    # Decrease threads
+    ds_iter.set_num_threads(5)
+    self.assertEqual(ds_iter._num_threads, 5)
+    self.assertEqual(ds_iter._executor._max_workers, 5)
+    self.assertEqual([next(ds_iter) for _ in range(15)], list(range(5, 20)))
+
+  def test_set_num_threads_increase_threads(self):
+    ds = prefetch.PrefetchIterDataset(
+        self.range_ds, read_options=options.ReadOptions(num_threads=5)
+    )
+    ds_iter = iter(ds)
+    self.assertIsInstance(ds_iter, prefetch.PrefetchDatasetIterator)
+    ds_iter = cast(prefetch.PrefetchDatasetIterator, ds_iter)
+    self.assertEqual(ds_iter._num_threads, 5)
+    self.assertEqual(ds_iter._executor._max_workers, 5)
+    self.assertEqual([next(ds_iter) for _ in range(5)], list(range(5)))
+
+    # Increase threads
+    ds_iter.set_num_threads(10)
+    self.assertEqual(ds_iter._num_threads, 10)
+    self.assertEqual(ds_iter._executor._max_workers, 10)
+    self.assertEqual([next(ds_iter) for _ in range(15)], list(range(5, 20)))
+
+  def test_set_num_threads_decrease_to_zero(self):
+    ds_iter = iter(self.prefetch_lazy_iter_ds)
+    self.assertIsInstance(ds_iter, prefetch.PrefetchDatasetIterator)
+    ds_iter = cast(prefetch.PrefetchDatasetIterator, ds_iter)
+    self.assertEqual(ds_iter._num_threads, options.ReadOptions().num_threads)
+    self.assertEqual(
+        ds_iter._executor._max_workers, options.ReadOptions().num_threads
+    )
+    self.assertEqual([next(ds_iter) for _ in range(5)], list(range(5)))
+    # Decrease threads to 0
+    ds_iter.set_num_threads(0)
+    self.assertEqual(ds_iter._num_threads, 0)
+    self.assertFalse(hasattr(ds_iter, '_executor'))
+    self.assertEqual([next(ds_iter) for _ in range(15)], list(range(5, 20)))
+
+  def test_set_num_threads_increase_from_zero(self):
+    ds_iter = iter(self.prefetch_lazy_iter_ds)
+    self.assertIsInstance(ds_iter, prefetch.PrefetchDatasetIterator)
+    ds_iter = cast(prefetch.PrefetchDatasetIterator, ds_iter)
+    self.assertEqual([next(ds_iter) for _ in range(5)], list(range(5)))
+    ds_iter.set_num_threads(0)
+    self.assertEqual(ds_iter._num_threads, 0)
+    self.assertFalse(hasattr(ds_iter, '_executor'))
+    self.assertEqual([next(ds_iter) for _ in range(5)], list(range(5, 10)))
+
+    # Increase threads from 0
+    ds_iter.set_num_threads(5)
+    self.assertEqual(ds_iter._num_threads, 5)
+    self.assertEqual(ds_iter._executor._max_workers, 5)
+    self.assertEqual([next(ds_iter) for _ in range(10)], list(range(10, 20)))
 
 
 class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
@@ -639,6 +789,92 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
     ds = ds.filter(lambda x: x > 2)
     with self.assertRaises(Exception):
       list(ds)
+
+  def test_multiprocess_prefetch_with_sequential_slice(self):
+    ds = dataset.MapDataset.source(range(10)).to_iter_dataset()
+    ds = prefetch.MultiprocessPrefetchIterDataset(
+        ds,
+        options.MultiprocessingOptions(num_workers=3, per_worker_buffer_size=1),
+        sequential_slice=True,
+    )
+    self.assertEqual(list(ds), [0, 4, 7, 1, 5, 8, 2, 6, 9, 3])
+
+  def test_multiprocess_prefetch_with_default_slice_non_sequential(self):
+    ds = dataset.MapDataset.source(range(10)).to_iter_dataset()
+    ds_sequential_off = prefetch.MultiprocessPrefetchIterDataset(
+        ds,
+        options.MultiprocessingOptions(num_workers=3, per_worker_buffer_size=1),
+        sequential_slice=False,
+    )
+    ds_sequential_default = prefetch.MultiprocessPrefetchIterDataset(
+        ds,
+        options.MultiprocessingOptions(num_workers=3, per_worker_buffer_size=1),
+    )
+    elements_sequential_off = list(ds_sequential_off)
+    elements_sequential_default = list(ds_sequential_default)
+    self.assertEqual(
+        elements_sequential_off,
+        elements_sequential_default,
+    )
+    self.assertEqual(
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+        elements_sequential_default,
+    )
+
+  def test_multiprocess_prefetch_sequential_slice_order_from_source(self):
+    ds = dataset.MapDataset.source(range(10)).to_iter_dataset()
+    ds_sequential_on = prefetch.MultiprocessPrefetchIterDataset(
+        ds,
+        options.MultiprocessingOptions(num_workers=3, per_worker_buffer_size=1),
+        sequential_slice=True,
+    )
+    elements_sequential_on = list(ds_sequential_on)
+    self.assertEqual([0, 4, 7, 1, 5, 8, 2, 6, 9, 3], elements_sequential_on)
+
+  def test_multiprocess_prefetch_sequential_slice_order_from_range(self):
+    ds_range = dataset.MapDataset.range(10).to_iter_dataset()
+    ds_range_sequential_on = prefetch.MultiprocessPrefetchIterDataset(
+        ds_range,
+        options.MultiprocessingOptions(num_workers=3, per_worker_buffer_size=1),
+        sequential_slice=True,
+    )
+    elements_range_sequential_on = list(ds_range_sequential_on)
+    self.assertEqual(
+        [0, 4, 7, 1, 5, 8, 2, 6, 9, 3],
+        elements_range_sequential_on,
+    )
+
+  def test_multiprocess_prefetch_sequential_slice_order_from_range_slice(self):
+    ds_range = dataset.MapDataset.range(
+        start=2, stop=21, step=3
+    ).to_iter_dataset()
+    ds_range_sequential_on = prefetch.MultiprocessPrefetchIterDataset(
+        ds_range,
+        options.MultiprocessingOptions(num_workers=3, per_worker_buffer_size=1),
+        sequential_slice=True,
+    )
+    elements_range_sequential_on = list(ds_range_sequential_on)
+    self.assertEqual(
+        [2, 11, 17, 5, 14, 20, 8],
+        elements_range_sequential_on,
+    )
+
+  def test_multiprocess_prefetch_sequential_slice_order_same(self):
+    ds_source = dataset.MapDataset.source(range(10)).to_iter_dataset()
+    ds_range = dataset.MapDataset.range(10).to_iter_dataset()
+    ds_source_mp = prefetch.MultiprocessPrefetchIterDataset(
+        ds_source,
+        options.MultiprocessingOptions(num_workers=3, per_worker_buffer_size=1),
+        sequential_slice=True,
+    )
+    ds_range_mp = prefetch.MultiprocessPrefetchIterDataset(
+        ds_range,
+        options.MultiprocessingOptions(num_workers=3, per_worker_buffer_size=1),
+        sequential_slice=True,
+    )
+    elements_source = list(ds_source_mp)
+    elements_range = list(ds_range_mp)
+    self.assertEqual(elements_source, elements_range)
 
   def test_options_after_prefetch(self):
     ds = dataset.MapDataset.source([1, 2, 3]).repeat(1000)

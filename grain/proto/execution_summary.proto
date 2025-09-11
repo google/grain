@@ -40,3 +40,8 @@ message ExecutionSummary {
   // Map of node IDs to nodes in the pipeline.
   map<int32, Node> nodes = 1;
 }
+
+// A collection of execution summaries, one for each pipeline iterator.
+message ExecutionSummaries {
+  repeated ExecutionSummary execution_summaries = 1;
+}

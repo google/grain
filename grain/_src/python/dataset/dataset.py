@@ -52,7 +52,6 @@ import functools
 import json
 from typing import Any, Generic, TypeVar, Union, cast, overload
 import warnings
-import weakref
 
 from etils import epath
 from grain._src.core import monitoring as grain_monitoring
@@ -373,6 +372,28 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
   @abc.abstractmethod
   def __getitem__(self, index):
     """Returns the element for the index or None if missing."""
+
+  def apply(
+      self,
+      transformations: transforms.Transformation | transforms.Transformations,
+  ) -> MapDataset:
+    """Returns a dataset with the given transformation(s) applied.
+
+    Syntactic sugar to avoid dispatch by transformation type.
+
+    Example usage::
+
+      ds = grain.MapDataset.range(5)
+      ds = ds.apply([AddOne(), grain.transforms.Batch(2)])
+      list(ds) == [np.ndarray([1, 2]), np.ndarray([3, 4]), np.ndarray([5])]
+
+    Args:
+      transformations: one or more transformations to apply.
+
+    Returns:
+      Dataset with the given transformations applied.
+    """
+    return apply_transformations(self, transformations)
 
   def batch(
       self,
@@ -720,17 +741,25 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
         parent=self, transform=transform, seed=seed
     )
 
-  def repeat(self, num_epochs: int | None = None) -> MapDataset[T]:
+  def repeat(
+      self, num_epochs: int | None = None, *, reseed_each_epoch: bool = True
+  ) -> MapDataset[T]:
     """Returns a dataset repeating the elements of this dataset multiple times.
 
     Specifying ``None`` for ``num_epochs`` will repeat the dataset infinitely,
     and causes ``len(ds)`` to return ``sys.maxsize``.
 
-    Since ``MapDataset`` allows accessing elements past ``len(ds) - 1`` anyway
-    (and uses the index modulo ``len(ds)``), this transformation effectively
-    only changes the length of the dataset.
-
     Can not be called on an infinite dataset.
+
+    By default, random upstream transformations such as ``shuffle`` and
+    ``random_map`` will be seeded differently (but deterministically) for each
+    epoch. This means that each epoch will be shuffled differently. If you want
+    to repeat the first epoch exactly as is, set ``reseed_each_epoch`` to
+    ``False``.
+
+    Implementation note: since ``MapDataset`` allows accessing elements past
+    ``len(ds) - 1`` anyway (and uses the index modulo ``len(ds)``), this
+    transformation effectively only changes the length of the dataset.
 
     Example usage::
 
@@ -743,6 +772,10 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
     Args:
       num_epochs: Either a positive integer representing the number of times
         this dataset should be repeated or ``None`` to repeat infinitely.
+      reseed_each_epoch: If True (default), all random upstream transformations
+        use a seed folded with the epoch number, so that each epoch is shuffled
+        and processed differently. If False, the first epoch is repeated exactly
+        as is. In both cases, the random transformations are deterministic.
 
     Returns:
       A dataset repeating the elements of this dataset multiple times.
@@ -751,7 +784,11 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
     # pylint: disable=g-import-not-at-top
     from grain._src.python.dataset.transformations import repeat
     # pylint: enable=g-import-not-at-top
-    return repeat.RepeatMapDataset(parent=self, num_epochs=num_epochs)
+    return repeat.RepeatMapDataset(
+        parent=self,
+        num_epochs=num_epochs,
+        reseed_each_epoch=reseed_each_epoch,
+    )
 
   def to_iter_dataset(
       self,
@@ -820,7 +857,7 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
     config = dataset_stats.StatsConfig(
         name=str(self),
         transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
-        iter_weakref=weakref.ref(self),
+        iter_weakref=dataset_stats.HashableWeakRef(self),
     )
     # If the stats object has already been initialized, copy the queues from
     # the original stats object to the new stats object.
@@ -916,6 +953,28 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
   def _parent(self) -> MapDataset | IterDataset:
     assert len(self._parents) == 1, self._parents
     return self._parents[0]
+
+  def apply(
+      self,
+      transformations: transforms.Transformation | transforms.Transformations,
+  ) -> IterDataset:
+    """Returns a dataset with the given transformation(s) applied.
+
+    Syntactic sugar to avoid dispatch by transformation type.
+
+    Example usage::
+
+      ds = grain.MapDataset.range(5).to_iter_dataset()
+      ds = ds.apply([AddOne(), grain.transforms.Batch(2)])
+      list(ds) == [np.ndarray([1, 2]), np.ndarray([3, 4]), np.ndarray([5])]
+
+    Args:
+      transformations: one or more transformations to apply.
+
+    Returns:
+      Dataset with the given transformations applied.
+    """
+    return apply_transformations(self, transformations)
 
   def batch(
       self,
@@ -1201,6 +1260,7 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
       self,
       options: grain_options.MultiprocessingOptions | None = None,
       worker_init_fn: Callable[[int, int], None] | None = None,
+      sequential_slice: bool = False,
   ) -> IterDataset[T]:
     """Returns a dataset prefetching elements in multiple processes.
 
@@ -1214,7 +1274,6 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
     prefetch workers, consider moving many-to-one and stateful transformations
     to after ``mp_prefetch`` or outside of the Grain pipeline.
 
-
     Args:
       options: options for the prefetching processes. ``options.num_workers``
         must be greater than or equal to 0. If ``options.num_workers`` is 0,
@@ -1223,6 +1282,11 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
       worker_init_fn: A function that is called in each worker process before
         the data is processed. The function takes two arguments: the current
         worker index and the total worker count.
+      sequential_slice: a boolean indicating whether the slice for the worker
+        should be sequential (consecutive at the source dataset). It is an
+        experimental feature, introduced to improve performance. Note that if
+        enabled, effectively shuffle is applied on the slice/worker level and
+        not globally).
 
     Returns:
       A dataset prefetching input elements in separate processes.
@@ -1236,6 +1300,7 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
         self,
         multiprocessing_options=options,
         worker_init_fn=worker_init_fn,
+        sequential_slice=sequential_slice,
     )
 
   @abc.abstractmethod
@@ -1349,7 +1414,7 @@ class DatasetIterator(Iterator[T], abc.ABC):
     config = dataset_stats.StatsConfig(
         name=str(self),
         transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
-        iter_weakref=weakref.ref(self),
+        iter_weakref=dataset_stats.HashableWeakRef(self),
     )
     # If the stats object has already been initialized, copy the queues from
     # the original stats object to the new stats object.
@@ -1514,6 +1579,8 @@ def apply_transformations(
     transformations: transforms.Transformation | transforms.Transformations,
 ) -> _ConsistentDatasetType:
   """Applies transformations to a dataset.
+
+  DEPRECATED: Use `ds.apply(transformations)` instead.
 
   Args:
     ds: `MapDataset` or `IterDataset` to apply the transformations to.
