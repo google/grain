@@ -12,6 +12,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * Migrates data loader to use dataset API under the hood.
 
 * Breaking changes:
+  * SliceMapDataset updated to use the full index relative to the parent
+    dataset, instead index%len(self).
 
 * Deprecations:
   * Graduate `grain.experimental.apply_transformations` to
