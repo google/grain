@@ -154,6 +154,39 @@ class DatasetTest(parameterized.TestCase):
     self.assertLen(ds, len(range(start, stop, step)))
     self.assertEqual(list(ds), list(range(start, stop, step)))
 
+  def test_source_get_items_all_indices(self):
+    ds = dataset.MapDataset.source(Source15IntsFrom0())
+    self.assertIsInstance(ds, dataset.MapDataset)
+    self.assertEqual(list(ds._getitems(range(3, 10))), list(range(3, 10)))
+
+  def test_source_get_items_subset_of_indices(self):
+    ds = dataset.MapDataset.source(Source15IntsFrom0())
+    self.assertIsInstance(ds, dataset.MapDataset)
+    self.assertEqual(ds._getitems(range(3, 10)), list(range(3, 10)))
+
+  def test_range_with_stop_get_items(self):
+    n = 34
+    ds = dataset.MapDataset.range(n)
+    self.assertEqual(ds._getitems(range(n)), list(range(n)))
+
+  def test_range_with_start_and_stop_get_items(self):
+    start = 3
+    stop = 10
+    ds = dataset.MapDataset.range(start, stop)
+    self.assertEqual(
+        ds._getitems(range(stop - start)), list(range(start, stop))
+    )
+
+  def test_range_with_start_and_stop_and_step_get_items(self):
+    start = 3
+    stop = 10
+    step = 3
+    ds = dataset.MapDataset.range(start, stop, step)
+    self.assertEqual(
+        ds._getitems(range(len(range(start, stop, step)))),
+        list(range(start, stop, step)),
+    )
+
   @parameterized.parameters(
       # pyformat: disable
       dict(proportions=None,
@@ -207,6 +240,50 @@ class DatasetTest(parameterized.TestCase):
     self.assertIsInstance(ds, dataset.MapDataset)
     self.assertLen(ds, 10)
     self.assertEqual(list(ds), [100, 0, 101, 1, 102, 2, 103, 3, 104, 4])
+
+  @parameterized.parameters(
+      # pyformat: disable
+      dict(proportions=None,
+           expected=[
+               0, 100, 1, 101, 2, 102, 3, 103, 4, 104, 5, 105, 6, 106, 7, 107,
+               8, 108, 9, 109, 10, 110, 11, 111, 12, 112, 13, 113, 14, 114]),
+      dict(proportions=[1, 2],
+           expected=[
+               0, 100, 101, 1, 102, 103, 2, 104, 105, 3, 106, 107, 4, 108, 109,
+               5, 110, 111, 6, 112, 113, 7]),
+      # pyformat: enable
+  )
+  def test_mix_map_get_items_all_indices(self, proportions, expected):
+    datasets = [
+        dataset.MapDataset.range(15),
+        dataset.MapDataset.range(15).map(lambda x: x + 100),
+    ]
+    ds = dataset.MapDataset.mix(datasets, proportions)
+    self.assertIsInstance(ds, dataset.MapDataset)
+    self.assertLen(ds, len(expected))
+    self.assertEqual(ds._getitems(range(len(expected))), expected)
+
+  @parameterized.parameters(
+      # pyformat: disable
+      dict(proportions=None,
+           indices=[1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29],
+           expected=[
+               100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114]),
+      dict(proportions=[1, 2],
+           indices=[0, 1, 2, 3, 4, 5],
+           expected=[0, 100, 101, 1, 102, 103]),
+      # pyformat: enable
+  )
+  def test_mix_map_get_items_subset_of_indices(
+      self, proportions, indices, expected
+  ):
+    datasets = [
+        dataset.MapDataset.range(15),
+        dataset.MapDataset.range(15).map(lambda x: x + 100),
+    ]
+    ds = dataset.MapDataset.mix(datasets, proportions)
+    self.assertIsInstance(ds, dataset.MapDataset)
+    self.assertEqual(ds._getitems(indices), expected)
 
   @parameterized.parameters(
       dict(initial_ds=dataset.MapDataset.range(15)),
@@ -263,6 +340,95 @@ class DatasetTest(parameterized.TestCase):
             np.array([[12, 13, 14]]),
         ],
     )
+
+  @parameterized.parameters(
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          batch_size=3,
+          indices=range(5),
+          expected=[
+              np.array([0, 1, 2]),
+              np.array([3, 4, 5]),
+              np.array([6, 7, 8]),
+              np.array([9, 10, 11]),
+              np.array([12, 13, 14]),
+          ],
+      ),
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          batch_size=3,
+          indices=[0, 2, 4],
+          expected=[
+              np.array([0, 1, 2]),
+              np.array([6, 7, 8]),
+              np.array([12, 13, 14]),
+          ],
+      ),
+  )
+  def test_batch_get_items(self, initial_ds, batch_size, indices, expected):
+    ds = initial_ds.batch(batch_size=batch_size)
+    np.testing.assert_equal(ds._getitems(indices), expected)
+
+  @parameterized.parameters(
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          batch_size=4,
+          indices=range(3),
+          expected=[
+              np.array([0, 1, 2, 3]),
+              np.array([4, 5, 6, 7]),
+              np.array([8, 9, 10, 11]),
+          ],
+      ),
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          batch_size=4,
+          indices=[1, 2],
+          expected=[
+              np.array([4, 5, 6, 7]),
+              np.array([8, 9, 10, 11]),
+          ],
+      ),
+  )
+  def test_batch_with_drop_remainder_get_items(
+      self, initial_ds, batch_size, indices, expected
+  ):
+    ds = initial_ds.batch(batch_size=batch_size, drop_remainder=True)
+    np.testing.assert_equal(ds._getitems(indices), expected)
+
+  @parameterized.parameters(
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          batch_size=4,
+          batch_fn=lambda xs: np.expand_dims(np.array(xs), axis=0),
+          indices=range(4),
+          expected=[
+              np.array([[0, 1, 2, 3]]),
+              np.array([[4, 5, 6, 7]]),
+              np.array([[8, 9, 10, 11]]),
+              np.array([[12, 13, 14]]),
+          ],
+      ),
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          batch_size=4,
+          batch_fn=lambda xs: np.expand_dims(np.array(xs), axis=0),
+          indices=[0, 2, 3],
+          expected=[
+              np.array([[0, 1, 2, 3]]),
+              np.array([[8, 9, 10, 11]]),
+              np.array([[12, 13, 14]]),
+          ],
+      ),
+  )
+  def test_batch_with_batch_fn_get_items(
+      self, initial_ds, batch_size, batch_fn, indices, expected
+  ):
+    ds = initial_ds.batch(
+        batch_size=batch_size,
+        batch_fn=batch_fn,
+    )
+    np.testing.assert_equal(ds._getitems(indices), expected)
 
   @parameterized.parameters(
       dict(initial_ds=dataset.MapDataset.range(15)),
@@ -365,6 +531,38 @@ class DatasetTest(parameterized.TestCase):
     )
     self.assertSequenceEqual(list(iter(ds)), expected)
 
+  @parameterized.parameters(
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          indices=range(8),
+          expected=[0, None, 2, None, 4, None, 6, None],
+      ),
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          indices=range(1, 15, 2),
+          expected=[None, None, None, None, None, None, None],
+      ),
+  )
+  def test_filter_with_callable_get_items(self, initial_ds, indices, expected):
+    ds = initial_ds.filter(lambda x: x % 2 == 0)
+    self.assertSequenceEqual(ds._getitems(indices), expected)
+
+  @parameterized.parameters(
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          indices=range(8),
+          expected=[None, 1, None, 3, None, 5, None, 7],
+      ),
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          indices=range(0, 15, 2),
+          expected=[None, None, None, None, None, None, None, None],
+      ),
+  )
+  def test_filter_with_transform_get_items(self, initial_ds, indices, expected):
+    ds = initial_ds.filter(FilterKeepingOddElementsOnly())
+    self.assertSequenceEqual(ds._getitems(indices), expected)
+
   def test_slice_with_just_stop_returns_correct_elements(self):
     ds = dataset.MapDataset.range(15).slice(slice(7))
     self.assertSequenceEqual(list(iter(ds)), [0, 1, 2, 3, 4, 5, 6])
@@ -395,6 +593,80 @@ class DatasetTest(parameterized.TestCase):
     )
     self.assertSequenceEqual(list(iter(ds)), [7])
 
+  @parameterized.parameters(
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          slice_start=0,
+          slice_stop=7,
+          slice_step=1,
+          indices=range(7),
+          expected=[0, 1, 2, 3, 4, 5, 6],
+      ),
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          slice_start=0,
+          slice_stop=10,
+          slice_step=1,
+          indices=range(0, 10, 2),
+          expected=[0, 2, 4, 6, 8],
+      ),
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          slice_start=3,
+          slice_stop=9,
+          slice_step=1,
+          indices=range(6),
+          expected=[3, 4, 5, 6, 7, 8],
+      ),
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          slice_start=3,
+          slice_stop=9,
+          slice_step=1,
+          indices=[0, 5],
+          expected=[3, 8],
+      ),
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          slice_start=2,
+          slice_stop=11,
+          slice_step=3,
+          indices=[0, 1, 2],
+          expected=[2, 5, 8],
+      ),
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          slice_start=2,
+          slice_stop=11,
+          slice_step=3,
+          indices=[1],
+          expected=[5],
+      ),
+  )
+  def test_slice_with_get_items(
+      self, initial_ds, slice_start, slice_stop, slice_step, indices, expected
+  ):
+    ds = initial_ds.slice(slice(slice_start, slice_stop, slice_step))
+    self.assertSequenceEqual(ds._getitems(indices), expected)
+
+  def test_slice_composition_with_get_items(self):
+    ds = (
+        dataset.MapDataset.range(15)
+        .slice(slice(1, 10, 2))  # 1, 3, 5, 7, 9
+        .slice(slice(1, 3))  # 3, 5
+    )
+    self.assertSequenceEqual(ds._getitems([0, 1]), [3, 5])
+
+  def test_slice_and_filter_composed_with_get_items(self):
+    ds = (
+        dataset.MapDataset.range(15)
+        .slice(slice(1, 10, 2))  # 1, 3, 5, 7, 9
+        .filter(lambda x: x % 3 == 0 or x == 7)  # None, 3, None, 7, 9
+        .filter(lambda x: x > 5)  # None, None, None, 7, 9
+        .slice(slice(2, 4))  # None, 7
+    )
+    self.assertSequenceEqual(ds._getitems([0, 1]), [None, 7])
+
   def test_repeat_updates_length(self):
     ds = dataset.MapDataset.range(15).repeat(3)
     self.assertLen(ds, 45)
@@ -415,6 +687,10 @@ class DatasetTest(parameterized.TestCase):
         .repeat(2)
     )
     self.assertSequenceEqual(list(ds), [1, 3, 5, 1, 3, 5])
+
+  def test_repeat_with_get_items(self):
+    ds = dataset.MapDataset.range(3).repeat(3)
+    self.assertSequenceEqual(ds._getitems([0, 1, 2, 3, 4]), [0, 1, 2, 0, 1])
 
   def test_shuffle_does_not_affect_len(self):
     ds = dataset.MapDataset.range(15).shuffle(seed=123)
@@ -444,6 +720,18 @@ class DatasetTest(parameterized.TestCase):
     epoch_2 = [ds[i] for i in range(15, 30)]
     self.assertSameElements(epoch_1, epoch_2)
     self.assertNotEqual(epoch_1, epoch_2)
+
+  def test_shuffle_and_get_items_with_same_seed_returns_same_elements(self):
+    ds1 = dataset.MapDataset.range(15).shuffle(seed=123)
+    ds2 = dataset.MapDataset.range(15).shuffle(seed=123)
+    self.assertSequenceEqual(ds1._getitems(range(15)), ds2._getitems(range(15)))
+
+  def test_shuffle_and_get_items_with_different_seed_returns_different_elements(
+      self,
+  ):
+    ds1 = dataset.MapDataset.range(15).shuffle(seed=123)
+    ds2 = dataset.MapDataset.range(15).shuffle(seed=456)
+    self.assertNotEqual(ds1._getitems(range(15)), ds2._getitems(range(15)))
 
   def test_multiprocess_prefetch(self):
     ds = dataset.MapDataset.range(15).to_iter_dataset().mp_prefetch()
