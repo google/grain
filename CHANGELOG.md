@@ -9,6 +9,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * Add `reseed_each_epoch` option to `MapDataset.repeat` that allows to replay
     the first epoch exactly if set to False (True by default).
   * Introduces `grain.experimental.RebatchIterDataset` for efficient rebatch.
+  * Migrates data loader to use dataset API under the hood.
 
 * Breaking changes:
 

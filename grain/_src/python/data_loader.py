@@ -16,22 +16,16 @@
 from __future__ import annotations
 
 import collections
-from collections.abc import Iterator
 import contextlib
 import dataclasses
 import functools
 import json
-from multiprocessing import pool
-from multiprocessing import queues
-from multiprocessing import synchronize
 import os
 import sys
-import time
-from typing import Any, Awaitable, Callable, Optional, Sequence, Tuple, TypeVar, Union
+from typing import Any, Awaitable, Optional, Sequence, TypeVar
 
 from absl import logging
 from etils import epath
-from concurrent import futures
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import sharding
 from grain._src.core import transforms
@@ -39,10 +33,13 @@ from grain._src.core import tree_lib
 from grain._src.core import usage_logging
 import multiprocessing as mp
 from grain._src.python import checkpointing
-from grain._src.python import grain_pool
+from grain._src.python import operations as ops
 from grain._src.python import options
 from grain._src.python import record
 from grain._src.python.data_sources import RandomAccessDataSource
+from grain._src.python.dataset import dataset
+from grain._src.python.dataset.transformations import batch as batch_ds
+from grain._src.python.dataset.transformations import prefetch
 from grain._src.python.operations import BatchOperation
 from grain._src.python.operations import Operation
 from grain._src.python.samplers import Sampler
@@ -50,6 +47,7 @@ from grain._src.python.shared_memory_array import SharedMemoryArray
 import numpy as np
 
 from grain._src.core import monitoring
+
 
 _api_usage_counter = monitoring.Counter(
     "/grain/python/data_loader/api",
@@ -81,20 +79,6 @@ _DATA_SOURCE = "data_source"
 _CHECKPOINT_VERSION_NUMBER = 2
 
 
-def _validate_operations(operations: Sequence[Operation]) -> None:
-  """Validates user-provided operations."""
-  for operation, operation_idx in enumerate(operations):
-    if (
-        isinstance(operation, BatchOperation)
-        and operation_idx < len(operations) - 1
-    ):
-      raise ValueError(
-          "Batch Operation is only allowed at the end of the "
-          "pipeline. Found a Batch Operation at position "
-          f"{operation_idx} in the input operations."
-      )
-
-
 def _determine_worker_count(input_worker_count: int | None) -> int:
   """Determines count of child processes to use."""
   if input_worker_count is not None:
@@ -103,28 +87,6 @@ def _determine_worker_count(input_worker_count: int | None) -> int:
     return os_cpu_count
   else:
     raise ValueError("Can't determine worker count. Please set worker count.")
-
-
-@dataclasses.dataclass(slots=True, frozen=True)
-class _ReaderQueueElement:
-  """Element to be added to the reader queue."""
-
-  async_result: pool.AsyncResult[Any]
-  # max record index seen so far at worker with worker_index
-  max_element_index: int
-  # index of worker producing the element in [0, worker_count]
-  worker_index: int
-
-
-@dataclasses.dataclass(frozen=True)
-class _GrainPoolProcessingComplete:
-  """Indicates processing of grain pool is complete."""
-
-
-_GRAIN_POOL_PROCESSING_COMPLETE = _GrainPoolProcessingComplete()
-_QueueElement = Union[
-    _ReaderQueueElement, _GrainPoolProcessingComplete, Exception
-]
 
 
 @contextlib.contextmanager
@@ -155,6 +117,221 @@ class CopyNumPyArrayToSharedMemory(transforms.MapTransform):
       return shared_memory_arr.metadata
 
     return tree_lib.map_structure(copy_if_applied, element)
+
+
+class _SamplerMapDataset(dataset.MapDataset[record.Record]):
+  """A MapDataset that is indexed by a sampler."""
+
+  def __init__(
+      self,
+      data_source: RandomAccessDataSource,
+      sampler: Sampler,
+      shard_options: sharding.ShardOptions,
+  ):
+    super().__init__()
+    self._sampler = sampler
+    self._shard_options = shard_options
+    self._data_source = data_source
+    self.length = self._sampler_size() // self._shard_options.shard_count
+
+  def _sampler_size(self) -> int:
+    """Returns the length of the sampler."""
+    if hasattr(self._sampler, "__len__"):
+      return len(self._sampler)
+    lo = 0
+    hi = sys.maxsize
+    while lo < hi:
+      mid = (lo + hi) // 2
+      try:
+        self._sampler[mid]  # pylint: disable=pointless-statement
+        lo = mid + 1
+      except IndexError:
+        hi = mid
+    return lo
+
+  def __len__(self) -> int:
+    return self.length
+
+  def __getitem__(self, index):
+    if isinstance(index, slice):
+      return self.slice(index)
+
+    # Account for sharding
+    index = (
+        index * self._shard_options.shard_count
+        + self._shard_options.shard_index
+    )
+    with self._stats.record_self_time():
+      metadata = self._sampler[index]
+      data = self._data_source[metadata.record_key]
+      return record.Record(metadata=metadata, data=data)
+
+
+class _OperationIterDataset(dataset.IterDataset[_T]):
+  """Applies an operation to the dataset.
+
+  NOTE: This class should not be used anywhere else as operations break
+  checkpointing. It only exists for legacy reasons and backwards compatibility.
+  """
+
+  def __init__(
+      self,
+      parent: dataset.IterDataset[_T],
+      operation: ops.Operation,
+  ):
+    super().__init__(parent)
+    self.operation = operation
+
+  def __iter__(self) -> dataset.DatasetIterator[_T]:
+    return _OperationDatasetIterator(self._parent.__iter__(), self.operation)
+
+
+class _OperationDatasetIterator(dataset.DatasetIterator[_T]):
+  """Iterator that applies an operation to the dataset."""
+
+  def __init__(
+      self,
+      parent: dataset.DatasetIterator[_T],
+      operation: ops.Operation,
+  ):
+    super().__init__(parent)
+    self._operation = operation
+    self._iterator = operation(parent)
+
+  def __next__(self) -> _T:
+    return next(self._iterator)
+
+  def get_state(self):
+    return self._parent.get_state()
+
+  def set_state(self, state):
+    self._parent.set_state(state)
+
+
+class _DataLoaderStateIterDataset(dataset.IterDataset[_T]):
+  """IterDataset that converts between dataset and data loader state."""
+
+  def __init__(
+      self,
+      parent: dataset.IterDataset[_T],
+      shard_options: sharding.ShardOptions,
+      worker_count: int,
+      sampler: Sampler,
+      data_source: RandomAccessDataSource,
+  ):
+    super().__init__(parent)
+    self._shard_options = shard_options
+    self._worker_count = worker_count
+    self._sampler = sampler
+    self._data_source = data_source
+
+  def __iter__(self) -> dataset.DatasetIterator[_T]:
+    return _DataLoaderStateDatasetIterator(
+        self._parent.__iter__(),
+        self._shard_options,
+        self._worker_count,
+        self._sampler,
+        self._data_source,
+    )
+
+
+class _DataLoaderStateDatasetIterator(dataset.DatasetIterator[_T]):
+  """Iterator that converts between dataset and data loader state."""
+
+  def __init__(
+      self,
+      parent: dataset.DatasetIterator[_T],
+      shard_options: sharding.ShardOptions | None,
+      worker_count: int,
+      sampler: Sampler,
+      data_source: RandomAccessDataSource,
+  ):
+    super().__init__(parent)
+    self._shard_options = shard_options
+    self._worker_count = worker_count
+    self._sampler = sampler
+    self._data_source = data_source
+
+  def __next__(self) -> _T:
+    return next(self._parent)
+
+  def get_state(self):
+    # TODO: Fix user tests relying on the exact checkpoint
+    # structure and switch to native dataset checkpointing. This class can be
+    # removed afterwards.
+    dataset_state = self._parent.get_state()
+    if "workers_state" not in dataset_state:
+      dataset_state = {
+          "workers_state": {"0": dataset_state},
+          "last_worker_index": -1,
+      }
+    workers_state = dataset_state["workers_state"]
+    last_worker_index = dataset_state["last_worker_index"]
+    worker_count = len(dataset_state["workers_state"])
+
+    shard_index = self._shard_options.shard_index if self._shard_options else 0
+    shard_count = self._shard_options.shard_count if self._shard_options else 1
+    global_worker_count = worker_count * shard_count
+
+    local_offset = shard_index - global_worker_count
+    last_seen_indices = {
+        str(i): (
+            local_offset
+            + i * shard_count
+            + workers_state[str(i)]["next_index"] * global_worker_count
+        )
+        for i in range(worker_count)
+    }
+
+    dataloader_state = {
+        _VERSION: _CHECKPOINT_VERSION_NUMBER,
+        _LAST_SEEN_INDICES: last_seen_indices,
+        _LAST_WORKER_INDEX: last_worker_index,
+        _WORKER_COUNT: self._worker_count,
+        _SAMPLER: repr(self._sampler),
+        _DATA_SOURCE: _source_repr(self._data_source),
+    }
+    return dataloader_state
+
+  def set_state(self, state):
+    last_seen_indices = state[_LAST_SEEN_INDICES]
+    last_worker_index = state[_LAST_WORKER_INDEX]
+    worker_count = state[_WORKER_COUNT]
+    shard_count = self._shard_options.shard_count if self._shard_options else 1
+    shard_index = self._shard_options.shard_index if self._shard_options else 0
+    global_worker_count = worker_count * shard_count
+
+    if worker_count == 0:
+      dataset_state = {
+          "next_index": (
+              (last_seen_indices[str(0)] + shard_count - shard_index)
+              // shard_count
+          )
+      }
+      self._parent.set_state(dataset_state)
+      return
+
+    iterations_to_skip = {str(i): 0 for i in range(worker_count)}
+    workers_state = {
+        str(i): {
+            "next_index": (
+                (
+                    last_seen_indices[str(i)]
+                    + global_worker_count
+                    - shard_index
+                    - i * shard_count
+                )
+                // global_worker_count
+            )
+        }
+        for i in range(worker_count)
+    }
+    dataset_state = {
+        "workers_state": workers_state,
+        "iterations_to_skip": iterations_to_skip,
+        "last_worker_index": last_worker_index,
+    }
+    self._parent.set_state(dataset_state)
 
 
 class DataLoader:
@@ -254,6 +431,7 @@ class DataLoader:
             "DataLoader for greater flexibility."
         )
       # pylint: enable=protected-access
+    self._dataset = self._create_dataset()
 
   @property
   def multiprocessing_options(self) -> options.MultiprocessingOptions:
@@ -268,6 +446,30 @@ class DataLoader:
   def _global_num_workers(self):
     """Returns the number of workers across all data shards."""
     return self._local_num_workers * self._shard_options.shard_count  # pytype: disable=attribute-error
+
+  def _create_dataset(self) -> dataset.IterDataset:
+    """Returns the dataset for this data loader."""
+    ds = _SamplerMapDataset(
+        self._data_source, self._sampler, self._shard_options
+    )
+    ds = ds.to_iter_dataset(self._read_options)
+    for operation in self._operations:
+      ds = _apply_transform_to_dataset(operation, ds)
+    ds = ds.map(lambda r: r.data)
+    if self.multiprocessing_options.num_workers > 0:
+      ds = prefetch.MultiprocessPrefetchIterDataset(
+          ds,
+          self.multiprocessing_options,
+          always_report_worker_state=True,
+      )
+    ds = _DataLoaderStateIterDataset(
+        ds,
+        self._shard_options,
+        self._multiprocessing_options.num_workers,
+        self._sampler,
+        self._data_source,
+    )
+    return ds
 
   def __iter__(self) -> DataLoaderIterator:
     return DataLoaderIterator(self, self._create_initial_state())
@@ -306,58 +508,6 @@ class DataLoader:
         _DATA_SOURCE: _source_repr(self._data_source),
     }
 
-  def _read_data(self, last_seen_index: int) -> Iterator[record.Record]:
-    """Reads sampled record indices from the data source and yields records."""
-    # We use a thread pool to read elements and add them to a buffer in the
-    # background.
-    # The main thread simply gets elements from the buffer and waits for them
-    # to be available.
-    next_index = last_seen_index + self._global_num_workers
-
-    def fetch_element(index: int) -> record.Record:
-      metadata = self._sampler[index]
-      data = self._data_source[metadata.record_key]
-      return record.Record(metadata=metadata, data=data)
-
-    if self._read_options.num_threads == 0:
-      while True:
-        try:
-          element = fetch_element(next_index)
-        except IndexError:
-          return
-        yield element
-        next_index += self._global_num_workers
-
-    buffer = collections.deque()
-    buffer_size = self._read_options.prefetch_buffer_size
-
-    with futures.ThreadPoolExecutor(self._read_options.num_threads) as executor:
-      # Fill the buffer initially.
-      while len(buffer) < buffer_size:
-        buffer.append(executor.submit(fetch_element, next_index))
-        next_index += self._global_num_workers
-
-      # Iterate until we get an IndexError. The IndexError indicates that we
-      # reached the end of the Sampler.
-      while True:
-        try:
-          element = buffer.popleft().result()
-        except IndexError:
-          # End of sampler.
-          return
-        yield element
-        buffer.append(executor.submit(fetch_element, next_index))
-        next_index += self._global_num_workers
-
-  def _read_and_transform_data(
-      self, last_seen_index: int
-  ) -> Iterator[record.Record]:
-    """Reads input data and applies operations to it."""
-    iterator = self._read_data(last_seen_index)
-    for operation in self._operations:
-      iterator = _apply_transform(operation, iterator)
-    return iterator
-
   def _validate_state(self, state: _IteratorState):
     """Validates that loaded state matches data loader definition."""
     # state can be None if Iterator never progressed before checkpointing.
@@ -386,49 +536,6 @@ class DataLoader:
       )
 
 
-def _iterator_with_context(
-    iterator: contextlib.AbstractContextManager[Iterator[_T]],
-) -> Iterator[_T]:
-  with iterator as it:
-    yield from it
-
-
-def _source_repr(source: RandomAccessDataSource) -> str:
-  """Returns a string representation of the source."""
-  # If the source has data in memory avoid printing the data itself.
-  if isinstance(source, (list, tuple, np.ndarray)):
-    return str(type(source))
-  return repr(source)
-
-
-class GetElementProducerFn(grain_pool.GetElementProducerFn):
-  """Implements `grain_pool.GetElementProducerFn`."""
-
-  def __init__(
-      self,
-      state: _IteratorState,
-      read_and_transform_data: Callable[[int], Iterator[record.Record]],
-  ):
-    self._state = state
-    self._read_and_transform_data = read_and_transform_data
-
-  def __call__(
-      self,
-      *,
-      worker_index: int,
-      worker_count: int,
-      start_profiling_event: synchronize.Event | None = None,
-      stop_profiling_event: synchronize.Event | None = None,
-      stats_out_queue: queues.Queue | None = None,
-  ) -> Iterator[record.Record]:
-    del worker_count
-    del start_profiling_event
-    del stop_profiling_event
-    del stats_out_queue
-    last_seen_index = self._state[_LAST_SEEN_INDICES].get(str(worker_index))
-    yield from self._read_and_transform_data(last_seen_index)
-
-
 class DataLoaderIterator(collections.abc.Iterator[_T]):
   """DataLoader iterator providing get/set state functionality.
 
@@ -454,61 +561,18 @@ class DataLoaderIterator(collections.abc.Iterator[_T]):
     self._data_loader = data_loader
     self._data_loader._validate_state(state)
     self._state = state
-    self._raw_iterator = None
-    self._iterator = None
+    self._iterator = data_loader._dataset.__iter__()  # pylint: disable=protected-access
+    self._iterator.set_state(state)
 
   def __iter__(self) -> DataLoaderIterator[_T]:
     return self
 
-  def _create_iterator(self) -> None:
-    """Creates the wrapped `MultiProcessIterator` or in-process iterator."""
-    if self._data_loader.multiprocessing_options.num_workers == 0:
-      # Pipeline is going to be executed in the main process.
-      self._raw_iterator = self._data_loader._read_and_transform_data(  # pylint: disable=protected-access
-          self._state[_LAST_SEEN_INDICES]["0"]
-      )
-      self._iterator = self._raw_iterator
-    else:
-      state = self._state
-      # Custom DataLoader can avoid pickling the `self._data_loader` object here
-      # by e.g. making `_read_and_transform_data` a property.
-      read_and_transform_data = self._data_loader._read_and_transform_data  # pylint: disable=protected-access
-
-      get_element_producer_fn = GetElementProducerFn(
-          state, read_and_transform_data
-      )
-
-      worker_index_to_start_reading = (
-          state[_LAST_WORKER_INDEX] + 1
-      ) % self._data_loader.multiprocessing_options.num_workers
-
-      self._raw_iterator = grain_pool.MultiProcessIterator(
-          get_element_producer_fn,
-          self._data_loader.multiprocessing_options,
-          worker_index_to_start_reading,
-      )
-      self._iterator = _iterator_with_context(self._raw_iterator)
-
   def __next__(self) -> _T:
-    start_time = time.time_ns()
-    if self._iterator is None:
-      self._create_iterator()
-
-    result_record = next(self._iterator)
-
-    if isinstance(self._raw_iterator, grain_pool.MultiProcessIterator):
-      last_worker_index = self._raw_iterator.get_last_worker_index()
-      self._state[_LAST_WORKER_INDEX] = last_worker_index
-    else:
-      last_worker_index = 0
-    self._state[_LAST_SEEN_INDICES][
-        str(last_worker_index)
-    ] = result_record.metadata.index
-    _iterator_get_next_metric.Record(time.time_ns() - start_time)
-    return result_record.data
+    return next(self._iterator)
 
   def get_state(self) -> bytes:
-    return json.dumps(self._state, indent=4).encode()
+    state = self._iterator.get_state()
+    return json.dumps(state, indent=4).encode()
 
   def set_state(self, state: bytes):
     """Sets the state for the underlying iterator.
@@ -519,9 +583,7 @@ class DataLoaderIterator(collections.abc.Iterator[_T]):
     """
     state = json.loads(state.decode())
     self._data_loader._validate_state(state)  # pylint: disable=protected-access
-    self._state: _IteratorState = state
-    self._raw_iterator = None
-    self._iterator = None
+    self._iterator.set_state(state)
 
   ### BEGIN Orbax checkpointing API.
   # See orbax.checkpoint.v1.handlers.StatefulCheckpointable for more details.
@@ -571,52 +633,59 @@ class DataLoaderIterator(collections.abc.Iterator[_T]):
     return f"PyGrainDatasetIterator(state={self.get_state().decode()})"
 
 
-def _apply_transform(
+def _source_repr(source: RandomAccessDataSource) -> str:
+  """Returns a string representation of the source."""
+  # If the source has data in memory avoid printing the data itself.
+  if isinstance(source, (list, tuple, np.ndarray)):
+    return str(type(source))
+  return repr(source)
+
+
+def _apply_transform_to_dataset(
     transform: transforms.Transformation | Operation,
-    input_iterator: Iterator[record.Record],
-) -> Iterator[record.Record]:
-  """Applies the `transform` to records in the iterator."""
-  fn: Callable[[record.Record], Tuple[record.Record, bool]] = None
-  # pylint: disable=g-long-lambda
-  # pytype: disable=attribute-error
+    ds: dataset.IterDataset,
+) -> dataset.IterDataset:
+  """Applies the `transform` to the dataset."""
   if isinstance(transform, transforms.MapTransform):
-    fn = lambda r: (record.Record(r.metadata, transform.map(r.data)), True)
+    return ds.map(
+        lambda r: record.Record(metadata=r.metadata, data=transform.map(r.data))
+    )
   elif isinstance(transform, transforms.RandomMapTransform):
-    fn = lambda r: (
-        record.Record(r.metadata, transform.random_map(r.data, r.metadata.rng)),
-        True,
+    return ds.map(
+        lambda r: record.Record(
+            metadata=r.metadata,
+            data=transform.random_map(r.data, r.metadata.rng),
+        )
     )
   elif isinstance(transform, transforms.TfRandomMapTransform):
-    fn = lambda r: (
-        record.Record(
-            r.metadata, transform.np_random_map(r.data, r.metadata.rng)
-        ),
-        True,
+    return ds.map(
+        lambda r: record.Record(
+            metadata=r.metadata,
+            data=transform.np_random_map(r.data, r.metadata.rng),
+        )
     )
   elif isinstance(transform, transforms.Filter):
-    fn = lambda r: (r, bool(transform.filter(r.data)))
+    return ds.filter(lambda r: transform.filter(r.data))
   elif isinstance(transform, transforms.Batch):
-    batch_op = BatchOperation(
+
+    def batch_fn(
+        records: Sequence[record.Record[_T]],
+    ) -> record.Record[_T]:
+      values = []
+      last_metadata = records[0].metadata
+      for r in records:
+        last_metadata = r.metadata
+        values.append(r.data)
+      batch = batch_ds.make_batch(values)
+      return record.Record(
+          metadata=last_metadata.remove_record_key(), data=batch
+      )
+
+    return ds.batch(
         batch_size=transform.batch_size,
         drop_remainder=transform.drop_remainder,
+        batch_fn=batch_fn,
     )
-    batch_op.disable_deprecation_message()
-    for r in batch_op(input_iterator):
-      yield r
   else:
-    # Transform is a legacy style operation and __call__() yield output
-    # records.
-    for r in transform(input_iterator):
-      yield r
-  # pytype: enable=attribute-error
-  # pylint: enable=g-long-lambda
-
-  for input_record in input_iterator:
-    try:
-      output_record, filter_result = fn(input_record)
-    except Exception as e:
-      if sys.version_info >= (3, 11):
-        e.add_note(f"\nThe error occurred in {transform}.")
-      raise e
-    if filter_result:
-      yield output_record
+    # Handle legacy operations
+    return _OperationIterDataset(ds, transform)
