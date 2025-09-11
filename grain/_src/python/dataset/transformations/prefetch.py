@@ -363,6 +363,8 @@ _RECORD_STATE_INTERVAL_S = 3
 
 def _copy_leaf_to_shm(leaf: Any, min_size: int = 0) -> Any:
   """Copies `leaf` to shared memory if it's a big enough numpy array."""
+  if isinstance(leaf, shared_memory_array.SharedMemoryArray):
+    return leaf.metadata
   if (
       not isinstance(leaf, np.ndarray)
       or leaf.dtype.hasobject
