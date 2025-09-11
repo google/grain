@@ -199,6 +199,7 @@ py_test(
         ":options",
         ":samplers",
         ":shared_memory_array",
+        "//grain",
         "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
         "@abseil-py//absl/flags",
@@ -314,6 +315,7 @@ py_test(
     srcs_version = "PY3",
     deps = [
         ":grain_logging",
+        "//grain:conftest",
         "@abseil-py//absl/logging",
         "@abseil-py//absl/testing:absltest",
     ],
