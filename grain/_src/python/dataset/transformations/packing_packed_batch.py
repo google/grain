@@ -13,10 +13,10 @@
 # limitations under the License.
 """This module provides helper classes for multi-bin packing.
 
-Example packing is a step in many input pipelines for sequence-to-sequence
+Example packing is a step in many input pipelines for sequence to sequence
 models where multiple examples are packed together as a single example in order
-to maximize data fed to a TPU per batch. Our approach is implemented in pure
-Python (thus easy to extend/modify) and supports N-dimensional input features.
+to maximise data fed to a TPU per batch. Our approach is implemented in pure
+Python (thus easy to extend/ modify) and supports N-dimensional input features.
 
 Note on the packing algorithms: We perform online packing. We start by
 constructing an empty batch of "num_packing_bins" rows. For each input example,
