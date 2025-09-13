@@ -54,7 +54,10 @@ class SuccessfulRowOrFailingComponents:
   # or None if it can't fit into any row.
   row: int | None
   # If it can't fit into any row, we return the name of all the components
-  # that couldn't fit.
+  # that couldn't fit. We are packing multiple values, of which any of them
+  # could fail to fit within a given bin. The values have string names like
+  # "inputs" or "targets". This field holds the value of those components
+  # that failed to fit.
   failing_components: list[str] | None
 
 
