@@ -66,7 +66,7 @@ def _common_test_body(
 
 
 class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
-  """Tests for FirstFitPackIterDataset.
+  """Base test for FirstFitPackIterDataset.
 
   This class contains the test suite for the First-Fit packing algorithm.
   It also serves as a base for other packing algorithm tests (e.g., BestFit),
@@ -1187,7 +1187,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
 
 
 class BaseBestFitPackIterDatasetTest(BaseFirstFitPackIterDatasetTest):
-  """Tests for the Best-Fit packing algorithm.
+  """Base test for the Best-Fit packing algorithm.
 
   This class inherits from BaseFirstFitPackIterDatasetTest to reuse all
   general packing tests (e.g., for checkpointing, data types). It overrides
