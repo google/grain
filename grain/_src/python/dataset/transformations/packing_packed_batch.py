@@ -304,7 +304,10 @@ class BestFitPackedBatch(PackedBatch[_T]):
       order = np.argsort(-fail_counts)
       failing_components = [self._feature_paths[i] for i in order if fail_counts[i] > 0]
       if not failing_components:
-          raise ValueError("A failing component must be returned if no row is found.")
+        raise ValueError(
+            "If no successful row was found for an element, a failing component"
+            " must be returned."
+        )
       return failing_components
 
     # Score is the sum of free cells (higher score = tighter fit).
