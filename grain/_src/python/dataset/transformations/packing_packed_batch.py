@@ -11,7 +11,28 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""This module provides helper classes for multi-bin packing."""
+"""This module provides helper classes for multi-bin packing.
+
+Example packing is a step in many input pipelines for sequence-to-sequence
+models where multiple examples are packed together as a single example in order
+to maximize data fed to a TPU per batch. Our approach is implemented in pure
+Python (thus easy to extend/modify) and supports N-dimensional input features.
+
+Note on the packing algorithms: We perform online packing. We start by
+constructing an empty batch of "num_packing_bins" rows. For each input example,
+we try to find a bin where it can be added. If the new example can't fit in any bin,
+the current batch is finalized, and a new batch is started with that element. 
+This module implements two common strategies:
+
+- First-Fit: For a new example, this strategy finds the first available
+  bin that it can fit into. This is implemented in FirstFitPackedBatch.
+  (https://en.wikipedia.org/wiki/First-fit_bin_packing).
+
+- Best-Fit: For a new example, this strategy checks all available bins and
+  places it into the one that leaves the least amount of empty space (i.e., the
+  tightest fit). This is implemented in BestFitPackedBatch.
+  (https://en.wikipedia.org/wiki/Best-fit_bin_packing).
+"""
 
 from __future__ import annotations
 
@@ -81,9 +102,9 @@ class PackedBatch(abc.ABC, Generic[_T]):
 
   def __init__(
       self,
-      element_for_shapes: Any,
+      element_for_shapes: Any,  # PyTree[np.ndarray]
       num_packing_bins: int,
-      length_struct: Any,
+      length_struct: Any,  # PyTree[int]
       meta_features: Sequence[str] = (),
   ):
     self._num_packing_bins = num_packing_bins
@@ -191,9 +212,9 @@ class FirstFitPackedBatch(PackedBatch[_T]):
 
   def __init__(
       self,
-      element_for_shapes: Any,
+      element_for_shapes: Any,  # PyTree[np.ndarray]
       num_packing_bins: int,
-      length_struct: Any,
+      length_struct: Any,  # PyTree[int]
       meta_features: Sequence[str] = (),
   ):
     super().__init__(
@@ -244,9 +265,9 @@ class BestFitPackedBatch(PackedBatch[_T]):
 
   def __init__(
       self,
-      element_for_shapes: Any,
+      element_for_shapes: Any,  # PyTree[np.ndarray]
       num_packing_bins: int,
-      length_struct: Any,
+      length_struct: Any,  # PyTree[int]
       meta_features: Sequence[str] = (),
   ):
     super().__init__(
