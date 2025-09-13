@@ -75,9 +75,7 @@ class BasePackIterDatasetTest(parameterized.TestCase):
     )
     actual_elements = list(ld)
     self.assertEqual(len(actual_elements), len(expected_elements))
-
-    for actual, expected in zip(actual_elements, expected_elements):
-      _assert_trees_equal(actual, expected)
+    _assert_trees_equal(actual_elements, expected_elements)
 
 
 class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
@@ -228,10 +226,7 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "targets": [50, 60],
         },
     ]
-    length_struct = {
-        "inputs": 3,
-        "targets": 3,
-    }
+    length_struct = {"inputs": 3, "targets": 3}
     expected_elements = [
         {
             "inputs": [1, 2, 3],
@@ -281,10 +276,7 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "targets": [50, 60],
         },
     ]
-    length_struct = {
-        "inputs": 4,
-        "targets": 4,
-    }
+    length_struct = {"inputs": 4, "targets": 4}
     expected_elements = [
         {
             "inputs": [1, 2, 3, 6],
@@ -322,10 +314,7 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "targets": [50, 60],
         },
     ]
-    length_struct = {
-        "inputs": 5,
-        "targets": 5,
-    }
+    length_struct = {"inputs": 5, "targets": 5}
     expected_elements = [
         {
             "inputs": [1, 2, 3, 4, 5],
@@ -363,10 +352,7 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "targets": [50, 60],
         },
     ]
-    length_struct = {
-        "inputs": 6,
-        "targets": 6,
-    }
+    length_struct = {"inputs": 6, "targets": 6}
     expected_elements = [{
         "inputs": [1, 2, 3, 4, 5, 6],
         "targets": [10, 20, 30, 40, 50, 60],
@@ -394,10 +380,7 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "targets": [50, 60],
         },
     ]
-    length_struct = {
-        "inputs": 7,
-        "targets": 7,
-    }
+    length_struct = {"inputs": 7, "targets": 7}
     expected_elements = [{
         "inputs": [1, 2, 3, 4, 5, 6, 0],
         "targets": [10, 20, 30, 40, 50, 60, 0],
@@ -523,10 +506,7 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "a": np.asarray([1, 2, 3]),
         },
     ]
-    length_struct = {
-        "a": 3,
-        "b": 3,
-    }
+    length_struct = {"a": 3, "b": 3}
     ld = self.packer_cls(
         source.SourceMapDataset(input_elements).to_iter_dataset(),
         num_packing_bins=1,
@@ -552,10 +532,7 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "targets": [50, 60],
         },
     ]
-    length_struct = {
-        "inputs": 3,
-        "targets": 3,
-    }
+    length_struct = {"inputs": 3, "targets": 3}
     expected_elements = [
         {
             "inputs": [6, 0, 0],
@@ -617,10 +594,7 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "epoch": [2],
         },
     ]
-    length_struct = {
-        "inputs": 3,
-        "epoch": 3,
-    }
+    length_struct = {"inputs": 3, "epoch": 3}
     expected_elements = [
         {
             "inputs": [7, 0, 0],
@@ -677,10 +651,7 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "epoch": [0],
         },
     ]
-    length_struct = {
-        "inputs": 3,
-        "epoch": 3,
-    }
+    length_struct = {"inputs": 3, "epoch": 3}
     expected_elements = [
         {
             "inputs": [4, 5, 6],
@@ -728,10 +699,7 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "targets": [50, 60],
         },
     ]
-    length_struct = {
-        "inputs": 3,
-        "targets": 3,
-    }
+    length_struct = {"inputs": 3, "targets": 3}
     element_1 = {
         "inputs": [6, 0, 0],
         "targets": [50, 60, 0],
@@ -789,10 +757,7 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "epoch": 3,
         },
     ]
-    length_struct = {
-        "inputs": 3,
-        "epoch": 3,
-    }
+    length_struct = {"inputs": 3, "epoch": 3}
     expected_elements = [
         {
             "inputs": [1, 2, 3],
@@ -832,10 +797,7 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "targets": [50, 60],
         },
     ]
-    length_struct = {
-        "inputs": 3,
-        "targets": 4,
-    }
+    length_struct = {"inputs": 3, "targets": 4}
     expected_elements = [
         {
             "inputs": [1, 2, 3],
@@ -888,11 +850,7 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "targets": [50, 60],
         },
     ]
-    length_struct = {
-        "input_tokens": 5,
-        "input_vectors": 3,
-        "targets": 5,
-    }
+    length_struct = {"input_tokens": 5, "input_vectors": 3, "targets": 5}
     expected_elements = [
         {
             "input_tokens": [1, 2, 3, 0, 0],
@@ -944,11 +902,7 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "meta_feature": 5,
         },
     ]
-    length_struct = {
-        "inputs": 3,
-        "targets": 4,
-        "meta_feature": 3,
-    }
+    length_struct = {"inputs": 3, "targets": 4, "meta_feature": 3}
     expected_elements = [
         {
             "inputs": [1, 2, 3],
@@ -1065,10 +1019,7 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
     input_elements = [
         {k: np.asarray(v) for k, v in d.items()} for d in input_elements
     ]
-    length_struct = {
-        "inputs": 3,
-        "targets": 3,
-    }
+    length_struct = {"inputs": 3, "targets": 3}
     ld = self.packer_cls(
         source.SourceMapDataset(input_elements).to_iter_dataset(),
         num_packing_bins=2,
@@ -1117,8 +1068,7 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
         {k: np.asarray(v) for k, v in d.items()} for d in expected_elements
     ]
     self.assertEqual(len(actual_elements), len(expected_elements))
-    for actual, expected in zip(actual_elements, expected_elements):
-      _assert_trees_equal(actual, expected)
+    _assert_trees_equal(actual_elements, expected_elements)
 
 
 class BaseBestFitPackIterDatasetTest(BaseFirstFitPackIterDatasetTest):

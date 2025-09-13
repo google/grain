@@ -40,8 +40,24 @@ class SuccessfulRowOrFailingComponents:
 def _extract_and_rekey_packed_batch(
     values, *, segment_ids, positions, meta_features: Sequence[str]
 ):
-  """Merges values, segment_ids and positions into a single struct."""
+  """Merges values, segment_ids and positions into a single struct.
+
+  Args:
+    values: The packed values.
+    segment_ids: The segment IDs.
+    positions: The positions.
+    meta_features: Paths of meta features. For meta features segment_ids and
+      positions will not be merged.
+
+  Returns:
+    A data element with packing meta features merged into it.
+  """
+  # Make a shallow copy of the values in the packed batch. The packed batch
+  # structure is internal to the packing op which can be stateful, we should
+  # not make assumptions that once the batch is emitted its contents won't be
+  # used by the op.
   data = copy.copy(values)
+
   assert isinstance(values, dict)
   for k in list(values):
     if k not in meta_features:
@@ -54,6 +70,10 @@ def _extract_and_rekey_packed_batch(
       data[f"{k}_segment_ids"] = segment_ids[k].astype(np.int32)
       data[f"{k}_positions"] = positions[k].astype(np.int32)
   return data
+
+
+def zeros(*args, **kwargs):
+  return np.zeros(*args, **kwargs)
 
 
 class PackedBatch(abc.ABC, Generic[_T]):
@@ -72,29 +92,33 @@ class PackedBatch(abc.ABC, Generic[_T]):
 
     def make_packed_buffer(length: int, x: np.ndarray | int):
       is_scalar = np.ndim(x) == 0
-      shape = () if is_scalar else x.shape[1:]
-      dtype = (
-          (np.int64 if isinstance(x, int) else np.asarray(x).dtype)
-          if is_scalar
-          else x.dtype
+      if is_scalar:
+        shape = ()
+        dtype = np.int64 if isinstance(x, int) else np.asarray(x).dtype
+      else:
+        assert isinstance(x, np.ndarray), type(x)
+        shape = x.shape[1:]
+        dtype = x.dtype
+      return zeros(
+          shape=(num_packing_bins, length, *shape),  # (B, T, ...)
+          dtype=dtype,
       )
-      return np.zeros(shape=(num_packing_bins, length, *shape), dtype=dtype)
 
     self._values = tree_lib.map_structure(
         make_packed_buffer, length_struct, element_for_shapes
     )
     self._segment_ids = tree_lib.map_structure(
-        lambda l: np.zeros((num_packing_bins, l), dtype=np.int32),
+        lambda l: zeros((num_packing_bins, l), dtype=np.int32),
         length_struct,
     )
     self._positions = tree_lib.map_structure(
-        lambda l: np.zeros((num_packing_bins, l), dtype=np.int32),
+        lambda l: zeros((num_packing_bins, l), dtype=np.int32),
         length_struct,
     )
     self._first_free_cell_per_row = tree_lib.map_structure(
-        lambda _: np.zeros(num_packing_bins, dtype=np.int64), length_struct
+        lambda _: zeros(num_packing_bins, dtype=np.int64), length_struct
     )
-    self._num_examples_per_row = np.zeros(num_packing_bins, dtype=np.int32)
+    self._num_examples_per_row = zeros(num_packing_bins, dtype=np.int32)
 
     # Flatten internal buffers and pre-calculate paths for efficient access.
     self._flat_paths_and_max = tree_lib.flatten_with_path(self._length_struct)
@@ -105,7 +129,7 @@ class PackedBatch(abc.ABC, Generic[_T]):
     self._flat_values = tree_lib.flatten(self._values)
     self._flat_seg_ids = tree_lib.flatten(self._segment_ids)
     self._flat_positions = tree_lib.flatten(self._positions)
-    self._flat_ffcpr = tree_lib.flatten(self._first_free_cell_per_row)
+    self._flat_first_free_cell_per_row = tree_lib.flatten(self._first_free_cell_per_row)
 
   def get_packed_batch(self):
     """Returns the current packed batch, slicing off any empty trailing rows."""
@@ -145,7 +169,7 @@ class PackedBatch(abc.ABC, Generic[_T]):
     seg_id = self._num_examples_per_row[row] + 1
     for idx, value in enumerate(flat_elem):
       value_len = 1 if np.ndim(value) == 0 else len(value)
-      start = int(self._flat_ffcpr[idx][row])
+      start = int(self._flat_first_free_cell_per_row[idx][row])
       end = start + value_len
 
       self._flat_values[idx][row, start:end] = value
@@ -153,7 +177,7 @@ class PackedBatch(abc.ABC, Generic[_T]):
       self._flat_positions[idx][row, start:end] = np.arange(
           end - start, dtype=np.int32
       )
-      self._flat_ffcpr[idx][row] = end
+      self._flat_first_free_cell_per_row[idx][row] = end
     self._num_examples_per_row[row] += 1
 
   @abc.abstractmethod
@@ -196,10 +220,10 @@ class FirstFitPackedBatch(PackedBatch[_T]):
           f"Exceeds: (feature_path, feature_length, max_length) = {details}"
       )
 
-    F = len(self._flat_ffcpr)
+    F = len(self._flat_first_free_cell_per_row)
     fits_FB = np.empty((F, self._num_packing_bins), dtype=bool)
     for f in range(F):
-      fits_FB[f, :] = (element_lengths[f] + self._flat_ffcpr[f]) <= self._capacities[f]
+      fits_FB[f, :] = (element_lengths[f] + self._flat_first_free_cell_per_row[f]) <= self._capacities[f]
 
     feasible_rows = np.all(fits_FB, axis=0)
     if np.any(feasible_rows):
@@ -249,7 +273,7 @@ class BestFitPackedBatch(PackedBatch[_T]):
           f"Exceeds: (feature_path, feature_length, max_length) = {details}"
       )
 
-    free_cells_matrix = np.stack(self._flat_ffcpr, axis=0)
+    free_cells_matrix = np.stack(self._flat_first_free_cell_per_row, axis=0)
     new_free_cells = free_cells_matrix + element_lengths[:, np.newaxis]
     fittable_mask = np.all(new_free_cells <= self._capacities[:, np.newaxis], axis=0)
 
