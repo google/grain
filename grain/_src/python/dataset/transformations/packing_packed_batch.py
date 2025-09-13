@@ -139,9 +139,13 @@ class PackedBatch(abc.ABC, Generic[_T]):
         lambda l: zeros((num_packing_bins, l), dtype=np.int32),
         length_struct,
     )
+    # Tracks the next empty position to insert an example for each row
+    # in the batch, for each feature in features_to_pack.
     self._first_free_cell_per_row = tree_lib.map_structure(
         lambda _: zeros(num_packing_bins, dtype=np.int64), length_struct
     )
+    # Tracks the number of examples already packed into row of the batch. Used
+    # to fill the segmentation values for each feature.
     self._num_examples_per_row = zeros(num_packing_bins, dtype=np.int32)
 
     # Flatten internal buffers and pre-calculate paths for efficient access.
@@ -159,6 +163,7 @@ class PackedBatch(abc.ABC, Generic[_T]):
     """Returns the current packed batch, slicing off any empty trailing rows."""
     rows_with_values = np.count_nonzero(self._num_examples_per_row > 0)
     if rows_with_values < self._num_packing_bins:
+      # Partial batch, last rows don't have values.
       values = tree_lib.map_structure(
           lambda x: x[:rows_with_values], self._values
       )
@@ -244,17 +249,25 @@ class FirstFitPackedBatch(PackedBatch[_T]):
           f"Exceeds: (feature_path, feature_length, max_length) = {details}"
       )
 
+    # For each feature and row, check if the element fits.
     F = len(self._flat_first_free_cell_per_row)
     fits_FB = np.empty((F, self._num_packing_bins), dtype=bool)
     for f in range(F):
       fits_FB[f, :] = (element_lengths[f] + self._flat_first_free_cell_per_row[f]) <= self._capacities[f]
 
+    # Find the first row where all features fit.
     feasible_rows = np.all(fits_FB, axis=0)
     if np.any(feasible_rows):
       row = int(np.argmax(feasible_rows))
       self.add_element_to_batch(element, row)
       return None
 
+    # There is no guarantee we have a single failing component, since one
+    # component could be the reason an element could not fit in one row
+    # and a different component could be the reason it could not fit in
+    # a different row. In the event we have multiple, we return all of them
+    # in order of number of rows they failed in, with highest number of failing
+    # rows first.
     fail_counts = np.sum(~fits_FB, axis=1)
     order = np.argsort(-fail_counts)
     failing_components = [self._feature_paths[i] for i in order if fail_counts[i] > 0]
