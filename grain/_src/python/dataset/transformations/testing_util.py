@@ -28,60 +28,53 @@ def _assert_trees_equal(actual, expected):
   tree.map_structure_with_path(_check_equivalence, actual, expected)
 
 
-class BasePackIterDatasetTest(parameterized.TestCase):
-  """A base class for packing algorithm tests to avoid code duplication.
+def _common_test_body(
+    packer_cls: Type[packing.PackIterDataset],
+    input_elements,
+    expected_elements,
+    length_struct,
+    *,
+    num_packing_bins: int,
+    seed: int = 0,
+    shuffle_bins: bool = False,
+    shuffle_bins_group_by_feature: str | None = None,
+    meta_features: Sequence[str] = (),
+    convert_input_to_np: bool = True,
+    kwargs: dict[str, Any] | None = None,
+):
+  """Factor out common test operations in a separate function."""
+  if convert_input_to_np:
+    input_elements = [
+        {k: np.asarray(v) for k, v in d.items()} for d in input_elements
+    ]
+  expected_elements = [
+      {k: np.asarray(v) for k, v in d.items()} for d in expected_elements
+  ]
+  ld = packer_cls(
+      source.SourceMapDataset(input_elements).to_iter_dataset(),
+      num_packing_bins=num_packing_bins,
+      length_struct=length_struct,
+      seed=seed,
+      shuffle_bins=shuffle_bins,
+      shuffle_bins_group_by_feature=shuffle_bins_group_by_feature,
+      meta_features=meta_features,
+      **(kwargs if kwargs else {}),
+  )
+  actual_elements = list(ld)
+  np.testing.assert_equal(len(actual_elements), len(expected_elements))
+  _assert_trees_equal(actual_elements, expected_elements)
 
-  This class should be inherited by a class. 
-  Subclasses must override the `packer_cls` attribute.
+
+class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
+  """Tests for FirstFitPackIterDataset.
+
+  This class contains the test suite for the First-Fit packing algorithm.
+  It also serves as a base for other packing algorithm tests (e.g., BestFit),
+  which can inherit from it to reuse general packing test cases.
   """
 
-  # The specific packing.PackIterDataset class to be tested (e.g., FirstFit).
-  packer_cls: Type[packing.PackIterDataset] | None = None
-  kwargs = {}
-
-  def _common_test_body(
-      self,
-      input_elements,
-      expected_elements,
-      length_struct,
-      *,
-      num_packing_bins: int,
-      seed: int = 0,
-      shuffle_bins: bool = False,
-      shuffle_bins_group_by_feature: str | None = None,
-      meta_features: Sequence[str] = (),
-      convert_input_to_np: bool = True,
-      kwargs: dict[str, Any] | None = None,
-  ):
-    """Factor out common test operations in a separate function."""
-    if self.packer_cls is None:
-      raise ValueError("packer_cls must be set in the subclass.")
-    if convert_input_to_np:
-      input_elements = [
-          {k: np.asarray(v) for k, v in d.items()} for d in input_elements
-      ]
-    expected_elements = [
-        {k: np.asarray(v) for k, v in d.items()} for d in expected_elements
-    ]
-    ld = self.packer_cls(
-        source.SourceMapDataset(input_elements).to_iter_dataset(),
-        num_packing_bins=num_packing_bins,
-        length_struct=length_struct,
-        seed=seed,
-        shuffle_bins=shuffle_bins,
-        shuffle_bins_group_by_feature=shuffle_bins_group_by_feature,
-        meta_features=meta_features,
-        **(kwargs if kwargs else {}),
-    )
-    actual_elements = list(ld)
-    self.assertEqual(len(actual_elements), len(expected_elements))
-    _assert_trees_equal(actual_elements, expected_elements)
-
-
-class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
-  """Tests for FirstFitPackIterDataset."""
-
   packer_cls = packing.FirstFitPackIterDataset
+  kwargs = {}
 
   def test_packing_scenario_1(self):
     """Provides the foundational comparison case for the two algorithms."""
@@ -108,8 +101,12 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "features_positions": list(range(8)) + ([0] * 2),
         },
     ]
-    self._common_test_body(
-        input_elements, expected_elements, length_struct, num_packing_bins=2
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=2,
     )
 
   def test_packing_scenario_2(self):
@@ -134,8 +131,12 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "features_positions": list(range(15)) + ([0] * 5),
         },
     ]
-    self._common_test_body(
-        input_elements, expected_elements, length_struct, num_packing_bins=2
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=2,
     )
 
   def test_packing_scenario_3(self):
@@ -169,8 +170,12 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "features_positions": list(range(40)) + ([0] * 60),
         },
     ]
-    self._common_test_body(
-        input_elements, expected_elements, length_struct, num_packing_bins=3
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=3,
     )
 
   def test_packing_scenario_4(self):
@@ -202,8 +207,12 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "features_positions": list(range(10)) + ([0] * 10),
         },
     ]
-    self._common_test_body(
-        input_elements, expected_elements, length_struct, num_packing_bins=3
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=3,
     )
 
   @parameterized.parameters(
@@ -253,7 +262,8 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "targets_positions": [0, 1, 0],
         },
     ]
-    self._common_test_body(
+    _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -295,8 +305,12 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "targets_positions": [0, 1, 2, 0],
         },
     ]
-    self._common_test_body(
-        input_elements, expected_elements, length_struct, num_packing_bins=2
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=2,
     )
 
   def test_pack_sequences_length_5(self):
@@ -333,8 +347,12 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "targets_positions": [0, 1, 0, 0, 0],
         },
     ]
-    self._common_test_body(
-        input_elements, expected_elements, length_struct, num_packing_bins=2
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=2,
     )
 
   def test_pack_sequences_length_6(self):
@@ -361,8 +379,12 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
         "inputs_positions": [0, 1, 2, 0, 1, 0],
         "targets_positions": [0, 0, 1, 2, 0, 1],
     }]
-    self._common_test_body(
-        input_elements, expected_elements, length_struct, num_packing_bins=2
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=2,
     )
 
   def test_pack_sequences_length_7(self):
@@ -389,8 +411,12 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
         "inputs_positions": [0, 1, 2, 0, 1, 0, 0],
         "targets_positions": [0, 0, 1, 2, 0, 1, 0],
     }]
-    self._common_test_body(
-        input_elements, expected_elements, length_struct, num_packing_bins=1
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=1,
     )
 
   def test_bfloat16(self):
@@ -471,7 +497,8 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
         },
     ]
 
-    self._common_test_body(
+    _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -562,7 +589,8 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "targets_positions": [0, 1, 2],
         },
     ]
-    self._common_test_body(
+    _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -624,7 +652,8 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "inputs_positions": [0, 1, 0],
         },
     ]
-    self._common_test_body(
+    _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -675,7 +704,8 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "inputs_positions": [0, 1, 2],
         },
     ]
-    self._common_test_body(
+    _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -735,7 +765,8 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
       expected_elements = [element_2, element_1, element_3]
     else:
       raise ValueError(f"Unexpected seed: {seed}")
-    self._common_test_body(
+    _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -775,7 +806,8 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "inputs_positions": [0, 1, 0],
         },
     ]
-    self._common_test_body(
+    _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -827,7 +859,8 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "targets_positions": [0, 1, 0, 0],
         },
     ]
-    self._common_test_body(
+    _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -878,7 +911,8 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "targets_positions": [0, 1, 2, 0, 1],
         },
     ]
-    self._common_test_body(
+    _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -935,7 +969,8 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
             "meta_feature": [5, 0, 0],
         },
     ]
-    self._common_test_body(
+    _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -1075,7 +1110,12 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
 
 
 class BaseBestFitPackIterDatasetTest(BaseFirstFitPackIterDatasetTest):
-  """Tests for BestFitPackIterDataset."""
+  """Tests for the Best-Fit packing algorithm.
+
+  This class inherits from BaseFirstFitPackIterDatasetTest to reuse all
+  general packing tests (e.g., for checkpointing, data types). It overrides
+  only the packing scenario tests that are specific to the Best-Fit strategy.
+  """
 
   packer_cls = packing.BestFitPackIterDataset
 
@@ -1104,8 +1144,12 @@ class BaseBestFitPackIterDatasetTest(BaseFirstFitPackIterDatasetTest):
             "features_positions": [0, 1, 2, 3, 4, 5, 6, 7, 0, 1],
         },
     ]
-    self._common_test_body(
-        input_elements, expected_elements, length_struct, num_packing_bins=2
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=2,
     )
 
   def test_packing_scenario_2(self):
@@ -1130,8 +1174,12 @@ class BaseBestFitPackIterDatasetTest(BaseFirstFitPackIterDatasetTest):
             "features_positions": list(range(15)) + list(range(4)) + ([0] * 1),
         },
     ]
-    self._common_test_body(
-        input_elements, expected_elements, length_struct, num_packing_bins=2
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=2,
     )
 
   def test_packing_scenario_3(self):
@@ -1160,8 +1208,12 @@ class BaseBestFitPackIterDatasetTest(BaseFirstFitPackIterDatasetTest):
             "features_positions": list(range(70)) + list(range(25)) + ([0] * 5),
         },
     ]
-    self._common_test_body(
-        input_elements, expected_elements, length_struct, num_packing_bins=3
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=3,
     )
 
   def test_packing_scenario_4(self):
@@ -1188,8 +1240,12 @@ class BaseBestFitPackIterDatasetTest(BaseFirstFitPackIterDatasetTest):
             "features_positions": list(range(15)) + list(range(4)) + ([0] * 1),
         },
     ]
-    self._common_test_body(
-        input_elements, expected_elements, length_struct, num_packing_bins=3
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=3,
     )
 
 
