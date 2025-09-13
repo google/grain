@@ -482,6 +482,7 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
   def test_missing_length_struct_feature(self):
     input_elements = [{
         "a": np.asarray([1, 2, 3]),
+        # This feature is not in the length struct so it should be ignored.
         "b": np.asarray([1, 2, 3]),
     }]
     length_struct = {"a": 3}
@@ -493,7 +494,9 @@ class BaseFirstFitPackIterDatasetTest(BasePackIterDatasetTest):
     )
     result = next(iter(ld))
     np.testing.assert_array_equal(result["a"], np.asarray([1, 2, 3]))
-    np.testing.assert_array_equal(result["a_segment_ids"], np.asarray([1, 1, 1]))
+    np.testing.assert_array_equal(
+        result["a_segment_ids"], np.asarray([1, 1, 1])
+    )
     np.testing.assert_array_equal(result["a_positions"], np.asarray([0, 1, 2]))
 
   def test_variable_key_features(self):
