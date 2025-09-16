@@ -5,7 +5,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.2
+    jupytext_version: 1.17.3
 kernelspec:
   display_name: Python 3
   name: python3
@@ -283,6 +283,19 @@ print(f"Mixed dataset length = {len(ds)}")  # sys.maxsize
 
 ### Shuffling
 
+Grain doesn't shuffle your data by default. If no shuffle is applied, data will
+be iterated/batched together sequentially in the initial ordering. For sharded
+datasets, grain will use the ordering of filenames.
+
+Grain provides 3 different shuffling methods: global shuffle, window shuffle,
+and hierarchical shuffle.
+
+#### Global Shuffle
+
+Global shuffling will apply shuffling throughout the entire dataset and dataset
+shards. This provides low overhead for recommended file formats supporting
+random access such as ArrayRecord or Bagz.
+
 If you need to globally shuffle the mixed data prefer shuffling individual
 `Dataset`s before mixing. This will ensure that the actual weights of the mixed
 `Dataset`s are stable and as close as possible to the provided weights.
@@ -311,6 +324,50 @@ ds2 = grain.MapDataset.source(source2).seed(43).shuffle().repeat()
 
 ds = grain.MapDataset.mix([ds1, ds2], weights=[1, 2])
 print(f"Mixed dataset length = {len(ds)}")  # sys.maxsize
+```
+
++++ {"id": "y2FarwpEokOg"}
+
+#### Window Shuffle
+
+Window shuffling, a module in `grain.experimental`, allows users to specify the
+window size while shuffling through the dataset. This provides relatively low
+overhead shuffling for datasets that don't provide efficent random access.
+
+```{code-cell}
+:id: RLsmhS7eRA4F
+
+dataset = grain.MapDataset.range(100)
+dataset = grain.experimental.WindowShuffleMapDataset(dataset, window_size=10, seed=42)
+iter_ds = iter(dataset)
+for _ in range(5):
+  print(next(iter_ds))
+```
+
++++ {"id": "2my-x-ReRXqR"}
+
+#### Hierarchical Shuffle
+
+Hierarchical shuffle allows shuffling whole datasets first and then shuffling a
+buffer of elements that is filled up concurrently from the shuffled datasets.
+This method is best for sharded file formats that don't provide efficent random
+access(Parquet, TFRecord, etc.) to best mimic global shuffling.
+
+The overhead for this shuffling method comes mainly from the window buffer and
+the interleaving buffer.
+
+```{code-cell}
+:id: i9EXXERPSSHP
+
+ds_1 = grain.experimental.WindowShuffleIterDataset(grain.MapDataset.range(100), window_size=10, seed=42)
+ds_2 = grain.experimental.WindowShuffleIterDataset(grain.MapDataset.range(300,400), window_size=10, seed=42)
+dataset = grain.experimental.WindowShuffleIterDataset(
+    grain.experimental.InterleaveIterDataset([ds_1, ds_2], cycle_length=10),
+    window_size=10,
+    seed=42)
+iter_ds = iter(dataset)
+for _ in range(5):
+  print(next(iter_ds))
 ```
 
 +++ {"id": "DLsJtcAE8FPu"}
