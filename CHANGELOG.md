@@ -10,6 +10,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     the first epoch exactly if set to False (True by default).
   * Introduces `grain.experimental.RebatchIterDataset` for efficient rebatch.
   * Migrates data loader to use dataset API under the hood.
+  * Adds best-fit packing implementation.
 
 * Breaking changes:
   * SliceMapDataset updated to use the full index relative to the parent
