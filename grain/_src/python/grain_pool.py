@@ -54,6 +54,7 @@ import pstats
 import queue
 import sys
 import threading
+import time
 import traceback
 from typing import Any, Callable, Protocol, Type, TypeVar, Union, runtime_checkable
 
@@ -117,6 +118,153 @@ class RemoteWorkerError:
       return self.error_cls(msg)
     except Exception:  # pylint: disable=broad-except
       return RuntimeError(msg)
+
+
+class _VariableLengthMultiprocessingQueue:
+  """A multiprocessing queue whose max size can be dynamically changed."""
+
+  def __init__(self, max_size: int, ctx: context.BaseContext):
+    self._queue = ctx.Queue()
+    self._max_size = ctx.Value("i", max_size)
+    self._cond = ctx.Condition()
+
+  def set_max_size(self, max_size: int):
+    with self._cond:
+      self._max_size.value = max_size
+      self._cond.notify_all()
+
+  def put(self, obj, block: bool = True, timeout: float | None = None):
+    """Puts an item into the queue, similar to `queue.Queue.put`.
+
+    This method behaves like `queue.Queue.put`, but respects the current
+    `_max_size` of this variable-length queue. If the queue is full based on
+    `_max_size`, this method can block or raise `queue.Full` depending on
+    `block` and `timeout`.
+
+    Args:
+      obj: The object to put into the queue.
+      block: If True, block until a free slot is available.
+      timeout: If `block` is True, wait for at most `timeout` seconds.
+
+    Raises:
+      queue.Full: If the queue is full and `block` is False or the `timeout`
+        is reached.
+    """
+    if not block:
+      with self._cond:
+        if self._queue.qsize() >= self._max_size.value:
+          raise queue.Full
+        self._queue.put(obj, block=False)
+      return
+
+    deadline = None
+    if timeout is not None:
+      deadline = time.time() + timeout
+
+    with self._cond:
+      while self._queue.qsize() >= self._max_size.value:
+        if deadline is None:
+          self._cond.wait()
+          continue
+        remaining = deadline - time.time()
+        if remaining <= 0:
+          raise queue.Full
+        if not self._cond.wait(remaining):
+          if self._queue.qsize() >= self._max_size.value:
+            raise queue.Full
+          else:
+            break
+      self._queue.put(obj, block=False)
+
+  def get(self, block: bool = True, timeout: float | None = None):
+    item = self._queue.get(block=block, timeout=timeout)
+    with self._cond:
+      self._cond.notify()
+    return item
+
+  def empty(self) -> bool:
+    return self._queue.empty()
+
+  def get_nowait(self):
+    item = self._queue.get_nowait()
+    with self._cond:
+      self._cond.notify()
+    return item
+
+  def close(self):
+    self._queue.close()
+
+  def cancel_join_thread(self):
+    self._queue.cancel_join_thread()
+
+  def qsize(self) -> int:
+    return self._queue.qsize()
+
+
+class _VariableLengthQueue:
+  """A queue whose max size can be dynamically changed."""
+
+  def __init__(self, max_size: int):
+    self._queue = queue.Queue()
+    self._max_size = max_size
+    self._cond = threading.Condition()
+
+  def set_max_size(self, max_size: int):
+    with self._cond:
+      self._max_size = max_size
+      self._cond.notify_all()
+
+  def put(self, obj, block: bool = True, timeout: float | None = None):
+    """Puts an item into the queue, similar to `queue.Queue.put`.
+
+    This method behaves like `queue.Queue.put`, but respects the current
+    `_max_size` of this variable-length queue. If the queue is full based on
+    `_max_size`, this method can block or raise `queue.Full` depending on
+    `block` and `timeout`.
+
+    Args:
+      obj: The object to put into the queue.
+      block: If True, block until a free slot is available.
+      timeout: If `block` is True, wait for at most `timeout` seconds.
+
+    Raises:
+      queue.Full: If the queue is full and `block` is False or the `timeout`
+        is reached.
+    """
+    if not block:
+      with self._cond:
+        if self._queue.qsize() >= self._max_size:
+          raise queue.Full
+        self._queue.put(obj, block=False)
+      return
+
+    deadline = None
+    if timeout is not None:
+      deadline = time.time() + timeout
+
+    with self._cond:
+      while self._queue.qsize() >= self._max_size:
+        if deadline is None:
+          self._cond.wait()
+          continue
+        remaining = deadline - time.time()
+        if remaining <= 0:
+          raise queue.Full
+        if not self._cond.wait(remaining):
+          if self._queue.qsize() >= self._max_size:
+            raise queue.Full
+          else:
+            break
+      self._queue.put(obj, block=False)
+
+  def get(self, block: bool = True, timeout: float | None = None):
+    item = self._queue.get(block=block, timeout=timeout)
+    with self._cond:
+      self._cond.notify()
+    return item
+
+  def qsize(self) -> int:
+    return self._queue.qsize()
 
 
 def _print_profile(preamble: str, profile: cProfile.Profile):
@@ -225,7 +373,7 @@ def _worker_loop(
     *,
     args_queue: queues.Queue,
     errors_queue: queues.Queue,
-    output_queue: queues.Queue,
+    output_queue: _VariableLengthMultiprocessingQueue,
     termination_event: synchronize.Event,
     start_profiling_event: synchronize.Event,
     stop_profiling_event: synchronize.Event,
@@ -342,6 +490,7 @@ class GrainPool(Iterator[T]):
       options: MultiprocessingOptions,
       worker_init_fn: Callable[[int, int], None] | None = None,
       stats_in_queues: tuple[queues.Queue, ...] | None = None,
+      buffer_size_queue: queue.Queue[int] | None = None,
   ):
     """Initialise a Grain Pool.
 
@@ -362,6 +511,7 @@ class GrainPool(Iterator[T]):
         the total worker count.
       stats_in_queues: Queue to propagate execution summary from child processes
         to the parent.
+      buffer_size_queue: Queue to send buffer size updates to the GrainPool.
     """
     self.num_processes = options.num_workers
     logging.info("Grain pool will use %i processes.", self.num_processes)
@@ -381,6 +531,7 @@ class GrainPool(Iterator[T]):
     # this queue is shared by all child processes.
     self.worker_error_queue = ctx.Queue(self.num_processes)
     self.stats_in_queues = stats_in_queues
+    self.buffer_size_queue = buffer_size_queue
 
     try:
       get_element_producer_fn = get_element_producer_fn.serialize()
@@ -396,7 +547,9 @@ class GrainPool(Iterator[T]):
 
     for worker_index in range(self.num_processes):
       worker_args_queue = ctx.Queue(1)
-      worker_output_queue = ctx.Queue(options.per_worker_buffer_size)
+      worker_output_queue = _VariableLengthMultiprocessingQueue(
+          options.per_worker_buffer_size, ctx
+      )
       process_kwargs = dict(
           args_queue=worker_args_queue,
           errors_queue=self.worker_error_queue,
@@ -484,6 +637,15 @@ class GrainPool(Iterator[T]):
         continue
       try:
         element_worker_index = self._next_worker_index
+        # Check cmd queue for buffer size update commands.
+        if self.buffer_size_queue:
+          try:
+            while True:
+              buffer_size = self.buffer_size_queue.get_nowait()
+              for output_queue in self.worker_output_queues:
+                output_queue.set_max_size(buffer_size)
+          except queue.Empty:
+            pass
         element = self.worker_output_queues[self._next_worker_index].get(
             timeout=_QUEUE_WAIT_TIMEOUT
         )
@@ -589,6 +751,27 @@ _QueueElement = Union[
 ]
 
 
+class _ThreadPoolContainer:
+  """Container for ThreadPool to allow replacing it."""
+
+  def __init__(self, processes: int):
+    self.pool = pool.ThreadPool(processes)
+
+  def apply_async(self, *args, **kwargs):
+    return self.pool.apply_async(*args, **kwargs)
+
+  def close(self):
+    self.pool.close()
+
+  def join(self):
+    self.pool.join()
+
+  def replace_pool(self, processes: int):
+    old_pool = self.pool
+    self.pool = pool.ThreadPool(processes)
+    old_pool.close()
+
+
 def _open_shared_memory_for_leaf(element: Any) -> Any:
   if isinstance(element, shared_memory_array.SharedMemoryArrayMetadata):
     element = shared_memory_array.SharedMemoryArray.from_metadata(element)
@@ -617,6 +800,7 @@ def _process_elements_in_grain_pool(
     worker_index_to_start_reading: int,
     worker_init_fn: Callable[[int, int], None] | None,
     stats_in_queues: tuple[queues.Queue, ...] | None,
+    buffer_size_queue: queue.Queue[int] | None,
 ) -> None:
   """Processes elements in grain worker pool asynchronously."""
 
@@ -636,6 +820,7 @@ def _process_elements_in_grain_pool(
         options=multiprocessing_options,
         worker_init_fn=worker_init_fn,
         stats_in_queues=stats_in_queues,
+        buffer_size_queue=buffer_size_queue,
     ) as g_pool:
       for element in g_pool:
         if read_thread_should_stop():
@@ -720,6 +905,7 @@ class MultiProcessIterator(Iterator[T]):
     self._stats_in_queues = stats_in_queues
     self._start_profiling_event = start_profiling_event
     self._stop_profiling_event = stop_profiling_event
+    self._buffer_size_queue = None
 
   def __del__(self):
     if self._reader_thread:
@@ -736,9 +922,10 @@ class MultiProcessIterator(Iterator[T]):
         self._multiprocessing_options.num_workers
         * self._multiprocessing_options.per_worker_buffer_size
     )
-    self._reader_queue = queue.Queue(maxsize=max_buffered_elements)
-    self._reader_thread_pool = pool.ThreadPool(max_buffered_elements)
+    self._reader_queue = _VariableLengthQueue(max_buffered_elements)
+    self._reader_thread_pool = _ThreadPoolContainer(max_buffered_elements)
     self._termination_event = threading.Event()
+    self._buffer_size_queue = queue.Queue()
     self._reader_thread = threading.Thread(
         target=_process_elements_in_grain_pool,
         kwargs=dict(
@@ -752,6 +939,7 @@ class MultiProcessIterator(Iterator[T]):
             worker_index_to_start_reading=self._last_worker_index + 1,
             worker_init_fn=self._worker_init_fn,
             stats_in_queues=self._stats_in_queues,
+            buffer_size_queue=self._buffer_size_queue,
         ),
     )
     self._reader_thread.start()
@@ -809,7 +997,7 @@ class MultiProcessIterator(Iterator[T]):
           "MultiProcessIterator is in an invalid state. Note that"
           " MultiProcessIterator should be used with a 'with' statement."
       )
-    element = multiprocessing_common.get_element_from_queue(
+    element = multiprocessing_common.get_element_from_queue(  # pytype: disable=wrong-arg-types
         self._reader_queue, self._termination_event.is_set  # pytype: disable=attribute-error
     )
     if isinstance(element, Exception):
@@ -826,9 +1014,30 @@ class MultiProcessIterator(Iterator[T]):
       )
 
     result = multiprocessing_common.get_async_result(
-        element.async_result, self._termination_event.is_set
+        element.async_result, self._termination_event.is_set  # pytype: disable=attribute-error
     )
     if isinstance(result, multiprocessing_common._SystemTerminated):  # pylint: disable=protected-access
       raise StopIteration
     self._last_worker_index = element.worker_index
     return result
+
+  def set_per_worker_buffer_size(self, per_worker_buffer_size: int):
+    """Sets the per worker buffer size."""
+    if self._buffer_size_queue is None or self._reader_queue is None:
+      raise ValueError(
+          "Cannot change per worker buffer size before the iterator has been"
+          " initialized."
+      )
+    self._buffer_size_queue.put(per_worker_buffer_size)
+    self._reader_queue.set_max_size(
+        per_worker_buffer_size * self._multiprocessing_options.num_workers
+    )
+    self._multiprocessing_options = dataclasses.replace(
+        self._multiprocessing_options,
+        per_worker_buffer_size=per_worker_buffer_size,
+    )
+    new_thread_count = (
+        self._multiprocessing_options.num_workers
+        * self._multiprocessing_options.per_worker_buffer_size
+    )
+    self._reader_thread_pool.replace_pool(new_thread_count)  # pytype: disable=attribute-error
