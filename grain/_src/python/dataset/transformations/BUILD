@@ -164,8 +164,11 @@ py_test(
         "//conditions:default": ["@platforms//:incompatible"],
     }),
     deps = [
+        ":packing",
         ":testing_util",
+        "//grain/_src/python/dataset",
         "@abseil-py//absl/testing:absltest",
+        "@pypi//numpy:pkg",
     ],
 )
 

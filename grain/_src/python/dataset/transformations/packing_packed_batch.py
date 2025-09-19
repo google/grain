@@ -105,6 +105,7 @@ class PackedBatch(Generic[_T]):
     self._num_packing_bins = num_packing_bins
     self._length_struct = length_struct
     self._meta_features = meta_features
+    self._size_bytes = 0
 
     # Define the main buffers we will pack the data into.
     def make_packed_buffer(length: int, x: np.ndarray | int):
@@ -116,17 +117,21 @@ class PackedBatch(Generic[_T]):
         assert isinstance(x, np.ndarray), type(x)
         shape = x.shape[1:]
         dtype = x.dtype
-      return zeros(
+      buffer = zeros(
           shape=(num_packing_bins, length, *shape),  # (B, T, ...)
           dtype=dtype,
       )
+      self._size_bytes += buffer.nbytes
+      return buffer
 
     self._values = tree_lib.map_structure(
         make_packed_buffer, length_struct, element_for_shapes
     )
 
     def make_packed_aux_info(length: int):
-      return zeros(shape=(num_packing_bins, length), dtype=np.int32)
+      buffer = zeros(shape=(num_packing_bins, length), dtype=np.int32)
+      self._size_bytes += buffer.nbytes
+      return buffer
 
     self._segment_ids = tree_lib.map_structure(
         make_packed_aux_info, length_struct
@@ -135,15 +140,24 @@ class PackedBatch(Generic[_T]):
         make_packed_aux_info, length_struct
     )
 
+    def _make_first_free_cell_per_row_buffer(_):
+      buffer = zeros(num_packing_bins, dtype=np.int64)
+      self._size_bytes += buffer.nbytes
+      return buffer
+
     # Tracks the next empty position to insert an example for each row
     # in the batch, for each feature in features_to_pack.
     self._first_free_cell_per_row = tree_lib.map_structure(
-        lambda _: zeros(num_packing_bins, dtype=np.int64), length_struct
+        _make_first_free_cell_per_row_buffer, length_struct
     )
 
     # Tracks the number of examples already packed into row of the batch. Used
     # to fill the segmentation values for each feature.
     self._num_examples_per_row = [0 for _ in range(num_packing_bins)]
+
+  def get_size_bytes(self) -> int:
+    """Returns the size of the packed batch in bytes."""
+    return self._size_bytes
 
   def get_packed_batch(self):
     """Returns the current packed batch."""
