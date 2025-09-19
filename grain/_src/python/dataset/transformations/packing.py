@@ -54,6 +54,7 @@ class FirstFitPackIterDataset(dataset.IterDataset):
       shuffle_bins: bool = True,
       shuffle_bins_group_by_feature: str | None = None,
       meta_features: Sequence[str] = (),
+      max_sequences_per_bin: int | None = None,
   ):
     """Creates a dataset that packs sequences from the parent dataset.
 
@@ -72,6 +73,8 @@ class FirstFitPackIterDataset(dataset.IterDataset):
         within each epoch to avoid epoch leakage.
       meta_features: Meta features that do not need *_segment_ids and
         *_positions features.
+      max_sequences_per_bin: The maximum number of sequences that can be packed
+        into a bin
     """
     super().__init__(parent)
     self._length_struct = length_struct
@@ -80,6 +83,7 @@ class FirstFitPackIterDataset(dataset.IterDataset):
     self._shuffle_bins = shuffle_bins
     self._shuffle_bins_group_by_feature = shuffle_bins_group_by_feature
     self._meta_features = meta_features
+    self._max_sequences_per_bin = max_sequences_per_bin
 
   def __str__(self) -> str:
     return "FirstFitPackIterDataset"
@@ -93,6 +97,7 @@ class FirstFitPackIterDataset(dataset.IterDataset):
         shuffle_bins=self._shuffle_bins,
         shuffle_bins_group_by_feature=self._shuffle_bins_group_by_feature,
         meta_features=self._meta_features,
+        max_sequences_per_bin = self._max_sequences_per_bin,
     )
 
 
@@ -109,6 +114,7 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
       shuffle_bins: bool,
       shuffle_bins_group_by_feature: str | None,
       meta_features: Sequence[str],
+      max_sequences_per_bin: int | None,
   ):
     super().__init__(parent)
     self._num_packing_bins = num_packing_bins
@@ -117,6 +123,7 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
     self._shuffle_bins = shuffle_bins
     self._shuffle_bins_group_by_feature = shuffle_bins_group_by_feature
     self._meta_features = meta_features
+    self._max_sequences_per_bin = max_sequences_per_bin
     self._reset()
 
   def _reset(self):
@@ -197,6 +204,7 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
           self._num_packing_bins,
           self._length_struct,
           meta_features=self._meta_features,
+          max_sequences_per_bin=self._max_sequences_per_bin,
       )
 
   @dataset_stats.record_next_duration_if_output
@@ -251,6 +259,7 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
               self._num_packing_bins,
               self._length_struct,
               meta_features=self._meta_features,
+              max_sequences_per_bin=self._max_sequences_per_bin,
           )
 
         # Try adding element to the current packed batch.
