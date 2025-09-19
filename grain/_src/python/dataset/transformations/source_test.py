@@ -12,12 +12,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Tests for LazyDataset data sources."""
+
 import random
+from typing import Any, Sequence
 from unittest import mock
 
 from absl.testing import absltest
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import source
+
+
+class _MyRandomAccessDataSource:
+
+  def __init__(self, data: Sequence[Any]):
+    self._data = data
+
+  def __len__(self):
+    return len(self._data)
+
+  def __getitem__(self, index):
+    return self._data[index]
+
+
+class _MySupportsBatchedReadRandomAccessDataSource(_MyRandomAccessDataSource):
+
+  def _getitems(self, indices: Sequence[int]):
+    return [self._data[i % len(self._data)] for i in indices]
 
 
 class _Interleave(dataset.MapDataset):
@@ -34,18 +54,25 @@ class SourceMapDatasetTest(absltest.TestCase):
 
   def setUp(self):
     super().setUp()
-    self.sample_data_source = [1, 2, 3, 4, 5]
-    self.lazy_dataset_source = source.SourceMapDataset(  # pytype: disable=wrong-arg-types
-        self.sample_data_source
+    self._data_source = _MyRandomAccessDataSource([1, 2, 3, 4, 5])
+    self._batched_read_data_source = (
+        _MySupportsBatchedReadRandomAccessDataSource([1, 2, 3, 4, 5])
+    )
+    self._lazy_dataset_source = source.SourceMapDataset(  # pytype: disable=wrong-arg-types
+        self._data_source
+    )
+    self._batched_read_lazy_dataset_source = source.SourceMapDataset(  # pytype: disable=wrong-arg-types
+        self._batched_read_data_source
     )
 
   def test_lazy_dataset_source_len(self):
-    self.assertLen(self.lazy_dataset_source, 5)
+    self.assertLen(self._lazy_dataset_source, 5)
+    self.assertLen(self._batched_read_lazy_dataset_source, 5)
 
   def test_lazy_dataset_source_sequential_get(self):
     indices_to_read = [0, 1, 2, 3, 4]
     expected_data = [1, 2, 3, 4, 5]
-    actual_data = [self.lazy_dataset_source[i] for i in indices_to_read]
+    actual_data = [self._lazy_dataset_source[i] for i in indices_to_read]
     self.assertEqual(expected_data, actual_data)
 
   def test_lazy_dataset_source_reverse_sequential_get(self):
@@ -53,23 +80,70 @@ class SourceMapDatasetTest(absltest.TestCase):
     expected_data = [1, 2, 3, 4, 5]
     indices_to_read.reverse()
     expected_data.reverse()
-    actual_data = [self.lazy_dataset_source[i] for i in indices_to_read]
+    actual_data = [self._lazy_dataset_source[i] for i in indices_to_read]
     self.assertEqual(expected_data, actual_data)
 
   def test_lazy_dataset_source_random_get(self):
     indices_to_read = [0, 1, 2, 3, 4]
     random.shuffle(indices_to_read)
-    expected_data = [self.sample_data_source[i] for i in indices_to_read]
-    actual_data = [self.lazy_dataset_source[i] for i in indices_to_read]
+    expected_data = [self._data_source[i] for i in indices_to_read]
+    actual_data = [self._data_source[i] for i in indices_to_read]
     self.assertEqual(expected_data, actual_data)
 
   def test_lazy_dataset_source_random_modulo_get(self):
-    len_data_source = len(self.lazy_dataset_source)
+    len_data_source = len(self._lazy_dataset_source)
     indices_to_read = [100, 207, 303, 401]
     expected_data = [
-        self.sample_data_source[i % len_data_source] for i in indices_to_read
+        self._data_source[i % len_data_source] for i in indices_to_read
     ]
-    actual_data = [self.lazy_dataset_source[i] for i in indices_to_read]
+    actual_data = [self._lazy_dataset_source[i] for i in indices_to_read]
+    self.assertEqual(expected_data, actual_data)
+
+  def test_lazy_dataset_source_batched_read_get_all_items(self):
+    indices_to_read = [0, 1, 2, 3, 4]
+    expected_data = [1, 2, 3, 4, 5]
+    actual_data = self._batched_read_lazy_dataset_source._getitems(
+        indices_to_read
+    )
+    self.assertEqual(expected_data, actual_data)
+
+  def test_lazy_dataset_source_batched_read_get_some_items(self):
+    indices_to_read = [0, 2, 4]
+    expected_data = [1, 3, 5]
+    actual_data = self._batched_read_lazy_dataset_source._getitems(
+        indices_to_read
+    )
+    self.assertEqual(expected_data, actual_data)
+
+  def test_lazy_dataset_source_batched_read_get_reverse(self):
+    indices_to_read = [0, 1, 2, 3, 4]
+    expected_data = [1, 2, 3, 4, 5]
+    indices_to_read.reverse()
+    expected_data.reverse()
+    actual_data = self._batched_read_lazy_dataset_source._getitems(
+        indices_to_read
+    )
+    self.assertEqual(expected_data, actual_data)
+
+  def test_lazy_dataset_source_batched_read_get_random(self):
+    indices_to_read = [0, 1, 2, 3, 4]
+    random.shuffle(indices_to_read)
+    expected_data = [self._batched_read_data_source[i] for i in indices_to_read]
+    actual_data = self._batched_read_lazy_dataset_source._getitems(
+        indices_to_read
+    )
+    self.assertEqual(expected_data, actual_data)
+
+  def test_lazy_dataset_source_batched_read_get_random_modulo(self):
+    len_data_source = len(self._batched_read_lazy_dataset_source)
+    indices_to_read = [100, 207, 303, 401]
+    expected_data = [
+        self._batched_read_data_source[i % len_data_source]
+        for i in indices_to_read
+    ]
+    actual_data = self._batched_read_lazy_dataset_source._getitems(
+        indices_to_read
+    )
     self.assertEqual(expected_data, actual_data)
 
   def test_set_slice_raises_for_non_sequential_slice(self):
