@@ -51,4 +51,4 @@ homepage = "https://github.com/google/grain"
 include = ["grain*"]
 
 [tool.setuptools.package-data]
-"*" = ["*.so", "*.pyd"]
+"*" = ["*.so", "*.pyd", "testdata/*.array_record-*", "testdata/*.tfrecord"]
