@@ -139,6 +139,7 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
     self._next_row = 0
     self._counter = 0  # Used for RNG seed.
     self._shuffled_rows = None
+    self._packed_batch_size_bytes = None
 
   def get_state(self) -> dict[str, Any]:
     return {
@@ -152,6 +153,14 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
     self._reset()
     self._next_row = state["next_row"]
     self._counter = state["counter"]
+
+  def get_packed_batch_size_bytes(self) -> int:
+    if self._packed_batch_size_bytes is None:
+      raise ValueError(
+          "No current batch. Size can only be computed after at least one"
+          " element has been packed."
+      )
+    return self._packed_batch_size_bytes
 
   def _generate_and_set_shuffled_rows(self):
     assert self._packed_batch_num_bins is not None
@@ -252,6 +261,7 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
               self._length_struct,
               meta_features=self._meta_features,
           )
+          self._packed_batch_size_bytes = self._current_batch.get_size_bytes()
 
         # Try adding element to the current packed batch.
         failing_components = self._current_batch.try_add_to_batch(element)
