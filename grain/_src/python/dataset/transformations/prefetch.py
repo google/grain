@@ -932,3 +932,6 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         "ThreadPrefetchDatasetIterator("
         f"prefetch_buffer_size={self._prefetch_buffer_size})"
     )
+
+  def __del__(self):
+    self._stop_prefetch()

@@ -20,6 +20,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
    `grain.{MapDataset|IterDataset}.apply`. The experimental API will soon be
     deprecated.
 * Bug fixes
+  * Fix memory leak on `ThreadPrefetchDatasetIterator` deletion.
 
 ## Grain 0.2.12 (August 21, 2025)
 
