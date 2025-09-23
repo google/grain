@@ -101,10 +101,12 @@ class PackedBatch(Generic[_T]):
       num_packing_bins: int,
       length_struct: Any,  # PyTree[int]
       meta_features: Sequence[str] = (),
+      pack_alignment: int | None = None,
   ):
     self._num_packing_bins = num_packing_bins
     self._length_struct = length_struct
     self._meta_features = meta_features
+    self._pack_alignment = pack_alignment
     self._size_bytes = 0
 
     # Define the main buffers we will pack the data into.
@@ -278,6 +280,12 @@ class PackedBatch(Generic[_T]):
           per_feature_data
       )
       value_length = 1 if np.ndim(value) == 0 else len(value)
+      padded_length = value_length
+      if self._pack_alignment and self._pack_alignment > 0:
+        padded_length = (
+            (value_length + self._pack_alignment - 1) // self._pack_alignment
+        ) * self._pack_alignment
+
       # Update batch value, segmentations, and positions.
       start = first_free_cell_per_row[row]
       end = first_free_cell_per_row[row] + value_length
@@ -285,7 +293,7 @@ class PackedBatch(Generic[_T]):
       segment_ids[row][start:end] = self._num_examples_per_row[row] + 1
       positions[row][start:end] = np.arange(end - start)
       # Update first_free_cell_per_row.
-      first_free_cell_per_row[row] += value_length
+      first_free_cell_per_row[row] += padded_length
 
     self._num_examples_per_row[row] += 1
 
@@ -302,8 +310,16 @@ class PackedBatch(Generic[_T]):
     """
     tree_lib.assert_same_structure(element, self._length_struct)
 
+    def get_feature_length(x):
+      length = 1 if np.ndim(x) == 0 else len(x)
+      if self._pack_alignment and self._pack_alignment > 0:
+        length = (
+            (length + self._pack_alignment - 1) // self._pack_alignment
+        ) * self._pack_alignment
+      return length
+
     element_feature_lengths = tree_lib.map_structure(
-        lambda x: 1 if np.ndim(x) == 0 else len(x), element
+        get_feature_length, element
     )
 
     successful_row_or_failing_component = self.can_add_at_row(

@@ -1042,6 +1042,59 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
       ):
         _ = next(iter(ld))
 
+  def test_pack_alignment(self):
+    input_elements = [
+        {"inputs": [1, 2], "targets": [10]},
+        {"inputs": [3, 4, 5], "targets": [20, 30]},
+        {"inputs": [6], "targets": [40, 50, 60]},
+    ]
+    length_struct = {"inputs": 8, "targets": 8}
+    num_packing_bins = 2
+    # pack_alignment=1 should behave the same as no alignment.
+    expected_elements_pack_alignment_1 = [
+        {
+            "inputs": [1, 2, 3, 4, 5, 6, 0, 0],
+            "targets": [10, 20, 30, 40, 50, 60, 0, 0],
+            "inputs_segment_ids": [1, 1, 2, 2, 2, 3, 0, 0],
+            "targets_segment_ids": [1, 2, 2, 3, 3, 3, 0, 0],
+            "inputs_positions": [0, 1, 0, 1, 2, 0, 0, 0],
+            "targets_positions": [0, 0, 1, 0, 1, 2, 0, 0],
+        },
+    ]
+    expected_elements_pack_alignment_4 = [
+        {
+            "inputs": [1, 2, 0, 0, 3, 4, 5, 0],
+            "targets": [10, 0, 0, 0, 20, 30, 0, 0],
+            "inputs_segment_ids": [1, 1, 0, 0, 2, 2, 2, 0],
+            "targets_segment_ids": [1, 0, 0, 0, 2, 2, 0, 0],
+            "inputs_positions": [0, 1, 0, 0, 0, 1, 2, 0],
+            "targets_positions": [0, 0, 0, 0, 0, 1, 0, 0],
+        },
+        {
+            "inputs": [6, 0, 0, 0, 0, 0, 0, 0],
+            "targets": [40, 50, 60, 0, 0, 0, 0, 0],
+            "inputs_segment_ids": [1, 0, 0, 0, 0, 0, 0, 0],
+            "targets_segment_ids": [1, 1, 1, 0, 0, 0, 0, 0],
+            "inputs_positions": [0, 0, 0, 0, 0, 0, 0, 0],
+            "targets_positions": [0, 1, 2, 0, 0, 0, 0, 0],
+        },
+    ]
+
+    _common_test_body(
+        input_elements,
+        expected_elements_pack_alignment_1,
+        length_struct,
+        kwargs={**self.kwargs, "pack_alignment": 1},
+        num_packing_bins=num_packing_bins,
+    )
+    _common_test_body(
+        input_elements,
+        expected_elements_pack_alignment_4,
+        length_struct,
+        kwargs={**self.kwargs, "pack_alignment": 4},
+        num_packing_bins=num_packing_bins,
+    )
+
 
 if __name__ == "__main__":
   absltest.main()
