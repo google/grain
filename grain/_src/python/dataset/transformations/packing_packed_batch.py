@@ -101,12 +101,11 @@ class PackedBatch(Generic[_T]):
       num_packing_bins: int,
       length_struct: Any,  # PyTree[int]
       meta_features: Sequence[str] = (),
-      pack_alignment: int | None = None,
+      pack_alignment_struct: Any = None,
   ):
     self._num_packing_bins = num_packing_bins
     self._length_struct = length_struct
     self._meta_features = meta_features
-    self._pack_alignment = pack_alignment
     self._size_bytes = 0
 
     # Define the main buffers we will pack the data into.
@@ -141,6 +140,12 @@ class PackedBatch(Generic[_T]):
     self._positions = tree_lib.map_structure(
         make_packed_aux_info, length_struct
     )
+    if pack_alignment_struct is None:
+      self._pack_alignments = tree_lib.map_structure(lambda x: 1, length_struct)
+    else:
+      self._pack_alignments = tree_lib.map_structure(
+          lambda x: x, pack_alignment_struct
+      )
 
     def _make_first_free_cell_per_row_buffer(_):
       buffer = zeros(num_packing_bins, dtype=np.int64)
@@ -275,16 +280,20 @@ class PackedBatch(Generic[_T]):
         tree_lib.flatten(self._segment_ids),
         tree_lib.flatten(self._positions),
         tree_lib.flatten(self._first_free_cell_per_row),
+        tree_lib.flatten(self._pack_alignments),
     ):
-      value, batch_value, segment_ids, positions, first_free_cell_per_row = (
-          per_feature_data
-      )
+      (
+          value,
+          batch_value,
+          segment_ids,
+          positions,
+          first_free_cell_per_row,
+          pack_alignment,
+      ) = per_feature_data
       value_length = 1 if np.ndim(value) == 0 else len(value)
-      padded_length = value_length
-      if self._pack_alignment and self._pack_alignment > 0:
-        padded_length = (
-            (value_length + self._pack_alignment - 1) // self._pack_alignment
-        ) * self._pack_alignment
+      padded_length = (
+          (value_length + pack_alignment - 1) // pack_alignment
+      ) * pack_alignment
 
       # Update batch value, segmentations, and positions.
       start = first_free_cell_per_row[row]
@@ -310,16 +319,13 @@ class PackedBatch(Generic[_T]):
     """
     tree_lib.assert_same_structure(element, self._length_struct)
 
-    def get_feature_length(x):
+    def get_feature_length(x, pa):
       length = 1 if np.ndim(x) == 0 else len(x)
-      if self._pack_alignment and self._pack_alignment > 0:
-        length = (
-            (length + self._pack_alignment - 1) // self._pack_alignment
-        ) * self._pack_alignment
+      length = ((length + pa - 1) // pa) * pa
       return length
 
     element_feature_lengths = tree_lib.map_structure(
-        get_feature_length, element
+        get_feature_length, element, self._pack_alignments
     )
 
     successful_row_or_failing_component = self.can_add_at_row(

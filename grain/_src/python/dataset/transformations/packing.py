@@ -54,7 +54,7 @@ class FirstFitPackIterDataset(dataset.IterDataset):
       shuffle_bins: bool = True,
       shuffle_bins_group_by_feature: str | None = None,
       meta_features: Sequence[str] = (),
-      pack_alignment: int | None = None,
+      pack_alignment_struct: Any = None,
   ):
     """Creates a dataset that packs sequences from the parent dataset.
 
@@ -73,8 +73,10 @@ class FirstFitPackIterDataset(dataset.IterDataset):
         within each epoch to avoid epoch leakage.
       meta_features: Meta features that do not need *_segment_ids and
         *_positions features.
-      pack_alignment: If set, the length of each feature will be padded to the
-        nearest multiple of this value.
+      pack_alignment_struct: If set, the length of each feature will be padded
+        to the nearest multiple of this value. This is equivalent to first
+        padding to the nearest multiple of this value and then packing but
+        avoids a copy.
     """
     super().__init__(parent)
     self._length_struct = length_struct
@@ -83,7 +85,7 @@ class FirstFitPackIterDataset(dataset.IterDataset):
     self._shuffle_bins = shuffle_bins
     self._shuffle_bins_group_by_feature = shuffle_bins_group_by_feature
     self._meta_features = meta_features
-    self._pack_alignment = pack_alignment
+    self._pack_alignment_struct = pack_alignment_struct
 
   def __str__(self) -> str:
     return "FirstFitPackIterDataset"
@@ -113,7 +115,7 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
       shuffle_bins: bool,
       shuffle_bins_group_by_feature: str | None,
       meta_features: Sequence[str],
-      pack_alignment: int | None = None,
+      pack_alignment_struct: Any = None,
   ):
     super().__init__(parent)
     self._num_packing_bins = num_packing_bins
@@ -122,7 +124,7 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
     self._shuffle_bins = shuffle_bins
     self._shuffle_bins_group_by_feature = shuffle_bins_group_by_feature
     self._meta_features = meta_features
-    self._pack_alignment = pack_alignment
+    self._pack_alignment_struct = pack_alignment_struct
     self._reset()
 
   def _reset(self):
@@ -212,7 +214,7 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
           self._num_packing_bins,
           self._length_struct,
           meta_features=self._meta_features,
-          pack_alignment=self._pack_alignment,
+          pack_alignment_struct=self._pack_alignment_struct,
       )
 
   @dataset_stats.record_next_duration_if_output
@@ -267,7 +269,7 @@ class FirstFitPackDatasetIterator(dataset.DatasetIterator):
               self._num_packing_bins,
               self._length_struct,
               meta_features=self._meta_features,
-              pack_alignment=self._pack_alignment,
+              pack_alignment_struct=self._pack_alignment_struct,
           )
           self._packed_batch_size_bytes = self._current_batch.get_size_bytes()
 

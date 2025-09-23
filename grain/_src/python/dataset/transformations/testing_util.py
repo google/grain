@@ -1084,14 +1084,24 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
         input_elements,
         expected_elements_pack_alignment_1,
         length_struct,
-        kwargs={**self.kwargs, "pack_alignment": 1},
+        kwargs={
+            **self.kwargs,
+            "pack_alignment_struct": tree.map_structure(
+                lambda x: 1, length_struct
+            ),
+        },
         num_packing_bins=num_packing_bins,
     )
     _common_test_body(
         input_elements,
         expected_elements_pack_alignment_4,
         length_struct,
-        kwargs={**self.kwargs, "pack_alignment": 4},
+        kwargs={
+            **self.kwargs,
+            "pack_alignment_struct": tree.map_structure(
+                lambda x: 4, length_struct
+            ),
+        },
         num_packing_bins=num_packing_bins,
     )
 
