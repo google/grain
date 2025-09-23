@@ -122,7 +122,7 @@ class _BatchDatasetIterator(dataset.DatasetIterator[T]):
     self._drop_remainder = drop_remainder
     self._batch_fn = batch_fn
 
-  @stats.record_next_duration_if_output
+  @stats.record_next_duration_if_output(stage_category=stats.IPL_CAT_ENQUEUE)
   def __next__(self) -> T:
     values = []
     for _ in range(self._batch_size):

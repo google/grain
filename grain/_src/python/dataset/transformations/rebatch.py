@@ -96,7 +96,7 @@ class _RebatchDatasetIterator(dataset.DatasetIterator):
       self._treedef = pytree_element
     return tree_lib.flatten(pytree_element)
 
-  @stats.record_next_duration_if_output
+  @stats.record_next_duration_if_output(stage_category=stats.IPL_CAT_ENQUEUE)
   def __next__(self):
     timer = stats.Timer()
 

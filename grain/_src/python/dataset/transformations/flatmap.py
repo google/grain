@@ -94,7 +94,9 @@ class _FlatMapDatasetIterator(dataset.DatasetIterator[T]):
   def _has_consumed_all_buffer_elements(self):
     return self._next_index_in_buffer >= len(self._buffer)
 
-  @dataset_stats.record_next_duration_if_output
+  @dataset_stats.record_next_duration_if_output(
+      stage_category=dataset_stats.IPL_CAT_ENQUEUE
+  )
   def __next__(self):
     timer = dataset_stats.Timer()
     while self._has_consumed_all_buffer_elements():
