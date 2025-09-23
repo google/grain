@@ -99,6 +99,7 @@ class FirstFitPackIterDataset(dataset.IterDataset):
         shuffle_bins=self._shuffle_bins,
         shuffle_bins_group_by_feature=self._shuffle_bins_group_by_feature,
         meta_features=self._meta_features,
+        pack_alignment_struct=self._pack_alignment_struct,
     )
 
 

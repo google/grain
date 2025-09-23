@@ -39,6 +39,7 @@ def _common_test_body(
     shuffle_bins_group_by_feature: str | None = None,
     meta_features: Sequence[str] = (),
     convert_input_to_np: bool = True,
+    pack_alignment_struct: Any = None,
     kwargs: dict[str, Any] | None = None,
 ):
   """Factor out common test operations in a separate function."""
@@ -49,7 +50,7 @@ def _common_test_body(
   expected_elements = [
       {k: np.asarray(v) for k, v in d.items()} for d in expected_elements
   ]
-  ld = packing.FirstFitPackIterDataset(
+  ds = packing.FirstFitPackIterDataset(
       source.SourceMapDataset(input_elements).to_iter_dataset(),
       num_packing_bins=num_packing_bins,
       length_struct=length_struct,
@@ -57,23 +58,10 @@ def _common_test_body(
       shuffle_bins=shuffle_bins,
       shuffle_bins_group_by_feature=shuffle_bins_group_by_feature,
       meta_features=meta_features,
+      pack_alignment_struct=pack_alignment_struct,
       **(kwargs if kwargs else {}),
   )
-  actual_elements = list(ld)
-  np.testing.assert_equal(len(actual_elements), len(expected_elements))
-
-  def _check_equivalence(path, actual_val, expected_val):
-    np.testing.assert_array_equal(
-        actual_val,
-        expected_val,
-        err_msg=(
-            f"Pytrees differ at path {path}.\n\n"
-            f"Actual: {actual_val}\n\nExpected: {expected_val}"
-        ),
-    )
-
-  for actual, expected in zip(actual_elements, expected_elements):
-    tree.map_structure_with_path(_check_equivalence, actual, expected)
+  _assert_trees_equal(list(ds), expected_elements)
 
 
 class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
@@ -1042,7 +1030,48 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
       ):
         _ = next(iter(ld))
 
-  def test_pack_alignment(self):
+  @parameterized.named_parameters(
+      # pack_alignment=1 should behave the same as no alignment.
+      dict(
+          testcase_name="1",
+          pack_alignment=1,
+          expected_elements=[
+              {
+                  "inputs": [1, 2, 3, 4, 5, 6, 0, 0],
+                  "targets": [10, 20, 30, 40, 50, 60, 0, 0],
+                  "inputs_segment_ids": [1, 1, 2, 2, 2, 3, 0, 0],
+                  "targets_segment_ids": [1, 2, 2, 3, 3, 3, 0, 0],
+                  "inputs_positions": [0, 1, 0, 1, 2, 0, 0, 0],
+                  "targets_positions": [0, 0, 1, 0, 1, 2, 0, 0],
+              },
+          ],
+      ),
+      dict(
+          testcase_name="4",
+          pack_alignment=4,
+          expected_elements=[
+              {
+                  "inputs": [1, 2, 0, 0, 3, 4, 5, 0],
+                  "targets": [10, 0, 0, 0, 20, 30, 0, 0],
+                  "inputs_segment_ids": [1, 1, 0, 0, 2, 2, 2, 0],
+                  "targets_segment_ids": [1, 0, 0, 0, 2, 2, 0, 0],
+                  "inputs_positions": [0, 1, 0, 0, 0, 1, 2, 0],
+                  "targets_positions": [0, 0, 0, 0, 0, 1, 0, 0],
+              },
+              {
+                  "inputs": [6, 0, 0, 0, 0, 0, 0, 0],
+                  "targets": [40, 50, 60, 0, 0, 0, 0, 0],
+                  "inputs_segment_ids": [1, 0, 0, 0, 0, 0, 0, 0],
+                  "targets_segment_ids": [1, 1, 1, 0, 0, 0, 0, 0],
+                  "inputs_positions": [0, 0, 0, 0, 0, 0, 0, 0],
+                  "targets_positions": [0, 1, 2, 0, 0, 0, 0, 0],
+              },
+          ],
+      ),
+  )
+  def test_pack_alignment(
+      self, pack_alignment: int, expected_elements: list[dict[str, Any]]
+  ):
     input_elements = [
         {"inputs": [1, 2], "targets": [10]},
         {"inputs": [3, 4, 5], "targets": [20, 30]},
@@ -1050,58 +1079,13 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
     ]
     length_struct = {"inputs": 8, "targets": 8}
     num_packing_bins = 2
-    # pack_alignment=1 should behave the same as no alignment.
-    expected_elements_pack_alignment_1 = [
-        {
-            "inputs": [1, 2, 3, 4, 5, 6, 0, 0],
-            "targets": [10, 20, 30, 40, 50, 60, 0, 0],
-            "inputs_segment_ids": [1, 1, 2, 2, 2, 3, 0, 0],
-            "targets_segment_ids": [1, 2, 2, 3, 3, 3, 0, 0],
-            "inputs_positions": [0, 1, 0, 1, 2, 0, 0, 0],
-            "targets_positions": [0, 0, 1, 0, 1, 2, 0, 0],
-        },
-    ]
-    expected_elements_pack_alignment_4 = [
-        {
-            "inputs": [1, 2, 0, 0, 3, 4, 5, 0],
-            "targets": [10, 0, 0, 0, 20, 30, 0, 0],
-            "inputs_segment_ids": [1, 1, 0, 0, 2, 2, 2, 0],
-            "targets_segment_ids": [1, 0, 0, 0, 2, 2, 0, 0],
-            "inputs_positions": [0, 1, 0, 0, 0, 1, 2, 0],
-            "targets_positions": [0, 0, 0, 0, 0, 1, 0, 0],
-        },
-        {
-            "inputs": [6, 0, 0, 0, 0, 0, 0, 0],
-            "targets": [40, 50, 60, 0, 0, 0, 0, 0],
-            "inputs_segment_ids": [1, 0, 0, 0, 0, 0, 0, 0],
-            "targets_segment_ids": [1, 1, 1, 0, 0, 0, 0, 0],
-            "inputs_positions": [0, 0, 0, 0, 0, 0, 0, 0],
-            "targets_positions": [0, 1, 2, 0, 0, 0, 0, 0],
-        },
-    ]
-
     _common_test_body(
         input_elements,
-        expected_elements_pack_alignment_1,
+        expected_elements,
         length_struct,
-        kwargs={
-            **self.kwargs,
-            "pack_alignment_struct": tree.map_structure(
-                lambda x: 1, length_struct
-            ),
-        },
-        num_packing_bins=num_packing_bins,
-    )
-    _common_test_body(
-        input_elements,
-        expected_elements_pack_alignment_4,
-        length_struct,
-        kwargs={
-            **self.kwargs,
-            "pack_alignment_struct": tree.map_structure(
-                lambda x: 4, length_struct
-            ),
-        },
+        pack_alignment_struct=tree.map_structure(
+            lambda x: pack_alignment, length_struct
+        ),
         num_packing_bins=num_packing_bins,
     )
 
