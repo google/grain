@@ -40,6 +40,7 @@ def _common_test_body(
     meta_features: Sequence[str] = (),
     convert_input_to_np: bool = True,
     pack_alignment_struct: Any = None,
+    padding_struct: Any = None,
     kwargs: dict[str, Any] | None = None,
 ):
   """Factor out common test operations in a separate function."""
@@ -59,6 +60,7 @@ def _common_test_body(
       shuffle_bins_group_by_feature=shuffle_bins_group_by_feature,
       meta_features=meta_features,
       pack_alignment_struct=pack_alignment_struct,
+      padding_struct=padding_struct,
       **(kwargs if kwargs else {}),
   )
   _assert_trees_equal(list(ds), expected_elements)
@@ -1038,7 +1040,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
           expected_elements=[
               {
                   "inputs": [1, 2, 3, 4, 5, 6, 0, 0],
-                  "targets": [10, 20, 30, 40, 50, 60, 0, 0],
+                  "targets": [10, 20, 30, 40, 50, 60, -1, -1],
                   "inputs_segment_ids": [1, 1, 2, 2, 2, 3, 0, 0],
                   "targets_segment_ids": [1, 2, 2, 3, 3, 3, 0, 0],
                   "inputs_positions": [0, 1, 0, 1, 2, 0, 0, 0],
@@ -1052,7 +1054,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
           expected_elements=[
               {
                   "inputs": [1, 2, 0, 0, 3, 4, 5, 0],
-                  "targets": [10, 0, 0, 0, 20, 30, 0, 0],
+                  "targets": [10, -1, -1, -1, 20, 30, -1, -1],
                   "inputs_segment_ids": [1, 1, 0, 0, 2, 2, 2, 0],
                   "targets_segment_ids": [1, 0, 0, 0, 2, 2, 0, 0],
                   "inputs_positions": [0, 1, 0, 0, 0, 1, 2, 0],
@@ -1060,7 +1062,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
               },
               {
                   "inputs": [6, 0, 0, 0, 0, 0, 0, 0],
-                  "targets": [40, 50, 60, 0, 0, 0, 0, 0],
+                  "targets": [40, 50, 60, -1, -1, -1, -1, -1],
                   "inputs_segment_ids": [1, 0, 0, 0, 0, 0, 0, 0],
                   "targets_segment_ids": [1, 1, 1, 0, 0, 0, 0, 0],
                   "inputs_positions": [0, 0, 0, 0, 0, 0, 0, 0],
@@ -1069,7 +1071,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
           ],
       ),
   )
-  def test_pack_alignment(
+  def test_pack_alignment_and_padding_struct(
       self, pack_alignment: int, expected_elements: list[dict[str, Any]]
   ):
     input_elements = [
@@ -1078,6 +1080,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
         {"inputs": [6], "targets": [40, 50, 60]},
     ]
     length_struct = {"inputs": 8, "targets": 8}
+    padding_struct = {"inputs": 0, "targets": -1}
     num_packing_bins = 2
     _common_test_body(
         input_elements,
@@ -1086,6 +1089,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
         pack_alignment_struct=tree.map_structure(
             lambda x: pack_alignment, length_struct
         ),
+        padding_struct=padding_struct,
         num_packing_bins=num_packing_bins,
     )
 

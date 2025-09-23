@@ -31,6 +31,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 import copy
 import dataclasses
+import functools
 from typing import Any, Generic, TypeVar
 
 from grain._src.core import tree_lib
@@ -92,6 +93,10 @@ def zeros(*args, **kwargs):
   return np.zeros(*args, **kwargs)
 
 
+def full(*args, **kwargs):
+  return np.full(*args, **kwargs)
+
+
 class PackedBatch(Generic[_T]):
   """Class to represent a batch of packed examples."""
 
@@ -102,6 +107,7 @@ class PackedBatch(Generic[_T]):
       length_struct: Any,  # PyTree[int]
       meta_features: Sequence[str] = (),
       pack_alignment_struct: Any = None,
+      padding_struct: Any = None,
   ):
     self._num_packing_bins = num_packing_bins
     self._length_struct = length_struct
@@ -109,7 +115,7 @@ class PackedBatch(Generic[_T]):
     self._size_bytes = 0
 
     # Define the main buffers we will pack the data into.
-    def make_packed_buffer(length: int, x: np.ndarray | int):
+    def make_packed_buffer(length: int, x: np.ndarray | int, padding: Any):
       is_scalar = np.ndim(x) == 0
       if is_scalar:
         shape = ()
@@ -118,15 +124,23 @@ class PackedBatch(Generic[_T]):
         assert isinstance(x, np.ndarray), type(x)
         shape = x.shape[1:]
         dtype = x.dtype
-      buffer = zeros(
+      buffer_fn = (
+          zeros
+          if padding is None
+          else functools.partial(full, fill_value=padding)
+      )
+      buffer = buffer_fn(
           shape=(num_packing_bins, length, *shape),  # (B, T, ...)
           dtype=dtype,
       )
       self._size_bytes += buffer.nbytes
       return buffer
 
+    if padding_struct is None:
+      padding_struct = tree_lib.map_structure(lambda x: None, length_struct)
+
     self._values = tree_lib.map_structure(
-        make_packed_buffer, length_struct, element_for_shapes
+        make_packed_buffer, length_struct, element_for_shapes, padding_struct
     )
 
     def make_packed_aux_info(length: int):
