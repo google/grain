@@ -32,7 +32,7 @@ T = TypeVar("T")
 S = TypeVar("S")
 
 
-def _make_batch(values: Sequence[T]) -> T:
+def make_batch(values: Sequence[T]) -> T:
   """Returns a batch of values with a new batch dimension at the front."""
 
   if not values:
@@ -81,7 +81,7 @@ def batch_and_pad(
   elif len(values) > batch_size:
     raise ValueError(f"Cannot batch {len(values)} values to {batch_size}.")
   elif len(values) == batch_size:
-    return _make_batch(values)
+    return make_batch(values)
   expanded_values = tree_lib.map_structure(
       lambda x: np.expand_dims(x, axis=0), values
   )
@@ -185,7 +185,7 @@ class BatchMapDataset(dataset.MapDataset[T]):
       to_check.extend(next_ds.parents)
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
-    self._batch_fn = _make_batch if batch_fn is None else batch_fn
+    self._batch_fn = make_batch if batch_fn is None else batch_fn
     if self._drop_remainder:
       self._length = len(self._parent) // self._batch_size
     else:
@@ -248,9 +248,11 @@ class BatchIterDataset(dataset.IterDataset[T]):
         Defaults to stacking the elements along a new batch dimension.
     """
     super().__init__(parent)
+    if batch_size <= 0:
+      raise ValueError("batch_size must be positive.")
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
-    self._batch_fn = _make_batch if batch_fn is None else batch_fn
+    self._batch_fn = make_batch if batch_fn is None else batch_fn
 
   def __iter__(self) -> _BatchDatasetIterator[T]:
     parent_iter = self._parent.__iter__()

@@ -13,6 +13,7 @@
 # limitations under the License.
 """A sampler is reponsible for providing which data records to load next."""
 
+import sys
 from typing import Optional, Protocol
 
 from grain._src.core import monitoring as grain_monitoring
@@ -65,6 +66,9 @@ class SequentialSampler:
       self._max_index = self._num_records
     self._seed = seed
     _api_usage_counter.Increment("SequentialSampler")
+
+  def __len__(self) -> int:
+    return self._max_index
 
   def __repr__(self) -> str:
     return (
@@ -165,6 +169,9 @@ class IndexSampler:
     if shuffle:
       self._record_keys = self._record_keys.shuffle(seed=seed)
     _api_usage_counter.Increment("IndexSampler")
+
+  def __len__(self) -> int:
+    return sys.maxsize if self._max_index is None else self._max_index
 
   def __repr__(self) -> str:
     return (

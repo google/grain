@@ -42,6 +42,8 @@ class PackingDatasetIterator(dataset.DatasetIterator):
       shuffle_bins: bool,
       shuffle_bins_group_by_feature: str | None,
       meta_features: Sequence[str],
+      pack_alignment_struct: Any = None,
+      padding_struct: Any = None,
   ):
     """Initializes the generic packing iterator.
 
@@ -55,6 +57,8 @@ class PackingDatasetIterator(dataset.DatasetIterator):
       shuffle_bins: Whether to shuffle bins after packing.
       shuffle_bins_group_by_feature: Feature to group by for shuffling.
       meta_features: Meta features that do not require packing.
+      pack_alignment_struct: Optional per-feature alignment values.
+      padding_struct: Optional per-feature padding values.
     """
     super().__init__(parent)
     self._packer_cls = packer_cls
@@ -64,6 +68,8 @@ class PackingDatasetIterator(dataset.DatasetIterator):
     self._shuffle_bins = shuffle_bins
     self._shuffle_bins_group_by_feature = shuffle_bins_group_by_feature
     self._meta_features = meta_features
+    self._pack_alignment_struct = pack_alignment_struct
+    self._padding_struct = padding_struct
     self._reset()
 
   def _reset(self):
@@ -81,6 +87,7 @@ class PackingDatasetIterator(dataset.DatasetIterator):
     # _counter is a global counter for rows emitted.
     self._counter = 0  # Used for RNG seed.
     self._shuffled_rows = None
+    self._packed_batch_size_bytes = None
 
   def get_state(self) -> dict[str, Any]:
     return {
@@ -94,6 +101,14 @@ class PackingDatasetIterator(dataset.DatasetIterator):
     self._reset()
     self._next_row = state["next_row"]
     self._counter = state["counter"]
+
+  def get_packed_batch_size_bytes(self) -> int:
+    if self._packed_batch_size_bytes is None:
+      raise ValueError(
+          "No current batch. Size can only be computed after at least one"
+          " element has been packed."
+      )
+    return self._packed_batch_size_bytes
 
   def _generate_and_set_shuffled_rows(self):
     assert self._packed_batch_num_bins is not None
@@ -140,6 +155,8 @@ class PackingDatasetIterator(dataset.DatasetIterator):
           self._num_packing_bins,
           self._length_struct,
           meta_features=self._meta_features,
+          pack_alignment_struct=self._pack_alignment_struct,
+          padding_struct=self._padding_struct,
       )
 
   @dataset_stats.record_next_duration_if_output
@@ -193,7 +210,10 @@ class PackingDatasetIterator(dataset.DatasetIterator):
               self._num_packing_bins,
               self._length_struct,
               meta_features=self._meta_features,
+              pack_alignment_struct=self._pack_alignment_struct,
+              padding_struct=self._padding_struct,
           )
+          self._packed_batch_size_bytes = self._current_batch.get_size_bytes()
 
         # Try adding element to the current packed batch.
         failing_components = self._current_batch.try_add_to_batch(element)
@@ -231,6 +251,8 @@ class PackIterDataset(dataset.IterDataset):
       shuffle_bins: bool = True,
       shuffle_bins_group_by_feature: str | None = None,
       meta_features: Sequence[str] = (),
+      pack_alignment_struct: Any = None,
+      padding_struct: Any = None,
   ):
     """Initializes the generic packing dataset.
 
@@ -243,6 +265,8 @@ class PackIterDataset(dataset.IterDataset):
       shuffle_bins: Whether to shuffle bins after packing.
       shuffle_bins_group_by_feature: Feature to group by for shuffling.
       meta_features: Meta features that do not need packing logic.
+      pack_alignment_struct: Optional per-feature alignment values.
+      padding_struct: Optional per-feature padding values.
     """
     super().__init__(parent)
     self._packer_cls = packer_cls
@@ -252,6 +276,8 @@ class PackIterDataset(dataset.IterDataset):
     self._shuffle_bins = shuffle_bins
     self._shuffle_bins_group_by_feature = shuffle_bins_group_by_feature
     self._meta_features = meta_features
+    self._pack_alignment_struct = pack_alignment_struct
+    self._padding_struct = padding_struct
 
   def __iter__(self) -> dataset.DatasetIterator:
     return PackingDatasetIterator(
@@ -263,6 +289,8 @@ class PackIterDataset(dataset.IterDataset):
         shuffle_bins=self._shuffle_bins,
         shuffle_bins_group_by_feature=self._shuffle_bins_group_by_feature,
         meta_features=self._meta_features,
+        pack_alignment_struct=self._pack_alignment_struct,
+        padding_struct=self._padding_struct,
     )
 
 
@@ -293,6 +321,8 @@ class FirstFitPackIterDataset(PackIterDataset):
       shuffle_bins: bool = True,
       shuffle_bins_group_by_feature: str | None = None,
       meta_features: Sequence[str] = (),
+      pack_alignment_struct: Any = None,
+      padding_struct: Any = None,
   ):
     """Creates a dataset that packs sequences using the first-fit strategy.
 
@@ -304,6 +334,8 @@ class FirstFitPackIterDataset(PackIterDataset):
       shuffle_bins: Whether to shuffle bins after packing.
       shuffle_bins_group_by_feature: Feature to group by for shuffling.
       meta_features: Meta features that do not need packing logic.
+      pack_alignment_struct: Optional per-feature alignment values.
+      padding_struct: Optional per-feature padding values.
     """
     super().__init__(
         parent,
@@ -314,6 +346,8 @@ class FirstFitPackIterDataset(PackIterDataset):
         shuffle_bins=shuffle_bins,
         shuffle_bins_group_by_feature=shuffle_bins_group_by_feature,
         meta_features=meta_features,
+        pack_alignment_struct=pack_alignment_struct,
+        padding_struct=padding_struct,
     )
 
   def __str__(self) -> str:
@@ -340,6 +374,8 @@ class BestFitPackIterDataset(PackIterDataset):
       shuffle_bins: bool = True,
       shuffle_bins_group_by_feature: str | None = None,
       meta_features: Sequence[str] = (),
+      pack_alignment_struct: Any = None,
+      padding_struct: Any = None,
   ):
     """Creates a dataset that packs sequences using the best-fit strategy.
 
@@ -351,6 +387,8 @@ class BestFitPackIterDataset(PackIterDataset):
       shuffle_bins: Whether to shuffle bins after packing.
       shuffle_bins_group_by_feature: Feature to group by for shuffling.
       meta_features: Meta features that do not need packing logic.
+      pack_alignment_struct: Optional per-feature alignment values.
+      padding_struct: Optional per-feature padding values.
     """
     super().__init__(
         parent,
@@ -361,6 +399,8 @@ class BestFitPackIterDataset(PackIterDataset):
         shuffle_bins=shuffle_bins,
         shuffle_bins_group_by_feature=shuffle_bins_group_by_feature,
         meta_features=meta_features,
+        pack_alignment_struct=pack_alignment_struct,
+        padding_struct=padding_struct,
     )
 
   def __str__(self) -> str:

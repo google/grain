@@ -14,7 +14,10 @@
 """Tests for batch transformation."""
 
 from absl.testing import absltest
+from grain._src.python.dataset.transformations import packing
+from grain._src.python.dataset.transformations import source
 from grain._src.python.dataset.transformations import testing_util
+import numpy as np
 
 
 class FirstFitPackIterDatasetTest(testing_util.BaseFirstFitPackIterDatasetTest):
@@ -23,12 +26,84 @@ class FirstFitPackIterDatasetTest(testing_util.BaseFirstFitPackIterDatasetTest):
     super().setUp()
     self.kwargs = {}
 
+  def test_get_packed_batch_size_bytes(self):
+    ds = source.SourceMapDataset([
+        {"x": np.zeros(5, dtype=np.int64)},
+        {"x": np.ones(4, dtype=np.int64)},
+        {"x": np.zeros(10, dtype=np.int64)},
+    ]).to_iter_dataset()
+    ds = packing.FirstFitPackIterDataset(
+        ds,
+        length_struct={"x": 10},
+        num_packing_bins=2,
+        **self.kwargs,
+    )
+    iterator = ds.__iter__()
+    # Get one element to initialize packing.
+    next(iterator)
+    # This memory calculation reflects the size of the core data and state
+    # buffers. It intentionally excludes auxiliary metadata buffers
+    # (`segment_ids`, `positions`), which are generated as part of the
+    # output format, not the essential packing state itself.
+    # Calculation: 2*10*8 (values) + 2*8 (first_free_cell) = 176.
+    self.assertEqual(iterator.get_packed_batch_size_bytes(), 176)
+
+  def test_get_packed_batch_size_bytes_before_next(self):
+    ds = source.SourceMapDataset([
+        {"x": np.zeros(5, dtype=np.int64)},
+    ]).to_iter_dataset()
+    ds = packing.FirstFitPackIterDataset(
+        ds,
+        length_struct={"x": 10},
+        num_packing_bins=2,
+        **self.kwargs,
+    )
+    iterator = ds.__iter__()
+    # Check size before calling next()
+    self.assertRaises(ValueError, iterator.get_packed_batch_size_bytes)  # pytype: disable=attribute-error
+
 
 class BestFitPackIterDatasetTest(testing_util.BaseBestFitPackIterDatasetTest):
 
   def setUp(self):
     super().setUp()
     self.kwargs = {}
+
+  def test_get_packed_batch_size_bytes(self):
+    ds = source.SourceMapDataset([
+        {"x": np.zeros(5, dtype=np.int64)},
+        {"x": np.ones(4, dtype=np.int64)},
+        {"x": np.zeros(10, dtype=np.int64)},
+    ]).to_iter_dataset()
+    ds = packing.BestFitPackIterDataset(
+        ds,
+        length_struct={"x": 10},
+        num_packing_bins=2,
+        **self.kwargs,
+    )
+    iterator = ds.__iter__()
+    # Get one element to initialize packing.
+    next(iterator)
+    # This memory calculation reflects the size of the core data and state
+    # buffers. It intentionally excludes auxiliary metadata buffers
+    # (`segment_ids`, `positions`), which are generated as part of the
+    # output format, not the essential packing state itself.
+    # Calculation: 2*10*8 (values) + 2*8 (first_free_cell) = 176.
+    self.assertEqual(iterator.get_packed_batch_size_bytes(), 176)
+
+  def test_get_packed_batch_size_bytes_before_next(self):
+    ds = source.SourceMapDataset([
+        {"x": np.zeros(5, dtype=np.int64)},
+    ]).to_iter_dataset()
+    ds = packing.BestFitPackIterDataset(
+        ds,
+        length_struct={"x": 10},
+        num_packing_bins=2,
+        **self.kwargs,
+    )
+    iterator = ds.__iter__()
+    # Check size before calling next()
+    self.assertRaises(ValueError, iterator.get_packed_batch_size_bytes)  # pytype: disable=attribute-error
 
 
 if __name__ == "__main__":

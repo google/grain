@@ -168,6 +168,7 @@ py_library(
         "//grain/_src/core:transforms",
         "//grain/_src/core:tree_lib",
         "//grain/_src/core:usage_logging",
+        "//grain/_src/python/dataset",
         "@abseil-py//absl/logging",
         "@pypi//etils:pkg",
         "@pypi//numpy:pkg",

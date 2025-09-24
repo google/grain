@@ -21,7 +21,7 @@ Python (thus easy to extend/ modify) and supports N-dimensional input features.
 Note on the packing algorithms: We perform online packing. We start by
 constructing an empty batch of "num_packing_bins" rows. For each input example,
 we try to find a bin where it can be added. If the new example can't fit in any bin,
-the current batch is finalized, and a new batch is started with that element. 
+the current batch is finalized, and a new batch is started with that element.
 This module implements two common strategies:
 
 - First-Fit: For a new example, this strategy finds the first available
@@ -39,6 +39,7 @@ from __future__ import annotations
 import abc
 import copy
 import dataclasses
+import functools
 from typing import Any, Generic, Sequence, TypeVar
 
 import numpy as np
@@ -100,6 +101,10 @@ def zeros(*args, **kwargs):
   return np.zeros(*args, **kwargs)
 
 
+def full(*args, **kwargs):
+  return np.full(*args, **kwargs)
+
+
 class PackedBatch(abc.ABC, Generic[_T]):
   """Base class to represent a batch of packed examples."""
 
@@ -109,12 +114,16 @@ class PackedBatch(abc.ABC, Generic[_T]):
       num_packing_bins: int,
       length_struct: Any,  # PyTree[int]
       meta_features: Sequence[str] = (),
+      pack_alignment_struct: Any = None,
+      padding_struct: Any = None,
   ):
     self._num_packing_bins = num_packing_bins
     self._length_struct = length_struct
     self._meta_features = meta_features
+    self._size_bytes = 0
 
-    def make_packed_buffer(length: int, x: np.ndarray | int):
+    # Define the main buffers we will pack the data into.
+    def make_packed_buffer(length: int, x: np.ndarray | int, padding: Any):
       is_scalar = np.ndim(x) == 0
       if is_scalar:
         shape = ()
@@ -123,14 +132,25 @@ class PackedBatch(abc.ABC, Generic[_T]):
         assert isinstance(x, np.ndarray), type(x)
         shape = x.shape[1:]
         dtype = x.dtype
-      return zeros(
+      buffer_fn = (
+          zeros
+          if padding is None
+          else functools.partial(full, fill_value=padding)
+      )
+      buffer = buffer_fn(
           shape=(num_packing_bins, length, *shape),  # (B, T, ...)
           dtype=dtype,
       )
+      self._size_bytes += buffer.nbytes
+      return buffer
+
+    if padding_struct is None:
+      padding_struct = tree_lib.map_structure(lambda x: None, length_struct)
 
     self._values = tree_lib.map_structure(
-        make_packed_buffer, length_struct, element_for_shapes
+        make_packed_buffer, length_struct, element_for_shapes, padding_struct
     )
+
     self._segment_ids = tree_lib.map_structure(
         lambda l: zeros((num_packing_bins, l), dtype=np.int32),
         length_struct,
@@ -139,10 +159,22 @@ class PackedBatch(abc.ABC, Generic[_T]):
         lambda l: zeros((num_packing_bins, l), dtype=np.int32),
         length_struct,
     )
+    if pack_alignment_struct is None:
+      self._pack_alignments = tree_lib.map_structure(lambda x: 1, length_struct)
+    else:
+      self._pack_alignments = tree_lib.map_structure(
+          lambda x: x, pack_alignment_struct
+      )
+
+    def _make_first_free_cell_per_row_buffer(_):
+      buffer = zeros(num_packing_bins, dtype=np.int64)
+      self._size_bytes += buffer.nbytes
+      return buffer
+
     # Tracks the next empty position to insert an example for each row
     # in the batch, for each feature in features_to_pack.
     self._first_free_cell_per_row = tree_lib.map_structure(
-        lambda _: zeros(num_packing_bins, dtype=np.int64), length_struct
+        _make_first_free_cell_per_row_buffer, length_struct
     )
     # Tracks the number of examples already packed into row of the batch. Used
     # to fill the segmentation values for each feature.
@@ -158,6 +190,10 @@ class PackedBatch(abc.ABC, Generic[_T]):
     self._flat_seg_ids = tree_lib.flatten(self._segment_ids)
     self._flat_positions = tree_lib.flatten(self._positions)
     self._flat_first_free_cell_per_row = tree_lib.flatten(self._first_free_cell_per_row)
+
+  def get_size_bytes(self) -> int:
+    """Returns the size of the packed batch in bytes."""
+    return self._size_bytes
 
   def get_packed_batch(self):
     """Returns the current packed batch, slicing off any empty trailing rows."""
@@ -195,18 +231,23 @@ class PackedBatch(abc.ABC, Generic[_T]):
   def add_element_to_batch(self, element: Any, row: int) -> None:
     """Adds an element to the specified row using pre-flattened buffers."""
     flat_elem = tree_lib.flatten(element)
+    flat_alignments = tree_lib.flatten(self._pack_alignments)
     seg_id = self._num_examples_per_row[row] + 1
+
     for idx, value in enumerate(flat_elem):
       value_len = 1 if np.ndim(value) == 0 else len(value)
       start = int(self._flat_first_free_cell_per_row[idx][row])
       end = start + value_len
+
+      alignment = flat_alignments[idx]
+      padded_end = ((end + alignment - 1) // alignment) * alignment
 
       self._flat_values[idx][row, start:end] = value
       self._flat_seg_ids[idx][row, start:end] = seg_id
       self._flat_positions[idx][row, start:end] = np.arange(
           end - start, dtype=np.int32
       )
-      self._flat_first_free_cell_per_row[idx][row] = end
+      self._flat_first_free_cell_per_row[idx][row] = padded_end
     self._num_examples_per_row[row] += 1
 
   @abc.abstractmethod
@@ -217,20 +258,6 @@ class PackedBatch(abc.ABC, Generic[_T]):
 
 class FirstFitPackedBatch(PackedBatch[_T]):
   """Implements first-fit packing of sequences."""
-
-  def __init__(
-      self,
-      element_for_shapes: Any,  # PyTree[np.ndarray]
-      num_packing_bins: int,
-      length_struct: Any,  # PyTree[int]
-      meta_features: Sequence[str] = (),
-  ):
-    super().__init__(
-        element_for_shapes,
-        num_packing_bins,
-        length_struct,
-        meta_features=meta_features,
-    )
 
   def try_add_to_batch(self, element: Any) -> list[str] | None:
     tree_lib.assert_same_structure(element, self._length_struct)
@@ -278,20 +305,6 @@ class FirstFitPackedBatch(PackedBatch[_T]):
 
 class BestFitPackedBatch(PackedBatch[_T]):
   """Implements best-fit packing of sequences."""
-
-  def __init__(
-      self,
-      element_for_shapes: Any,  # PyTree[np.ndarray]
-      num_packing_bins: int,
-      length_struct: Any,  # PyTree[int]
-      meta_features: Sequence[str] = (),
-  ):
-    super().__init__(
-        element_for_shapes,
-        num_packing_bins,
-        length_struct,
-        meta_features=meta_features,
-    )
 
   def try_add_to_batch(self, element: Any) -> list[str] | None:
     tree_lib.assert_same_structure(element, self._length_struct)

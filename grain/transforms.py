@@ -24,6 +24,7 @@ from grain._src.core.transforms import (
     MapTransform as Map,
     MapWithIndex,
     RandomMapTransform as RandomMap,
+    TfRandomMapTransform as TfRandomMap,
     Transformation,
     Transformations,
 )

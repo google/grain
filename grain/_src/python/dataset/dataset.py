@@ -373,6 +373,22 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
   def __getitem__(self, index):
     """Returns the element for the index or None if missing."""
 
+  def _getitems(self, indices: Sequence[int]) -> Sequence[T | None]:
+    """Returns a sequence of elements corresponding to the given indices.
+
+    For each index in `indices`, this method retrieves the corresponding
+    element. If an element is not present for a given index (e.g., it has
+    been filtered out), `None` is returned in its place.
+
+    Args:
+      indices: A sequence of integer indices for which to retrieve elements.
+
+    Returns:
+      A sequence containing the retrieved elements and/or `None` for missing
+      elements, maintaining the order of the input `indices`.
+    """
+    return [self.__getitem__(i) for i in indices]
+
   def apply(
       self,
       transformations: transforms.Transformation | transforms.Transformations,
@@ -1260,6 +1276,7 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
       self,
       options: grain_options.MultiprocessingOptions | None = None,
       worker_init_fn: Callable[[int, int], None] | None = None,
+      sequential_slice: bool = False,
   ) -> IterDataset[T]:
     """Returns a dataset prefetching elements in multiple processes.
 
@@ -1273,7 +1290,6 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
     prefetch workers, consider moving many-to-one and stateful transformations
     to after ``mp_prefetch`` or outside of the Grain pipeline.
 
-
     Args:
       options: options for the prefetching processes. ``options.num_workers``
         must be greater than or equal to 0. If ``options.num_workers`` is 0,
@@ -1282,6 +1298,11 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
       worker_init_fn: A function that is called in each worker process before
         the data is processed. The function takes two arguments: the current
         worker index and the total worker count.
+      sequential_slice: a boolean indicating whether the slice for the worker
+        should be sequential (consecutive at the source dataset). It is an
+        experimental feature, introduced to improve performance. Note that if
+        enabled, effectively shuffle is applied on the slice/worker level and
+        not globally).
 
     Returns:
       A dataset prefetching input elements in separate processes.
@@ -1295,6 +1316,7 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
         self,
         multiprocessing_options=options,
         worker_init_fn=worker_init_fn,
+        sequential_slice=sequential_slice,
     )
 
   @abc.abstractmethod

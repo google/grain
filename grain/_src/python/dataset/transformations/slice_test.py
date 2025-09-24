@@ -100,6 +100,21 @@ class SliceMapDatasetTest(parameterized.TestCase):
     ds = slice_ds.SliceMapDataset(ds, slice(0, 20, 2))  # 0, 6, 12
     self.assertSequenceEqual(list(ds), [0, 6, 12])
 
+  def test_slicing_with_index_multi_epoch(self):
+    num_to_compare = 20
+
+    ds = dataset.MapDataset.range(10)
+    ds = ds.map_with_index(lambda i, x: {"index": i, "value": x})
+
+    ds_sliced = ds[: len(ds)]
+    ds_sliced = ds_sliced.repeat()
+    ds_sliced = list(itertools.islice(ds_sliced, num_to_compare))
+
+    ds_unsliced = ds.repeat()
+    ds_unsliced = list(itertools.islice(ds_unsliced, num_to_compare))
+
+    self.assertSequenceEqual(ds_sliced, ds_unsliced)
+
 
 if __name__ == "__main__":
   absltest.main()

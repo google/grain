@@ -42,6 +42,7 @@ py_library(
         ":stats",
         "//grain/_src/core:exceptions",
         "//grain/_src/core:monitoring",
+        "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
         "//grain/_src/core:tree_lib",
         "//grain/_src/core:usage_logging",
