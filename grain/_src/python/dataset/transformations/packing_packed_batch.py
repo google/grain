@@ -151,13 +151,16 @@ class PackedBatch(abc.ABC, Generic[_T]):
         make_packed_buffer, length_struct, element_for_shapes, padding_struct
     )
 
+    def make_packed_aux_info(length: int):
+      buffer = zeros(shape=(num_packing_bins, length), dtype=np.int32)
+      self._size_bytes += buffer.nbytes
+      return buffer
+
     self._segment_ids = tree_lib.map_structure(
-        lambda l: zeros((num_packing_bins, l), dtype=np.int32),
-        length_struct,
+        make_packed_aux_info, length_struct
     )
     self._positions = tree_lib.map_structure(
-        lambda l: zeros((num_packing_bins, l), dtype=np.int32),
-        length_struct,
+        make_packed_aux_info, length_struct
     )
     if pack_alignment_struct is None:
       self._pack_alignments = tree_lib.map_structure(lambda x: 1, length_struct)
