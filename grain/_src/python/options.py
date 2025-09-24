@@ -14,6 +14,8 @@
 """Dataclasses for holdings options."""
 import dataclasses
 
+from absl import logging
+
 
 @dataclasses.dataclass(slots=True)
 class ReadOptions:
@@ -41,6 +43,33 @@ class ReadOptions:
   # 10 KiB on disk.
   num_threads: int = 16
   prefetch_buffer_size: int = 500
+
+  def __post_init__(self):
+    if self.num_threads < 0:
+      raise ValueError(
+          f'num_threads must be non-negative, got {self.num_threads}'
+      )
+    if self.prefetch_buffer_size < 0:
+      raise ValueError(
+          'prefetch_buffer_size must be non-negative, got'
+          f' {self.prefetch_buffer_size}'
+      )
+    # Avoid warning when setting prefetch_buffer_size=0, since this is commonly
+    # used to disable prefetching.
+    if (
+        self.prefetch_buffer_size < self.num_threads
+        and self.prefetch_buffer_size != 0
+    ):
+      logging.warning(
+          'prefetch_buffer_size=%s is smaller than num_threads=%s. This will'
+          ' limit the number of threads that can actually be used in parallel'
+          ' to %s, potentially hurting performance. Please set'
+          ' prefetch_buffer_size >= num_threads. This warning may become an'
+          ' error in the future.',
+          self.prefetch_buffer_size,
+          self.num_threads,
+          self.prefetch_buffer_size,
+      )
 
 
 @dataclasses.dataclass(slots=True)

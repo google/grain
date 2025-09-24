@@ -299,6 +299,18 @@ py_library(
     name = "options",
     srcs = ["options.py"],
     srcs_version = "PY3",
+    deps = ["@abseil-py//absl/logging"],
+)
+
+py_test(
+    name = "options_test",
+    srcs = ["options_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":options",
+        "@abseil-py//absl/logging",
+        "@abseil-py//absl/testing:absltest",
+    ],
 )
 
 py_library(
