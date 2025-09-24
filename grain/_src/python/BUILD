@@ -368,3 +368,19 @@ py_library(
         "@pypi//etils:pkg",
     ],
 )
+
+py_library(
+    name = "variable_size_queue",
+    srcs = ["variable_size_queue.py"],
+    srcs_version = "PY3",
+)
+
+py_test(
+    name = "variable_size_queue_test",
+    srcs = ["variable_size_queue_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":variable_size_queue",
+        "@abseil-py//absl/testing:absltest",
+    ],
+)
