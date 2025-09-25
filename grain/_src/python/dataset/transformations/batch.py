@@ -16,10 +16,11 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+import concurrent.futures
 import math
 import pprint
 import sys
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, TypeVar, cast
 
 from grain._src.core import tree_lib
 from grain._src.python.dataset import dataset
@@ -32,9 +33,94 @@ T = TypeVar("T")
 S = TypeVar("S")
 
 
+def _is_parallel_batch_experiment_enabled():
+  return False
+
+
+# The threshold (in bytes) for falling back to the serial `np.stack`  batching
+# implementation. If an `np.array` has a smaller size than this threshold, the
+# serial `np.stack` implementation will be used instead even if the parallel
+# batching experiment is enabled.
+_PARALLEL_BATCHING_MIN_BYTES = 256 * 1024
+
+
+class _MakeBatchParallel:
+  """A callable class for batching sequences of structured data in parallel.
+
+  This class provides a parallel implementation for batching. When an instance
+  of this class is called with a sequence of elements (e.g., a list of
+  NumPy arrays), it uses a `ThreadPoolExecutor` to parallelize the memory copy
+  operations: for each leaf in the data structure, it pre-allocates a single
+  large NumPy array to hold the batched results, and then submits tasks to the
+  thread pool to copy each individual element into its corresponding slice of
+  the final batch array.
+
+  If the elements to be batched are not NumPy arrays, or if the thread pool is
+  not available, it falls back to the standard serial `np.stack` operation.
+
+  The class is designed to be a drop-in replacement for the standard batching
+  `_make_batch` function and integrates with `tree_lib.map_structure` to handle
+  arbitrarily nested data structures.
+
+  Note: This is an experimental feature and is only active when the
+   'EXP_parallel_batch' experiment is enabled in the Grain configuration.
+  """
+
+  def __init__(self):
+    self._parallel_batch_executor = concurrent.futures.ThreadPoolExecutor()
+
+  def __call__(self, values: Sequence[T]) -> T:
+    def _batch_fn(*xs: Sequence[T]) -> T:
+      # If the thread pool is not available or the elements are not NumPy
+      # arrays, fall back to the standard serial `np.stack` operation.
+      if (self._parallel_batch_executor is None) or not isinstance(
+          xs[0], np.ndarray
+      ):
+        return np.stack(xs)
+      xs = cast(Sequence[np.ndarray], xs)
+      # Fall back to the standard serial `np.stack` operation if the length of
+      # an individual np.array within `values` is smaller in size (measured in
+      # bytes) than the threshold.
+      if any(x.nbytes < _PARALLEL_BATCHING_MIN_BYTES for x in xs):
+        return np.stack(xs)
+
+      out = np.empty([len(xs), *xs[0].shape], dtype=xs[0].dtype)
+      # For each input array, submit a parallel task to the thread pool to copy
+      # the data into the corresponding slice of the output array.
+      fs = []
+      for i, x in enumerate(xs):
+        fs.append(self._parallel_batch_executor.submit(out.__setitem__, i, x))
+      # Wait for all submitted futures to complete (blocking operation).
+      for f in fs:
+        f.result()
+
+      return out
+
+    if not values:
+      raise ValueError("Cannot batch 0 values. Please file a bug.")
+
+    try:
+      result = tree_lib.map_structure(_batch_fn, *values)
+      return result
+    except ValueError as e:
+      # NumPy error message doesn't include actual shapes and dtypes. Provide a
+      # more helpful error message.
+      raise ValueError(
+          "Expected all input elements to have the same structure but got:\n"
+          f"{pprint.pformat(tree_lib.spec_like(values))}"
+      ) from e
+
+  def __reduce__(self):
+    return (self.__class__, ())
+
+  def __del__(self):
+    if self._parallel_batch_executor:
+      self._parallel_batch_executor.shutdown(wait=False, cancel_futures=True)
+      self._parallel_batch_executor = None
+
+
 def make_batch(values: Sequence[T]) -> T:
   """Returns a batch of values with a new batch dimension at the front."""
-
   if not values:
     raise ValueError("Cannot batch 0 values. Please file a bug.")
 
@@ -168,7 +254,8 @@ class BatchMapDataset(dataset.MapDataset[T]):
       drop_remainder: Whether to drop the last batch if it is smaller than
         batch_size.
       batch_fn: A function that takes a list of elements and returns a batch.
-        Defaults to stacking the elements along a new batch dimension.
+        Defaults to stacking the elements along a new batch dimension. If
+        defined, the parallelized batch experiment will be disabled.
     """
     super().__init__(parent)
     if batch_size <= 0:
@@ -186,6 +273,8 @@ class BatchMapDataset(dataset.MapDataset[T]):
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
     self._batch_fn = make_batch if batch_fn is None else batch_fn
+    if _is_parallel_batch_experiment_enabled() and batch_fn is None:
+      self._batch_fn = _MakeBatchParallel()
     if self._drop_remainder:
       self._length = len(self._parent) // self._batch_size
     else:
@@ -245,7 +334,8 @@ class BatchIterDataset(dataset.IterDataset[T]):
       drop_remainder: Whether to drop the last batch if it is smaller than
         batch_size.
       batch_fn: A function that takes a list of elements and returns a batch.
-        Defaults to stacking the elements along a new batch dimension.
+        Defaults to stacking the elements along a new batch dimension. If
+        defined, the parallelized batch experiment will be disabled.
     """
     super().__init__(parent)
     if batch_size <= 0:
@@ -253,6 +343,8 @@ class BatchIterDataset(dataset.IterDataset[T]):
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
     self._batch_fn = make_batch if batch_fn is None else batch_fn
+    if _is_parallel_batch_experiment_enabled() and batch_fn is None:
+      self._batch_fn = _MakeBatchParallel()
 
   def __iter__(self) -> _BatchDatasetIterator[T]:
     parent_iter = self._parent.__iter__()
