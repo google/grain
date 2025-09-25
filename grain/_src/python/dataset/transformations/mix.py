@@ -140,6 +140,7 @@ class _MixedDatasetIterator(dataset.DatasetIterator[T]):
     self._proportions = tuple(proportions)
     self._index = 0
     self._stop = False
+    self._ipl_stage_cat = stats.IPL_CAT_ENQUEUE
 
   @stats.record_next_duration_if_output
   def __next__(self):

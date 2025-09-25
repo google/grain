@@ -79,6 +79,7 @@ class _ZipDatasetIterator(dataset.DatasetIterator[T]):
   ):
     super().__init__([p.__iter__() for p in parents])
     self._strict = strict
+    self._ipl_stage_cat = dataset_stats.IPL_CAT_ENQUEUE
 
   @dataset_stats.record_next_duration_if_output
   def __next__(self) -> tuple[T, ...]:

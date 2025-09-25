@@ -322,10 +322,12 @@ def record_next_duration_if_output(next_fn):
   @functools.wraps(next_fn)
   def wrapper(iterator):
     if _TRACE_ANNOTATION and _TRACE_ANNOTATION.is_enabled():
+      stage_category = getattr(iterator, "_ipl_stage_cat", IPL_CAT_UNKNOWN)
       with _TRACE_ANNOTATION(
           f"{iterator.__class__.__name__}.{next_fn.__name__}",
           _ipl_stage_name=str(iterator),
           _ipl_stage_id=id(iterator),
+          _ipl_stage_cat=stage_category,
       ):
         start_time = time.perf_counter_ns()
         result = next_fn(iterator)

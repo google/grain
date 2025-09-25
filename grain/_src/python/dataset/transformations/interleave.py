@@ -74,6 +74,7 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
         )
         .__iter__()
     )
+    self._ipl_stage_cat = stats.IPL_CAT_ENQUEUE
     self._cycle_length: int = min(cycle_length, len(datasets))
     self._next_index_in_cycle: int = 0
     self._next_index_in_datasets: int = 0
