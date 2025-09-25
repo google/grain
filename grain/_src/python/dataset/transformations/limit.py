@@ -33,6 +33,7 @@ class _LimitDatasetIterator(dataset.DatasetIterator[T]):
     super().__init__(parent)
     self._count = count
     self._count_elements_read = 0
+    self._ipl_stage_cat = stats.IPL_CAT_ENQUEUE
 
   @stats.record_next_duration_if_output
   def __next__(self):

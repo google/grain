@@ -90,6 +90,7 @@ class _FlatMapDatasetIterator(dataset.DatasetIterator[T]):
     self._buffer = []
     self._last_parent_state = self._parent.get_state()
     self._transform_name = transform_name
+    self._ipl_stage_cat = dataset_stats.IPL_CAT_ENQUEUE
 
   def _has_consumed_all_buffer_elements(self):
     return self._next_index_in_buffer >= len(self._buffer)

@@ -253,6 +253,7 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
 
     self._stop_iteration = False
     self._state = self._checkpoint()
+    self._ipl_stage_cat = stats.IPL_CAT_ENQUEUE
 
     # Allocate and set a `np.range(max_position)` once. We will copy from this
     # into the *_positions features.

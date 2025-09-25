@@ -159,6 +159,7 @@ class _WindowShuffleDatasetIterator(dataset.DatasetIterator[T]):
     self._parent_window_start_iter_state = self._parent.get_state()
     self._init = True
     self._parent_exhausted = False
+    self._ipl_stage_cat = stats.IPL_CAT_ENQUEUE
 
   def _maybe_update_window_index(self):
     # Ugly workaround to allow for the initialization upon calling next and not

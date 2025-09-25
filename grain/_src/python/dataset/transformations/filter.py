@@ -138,6 +138,7 @@ class _FilterDatasetIterator(dataset.DatasetIterator[T]):
     super().__init__(parent)
     self._filter_fn = filter_fn
     self._transform_name = transform_name
+    self._ipl_stage_cat = dataset_stats.IPL_CAT_ENQUEUE
 
   @functools.cached_property
   def _threshold_checker(self):

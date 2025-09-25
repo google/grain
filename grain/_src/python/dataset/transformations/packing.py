@@ -71,6 +71,7 @@ class PackingDatasetIterator(dataset.DatasetIterator):
     self._meta_features = meta_features
     self._pack_alignment_struct = pack_alignment_struct
     self._padding_struct = padding_struct
+    self._ipl_stage_cat = dataset_stats.IPL_CAT_ENQUEUE
     self._reset()
 
   def _reset(self):

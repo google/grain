@@ -209,6 +209,7 @@ class _MapDatasetIterator(dataset.DatasetIterator[T]):
     super().__init__(parent)
     self._map_fn = map_fn
     self._transform_name = transform_name
+    self._ipl_stage_cat = stats.IPL_CAT_ENQUEUE
 
   @stats.record_next_duration_if_output
   def __next__(self):

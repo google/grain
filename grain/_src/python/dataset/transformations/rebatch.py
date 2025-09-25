@@ -76,6 +76,7 @@ class _RebatchDatasetIterator(dataset.DatasetIterator):
     self._current_batch: list[Any] | None = None
     self._batch_idx = 0
     self._treedef = None
+    self._ipl_stage_cat = stats.IPL_CAT_ENQUEUE
     self._last_parent_state = self._parent.get_state()
 
   def get_state(self) -> dict[str, Any]:
