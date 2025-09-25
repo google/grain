@@ -4,7 +4,7 @@
 # pylint:disable=missing-class-docstring,missing-function-docstring
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Type
 from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.python.dataset.transformations import packing
@@ -29,6 +29,7 @@ def _assert_trees_equal(actual, expected):
 
 
 def _common_test_body(
+    packer_cls: Type[packing.PackIterDataset],
     input_elements,
     expected_elements,
     length_struct,
@@ -51,7 +52,7 @@ def _common_test_body(
   expected_elements = [
       {k: np.asarray(v) for k, v in d.items()} for d in expected_elements
   ]
-  ds = packing.FirstFitPackIterDataset(
+  ds = packer_cls(
       source.SourceMapDataset(input_elements).to_iter_dataset(),
       num_packing_bins=num_packing_bins,
       length_struct=length_struct,
@@ -63,17 +64,162 @@ def _common_test_body(
       padding_struct=padding_struct,
       **(kwargs if kwargs else {}),
   )
-  _assert_trees_equal(list(ds), expected_elements)
+  actual_elements = list(ds)
+  np.testing.assert_equal(len(actual_elements), len(expected_elements))
+  _assert_trees_equal(actual_elements, expected_elements)
 
 
 class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
   """Base test for FirstFitPackIterDataset.
 
-  This can be extended by multiple implementation of FirstFit for testing all of
-  them in the same manner.
+  This class contains the test suite for the First-Fit packing algorithm.
+  It also serves as a base for other packing algorithm tests (e.g., BestFit),
+  which can inherit from it to reuse general packing test cases.
   """
 
+  packer_cls = packing.FirstFitPackIterDataset
   kwargs = {}
+
+  def test_packing_scenario_1(self):
+    """Provides the foundational comparison case for the two algorithms."""
+    # With bins of capacity 10 and items [4, 8, 2]:
+    # 1. Item 4 is placed in Bin 0. (Bin 0 has 6 space left).
+    # 2. Item 8 can't fit in Bin 0, so it's placed in Bin 1.
+    # 3. Item 2 arrives. First-Fit starts searching from the beginning and
+    #    places it in the *first* available spot: Bin 0.
+    input_elements = [
+        {"features": [1, 1, 1, 1]},
+        {"features": [2, 2, 2, 2, 2, 2, 2, 2]},
+        {"features": [3, 3]},
+    ]
+    length_struct = {"features": 10}
+    expected_elements = [
+        {
+            "features": ([1] * 4) + ([3] * 2) + ([0] * 4),
+            "features_segment_ids": ([1] * 4) + ([2] * 2) + ([0] * 4),
+            "features_positions": list(range(4)) + list(range(2)) + ([0] * 4),
+        },
+        {
+            "features": ([2] * 8) + ([0] * 2),
+            "features_segment_ids": ([1] * 8) + ([0] * 2),
+            "features_positions": list(range(8)) + ([0] * 2),
+        },
+    ]
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=2,
+    )
+
+  def test_packing_scenario_2(self):
+    """Scenario: An item can fit in two bins with different amounts of free space."""
+    # First-Fit places the item of size 4 in the first available bin (Bin 0),
+    # even though Bin 1 would be a tighter fit.
+    input_elements = [
+        {"features": [1] * 10},
+        {"features": [2] * 15},
+        {"features": [3] * 4},
+    ]
+    length_struct = {"features": 20}
+    expected_elements = [
+        {
+            "features": ([1] * 10) + ([3] * 4) + ([0] * 6),
+            "features_segment_ids": ([1] * 10) + ([2] * 4) + ([0] * 6),
+            "features_positions": list(range(10)) + list(range(4)) + ([0] * 6),
+        },
+        {
+            "features": ([2] * 15) + ([0] * 5),
+            "features_segment_ids": ([1] * 15) + ([0] * 5),
+            "features_positions": list(range(15)) + ([0] * 5),
+        },
+    ]
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=2,
+    )
+
+  def test_packing_scenario_3(self):
+    """Scenario where FF is forced to use an extra bin for the final item."""
+    # 1. Item 50 -> Bin 0. (rem: 50)
+    # 2. Item 70 -> Bin 1. (rem: 30)
+    # 3. Item 25 -> Bin 0. (rem: 25)
+    # 4. Item 40 arrives. It can't fit in Bin 0 (rem 25) or Bin 1 (rem 30).
+    #    It is forced to open a new, third bin.
+    input_elements = [
+        {"features": [1] * 50},
+        {"features": [2] * 70},
+        {"features": [3] * 25},
+        {"features": [4] * 40},
+    ]
+    length_struct = {"features": 100}
+    expected_elements = [
+        {
+            "features": ([1] * 50) + ([3] * 25) + ([0] * 25),
+            "features_segment_ids": ([1] * 50) + ([2] * 25) + ([0] * 25),
+            "features_positions": (
+                list(range(50)) + list(range(25)) + ([0] * 25)
+            ),
+        },
+        {
+            "features": ([2] * 70) + ([0] * 30),
+            "features_segment_ids": ([1] * 70) + ([0] * 30),
+            "features_positions": list(range(70)) + ([0] * 30),
+        },
+        {
+            "features": ([4] * 40) + ([0] * 60),
+            "features_segment_ids": ([1] * 40) + ([0] * 60),
+            "features_positions": list(range(40)) + ([0] * 60),
+        },
+    ]
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=3,
+    )
+
+  def test_packing_scenario_4(self):
+    """Scenario where FF's prior choices prevent fitting a final large item."""
+    # After packing {10, 4} into Bin 0 and {15} into Bin 1, the largest
+    # remaining empty space is 6. The final item of size 10 cannot fit
+    # and is forced to open a new, third bin.
+    input_elements = [
+        {"features": [1] * 10},
+        {"features": [2] * 15},
+        {"features": [3] * 4},
+        {"features": [4] * 10},
+    ]
+    length_struct = {"features": 20}
+    expected_elements = [
+        {
+            "features": ([1] * 10) + ([3] * 4) + ([0] * 6),
+            "features_segment_ids": ([1] * 10) + ([2] * 4) + ([0] * 6),
+            "features_positions": list(range(10)) + list(range(4)) + ([0] * 6),
+        },
+        {
+            "features": ([2] * 15) + ([0] * 5),
+            "features_segment_ids": ([1] * 15) + ([0] * 5),
+            "features_positions": list(range(15)) + ([0] * 5),
+        },
+        {
+            "features": ([4] * 10) + ([0] * 10),
+            "features_segment_ids": ([1] * 10) + ([0] * 10),
+            "features_positions": list(range(10)) + ([0] * 10),
+        },
+    ]
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=3,
+    )
 
   @parameterized.parameters(
       {"num_packing_bins": 1},
@@ -126,6 +272,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
     ]
 
     _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -212,6 +359,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
     ]
 
     _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -229,7 +377,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
     ]
     length_struct = {"a": 3}
 
-    ld = packing.FirstFitPackIterDataset(
+    ld = self.packer_cls(
         source.SourceMapDataset(input_elements).to_iter_dataset(),
         num_packing_bins=1,
         length_struct=length_struct,
@@ -255,7 +403,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
     ]
 
     length_struct = {"a": 3, "b": 3}
-    ld = packing.FirstFitPackIterDataset(
+    ld = self.packer_cls(
         source.SourceMapDataset(input_elements).to_iter_dataset(),
         num_packing_bins=1,
         length_struct=length_struct,
@@ -317,6 +465,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
     ]
 
     _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -384,6 +533,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
     ]
 
     _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -439,6 +589,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
     ]
 
     _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -506,6 +657,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
       raise ValueError(f"Unexpected seed: {seed}")
 
     _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -551,6 +703,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
     ]
 
     _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -597,6 +750,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
     ]
 
     _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -641,6 +795,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
     ]
 
     _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -675,6 +830,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
     }]
 
     _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -709,6 +865,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
     }]
 
     _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -760,6 +917,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
         },
     ]
     _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -814,6 +972,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
     ]
 
     _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -874,6 +1033,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
         },
     ]
     _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -908,7 +1068,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
         {k: np.asarray(v) for k, v in d.items()} for d in input_elements
     ]
     length_struct = {"inputs": 3, "targets": 3}
-    ld = packing.FirstFitPackIterDataset(
+    ld = self.packer_cls(
         source.SourceMapDataset(input_elements).to_iter_dataset(),
         num_packing_bins=2,
         length_struct=length_struct,
@@ -958,9 +1118,8 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
         {k: np.asarray(v) for k, v in d.items()} for d in expected_elements
     ]
 
-    np.testing.assert_equal(len(actual_elements), len(expected_elements))
-    for actual, expected in zip(actual_elements, expected_elements):
-      _assert_trees_equal(actual, expected)
+    self.assertEqual(len(actual_elements), len(expected_elements))
+    _assert_trees_equal(actual_elements, expected_elements)
 
   @parameterized.product(
       shuffle_bins=[True, False],
@@ -975,7 +1134,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
         dict(row=rng.integers(0, 10, size=rng.integers(5, 30)))
         for _ in range(100)
     ]
-    ld = packing.FirstFitPackIterDataset(
+    ld = self.packer_cls(
         source.SourceMapDataset(elements).repeat().to_iter_dataset(),
         num_packing_bins=4,
         length_struct=dict(row=100),
@@ -1014,7 +1173,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
         )
         for _ in range(100)
     ]
-    ld = packing.FirstFitPackIterDataset(
+    ld = self.packer_cls(
         source.SourceMapDataset(elements).repeat().to_iter_dataset(),
         num_packing_bins=4,
         length_struct=dict(row=100, nested_feature=dict(inner_value=100)),
@@ -1083,6 +1242,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
     padding_struct = {"inputs": 0, "targets": -1}
     num_packing_bins = 2
     _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -1091,6 +1251,148 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
         ),
         padding_struct=padding_struct,
         num_packing_bins=num_packing_bins,
+    )
+
+
+class BaseBestFitPackIterDatasetTest(BaseFirstFitPackIterDatasetTest):
+  """Base test for the Best-Fit packing algorithm.
+
+  This class inherits from BaseFirstFitPackIterDatasetTest to reuse all
+  general packing tests (e.g., for checkpointing, data types). It overrides
+  only the packing scenario tests that are specific to the Best-Fit strategy.
+  """
+
+  packer_cls = packing.BestFitPackIterDataset
+
+  def test_packing_scenario_1(self):
+    """Provides the foundational comparison case for the two algorithms."""
+    # With bins of capacity 10 and items [4, 8, 2]:
+    # 1. Item 4 is placed in Bin 0. (Bin 0 has 6 space left).
+    # 2. Item 8 is placed in Bin 1. (Bin 1 has 2 space left).
+    # 3. Item 2 arrives. Best-Fit checks all options and finds that Bin 1 is
+    #    the "best" (tightest) fit, as it leaves 0 empty space.
+    input_elements = [
+        {"features": [1, 1, 1, 1]},
+        {"features": [2, 2, 2, 2, 2, 2, 2, 2]},
+        {"features": [3, 3]},
+    ]
+    length_struct = {"features": 10}
+    expected_elements = [
+        {
+            "features": [1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
+            "features_segment_ids": [1, 1, 1, 1, 0, 0, 0, 0, 0, 0],
+            "features_positions": [0, 1, 2, 3, 0, 0, 0, 0, 0, 0],
+        },
+        {
+            "features": [2, 2, 2, 2, 2, 2, 2, 2, 3, 3],
+            "features_segment_ids": [1, 1, 1, 1, 1, 1, 1, 1, 2, 2],
+            "features_positions": [0, 1, 2, 3, 4, 5, 6, 7, 0, 1],
+        },
+    ]
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=2,
+    )
+
+  def test_packing_scenario_2(self):
+    """Scenario: An item can fit in two bins with different amounts of free space."""
+    # Best-Fit checks both bins and places the item of size 4 in Bin 1,
+    # as it results in the least leftover space (1 vs 6).
+    input_elements = [
+        {"features": [1] * 10},
+        {"features": [2] * 15},
+        {"features": [3] * 4},
+    ]
+    length_struct = {"features": 20}
+    expected_elements = [
+        {
+            "features": ([1] * 10) + ([0] * 10),
+            "features_segment_ids": ([1] * 10) + ([0] * 10),
+            "features_positions": list(range(10)) + ([0] * 10),
+        },
+        {
+            "features": ([2] * 15) + ([3] * 4) + ([0] * 1),
+            "features_segment_ids": ([1] * 15) + ([2] * 4) + ([0] * 1),
+            "features_positions": list(range(15)) + list(range(4)) + ([0] * 1),
+        },
+    ]
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=2,
+    )
+
+  def test_packing_scenario_3(self):
+    """Scenario where BF's smarter choices result in using fewer bins."""
+    # 1. Item 50 -> Bin 0. (rem: 50)
+    # 2. Item 70 -> Bin 1. (rem: 30)
+    # 3. Item 25 -> Bin 1 (best fit, leaves 5). (rem: Bin 0: 50, Bin 1: 5)
+    # 4. Item 40 arrives. It fits nicely into Bin 0 (best fit, leaves 10).
+    #    The result is a compact packing into only 2 bins.
+    input_elements = [
+        {"features": [1] * 50},
+        {"features": [2] * 70},
+        {"features": [3] * 25},
+        {"features": [4] * 40},
+    ]
+    length_struct = {"features": 100}
+    expected_elements = [
+        {
+            "features": ([1] * 50) + ([4] * 40) + ([0] * 10),
+            "features_segment_ids": ([1] * 50) + ([2] * 40) + ([0] * 10),
+            "features_positions": (
+                list(range(50)) + list(range(40)) + ([0] * 10)
+            ),
+        },
+        {
+            "features": ([2] * 70) + ([3] * 25) + ([0] * 5),
+            "features_segment_ids": ([1] * 70) + ([2] * 25) + ([0] * 5),
+            "features_positions": list(range(70)) + list(range(25)) + ([0] * 5),
+        },
+    ]
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=3,
+    )
+
+  def test_packing_scenario_4(self):
+    """Scenario where BF's prior choices allow fitting a final large item."""
+    # After packing {10} into Bin 0 and {15, 4} into Bin 1, Best-Fit
+    # strategically preserved a large empty space of 10 in Bin 0. The final
+    # item fits perfectly into this space, allowing for a compact 2-bin pack.
+    input_elements = [
+        {"features": [1] * 10},
+        {"features": [2] * 15},
+        {"features": [3] * 4},
+        {"features": [4] * 10},
+    ]
+    length_struct = {"features": 20}
+    expected_elements = [
+        {
+            "features": ([1] * 10) + ([4] * 10),
+            "features_segment_ids": ([1] * 10) + ([2] * 10),
+            "features_positions": list(range(10)) + list(range(10)),
+        },
+        {
+            "features": ([2] * 15) + ([3] * 4) + ([0] * 1),
+            "features_segment_ids": ([1] * 15) + ([2] * 4) + ([0] * 1),
+            "features_positions": list(range(15)) + list(range(4)) + ([0] * 1),
+        },
+    ]
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=3,
     )
 
 

@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Tests for batch transformation."""
+from typing import Any
 
 from absl.testing import absltest
 from grain._src.python.dataset.transformations import packing
@@ -20,11 +21,13 @@ from grain._src.python.dataset.transformations import testing_util
 import numpy as np
 
 
-class FirstFitPackIterDatasetTest(testing_util.BaseFirstFitPackIterDatasetTest):
+# A "mixin" class to provide the common memory size tests.
+# It is not a TestCase itself but provides test methods to other classes.
+# It assumes that any class using it will define `self.packer_cls`.
+class _PackedBatchSizeBytesTestMixin:
+  """A mixin providing common tests for get_packed_batch_size_bytes."""
 
-  def setUp(self):
-    super().setUp()
-    self.kwargs = {}
+  kwargs: dict[str, Any]
 
   def test_get_packed_batch_size_bytes(self):
     ds = source.SourceMapDataset([
@@ -58,6 +61,24 @@ class FirstFitPackIterDatasetTest(testing_util.BaseFirstFitPackIterDatasetTest):
     iterator = ds.__iter__()
     # Check size before calling next()
     self.assertRaises(ValueError, iterator.get_packed_batch_size_bytes)  # pytype: disable=attribute-error
+
+
+class FirstFitPackIterDatasetTest(
+    _PackedBatchSizeBytesTestMixin, testing_util.BaseFirstFitPackIterDatasetTest
+):
+
+  def setUp(self):
+    super().setUp()
+    self.kwargs = {}
+
+
+class BestFitPackIterDatasetTest(
+    _PackedBatchSizeBytesTestMixin, testing_util.BaseBestFitPackIterDatasetTest
+):
+
+  def setUp(self):
+    super().setUp()
+    self.kwargs = {}
 
 if __name__ == "__main__":
   absltest.main()

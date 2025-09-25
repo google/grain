@@ -11,28 +11,34 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""This module provides a helper class for multi-bin first-fit packing.
+"""This module provides helper classes for multi-bin packing.
 
 Example packing is a step in many input pipelines for sequence to sequence
 models where multiple examples are packed together as a single example in order
 to maximise data fed to a TPU per batch. Our approach is implemented in pure
 Python (thus easy to extend/ modify) and supports N-dimensional input features.
-
-Note on the packing algorithm: We perform online packing. We start by
+Note on the packing algorithms: We perform online packing. We start by
 constructing an empty batch of "num_packing_bins" rows. For each input example,
-we try to find the first row in the batch where it can be added. If the new
-example can't be added, we construct a new batch to which the element is added.
-This is equivalent to first-fit bin backing
-(https://en.wikipedia.org/wiki/First-fit_bin_packing).
+we try to find a bin where it can be added. If the new example can't fit in any
+bin, the current batch is finalized, and a new batch is started with that
+element. This module implements two common strategies:
+
+- First-Fit: For a new example, this strategy finds the first available
+  bin that it can fit into. This is implemented in FirstFitPackedBatch.
+  (https://en.wikipedia.org/wiki/First-fit_bin_packing).
+- Best-Fit: For a new example, this strategy checks all available bins and
+  places it into the one that leaves the least amount of empty space (i.e., the
+  tightest fit). This is implemented in BestFitPackedBatch.
+  (https://en.wikipedia.org/wiki/Best-fit_bin_packing).
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import abc
 import copy
 import dataclasses
 import functools
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Sequence, TypeVar
 
 from grain._src.core import tree_lib
 import numpy as np
@@ -93,12 +99,8 @@ def zeros(*args, **kwargs):
   return np.zeros(*args, **kwargs)
 
 
-def full(*args, **kwargs):
-  return np.full(*args, **kwargs)
-
-
-class PackedBatch(Generic[_T]):
-  """Class to represent a batch of packed examples."""
+class PackedBatch(abc.ABC, Generic[_T]):
+  """Base class to represent a batch of packed examples."""
 
   def __init__(
       self,
@@ -127,7 +129,7 @@ class PackedBatch(Generic[_T]):
       buffer_fn = (
           zeros
           if padding is None
-          else functools.partial(full, fill_value=padding)
+          else functools.partial(np.full, fill_value=padding)
       )
       buffer = buffer_fn(
           shape=(num_packing_bins, length, *shape),  # (B, T, ...)
@@ -174,91 +176,128 @@ class PackedBatch(Generic[_T]):
 
     # Tracks the number of examples already packed into row of the batch. Used
     # to fill the segmentation values for each feature.
-    self._num_examples_per_row = [0 for _ in range(num_packing_bins)]
+    self._num_examples_per_row = zeros(num_packing_bins, dtype=np.int32)
+
+    # Flatten internal buffers and pre-calculate paths for efficient access.
+    self._flat_paths_and_max = tree_lib.flatten_with_path(self._length_struct)
+    self._feature_paths = [p for (p, _) in self._flat_paths_and_max]
+    self._capacities = np.array(
+        [int(m) for (_, m) in self._flat_paths_and_max], dtype=np.int64
+    )
+    self._flat_values = tree_lib.flatten(self._values)
+    self._flat_segment_ids = tree_lib.flatten(self._segment_ids)
+    self._flat_positions = tree_lib.flatten(self._positions)
+    self._flat_first_free_cell_per_row = tree_lib.flatten(
+        self._first_free_cell_per_row
+    )
 
   def get_size_bytes(self) -> int:
     """Returns the size of the packed batch in bytes."""
     return self._size_bytes
 
   def get_packed_batch(self):
-    """Returns the current packed batch."""
-    rows_with_values = sum(x > 0 for x in self._num_examples_per_row)
-    if rows_with_values < len(self._num_examples_per_row):
+    """Returns the current packed batch, slicing off any empty trailing rows."""
+    rows_with_values = np.count_nonzero(self._num_examples_per_row > 0)
+    if rows_with_values < self._num_packing_bins:
       # Partial batch, last rows don't have values.
-      self._values = tree_lib.map_structure(
+      values = tree_lib.map_structure(
           lambda x: x[:rows_with_values], self._values
       )
-      self._segment_ids = tree_lib.map_structure(
+      segment_ids = tree_lib.map_structure(
           lambda x: x[:rows_with_values], self._segment_ids
       )
-      self._positions = tree_lib.map_structure(
+      positions = tree_lib.map_structure(
           lambda x: x[:rows_with_values], self._positions
       )
+    else:
+      values, segment_ids, positions = (
+          self._values,
+          self._segment_ids,
+          self._positions,
+      )
+
     return _extract_and_rekey_packed_batch(
-        self._values,
-        segment_ids=self._segment_ids,
-        positions=self._positions,
+        values,
+        segment_ids=segment_ids,
+        positions=positions,
         meta_features=self._meta_features,
     )
 
-  @classmethod
-  def can_add_at_row(
-      cls,
-      element_feature_lengths: Any,  # PyTree[int]
-      num_packing_bins: int,
-      length_struct: Any,  # PyTree[int]
-      first_free_cell_per_row: Any,  # PyTree[int]
-  ) -> SuccessfulRowOrFailingComponents:
-    """Checks whether the element can be added in any of the rows.
-
-    Args:
-      element_feature_lengths: The lengths of each feature in the element.
-      num_packing_bins: The number of packing bins.
-      length_struct: The max length of each feature.
-      first_free_cell_per_row: The first free cell per row.
-
-    Returns:
-      SuccessfulRowOrFailingComponents: If the element fits into a row,
-        return the index of that row. If it doesn't fit in any of the rows,
-        return the names of the components that caused it to fail to fit.
-    """
-    # Check no feature exceeds max length
-    features_exceeding_max_length = []
-    for (path, feature_length), (_, max_length) in zip(
-        tree_lib.flatten_with_path(element_feature_lengths),
-        tree_lib.flatten_with_path(length_struct),
-        strict=True,
-    ):
-      if feature_length > max_length:
-        features_exceeding_max_length.append((path, feature_length, max_length))
-
-    if features_exceeding_max_length:
-      raise ValueError(
-          f"Inputs to {cls.__name__} must be truncated to max length. Received "
-          "the following features that exceed their max: (feature_path, "
-          "feature_length, max_length) = "
-          f"{features_exceeding_max_length}"
-      )
-
-    # For each row, check whether the total length after adding the current
-    # element would exceed max feature lengths.
-    def _feature_will_fit(feature_length, first_free_cell, max_length):
-      return feature_length + first_free_cell <= max_length
-
-    is_row_free_struct = tree_lib.flatten_with_path(
-        tree_lib.map_structure(
-            _feature_will_fit,
-            element_feature_lengths,
-            first_free_cell_per_row,
-            length_struct,
-        )
+  def _get_element_lengths_flat(self, element: Any) -> np.ndarray:
+    """Computes a flat vector of feature lengths for the given element."""
+    flat_element = tree_lib.flatten(element)
+    return np.fromiter(
+        ((1 if np.ndim(x) == 0 else len(x)) for x in flat_element),
+        dtype=np.int64,
+        count=len(flat_element),
     )
 
-    # Pick first row (if exists) where element can be added.
-    for i in range(num_packing_bins):  # For each row.
-      if all(free[i] for _, free in is_row_free_struct):
-        # All components are free at that row.
-        return SuccessfulRowOrFailingComponents(row=i, failing_components=None)
+  def add_element_to_batch(self, element: Any, row: int) -> None:
+    """Adds an element to the specified row using pre-flattened buffers."""
+    flat_element = tree_lib.flatten(element)
+    flat_alignments = tree_lib.flatten(self._pack_alignments)
+    segment_id = self._num_examples_per_row[row] + 1
+
+    for idx, value in enumerate(flat_element):
+      value_length = 1 if np.ndim(value) == 0 else len(value)
+      start = int(self._flat_first_free_cell_per_row[idx][row])
+      end = start + value_length
+
+      alignment = flat_alignments[idx]
+      padded_end = ((end + alignment - 1) // alignment) * alignment
+
+      self._flat_values[idx][row, start:end] = value
+      self._flat_segment_ids[idx][row, start:end] = segment_id
+      self._flat_positions[idx][row, start:end] = np.arange(
+          end - start, dtype=np.int32
+      )
+      self._flat_first_free_cell_per_row[idx][row] = padded_end
+    self._num_examples_per_row[row] += 1
+
+  @abc.abstractmethod
+  def try_add_to_batch(self, element: Any) -> list[str] | None:
+    """Tries to add an element to the batch using a specific strategy."""
+    raise NotImplementedError
+
+
+class FirstFitPackedBatch(PackedBatch[_T]):
+  """Implements first-fit packing of sequences."""
+
+  def try_add_to_batch(self, element: Any) -> list[str] | None:
+    tree_lib.assert_same_structure(element, self._length_struct)
+    element_lengths = self._get_element_lengths_flat(element)
+
+    # Check if any feature exceeds its max length before attempting to pack.
+    too_long = element_lengths > self._capacities
+    if np.any(too_long):
+      idxs = np.nonzero(too_long)[0]
+      details = [
+          (
+              self._feature_paths[i],
+              int(element_lengths[i]),
+              int(self._capacities[i]),
+          )
+          for i in idxs
+      ]
+      raise ValueError(
+          "Inputs to PackedBatch must be truncated to max length. "
+          f"Exceeds: (feature_path, feature_length, max_length) = {details}"
+      )
+
+    # For each feature and row, check if the element fits.
+    num_features = len(self._flat_first_free_cell_per_row)
+    features_fit = np.empty((num_features, self._num_packing_bins), dtype=bool)
+    for i in range(num_features):
+      features_fit[i, :] = (
+          element_lengths[i] + self._flat_first_free_cell_per_row[i]
+      ) <= self._capacities[i]
+
+    # Find the first row where all features fit.
+    feasible_rows = np.all(features_fit, axis=0)
+    if np.any(feasible_rows):
+      row = int(np.argmax(feasible_rows))
+      self.add_element_to_batch(element, row)
+      return None
 
     # There is no guarantee we have a single failing component, since one
     # component could be the reason an element could not fit in one row
@@ -266,97 +305,67 @@ class PackedBatch(Generic[_T]):
     # a different row. In the event we have multiple, we return all of them
     # in order of number of rows they failed in, with highest number of failing
     # rows first.
-    # Disabling the singleton comparison pylint because numpy does not work
-    # without it.
-    sorted_failing_components = sorted(
-        [
-            (component, np.count_nonzero(value == False))  # pylint: disable=singleton-comparison
-            for component, value in is_row_free_struct
-        ],
-        key=lambda x: x[1],
-        reverse=True,
-    )
-    failing_components = [e[0] for e in sorted_failing_components if e[1] > 0]
-    return SuccessfulRowOrFailingComponents(
-        row=None, failing_components=failing_components
-    )
+    fail_counts = np.sum(~features_fit, axis=1)
+    order = np.argsort(-fail_counts)
+    failing_components = [
+        self._feature_paths[i] for i in order if fail_counts[i] > 0
+    ]
+    if not failing_components:
+      raise ValueError(
+          "A failing component must be returned if no row is found."
+      )
+    return failing_components
 
-  def add_element_to_batch(
-      self,
-      element: Any,  # PyTree[np.ndarray]
-      row: int,
-  ) -> None:
-    """Adds element to current batch at the specified row."""
-    # Apply updates to each feature.
-    for per_feature_data in zip(
-        tree_lib.flatten(element),
-        tree_lib.flatten(self._values),
-        tree_lib.flatten(self._segment_ids),
-        tree_lib.flatten(self._positions),
-        tree_lib.flatten(self._first_free_cell_per_row),
-        tree_lib.flatten(self._pack_alignments),
-    ):
-      (
-          value,
-          batch_value,
-          segment_ids,
-          positions,
-          first_free_cell_per_row,
-          pack_alignment,
-      ) = per_feature_data
-      value_length = 1 if np.ndim(value) == 0 else len(value)
-      padded_length = (
-          (value_length + pack_alignment - 1) // pack_alignment
-      ) * pack_alignment
 
-      # Update batch value, segmentations, and positions.
-      start = first_free_cell_per_row[row]
-      end = first_free_cell_per_row[row] + value_length
-      batch_value[row][start:end] = value
-      segment_ids[row][start:end] = self._num_examples_per_row[row] + 1
-      positions[row][start:end] = np.arange(end - start)
-      # Update first_free_cell_per_row.
-      first_free_cell_per_row[row] += padded_length
+class BestFitPackedBatch(PackedBatch[_T]):
+  """Implements best-fit packing of sequences."""
 
-    self._num_examples_per_row[row] += 1
-
-  def try_add_to_batch(self, element) -> list[str] | None:
-    """Finds a row in the batch at which element can be added.
-
-    Args:
-      element: The element we are trying to fit into a row in the batch.
-
-    Returns:
-      None if the element was successfully added to the batch. If the element
-      could not be added, returns a list of strings indicating the components
-      that failed.
-    """
+  def try_add_to_batch(self, element: Any) -> list[str] | None:
     tree_lib.assert_same_structure(element, self._length_struct)
+    element_lengths = self._get_element_lengths_flat(element)
 
-    def get_feature_length(x, pa):
-      length = 1 if np.ndim(x) == 0 else len(x)
-      length = ((length + pa - 1) // pa) * pa
-      return length
+    # Check if any feature exceeds its max length before attempting to pack.
+    too_long = element_lengths > self._capacities
+    if np.any(too_long):
+      indices = np.nonzero(too_long)[0]
+      details = [
+          (
+              self._feature_paths[i],
+              int(element_lengths[i]),
+              int(self._capacities[i]),
+          )
+          for i in indices
+      ]
+      raise ValueError(
+          "Inputs to packer must be truncated to max length. "
+          f"Exceeds: (feature_path, feature_length, max_length) = {details}"
+      )
 
-    element_feature_lengths = tree_lib.map_structure(
-        get_feature_length, element, self._pack_alignments
+    free_cells_matrix = np.stack(self._flat_first_free_cell_per_row, axis=0)
+    new_free_cells = free_cells_matrix + element_lengths[:, np.newaxis]
+    fittable_mask = np.all(
+        new_free_cells <= self._capacities[:, np.newaxis], axis=0
     )
 
-    successful_row_or_failing_component = self.can_add_at_row(
-        element_feature_lengths,
-        self._num_packing_bins,
-        self._length_struct,
-        self._first_free_cell_per_row,
-    )
-    successful_row = successful_row_or_failing_component.row
-    failing_components = successful_row_or_failing_component.failing_components
-    if successful_row is None:
+    if not np.any(fittable_mask):
+      features_fit = new_free_cells <= self._capacities[:, np.newaxis]
+      fail_counts = np.sum(~features_fit, axis=1)
+      order = np.argsort(-fail_counts)
+      failing_components = [
+          self._feature_paths[i] for i in order if fail_counts[i] > 0
+      ]
       if not failing_components:
         raise ValueError(
             "If no successful row was found for an element, a failing component"
             " must be returned."
         )
       return failing_components
-    self.add_element_to_batch(element, successful_row)
 
+    # Score is the sum of free cells (higher score = tighter fit).
+    # We invalidate the scores of non-fittable bins by setting them to -1.
+    scores = np.sum(free_cells_matrix, axis=0)
+    scores[~fittable_mask] = -1
+
+    best_bin_index = int(np.argmax(scores))
+    self.add_element_to_batch(element, best_bin_index)
     return None
