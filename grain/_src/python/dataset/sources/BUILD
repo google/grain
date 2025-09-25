@@ -35,7 +35,7 @@ py_library(
 py_test(
     name = "tfrecord_dataset_test",
     srcs = ["tfrecord_dataset_test.py"],
-    args = ["--test_srcdir=grain/_src/python/testdata"],
+    args = ["--test_srcdir=grain/_src/python"],
     data = [
         "//grain/_src/python/testdata:morris_sequence_first_5.tfrecord",
     ],
