@@ -33,6 +33,10 @@ T = TypeVar("T")
 S = TypeVar("S")
 
 
+def _is_batch_pushdown_experiment_enabled() -> bool:
+  return False
+
+
 def _is_parallel_batch_experiment_enabled():
   return False
 
@@ -295,7 +299,13 @@ class BatchMapDataset(dataset.MapDataset[T]):
     # Add offset for epoch.
     start += epoch * len(self._parent)
     stop += epoch * len(self._parent)
-    values = [self._parent[i] for i in range(start, stop)]
+    # Leverage batch pushdown API to retrieve multiple items at once if the
+    # experiment is enabled.
+    values = (
+        self._parent._getitems(list(range(start, stop)))
+        if _is_batch_pushdown_experiment_enabled()
+        else [self._parent[i] for i in range(start, stop)]
+    )
     with self._stats.record_self_time():
       try:
         return self._stats.record_output_spec(self._batch_fn(values))
