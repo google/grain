@@ -373,6 +373,22 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
   def __getitem__(self, index):
     """Returns the element for the index or None if missing."""
 
+  def _getitems(self, indices: Sequence[int]) -> Sequence[T | None]:
+    """Returns a sequence of elements corresponding to the given indices.
+
+    For each index in `indices`, this method retrieves the corresponding
+    element. If an element is not present for a given index (e.g., it has
+    been filtered out), `None` is returned in its place.
+
+    Args:
+      indices: A sequence of integer indices for which to retrieve elements.
+
+    Returns:
+      A sequence containing the retrieved elements and/or `None` for missing
+      elements, maintaining the order of the input `indices`.
+    """
+    return [self.__getitem__(i) for i in indices]
+
   def apply(
       self,
       transformations: transforms.Transformation | transforms.Transformations,

@@ -45,6 +45,7 @@ from grain._src.python.dataset.transformations.limit import LimitIterDataset
 from grain._src.python.dataset.transformations.map import RngPool
 from grain._src.python.dataset.transformations.packing import (
     FirstFitPackIterDataset,
+    BestFitPackIterDataset,
 )
 from grain._src.python.dataset.transformations.packing_concat_then_split import (
     BOSHandling,
@@ -77,4 +78,9 @@ from grain._src.python.testing.experimental import (
 
 from grain._src.python.experimental.device_put.device_put import (
     device_put,
+)
+
+from grain._src.python.dataset.transformations.prefetch_autotune import (
+    pick_performance_config,
+    PerformanceConfig,
 )

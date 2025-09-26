@@ -305,11 +305,7 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     self.assertEqual(list(ds), [None] * 1000)
 
   def test_iterator_has_no_reference_cycle(self):
-    ds = (
-        dataset.MapDataset.range(0, 1000)
-        .map(lambda x: x)
-        .to_iter_dataset()
-    )
+    ds = dataset.MapDataset.range(0, 1000).map(lambda x: x).to_iter_dataset()
     ds_iter = iter(ds)
     # Here, we check that iterating over the data does not create new references
     # to the iterator. One common scenario when this could happen is if the
@@ -1116,6 +1112,41 @@ class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
     self.assertEqual(elements, list(range(1, 11)))
     it.set_state(checkpoint)
     self.assertEqual(list(it), elements[checkpoint_step:])
+
+  def test_no_mem_leak(self):
+    ds = (
+        dataset.MapDataset.range(1000)
+        .repeat()
+        .map(lambda x: x * np.ones((1000, 1000), dtype=np.int64))
+        .to_iter_dataset(options.ReadOptions(prefetch_buffer_size=0))
+    )
+    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=10)
+    # If buffered elements are not cleaned up when the iterator is gc'ed, this
+    # test will OOM.
+    for _ in range(1000):
+      it = ds.__iter__()
+      for _ in range(5):
+        _ = next(it)
+
+  @parameterized.parameters([True, False])
+  def test_no_mem_leak_with_double_prefetch(self, close: bool):
+    ds = (
+        dataset.MapDataset.range(1000)
+        .repeat()
+        .map(lambda x: x * np.ones((1000, 1000), dtype=np.int64))
+        .to_iter_dataset(options.ReadOptions(prefetch_buffer_size=0))
+    )
+    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=10)
+    ds = ds.map(lambda x: x + 1)
+    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=10)
+    # If buffered elements are not cleaned up when the iterator is gc'ed, this
+    # test will OOM.
+    for _ in range(1000):
+      it = ds.__iter__()
+      for _ in range(5):
+        _ = next(it)
+      if close:
+        it.close()  # pytype: disable=attribute-error
 
 
 if __name__ == '__main__':

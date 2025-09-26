@@ -6,20 +6,24 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features
-  * Add `reseed_each_epoch` option to `MapDataset.repeat` that allows to replay
+  * Adds `reseed_each_epoch` option to `MapDataset.repeat` that allows to replay
     the first epoch exactly if set to False (True by default).
   * Introduces `grain.experimental.RebatchIterDataset` for efficient rebatch.
   * Migrates data loader to use dataset API under the hood.
+  * Improves first-fit packing speed by up to 12x.
+  * Adds best-fit packing implementation which reduces padding in benchmarks by
+    over 27% compared to first-fit.
 
 * Breaking changes:
   * SliceMapDataset updated to use the full index relative to the parent
     dataset, instead index%len(self).
 
 * Deprecations:
-  * Graduate `grain.experimental.apply_transformations` to
+  * Graduates `grain.experimental.apply_transformations` to
    `grain.{MapDataset|IterDataset}.apply`. The experimental API will soon be
     deprecated.
 * Bug fixes
+  * Fixes memory leak on `ThreadPrefetchDatasetIterator` deletion.
 
 ## Grain 0.2.12 (August 21, 2025)
 

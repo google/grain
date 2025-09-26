@@ -122,7 +122,9 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._num_threads = read_options.num_threads
     self._allow_nones = allow_nones
     if self._prefetch_buffer_size > 0:
-      self._executor = futures.ThreadPoolExecutor(self._num_threads)
+      self._executor = futures.ThreadPoolExecutor(
+          self._num_threads, thread_name_prefix="grain-prefetch"
+      )
 
   def _initialize_stats(
       self, execution_tracking_mode: base.ExecutionTrackingMode
@@ -260,7 +262,9 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
             "num_threads must be greater than 0 when prefetch buffer size is"
             " greater than 0."
         )
-      self._executor = futures.ThreadPoolExecutor(self._num_threads)
+      self._executor = futures.ThreadPoolExecutor(
+          self._num_threads, thread_name_prefix="grain-prefetch"
+      )
     elif self._prefetch_buffer_size == 0 and hasattr(self, "_executor"):
       self._executor.shutdown()
       delattr(self, "_executor")
@@ -273,7 +277,9 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     if hasattr(self, "_executor"):
       old_executor = self._executor
     if self._num_threads > 0:
-      self._executor = futures.ThreadPoolExecutor(self._num_threads)
+      self._executor = futures.ThreadPoolExecutor(
+          self._num_threads, thread_name_prefix="grain-prefetch"
+      )
     else:
       delattr(self, "_executor")
     if old_executor is not None:
@@ -363,6 +369,8 @@ _RECORD_STATE_INTERVAL_S = 3
 
 def _copy_leaf_to_shm(leaf: Any, min_size: int = 0) -> Any:
   """Copies `leaf` to shared memory if it's a big enough numpy array."""
+  if isinstance(leaf, shared_memory_array.SharedMemoryArray):
+    return leaf.metadata
   if (
       not isinstance(leaf, np.ndarray)
       or leaf.dtype.hasobject
@@ -869,7 +877,7 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
             should_stop=self._prefetch_should_stop,
         ),
         daemon=True,
-        name=f"prefetch-thread-{str(self)}",
+        name=f"grain-thread-prefetch-{str(self)}",
     )
     self._prefetch_thread.start()
 
@@ -924,3 +932,6 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         "ThreadPrefetchDatasetIterator("
         f"prefetch_buffer_size={self._prefetch_buffer_size})"
     )
+
+  def __del__(self):
+    self._stop_prefetch()

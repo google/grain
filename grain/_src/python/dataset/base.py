@@ -16,9 +16,11 @@
 Classes in this module are shared by Dataset implementations as well as public
 Dataset API.
 """
+
 from __future__ import annotations
 
 import abc
+from collections.abc import Sequence
 import dataclasses
 import enum
 import typing
@@ -37,6 +39,24 @@ class RandomAccessDataSource(Protocol[T]):
 
   def __getitem__(self, index: int) -> T:
     ...
+
+
+class SupportsBatchedReadRandomAccessDataSource(
+    RandomAccessDataSource[T], Protocol[T]
+):
+  """Interface for datasources that support efficient random access and batched reads."""
+
+  def _getitems(self, indices: Sequence[int]) -> Sequence[T]:
+    """Returns the values for the given record_keys.
+
+    This method must be threadsafe and deterministic.
+
+    Arguments:
+      indices: A sequence of integers in [0, len(self)-1].
+
+    Returns:
+      The sequence of corresponding records.
+    """
 
 
 class DatasetSelectionMap(abc.ABC):

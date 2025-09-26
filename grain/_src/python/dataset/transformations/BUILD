@@ -30,6 +30,7 @@ py_test(
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
         "@pypi//dm_tree:pkg",
+        "@pypi//jax:pkg",  # buildcleaner: keep
         "@pypi//numpy:pkg",
     ],
 )
@@ -164,8 +165,11 @@ py_test(
         "//conditions:default": ["@platforms//:incompatible"],
     }),
     deps = [
+        ":packing",
         ":testing_util",
+        "//grain/_src/python/dataset",
         "@abseil-py//absl/testing:absltest",
+        "@pypi//numpy:pkg",
     ],
 )
 
