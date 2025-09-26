@@ -808,11 +808,13 @@ def _put_iterator_elements_in_buffer(
     iterator: dataset.DatasetIterator[T],
     buffer: queue.Queue[tuple[T, StateT, Exception | None]],
     should_stop: threading.Event,
+    stats: dataset_stats.Stats,
 ):
   """Fetches elements from the iterator and puts them in the buffer."""
   try:
     while not should_stop.is_set():
-      element, state = iterator.__next__(), iterator.get_state()
+      element = stats.record_bytes_consumed(iterator.__next__())
+      state = iterator.get_state()
       buffer.put((element, state, None))
   except Exception as e:  # pylint: disable=broad-except
     buffer.put((None, None, e))
@@ -857,6 +859,43 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         maxsize=self._prefetch_buffer_size
     )
 
+  # pytype: disable=attribute-error
+  # pylint: disable=protected-access
+
+  def _initialize_stats(
+      self, execution_tracking_mode: base.ExecutionTrackingMode
+  ):
+    # This method is needed to set `is_prefetch` to `True` in the stats config.
+    parent_stats = [
+        p._initialize_stats(execution_tracking_mode) for p in self._parents
+    ]
+    config = dataset_stats.StatsConfig(
+        name=str(self),
+        transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
+        is_prefetch=True,
+        iter_weakref=dataset_stats.HashableWeakRef(self),
+    )
+    # If the stats object has already been initialized, copy the queues from
+    # the original stats object to the new stats object.
+    if "_stats" in self.__dict__:
+      config.stats_out_queue = self._stats._config.stats_out_queue
+      config.stats_in_queues = self._stats._config.stats_in_queues
+    self._stats = dataset_stats.make_stats(
+        config,
+        parent_stats,
+        execution_tracking_mode=execution_tracking_mode,
+    )
+    return self._stats
+
+  @functools.cached_property
+  def _stats(self):
+    return self._initialize_stats(
+        self._ctx.dataset_options.execution_tracking_mode
+    )
+
+  # pytype: enable=attribute-error
+  # pylint: enable=protected-access
+
   def start_prefetch(self):
     """Starts prefetching elements in background.
 
@@ -875,6 +914,7 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
             iterator=self._maybe_nonnative_parent,
             buffer=self._buffer,
             should_stop=self._prefetch_should_stop,
+            stats=self._stats,
         ),
         daemon=True,
         name=f"grain-thread-prefetch-{str(self)}",
@@ -883,14 +923,20 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   @dataset_stats.record_next_duration_if_output
   def __next__(self):
-    self.start_prefetch()
-    element, state, err = self._buffer.get()
+    timer = dataset_stats.Timer()
+    with timer:
+      # Eagerly initialize stats before background thread starts.
+      _ = self._stats
+      self.start_prefetch()
+      element, state, err = self._buffer.get()
 
     if err is not None:
       self._stop_prefetch()
       raise err
     self._state = state
-    return element
+    with self._stats.record_self_time(offset_ns=timer.value()):
+      element = self._stats.record_bytes_produced(element)
+      return self._stats.record_output_spec(element)
 
   def close(self):
     """Stops the iterator. No further calls to the iterator are expected."""
