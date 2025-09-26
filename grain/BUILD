@@ -1,47 +1,76 @@
-load("@python//3.10:defs.bzl", compile_pip_requirements_3_10 = "compile_pip_requirements")
-load("@python//3.11:defs.bzl", compile_pip_requirements_3_11 = "compile_pip_requirements")
-load("@python//3.12:defs.bzl", compile_pip_requirements_3_12 = "compile_pip_requirements")
-load("@python//3.13:defs.bzl", compile_pip_requirements_3_13 = "compile_pip_requirements")
+
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+package(default_visibility = ["//grain:__subpackages__"])
+
+licenses(["notice"])
+
+exports_files(["LICENSE"])
+
+# Backwards compatibility alias.
+alias(
+    name = "python",
+    actual = ":grain",
+    visibility = ["//visibility:public"],
+)
 
 py_library(
-    name = "setup",
-    srcs = ["setup.py"],
+    name = "grain",
+    srcs = [
+        "__init__.py",
+        "_src/__init__.py",
+        "checkpoint.py",
+        "constants.py",
+        "experimental.py",
+        "multiprocessing.py",
+        "python/__init__.py",
+        "python/experimental.py",
+        "samplers.py",
+        "sharding.py",
+        "sources.py",
+        "transforms.py",
+    ],
     srcs_version = "PY3",
-)
-
-compile_pip_requirements_3_10(
-    name = "requirements_3_10",
-    requirements_in = "test_requirements.in",
-    requirements_txt = "test_requirements_lock_3_10.txt",
-    target_compatible_with = select({
-        "@platforms//os:windows": ["@platforms//:incompatible"],
-        "//conditions:default": [],
+    data = select({
+        "@platforms//os:windows": ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.pyd"],
+       "//conditions:default": ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
     }),
-)
-compile_pip_requirements_3_11(
-    name = "requirements_3_11",
-    requirements_in = "test_requirements.in",
-    requirements_txt = "test_requirements_lock_3_11.txt",
-    target_compatible_with = select({
-        "@platforms//os:windows": ["@platforms//:incompatible"],
-        "//conditions:default": [],
-    }),
-)
-compile_pip_requirements_3_12(
-    name = "requirements_3_12",
-    requirements_in = "test_requirements.in",
-    requirements_txt = "test_requirements_lock_3_12.txt",
-    target_compatible_with = select({
-        "@platforms//os:windows": ["@platforms//:incompatible"],
-        "//conditions:default": [],
-    }),
-)
-compile_pip_requirements_3_13(
-    name = "requirements_3_13",
-    requirements_in = "test_requirements.in",
-    requirements_txt = "test_requirements_lock_3_13.txt",
-    target_compatible_with = select({
-        "@platforms//os:windows": ["@platforms//:incompatible"],
-        "//conditions:default": [],
-    }),
+    # Implicit build flag
+    visibility = ["//visibility:public"],
+    deps = [
+        "//grain/_src/core:config",
+        "//grain/_src/core:constants",
+        "//grain/_src/core:monitoring",
+        "//grain/_src/core:sharding",
+        "//grain/_src/core:transforms",
+        "//grain/_src/core:version",
+        "//grain/_src/python:checkpoint_handlers",
+        "//grain/_src/python:data_loader",
+        "//grain/_src/python:data_sources",
+        "//grain/_src/python:load",
+        "//grain/_src/python:operations",
+        "//grain/_src/python:options",
+        "//grain/_src/python:record",
+        "//grain/_src/python:samplers",
+        "//grain/_src/python:shared_memory_array",
+        "//grain/_src/python/dataset",
+        "//grain/_src/python/dataset:base",
+        "//grain/_src/python/dataset:elastic_iterator",
+        "//grain/_src/python/dataset:stats",
+        "//grain/_src/python/dataset:visualize",
+        "//grain/_src/python/dataset/sources:parquet_dataset",
+        "//grain/_src/python/dataset/sources:tfrecord_dataset",
+        "//grain/_src/python/dataset/transformations:interleave",
+        "//grain/_src/python/dataset/transformations:prefetch_autotune",
+        "//grain/_src/python/dataset/transformations:limit",
+        "//grain/_src/python/dataset/transformations:packing",
+        "//grain/_src/python/dataset/transformations:packing_concat_then_split",
+        "//grain/_src/python/dataset/transformations:zip",
+        "//grain/_src/python/experimental/device_put",
+        "//grain/_src/python/experimental/example_packing:packing",
+        "//grain/_src/python/testing:experimental",
+        "//grain/proto:execution_summary_py_pb2",
+    ],
 )
