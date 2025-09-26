@@ -45,7 +45,7 @@ class PackingDatasetIterator(dataset.DatasetIterator):
       meta_features: Sequence[str],
       pack_alignment_struct: Any = None,
       padding_struct: Any = None,
-      max_sequences_per_bin: int | None,
+      max_sequences_per_bin: int | None = None,
   ):
     """Initializes the generic packing iterator.
 
