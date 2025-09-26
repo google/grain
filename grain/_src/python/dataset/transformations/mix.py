@@ -24,6 +24,10 @@ from grain._src.core import exceptions
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
+from grain._src.python.dataset.transformations import (
+    filter as filter_dataset,
+)
+from grain._src.python.dataset.transformations import (flatmap)
 
 Element = Any
 T = TypeVar("T")  # pylint: disable=invalid-name
@@ -66,14 +70,33 @@ class SelectionWithProportionsMap(base.DatasetSelectionMap):
     return input_index, index
 
 
+def _check_for_sparse_transformations(datasets: Sequence[dataset.MapDataset]):
+  """Validates that the given datasets do not contain sparse transformations."""
+  to_check = list(datasets)
+  while to_check:
+    ds = to_check.pop()
+    if isinstance(
+        ds, (filter_dataset.FilterMapDataset, flatmap.FlatMapMapDataset)
+    ):
+      raise ValueError(
+          "Sparse transformations before `MapDataset.mix` are not allowed by "
+          "default because the provided weights are not going to be "
+          f"respected. Detected sparse transformation: {ds}. Use "
+          "IterDataset.mix instead. You can disable this check py passing "
+          "`allow_sparse_transformations=True` if you know what you're doing."
+      )
+    to_check.extend(ds.parents)
+
+
 class MixedMapDataset(dataset.MapDataset[T]):
-  """LazyDataset for mixtures."""
+  """MapDataset for mixtures."""
 
   def __init__(
       self,
       parents: Sequence[dataset.MapDataset[T]],
       proportions: Sequence[float] | None = None,
       selection_map: base.DatasetSelectionMap | None = None,
+      allow_sparse_transformations: bool = False,
   ):
     """Initializes the mixed dataset.
 
@@ -83,7 +106,11 @@ class MixedMapDataset(dataset.MapDataset[T]):
         Defaults to uniform weight if selection_map is not given.
       selection_map: Mapping from global index to paraent dataset and index
         within parent dataset.
+      allow_sparse_transformations: Whether to allow sparse transformations,
+        such as filter, before mixing.
     """
+    if not allow_sparse_transformations:
+      _check_for_sparse_transformations(parents)
     super().__init__(parents)
     # Cannot set both proportions and selection_map
     if proportions is not None and selection_map is not None:

@@ -17,6 +17,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 * Breaking changes:
   * SliceMapDataset updated to use the full index relative to the parent
     dataset, instead index%len(self).
+  * Prohibit sparse transformations before `MapDataset.mix` and
+    `MapDataset.select_from_datasets` by default.
 
 * Deprecations:
   * Graduates `grain.experimental.apply_transformations` to
