@@ -61,6 +61,7 @@ class PackingDatasetIterator(dataset.DatasetIterator):
       meta_features: Meta features that do not require packing.
       pack_alignment_struct: Optional per-feature alignment values.
       padding_struct: Optional per-feature padding values.
+      max_sequences_per_bin: Optional maximum number of input sequences that can be packed into a bin
     """
     super().__init__(parent)
     self._packer_cls = packer_cls
@@ -261,6 +262,7 @@ class PackIterDataset(dataset.IterDataset):
       meta_features: Sequence[str] = (),
       pack_alignment_struct: Any = None,
       padding_struct: Any = None,
+      max_sequences_per_bin: int | None = None,
   ):
     """Initializes the generic packing dataset.
 
@@ -275,6 +277,7 @@ class PackIterDataset(dataset.IterDataset):
       meta_features: Meta features that do not need packing logic.
       pack_alignment_struct: Optional per-feature alignment values.
       padding_struct: Optional per-feature padding values.
+      max_sequences_per_bin: Optional maximum number of input sequences that can be packed into a bin
     """
     super().__init__(parent)
     self._packer_cls = packer_cls
@@ -286,6 +289,7 @@ class PackIterDataset(dataset.IterDataset):
     self._meta_features = meta_features
     self._pack_alignment_struct = pack_alignment_struct
     self._padding_struct = padding_struct
+    self._max_sequences_per_bin = max_sequences_per_bin
 
   def __iter__(self) -> dataset.DatasetIterator:
     return PackingDatasetIterator(
@@ -299,6 +303,7 @@ class PackIterDataset(dataset.IterDataset):
         meta_features=self._meta_features,
         pack_alignment_struct=self._pack_alignment_struct,
         padding_struct=self._padding_struct,
+        max_sequences_per_bin = self._max_sequences_per_bin,
     )
 
 
@@ -331,6 +336,7 @@ class FirstFitPackIterDataset(PackIterDataset):
       meta_features: Sequence[str] = (),
       pack_alignment_struct: Any = None,
       padding_struct: Any = None,
+      max_sequences_per_bin: int | None = None,      
   ):
     """Creates a dataset that packs sequences using the first-fit strategy.
 
@@ -344,6 +350,7 @@ class FirstFitPackIterDataset(PackIterDataset):
       meta_features: Meta features that do not need packing logic.
       pack_alignment_struct: Optional per-feature alignment values.
       padding_struct: Optional per-feature padding values.
+      max_sequences_per_bin: Optional maximum number of input sequences that can be packed into a bin
     """
     super().__init__(
         parent,
@@ -356,6 +363,7 @@ class FirstFitPackIterDataset(PackIterDataset):
         meta_features=meta_features,
         pack_alignment_struct=pack_alignment_struct,
         padding_struct=padding_struct,
+        max_sequences_per_bin=max_sequences_per_bin,
     )
 
   def __str__(self) -> str:
@@ -384,6 +392,7 @@ class BestFitPackIterDataset(PackIterDataset):
       meta_features: Sequence[str] = (),
       pack_alignment_struct: Any = None,
       padding_struct: Any = None,
+      max_sequences_per_bin: int | None = None,      
   ):
     """Creates a dataset that packs sequences using the best-fit strategy.
 
@@ -397,6 +406,7 @@ class BestFitPackIterDataset(PackIterDataset):
       meta_features: Meta features that do not need packing logic.
       pack_alignment_struct: Optional per-feature alignment values.
       padding_struct: Optional per-feature padding values.
+      max_sequences_per_bin: Optional maximum number of input sequences that can be packed into a bin
     """
     super().__init__(
         parent,
@@ -409,6 +419,7 @@ class BestFitPackIterDataset(PackIterDataset):
         meta_features=meta_features,
         pack_alignment_struct=pack_alignment_struct,
         padding_struct=padding_struct,
+        max_sequences_per_bin=max_sequences_per_bin,
     )
 
   def __str__(self) -> str:

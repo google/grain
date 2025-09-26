@@ -1293,6 +1293,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
     ]
 
     _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
@@ -1480,6 +1481,7 @@ class BaseBestFitPackIterDatasetTest(BaseFirstFitPackIterDatasetTest):
     ]
 
     _common_test_body(
+        self.packer_cls,
         input_elements,
         expected_elements,
         length_struct,
