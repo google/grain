@@ -110,11 +110,13 @@ class PackedBatch(abc.ABC, Generic[_T]):
       meta_features: Sequence[str] = (),
       pack_alignment_struct: Any = None,
       padding_struct: Any = None,
+      max_sequences_per_bin: int | None = None,
   ):
     self._num_packing_bins = num_packing_bins
     self._length_struct = length_struct
     self._meta_features = meta_features
     self._size_bytes = 0
+    self._max_sequences_per_bin = max_sequences_per_bin
 
     # Define the main buffers we will pack the data into.
     def make_packed_buffer(length: int, x: np.ndarray | int, padding: Any):
@@ -175,7 +177,8 @@ class PackedBatch(abc.ABC, Generic[_T]):
     )
 
     # Tracks the number of examples already packed into row of the batch. Used
-    # to fill the segmentation values for each feature.
+    # to fill the segmentation values for each feature and to make sure that
+    # the maximum batches per row is not exceeded
     self._num_examples_per_row = zeros(num_packing_bins, dtype=np.int32)
 
     # Flatten internal buffers and pre-calculate paths for efficient access.
@@ -290,7 +293,9 @@ class FirstFitPackedBatch(PackedBatch[_T]):
     for i in range(num_features):
       features_fit[i, :] = (
           element_lengths[i] + self._flat_first_free_cell_per_row[i]
-      ) <= self._capacities[i]
+      ) <= self._capacities[i] and (
+           (self._max_sequences_per_bin is None) or
+              (self._num_examples_per_row[i] < self._max_sequences_per_bin))
 
     # Find the first row where all features fit.
     feasible_rows = np.all(features_fit, axis=0)
@@ -344,7 +349,9 @@ class BestFitPackedBatch(PackedBatch[_T]):
     free_cells_matrix = np.stack(self._flat_first_free_cell_per_row, axis=0)
     new_free_cells = free_cells_matrix + element_lengths[:, np.newaxis]
     fittable_mask = np.all(
-        new_free_cells <= self._capacities[:, np.newaxis], axis=0
+        new_free_cells <= self._capacities[:, np.newaxis] and (
+           (self._max_sequences_per_bin is None) or
+              (self._num_examples_per_row[i] < self._max_sequences_per_bin)), axis=0
     )
 
     if not np.any(fittable_mask):

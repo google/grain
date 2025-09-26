@@ -45,6 +45,7 @@ class PackingDatasetIterator(dataset.DatasetIterator):
       meta_features: Sequence[str],
       pack_alignment_struct: Any = None,
       padding_struct: Any = None,
+      max_sequences_per_bin: int | None = None,
   ):
     """Initializes the generic packing iterator.
 
@@ -71,6 +72,7 @@ class PackingDatasetIterator(dataset.DatasetIterator):
     self._meta_features = meta_features
     self._pack_alignment_struct = pack_alignment_struct
     self._padding_struct = padding_struct
+    self._max_sequences_per_bin = max_sequences_per_bin
     self._reset()
 
   def _reset(self):
@@ -159,6 +161,7 @@ class PackingDatasetIterator(dataset.DatasetIterator):
           meta_features=self._meta_features,
           pack_alignment_struct=self._pack_alignment_struct,
           padding_struct=self._padding_struct,
+          max_sequences_per_bin=self._max_sequences_per_bin,
       )
 
   @dataset_stats.record_next_duration_if_output
@@ -216,6 +219,7 @@ class PackingDatasetIterator(dataset.DatasetIterator):
               meta_features=self._meta_features,
               pack_alignment_struct=self._pack_alignment_struct,
               padding_struct=self._padding_struct,
+              max_sequences_per_bin=self._max_sequences_per_bin,
           )
           self._packed_batch_size_bytes = self._current_batch.get_size_bytes()
 
