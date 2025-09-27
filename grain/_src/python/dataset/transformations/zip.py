@@ -80,7 +80,9 @@ class _ZipDatasetIterator(dataset.DatasetIterator[T]):
     super().__init__([p.__iter__() for p in parents])
     self._strict = strict
 
-  @dataset_stats.record_next_duration_if_output
+  @dataset_stats.record_next_duration_if_output(
+      stage_category=dataset_stats.IPL_CAT_ENQUEUE
+  )
   def __next__(self) -> tuple[T, ...]:
     with self._stats.record_self_time():
       # Can't use for a `for` loop because we need to raise StopIteration from
