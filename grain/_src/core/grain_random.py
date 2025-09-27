@@ -23,7 +23,7 @@ Grain as well as user defined preprocessing and extensions).
 ## Motivation
 We want Grain input pipelines to be reproducible while still being highly
 parallelizable. This very much overlaps with the design choices for JAX's PRNG
-([design notes](github.com/google/jax/blob/main/docs/design_notes/prng.md)) and
+([design notes](github.com/jax-ml/jax/blob/main/docs/design_notes/prng.md)) and
 their choice for counter-based PRNGs like ThreeFry and Philox.
 NumPy, JAX and TF all contain implementations of ThreeFry/Philox.
 
