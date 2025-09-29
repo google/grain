@@ -152,6 +152,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     )
     self._num_threads = read_options.num_threads
     self._allow_nones = allow_nones
+    self._ipl_stage_cat = dataset_stats.IPL_CAT_ENQUEUE
     if self._prefetch_buffer_size > 0:
       self._executor = futures.ThreadPoolExecutor(
           self._num_threads, thread_name_prefix="grain-prefetch"
