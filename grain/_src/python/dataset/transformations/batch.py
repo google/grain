@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 import concurrent.futures
+import functools
 import math
 import pprint
 import sys
@@ -31,6 +32,10 @@ import numpy as np
 
 T = TypeVar("T")
 S = TypeVar("S")
+
+
+def _is_batch_pushdown_experiment_enabled() -> bool:
+  return False
 
 
 def _is_parallel_batch_experiment_enabled():
@@ -280,6 +285,14 @@ class BatchMapDataset(dataset.MapDataset[T]):
     else:
       self._length = math.ceil(len(self._parent) / self._batch_size)
 
+  @functools.cached_property
+  def _get_parent_items_fn(self):
+    # Leverage batch pushdown API to retrieve multiple items at once if the
+    # experiment is enabled.
+    if _is_batch_pushdown_experiment_enabled():
+      return lambda items: self._parent._getitems(list(items))  # pylint: disable=protected-access
+    return lambda items: [self._parent[i] for i in items]
+
   def __len__(self):
     return self._length
 
@@ -295,7 +308,7 @@ class BatchMapDataset(dataset.MapDataset[T]):
     # Add offset for epoch.
     start += epoch * len(self._parent)
     stop += epoch * len(self._parent)
-    values = [self._parent[i] for i in range(start, stop)]
+    values = self._get_parent_items_fn(range(start, stop))
     with self._stats.record_self_time():
       try:
         return self._stats.record_output_spec(self._batch_fn(values))
