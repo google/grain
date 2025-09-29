@@ -5,7 +5,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.17.2
+    jupytext_version: 1.17.3
 kernelspec:
   display_name: Python 3
   name: python3
@@ -252,7 +252,11 @@ pprint(np.shape(next(iter(ds))))
 
 ### Multi-epoch training
 
-Mixed dataset length is determined by a combination of the length of the shortest input dataset and mixing weights. This means that once the shortest component is exhausted the new epoch will begin and the remainder of other datasets is going to be discarded. This can be avoided by repeating inputs to the mixture.
+Mixed dataset length is determined by a combination of the length of the
+shortest input dataset and mixing weights. This means that once the shortest
+component is exhausted the new epoch will begin and the remainder of other
+datasets is going to be discarded. This can be avoided by repeating inputs to
+the mixture.
 
 ```{code-cell}
 ---
@@ -283,6 +287,43 @@ print(f"Mixed dataset length = {len(ds)}")  # sys.maxsize
 
 ### Shuffling
 
+Most ML training workflows will want to access training data in a randomized
+order to minimize the chances of the model picking up data order dependency.
+Grain provides the ability to apply two different shuffling methods: **global**
+shuffle and **hierarchical** shuffle. The recommended shuffling approach relies
+heavily on whether or not your
+[data source](https://google-grain.readthedocs.io/en/latest/data_sources.html#file-format)
+support efficient random access.
+
+| Feature               | **Global Shuffle**       | **Hierarchical** Shuffle  |
+| :-------------------- | :----------------------- | :------------------------ |
+| **Description**       | Shuffles across the      | Shuffles shard file       |
+:                       : entire dataset and all   : names, interleaves        :
+:                       :                          : elements and then         :
+:                       :                          : shuffles again with an    :
+:                       :                          : in-memory buffer.         :
+| **Compatible          | File formats with        | **All** file file formats |
+: Datasources**         : efficient random access  : including ones *without*  :
+:                       : (e.g., ArrayRecord,      : efficient random access   :
+:                       : Bagz).                   : (e.g., Parquet,           :
+:                       :                          : TFRecord).                :
+| **Shuffling Quality** | Provides the best mixing | Provides psuedo-random    |
+:                       : quality and randomness   : shuffling but can leave   :
+:                       : throughout               : hints of ordering in the  :
+:                       :                          : dataset. Randomness can   :
+:                       :                          : be improved by increasing :
+:                       :                          : window/interleaving       :
+:                       :                          : buffer size.              :
+| **Overhead**          | Generally low for        | RAM overhead from window  |
+:                       : supported file formats.  : buffer and interleaving   :
+:                       :                          : buffer.                   :
+
+#### Global Shuffle
+
+Global shuffling will apply shuffling throughout the entire dataset and dataset
+shards. This is the recommended shuffling method for file formats supporting
+random access such as ArrayRecord or Bagz.
+
 If you need to globally shuffle the mixed data prefer shuffling individual
 `Dataset`s before mixing. This will ensure that the actual weights of the mixed
 `Dataset`s are stable and as close as possible to the provided weights.
@@ -311,6 +352,34 @@ ds2 = grain.MapDataset.source(source2).seed(43).shuffle().repeat()
 
 ds = grain.MapDataset.mix([ds1, ds2], weights=[1, 2])
 print(f"Mixed dataset length = {len(ds)}")  # sys.maxsize
+```
+
++++ {"id": "y2FarwpEokOg"}
+
+#### Hierarchical Shuffle
+
+Hierarchical shuffle, similar to tf.data's implementation of shuffle, first
+shuffles dataset shard names and randomly selects items to fill up an in-memory
+buffer and shuffle again. This method is best for sharded file formats that
+don't provide efficent random access(Parquet, TFRecord, etc.) to best mimic
+global shuffling. If your file-format does support efficient random access, we
+recommend using the global shuffle.
+
+The overhead for this shuffling method comes mainly from the window buffer and
+the interleaving buffer.
+
+``` {code-cell}
+:id: i9EXXERPSSHP
+
+dataset = grain.MapDataset.source(filenames)
+dataset = dataset.map(parquet_dataset.ParquetIterDataset)
+dataset = grain.experimental.WindowShuffleIterDataset(
+    grain.experimental.InterleaveIterDataset(dataset, cycle_length=len(filenames)),
+    window_size=10,
+    seed=42)
+iter_ds = iter(dataset)
+for _ in range(5):
+  print(next(iter_ds))
 ```
 
 +++ {"id": "DLsJtcAE8FPu"}
