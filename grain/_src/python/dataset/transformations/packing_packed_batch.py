@@ -291,7 +291,7 @@ class FirstFitPackedBatch(PackedBatch[_T]):
     num_features = len(self._flat_first_free_cell_per_row)
     features_fit = np.empty((num_features, self._num_packing_bins), dtype=bool)
     for i in range(num_features):
-      if ((self._max_sequences_per_bin is None) or 
+      if ((self._max_sequences_per_bin is None) or
         (self._num_examples_per_row[i] < self._max_sequences_per_bin)):
         features_fit[i, :] = (
             element_lengths[i] + self._flat_first_free_cell_per_row[i]
@@ -350,11 +350,12 @@ class BestFitPackedBatch(PackedBatch[_T]):
 
     free_cells_matrix = np.stack(self._flat_first_free_cell_per_row, axis=0)
     new_free_cells = free_cells_matrix + element_lengths[:, np.newaxis]
+
     if self._max_sequences_per_bin is not None:
         sequence_mask = np.where(self._num_examples_per_row < self._max_sequences_per_bin, 0, 1)
         new_free_cells = new_free_cells + sequence_mask * self._capacities[:, np.newaxis]
     fittable_mask = np.all(
-        new_free_cells <= self._capacities[:, np.newaxis]
+        new_free_cells <= self._capacities[:, np.newaxis], axis=0
     )
 
     if not np.any(fittable_mask):
