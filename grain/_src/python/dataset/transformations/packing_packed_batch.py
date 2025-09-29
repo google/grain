@@ -352,8 +352,12 @@ class BestFitPackedBatch(PackedBatch[_T]):
     new_free_cells = free_cells_matrix + element_lengths[:, np.newaxis]
 
     if self._max_sequences_per_bin is not None:
-        sequence_mask = np.where(self._num_examples_per_row < self._max_sequences_per_bin, 0, 1)
-        new_free_cells = new_free_cells + sequence_mask * self._capacities[:, np.newaxis]
+      max_sequence_mask = np.where(
+        self._num_examples_per_row < self._max_sequences_per_bin, 0, 1
+      )
+      new_free_cells = (
+        new_free_cells + max_sequence_mask * self._capacities[:, np.newaxis]
+      )
     fittable_mask = np.all(
         new_free_cells <= self._capacities[:, np.newaxis], axis=0
     )
