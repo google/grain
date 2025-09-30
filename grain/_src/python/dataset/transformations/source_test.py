@@ -37,7 +37,7 @@ class _MyRandomAccessDataSource:
 class _MySupportsBatchedReadRandomAccessDataSource(_MyRandomAccessDataSource):
 
   def _getitems(self, indices: Sequence[int]):
-    return [self._data[i % len(self._data)] for i in indices]
+    return [self._data[i] for i in indices]
 
 
 class _Interleave(dataset.MapDataset):
