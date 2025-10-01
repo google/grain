@@ -13,6 +13,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * Improves first-fit packing speed by up to 12x.
   * Adds best-fit packing implementation which reduces padding in benchmarks by
     over 27% compared to first-fit.
+  * Adds `max_sequences_per_bin` to packing transformations to limit the number
+    of sequences packed into a single bin.
 
 * Breaking changes:
   * SliceMapDataset updated to use the full index relative to the parent

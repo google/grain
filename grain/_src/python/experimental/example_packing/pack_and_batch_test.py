@@ -32,13 +32,18 @@ def create_expected_dataset(values, segmentations, positions, indexes):
 
 
 def common_test_body(
-    input_dataset, expected_packed_dataset, length_struct, batch_size
+    input_dataset,
+    expected_packed_dataset,
+    length_struct,
+    batch_size,
+    max_sequences_per_bin=None,
 ):
   """Factor out common test operations in a separate function."""
   input_dataset = create_input_dataset(input_dataset)
   pack_op = packing.PackAndBatchOperation(
       batch_size=batch_size,
       length_struct=length_struct,
+      max_sequences_per_bin=max_sequences_per_bin,
   )
   packed_dataset = pack_op(input_dataset)  # pytype: disable=wrong-arg-types
   actual_packed_dataset = list(packed_dataset)
@@ -482,6 +487,120 @@ class PackingTest(absltest.TestCase):
 
     common_test_body(
         input_dataset, expected_packed_dataset, length_struct, batch_size
+    )
+
+  def test_pack_max_sequences_per_bin(self):
+    input_dataset = [
+        {
+            "inputs": [1, 2, 3],
+            "targets": [10],
+        },
+        {
+            "inputs": [4, 5],
+            "targets": [20, 30, 40],
+        },
+        {
+            "inputs": [6],
+            "targets": [50, 60],
+        },
+    ]
+
+    length_struct = {"inputs": 6, "targets": 6}
+    batch_size = 2
+    # Using max_sequences_per_bin=2 should result in the third sequence being
+    # placed in a new bin within the same batch.
+
+    expected_values = [{
+        "inputs": np.array([[1, 2, 3, 4, 5, 0], [6, 0, 0, 0, 0, 0]]),
+        "targets": np.array([[10, 20, 30, 40, 0, 0], [50, 60, 0, 0, 0, 0]]),
+    }]
+    expected_segmentations = [{
+        "inputs": np.array([[1, 1, 1, 2, 2, 0], [1, 0, 0, 0, 0, 0]]),
+        "targets": np.array([[1, 2, 2, 2, 0, 0], [1, 1, 0, 0, 0, 0]]),
+    }]
+    expected_positions = [{
+        "inputs": np.array([[0, 1, 2, 0, 1, 0], [0, 0, 0, 0, 0, 0]]),
+        "targets": np.array([[0, 0, 1, 2, 0, 0], [0, 1, 0, 0, 0, 0]]),
+    }]
+    expected_indexes = [2]
+    expected_packed_dataset = create_expected_dataset(
+        expected_values,
+        expected_segmentations,
+        expected_positions,
+        expected_indexes,
+    )
+
+    common_test_body(
+        input_dataset, expected_packed_dataset, length_struct, batch_size, 2
+    )
+
+  def test_pack_failure_due_to_max_sequences_per_bin(self):
+    input_dataset = [
+        {"inputs": [1]},
+        {"inputs": [2]},
+        {"inputs": [3]},
+    ]
+
+    length_struct = {"inputs": 10}
+    batch_size = 2
+    max_sequences_per_bin = 1
+
+    # The first two elements fill the two bins to their sequence capacity (1).
+    # The third element fails to pack because all bins are full by sequence
+    # count. This triggers the finalization of the first batch and the creation
+    # of a new one for the third element. This tests the C++ code path where
+    # `all_rows_full_by_seq_count` remains true.
+    expected_values = [
+        {
+            "inputs": np.array(
+                [[1, 0, 0, 0, 0, 0, 0, 0, 0, 0], [2, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+            ),
+        },
+        {
+            "inputs": np.array(
+                [[3, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+            ),
+        },
+    ]
+    expected_segmentations = [
+        {
+            "inputs": np.array(
+                [[1, 0, 0, 0, 0, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+            ),
+        },
+        {
+            "inputs": np.array(
+                [[1, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+            ),
+        },
+    ]
+    expected_positions = [
+        {
+            "inputs": np.array(
+                [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+            ),
+        },
+        {
+            "inputs": np.array(
+                [[0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+            ),
+        },
+    ]
+    # First batch has 2 elements, second has 1.
+    expected_indexes = [1, 2]
+    expected_packed_dataset = create_expected_dataset(
+        expected_values,
+        expected_segmentations,
+        expected_positions,
+        expected_indexes,
+    )
+
+    common_test_body(
+        input_dataset,
+        expected_packed_dataset,
+        length_struct,
+        batch_size,
+        max_sequences_per_bin=max_sequences_per_bin,
     )
 
 

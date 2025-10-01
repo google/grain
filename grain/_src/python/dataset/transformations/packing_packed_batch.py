@@ -110,11 +110,13 @@ class PackedBatch(abc.ABC, Generic[_T]):
       meta_features: Sequence[str] = (),
       pack_alignment_struct: Any = None,
       padding_struct: Any = None,
+      max_sequences_per_bin: int | None = None,
   ):
     self._num_packing_bins = num_packing_bins
     self._length_struct = length_struct
     self._meta_features = meta_features
     self._size_bytes = 0
+    self._max_sequences_per_bin = max_sequences_per_bin
 
     # Define the main buffers we will pack the data into.
     def make_packed_buffer(length: int, x: np.ndarray | int, padding: Any):
@@ -175,7 +177,8 @@ class PackedBatch(abc.ABC, Generic[_T]):
     )
 
     # Tracks the number of examples already packed into row of the batch. Used
-    # to fill the segmentation values for each feature.
+    # to fill the segmentation values for each feature and to make sure that
+    # the maximum batches per row is not exceeded
     self._num_examples_per_row = zeros(num_packing_bins, dtype=np.int32)
 
     # Flatten internal buffers and pre-calculate paths for efficient access.
@@ -284,13 +287,25 @@ class FirstFitPackedBatch(PackedBatch[_T]):
           f"Exceeds: (feature_path, feature_length, max_length) = {details}"
       )
 
-    # For each feature and row, check if the element fits.
+    # For each feature and row, check if the element fits by length.
     num_features = len(self._flat_first_free_cell_per_row)
-    features_fit = np.empty((num_features, self._num_packing_bins), dtype=bool)
+    features_fit_by_length = np.empty(
+        (num_features, self._num_packing_bins), dtype=bool
+    )
     for i in range(num_features):
-      features_fit[i, :] = (
+      features_fit_by_length[i, :] = (
           element_lengths[i] + self._flat_first_free_cell_per_row[i]
       ) <= self._capacities[i]
+
+    # Combine with max sequences per bin constraint to get overall fit matrix.
+    if self._max_sequences_per_bin is not None:
+      # A bin is not full if it has less than `max_sequences_per_bin`` examples.
+      not_full_mask = self._num_examples_per_row < self._max_sequences_per_bin
+      # A feature "fits" in a bin only if it fits by length AND the bin is not
+      # full.
+      features_fit = np.logical_and(features_fit_by_length, not_full_mask)
+    else:
+      features_fit = features_fit_by_length
 
     # Find the first row where all features fit.
     feasible_rows = np.all(features_fit, axis=0)
@@ -343,6 +358,16 @@ class BestFitPackedBatch(PackedBatch[_T]):
 
     free_cells_matrix = np.stack(self._flat_first_free_cell_per_row, axis=0)
     new_free_cells = free_cells_matrix + element_lengths[:, np.newaxis]
+
+    if self._max_sequences_per_bin is not None:
+      # Invalidate bins that have reached the max sequence limit. Adding the
+      # capacity ensures they fail the subsequent length check.
+      max_sequence_mask = np.where(
+          self._num_examples_per_row < self._max_sequences_per_bin, 0, 1
+      )
+      new_free_cells = (
+          new_free_cells + max_sequence_mask * self._capacities[:, np.newaxis]
+      )
     fittable_mask = np.all(
         new_free_cells <= self._capacities[:, np.newaxis], axis=0
     )

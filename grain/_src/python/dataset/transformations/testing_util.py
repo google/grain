@@ -42,6 +42,7 @@ def _common_test_body(
     convert_input_to_np: bool = True,
     pack_alignment_struct: Any = None,
     padding_struct: Any = None,
+    max_sequences_per_bin: int | None = None,
     kwargs: dict[str, Any] | None = None,
 ):
   """Factor out common test operations in a separate function."""
@@ -62,6 +63,7 @@ def _common_test_body(
       meta_features=meta_features,
       pack_alignment_struct=pack_alignment_struct,
       padding_struct=padding_struct,
+      max_sequences_per_bin=max_sequences_per_bin,
       **(kwargs if kwargs else {}),
   )
   actual_elements = list(ds)
@@ -1252,6 +1254,77 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
         padding_struct=padding_struct,
         num_packing_bins=num_packing_bins,
     )
+
+  def test_pack_max_sequences_per_bin(self):
+    input_elements = [
+        {
+            "inputs": [1, 2, 3],
+            "targets": [10],
+        },
+        {
+            "inputs": [4, 5],
+            "targets": [20, 30, 40],
+        },
+        {
+            "inputs": [6],
+            "targets": [50, 60],
+        },
+    ]
+    length_struct = {"inputs": 6, "targets": 6}
+
+    expected_elements = [
+        {
+            "inputs": [1, 2, 3, 4, 5, 0],
+            "targets": [10, 20, 30, 40, 0, 0],
+            "inputs_segment_ids": [1, 1, 1, 2, 2, 0],
+            "targets_segment_ids": [1, 2, 2, 2, 0, 0],
+            "inputs_positions": [0, 1, 2, 0, 1, 0],
+            "targets_positions": [0, 0, 1, 2, 0, 0],
+        },
+        {
+            "inputs": [6, 0, 0, 0, 0, 0],
+            "targets": [50, 60, 0, 0, 0, 0],
+            "inputs_segment_ids": [1, 0, 0, 0, 0, 0],
+            "targets_segment_ids": [1, 1, 0, 0, 0, 0],
+            "inputs_positions": [0, 0, 0, 0, 0, 0],
+            "targets_positions": [0, 1, 0, 0, 0, 0],
+        },
+    ]
+
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        kwargs=self.kwargs,
+        num_packing_bins=2,
+        max_sequences_per_bin=2,
+    )
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name="Zero",
+          max_sequences_per_bin=0,
+      ),
+      dict(
+          testcase_name="Negative",
+          max_sequences_per_bin=-1,
+      ),
+  )
+  def test_pack_max_sequences_per_bin_invalid_value(
+      self, max_sequences_per_bin
+  ):
+    with self.assertRaisesRegex(
+        ValueError,
+        "If specified, `max_sequences_per_bin` must be a positive integer,"
+        f" but got {max_sequences_per_bin}.",
+    ):
+      self.packer_cls(
+          source.SourceMapDataset([]).to_iter_dataset(),
+          length_struct={"inputs": 6, "targets": 6},
+          num_packing_bins=2,
+          max_sequences_per_bin=max_sequences_per_bin,
+      )
 
 
 class BaseBestFitPackIterDatasetTest(BaseFirstFitPackIterDatasetTest):

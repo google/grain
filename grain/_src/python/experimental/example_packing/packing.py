@@ -33,9 +33,11 @@ class _PackedBatch:
       element_for_shapes: Any,  # PyTree[np.ndarray]
       batch_size: int,
       length_struct: Any,  # PyTree[int]
+      max_sequences_per_bin: int | None = None,
   ):
     self._batch_size = batch_size
     self._length_struct = length_struct
+    self._max_sequences_per_bin = max_sequences_per_bin
 
     # Define the main buffers we will pack the data into.
     def make_packed_buffer(length: int, input_arr: np.ndarray):
@@ -65,7 +67,8 @@ class _PackedBatch:
     )
 
     # Tracks the number of examples already packed into row of the batch. Used
-    # to fill the segmentation values for each feature.
+    # to fill the segmentation values for each feature, and to make sure that
+    # the maximum examples per row is not exceeded
     self._num_examples_per_row = [0 for _ in range(batch_size)]
 
     # For determinism, the metadata.index for the packed batch must match
@@ -111,11 +114,14 @@ class _PackedBatch:
 
     ## Pick first row (if exists) where element can be added.
     for i in range(self._batch_size):
-      row_is_free_per_feature = [
-          free[i] for free in tree_lib.flatten(is_row_free_struct)
-      ]
-      if all(row_is_free_per_feature):
-        return i
+      if (self._max_sequences_per_bin is None) or (
+          self._num_examples_per_row[i] < self._max_sequences_per_bin
+      ):
+        row_is_free_per_feature = [
+            free[i] for free in tree_lib.flatten(is_row_free_struct)
+        ]
+        if all(row_is_free_per_feature):
+          return i
     return -1
 
   def add_element_to_batch(
@@ -167,6 +173,8 @@ class PackAndBatchOperation(Generic[_T]):
     length_struct: A pytree, with the same structure as `input_iterator`
       elements, but where leaves are ints, representing the packed length of the
       corresponding feature.
+    max_sequences_per_bin: int | None, the maximum number of examples to pack
+      into a single row.
 
   __call__() takes an input iterator, where elements are `Record`s containing:
 
@@ -193,6 +201,7 @@ class PackAndBatchOperation(Generic[_T]):
 
   length_struct: Any  # PyTree[int]
   batch_size: int
+  max_sequences_per_bin: int | None = None
   # We don't know input shapes and corresponding buffer shapes until __call__.
   _cur_batch: Union[_PackedBatch, None] = None
 
@@ -209,7 +218,10 @@ class PackAndBatchOperation(Generic[_T]):
       # Use `element` to set dtypes + trailing dimensions.
       if self._cur_batch is None:  # pytype: disable=attribute-error
         self._cur_batch = _PackedBatch(
-            element.data, self.batch_size, self.length_struct
+            element.data,
+            self.batch_size,
+            self.length_struct,
+            self.max_sequences_per_bin,
         )
 
       # Try adding element to the current packed batch.
