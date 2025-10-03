@@ -1148,6 +1148,44 @@ class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
       if close:
         it.close()  # pytype: disable=attribute-error
 
+  @parameterized.parameters(["naive", "close", "context"])
+  def test_early_break_continues_prefetching(self, method: str):
+    count = 0
+
+    class SlowCountingSource:
+      def __len__(self):
+        return 16
+
+      def __getitem__(self, index):
+        nonlocal count
+        time.sleep(0.1)
+        count += 1
+        return index
+
+    read_options = options.ReadOptions(num_threads=2)
+    ds = dataset.MapDataset.source(SlowCountingSource()).to_iter_dataset(read_options)
+    iterator = iter(ds)
+
+    assert count == 0
+    if method == "naive":
+      next(iterator)
+      assert count > 0
+      time.sleep(1)
+      assert count == 16
+    elif method == "close":
+      next(iterator)
+      assert count > 0
+      iterator.close()
+      time.sleep(1)
+      assert count < 8
+    elif method == "context":
+      with iterator:
+        next(iterator)
+      time.sleep(1)
+      assert count < 8
+    else:
+      raise ValueError(method)
+
 
 if __name__ == '__main__':
   absltest.main()

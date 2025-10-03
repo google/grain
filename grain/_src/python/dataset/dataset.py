@@ -1357,6 +1357,7 @@ class DatasetIterator(Iterator[T], abc.ABC):
         to_visit.extend(current._parents)
     else:
       self._ctx: base.IteratorContext = base.IteratorContext()
+    self._closed = False
 
   @property
   def _parent(self) -> DatasetIterator:
@@ -1402,6 +1403,36 @@ class DatasetIterator(Iterator[T], abc.ABC):
     recover the model.
     """
     raise NotImplementedError
+
+  def close(self) -> None:
+    """Closes the iterator and releases any resources.
+
+    This method is idempotent and safe to call multiple times.
+    After calling close(), the iterator will raise StopIteration on any
+    subsequent calls to __next__().
+
+    This method also closes all parent iterators in the pipeline to ensure
+    complete resource cleanup.
+    """
+    if self._closed:
+      return
+    self._closed = True
+    # Close parent iterators
+    for parent in self._parents:
+      if hasattr(parent, 'close'):
+        parent.close()
+
+  def __enter__(self) -> 'DatasetIterator[T]':
+    return self
+
+  def __exit__(self, *_):
+    self.close()
+
+  def __del__(self):
+    try:
+      self.close()
+    except:
+      pass
 
   # pytype: disable=attribute-error
   # pylint: disable=protected-access

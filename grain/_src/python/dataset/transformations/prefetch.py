@@ -185,6 +185,8 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   @dataset_stats.record_next_duration_if_output
   def __next__(self) -> T:
+    if self._closed:
+      raise StopIteration("Iterator is closed.")
     # The time recorded here is the time spent in prefetch node to return an
     # element, including the time spent in parent node.
     timer = dataset_stats.Timer()
@@ -260,6 +262,27 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
         )
       if self._prefetch_buffer_size > 0:
         self._buffer = None
+
+  def close(self) -> None:
+    """Closes the iterator and shuts down the thread pool executor.
+
+    This stops all prefetch threads and releases resources.
+    """
+    if self._closed:
+      return
+    # Shutdown the thread pool executor if it exists.
+    if self._prefetch_buffer_size > 0 and hasattr(self, '_executor'):
+      self._executor.shutdown(wait=False)
+      # Cancel all pending futures in the buffer.
+      if self._buffer:
+        while self._buffer:
+          try:
+            future = self._buffer.popleft()
+            future.cancel()
+          except:
+            pass
+        self._buffer = None
+    super().close()
 
   def __str__(self) -> str:
     return (
