@@ -396,7 +396,7 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
       tokens_in_buffer[k] += v
     return remainder
 
-  @stats.record_next_duration_if_output
+  @stats.record_next_duration_if_output(stage_category=stats.IPL_CAT_ENQUEUE)
   def __next__(self):
     if self._packed_elements:
       self._state.elements_from_buffer_after_checkpoint += 1

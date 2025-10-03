@@ -166,7 +166,9 @@ class PackingDatasetIterator(dataset.DatasetIterator):
           max_sequences_per_bin=self._max_sequences_per_bin,
       )
 
-  @dataset_stats.record_next_duration_if_output
+  @dataset_stats.record_next_duration_if_output(
+      stage_category=dataset_stats.IPL_CAT_ENQUEUE
+  )
   def __next__(self):
     timer = dataset_stats.Timer()
     if self._packed_batch is not None:
