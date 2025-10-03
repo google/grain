@@ -48,6 +48,13 @@ class RepeatMapDatasetTest(parameterized.TestCase):
     ds = repeat.RepeatMapDataset(ds, num_epochs=3)
     self.assertSequenceEqual(list(ds), [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3])
 
+  def test_infinite_epochs_produces_expected_elements_when_iterated(self):
+    ds = dataset.MapDataset.range(4)
+    ds = repeat.RepeatMapDataset(ds, num_epochs=None)
+    self.assertSequenceEqual(
+        ds[0 : 4 * 3], [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3]
+    )
+
   def test_infinite_epochs_sets_length_to_maxsize(self):
     ds = dataset.MapDataset.range(6)
     ds = repeat.RepeatMapDataset(ds, num_epochs=None)
@@ -74,13 +81,38 @@ class RepeatMapDatasetTest(parameterized.TestCase):
     ds = repeat.RepeatMapDataset(ds, num_epochs=None)
     self.assertEmpty(ds)
 
+  def test_finite_num_empochs_get_items_produces_expected_elements(self):
+    ds = dataset.MapDataset.range(4)
+    ds = repeat.RepeatMapDataset(ds, num_epochs=3)
+    self.assertSequenceEqual(
+        ds._getitems(list(range(4 * 3))), [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3]
+    )
+    self.assertSequenceEqual(
+        ds._getitems(list([0, 1, 4, 5, 8, 9])), [0, 1, 0, 1, 0, 1]
+    )
+
+  def test_infinite_epochs_get_items_produces_expected_elements(self):
+    ds = dataset.MapDataset.range(4)
+    ds = repeat.RepeatMapDataset(ds, num_epochs=None)
+    self.assertSequenceEqual(
+        ds._getitems(list(range(4 * 3))), [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3]
+    )
+    self.assertSequenceEqual(
+        ds._getitems(list([0, 1, 4, 5, 8, 9])), [0, 1, 0, 1, 0, 1]
+    )
+
   @parameterized.product(
       num_epochs=[2, None],
       reseed_each_epoch=[True, False],
       explicit_seed=[True, False],
+      use_batched_read=[True, False],
   )
   def test_random_transforms_across_epochs(
-      self, num_epochs: int | None, reseed_each_epoch: bool, explicit_seed: bool
+      self,
+      num_epochs: int | None,
+      reseed_each_epoch: bool,
+      explicit_seed: bool,
+      use_batched_read: bool,
   ):
     num_examples = 1000
     ds = dataset.MapDataset.range(num_examples)
@@ -93,8 +125,14 @@ class RepeatMapDatasetTest(parameterized.TestCase):
     ds = repeat.RepeatMapDataset(
         ds, num_epochs=num_epochs, reseed_each_epoch=reseed_each_epoch
     )
-    first_epoch = list(ds[:num_examples])
-    second_epoch = list(ds[num_examples : num_examples * 2])
+
+    if use_batched_read:
+      first_epoch = ds._getitems(list(range(num_examples)))
+      second_epoch = ds._getitems(list(range(num_examples, num_examples * 2)))
+    else:
+      first_epoch = list(ds[:num_examples])
+      second_epoch = list(ds[num_examples : num_examples * 2])
+
     if reseed_each_epoch:
       self.assertNotEqual(first_epoch, second_epoch)
       self.assertNotEqual(set(first_epoch), set(second_epoch))

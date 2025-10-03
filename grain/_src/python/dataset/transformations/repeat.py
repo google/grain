@@ -13,7 +13,7 @@
 # limitations under the License.
 """Implements repeat transformation."""
 import sys
-from typing import Optional, TypeVar
+from typing import Optional, Sequence, TypeVar
 
 from grain._src.python.dataset import dataset
 
@@ -60,6 +60,11 @@ class RepeatMapDataset(dataset.MapDataset[T]):
 
   def __str__(self) -> str:
     return f"RepeatMapDataset(num_epochs={self._num_epochs})"
+
+  def _getitems(self, indices: Sequence[int]):
+    if not self._reseed_each_epoch:
+      indices = [index % self._parent_length for index in indices]
+    return self._parent._getitems(indices)  # pylint: disable=protected-access
 
   def __getitem__(self, index):
     if isinstance(index, slice):
