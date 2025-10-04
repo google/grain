@@ -1248,6 +1248,37 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
     # pylint: enable=g-import-not-at-top
     return map_dataset.MapWithIndexIterDataset(parent=self, transform=transform)
 
+  def repeat(self, num_epochs: int | None = None) -> IterDataset[T]:
+    """Returns a dataset repeating the elements of this dataset multiple times.
+
+    Specifying ``None`` for ``num_epochs`` will repeat the dataset infinitely.
+
+    Note that unlike ``MapDataset.repeat``, we do not support
+    ``reseed_each_epoch``. Each epoch will be identical.
+
+    Example usage::
+
+      list(MapDataset.range(2).to_iter_dataset().repeat(2)) == [0, 1, 0, 1]
+      ds = MapDataset.range(5).to_iter_dataset().repeat()
+
+    Args:
+      num_epochs: Either a positive integer representing the number of times
+        this dataset should be repeated or ``None`` to repeat infinitely.
+
+    Returns:
+      A dataset repeating the elements of this dataset multiple times.
+    """
+    # Loaded lazily due to a circular dependency (dataset <-> repeat).
+    # pylint: disable=g-import-not-at-top
+    from grain._src.python.dataset.transformations import (
+        repeat as repeat_dataset,
+    )
+    # pylint: enable=g-import-not-at-top
+    return repeat_dataset.RepeatIterDataset(
+        parent=self,
+        num_epochs=num_epochs,
+    )
+
   def prefetch(
       self, multiprocessing_options: grain_options.MultiprocessingOptions
   ) -> IterDataset[T]:
