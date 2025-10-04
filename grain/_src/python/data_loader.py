@@ -392,6 +392,7 @@ class DataLoader:
         batch_operation = BatchOperation(
             batch_size=operations[-1].batch_size,
             drop_remainder=operations[-1].drop_remainder,
+            batch_fn=operations[-1].batch_fn,
         )
         batch_operation.disable_deprecation_message()
         operations = list(operations)
@@ -667,24 +668,10 @@ def _apply_transform_to_dataset(
   elif isinstance(transform, transforms.Filter):
     return ds.filter(lambda r: transform.filter(r.data))
   elif isinstance(transform, transforms.Batch):
-
-    def batch_fn(
-        records: Sequence[record.Record[_T]],
-    ) -> record.Record[_T]:
-      values = []
-      last_metadata = records[0].metadata
-      for r in records:
-        last_metadata = r.metadata
-        values.append(r.data)
-      batch = batch_ds.make_batch(values)
-      return record.Record(
-          metadata=last_metadata.remove_record_key(), data=batch
-      )
-
     return ds.batch(
         batch_size=transform.batch_size,
         drop_remainder=transform.drop_remainder,
-        batch_fn=batch_fn,
+        batch_fn=transform.batch_fn,
     )
   else:
     # Handle legacy operations
