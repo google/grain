@@ -760,6 +760,14 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         f"multiprocessing_options={self._multiprocessing_options})"
     )
 
+  def set_per_worker_buffer_size(self, per_worker_buffer_size: int):
+    if self._raw_iterator is None:
+      raise ValueError(
+          "Cannot change per worker buffer size before the iterator has been"
+          " initialized."
+      )
+    self._raw_iterator.set_per_worker_buffer_size(per_worker_buffer_size)
+
 
 class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
   """Iterable dataset that uses a synchronized queue for prefetching.
