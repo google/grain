@@ -162,6 +162,7 @@ py_test(
     deps = [
         ":dataset",
         ":stats",
+        "//grain/_src/core:config",
         "//grain/_src/core:transforms",
         "//grain/_src/python:options",
         "//grain/_src/python:shared_memory_array",
