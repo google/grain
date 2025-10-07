@@ -332,3 +332,30 @@ py_test(
         "@pypi//numpy:pkg",
     ],
 )
+
+py_library(
+    name = "cache",
+    srcs = ["cache.py"],
+    srcs_version = "PY3",
+    deps = [
+        "//grain/_src/python/dataset",
+        "//grain/_src/python/dataset:stats",
+    ],
+)
+
+py_test(
+    name = "cache_test",
+    srcs = ["cache_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":cache",
+        ":limit",
+        "//grain",
+        "//grain/_src/python:options",
+        "//grain/_src/python/dataset",
+        "//grain/_src/python/testing:experimental",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+        "@pypi//numpy:pkg",
+    ],
+)
