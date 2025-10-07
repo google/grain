@@ -8,6 +8,7 @@ filegroup(
     name = "core_transformations",
     srcs = [
         "batch.py",
+        "cache.py",
         "filter.py",
         "flatmap.py",
         "map.py",
@@ -330,5 +331,18 @@ py_test(
         "@abseil-py//absl/testing:parameterized",
         "@pypi//dm_tree:pkg",
         "@pypi//numpy:pkg",
+    ],
+)
+
+py_test(
+    name = "cache_test",
+    srcs = ["cache_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        "//grain/_src/python:options",
+        "//grain/_src/python/dataset",
+        "//grain/_src/python/testing:experimental",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
     ],
 )
