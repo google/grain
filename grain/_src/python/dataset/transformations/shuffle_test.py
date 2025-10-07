@@ -28,11 +28,22 @@ class ShuffleMapDatasetTest(parameterized.TestCase):
   def test_getitem(self):
     ds = shuffle.ShuffleMapDataset(dataset.MapDataset.range(400), seed=42)
     shuffled_indices = [ds[i] for i in range(400)]
-    self.assertLen(set(shuffled_indices), 400)
-    for x in shuffled_indices:
-      self.assertBetween(x, 0, 400)
+    self.assertCountEqual(shuffled_indices, list(range(400)))
+
     shuffled_indices_epoch2 = [ds[400 + i] for i in range(400)]
+    self.assertCountEqual(shuffled_indices_epoch2, list(range(400)))
     self.assertNotEqual(shuffled_indices, shuffled_indices_epoch2)
+
+  def test_getitems(self):
+    ds = shuffle.ShuffleMapDataset(dataset.MapDataset.range(400), seed=42)
+    shuffled_indices = ds._getitems(range(400))
+    self.assertCountEqual(shuffled_indices, list(range(400)))
+    self.assertEqual(shuffled_indices, [ds[i] for i in range(400)])
+
+    shuffled_indices_epoch2 = ds._getitems(range(400, 800))
+    self.assertCountEqual(shuffled_indices_epoch2, list(range(400)))
+    self.assertNotEqual(shuffled_indices, shuffled_indices_epoch2)
+    self.assertEqual(shuffled_indices_epoch2, [ds[400 + i] for i in range(400)])
 
   def test_iter(self):
     ds = shuffle.ShuffleMapDataset(dataset.MapDataset.range(400), seed=42)

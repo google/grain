@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 import copy
-from typing import TypeVar
+from typing import Sequence, TypeVar
 
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
@@ -73,6 +73,18 @@ class ShuffleMapDataset(dataset.MapDataset[T]):
       )
       shuffled_index = shuffled_index_in_epoch + epoch * length
     return self._parent[shuffled_index]
+
+  def _getitems(self, indices: Sequence[int]):
+    length = len(self._parent)
+    shuffled_indices = []
+    for index in indices:
+      epoch, index_in_epoch = divmod(index, length)
+      per_epoch_seed = (self._seed + epoch) % 2**32
+      shuffled_index_in_epoch = index_shuffle.index_shuffle(
+          index_in_epoch, max_index=length - 1, seed=per_epoch_seed, rounds=4
+      )
+      shuffled_indices.append(shuffled_index_in_epoch + epoch * length)
+    return self._parent._getitems(shuffled_indices)  # pylint: disable=protected-access
 
 
 class WindowShuffleMapDataset(dataset.MapDataset[T]):
