@@ -1515,6 +1515,9 @@ class _WithSeedMapDataset(MapDataset[T]):
   def __len__(self) -> int:
     return self._parent.__len__()
 
+  def _getitems(self, indices: Sequence[int]):
+    return self._parent._getitems(indices)  # pylint: disable=protected-access
+
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)

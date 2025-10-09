@@ -792,6 +792,42 @@ class DatasetTest(parameterized.TestCase):
     ds2 = initial_ds.seed(seed)
     self.assertEqual(ds1._default_seed, ds2._default_seed)
 
+  @parameterized.parameters(
+      dict(initial_ds=dataset.MapDataset.range(15), expected=list(range(15))),
+      dict(
+          initial_ds=dataset.MapDataset.range(15).to_iter_dataset(),
+          expected=list(range(15)),
+      ),
+  )
+  def test_seed_returns_same_elements_unchanged(self, initial_ds, expected):
+    seed = 123
+    ds1 = initial_ds.seed(seed)
+    self.assertEqual(list(ds1), expected)
+
+  @parameterized.parameters(
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          indices=list(range(15)),
+          expected=list(range(15)),
+      ),
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          indices=[0, 1, 2],
+          expected=[0, 1, 2],
+      ),
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          indices=[0, 5, 10],
+          expected=[0, 5, 10],
+      ),
+  )
+  def test_seed_get_items_returns_same_elements_unchanged(
+      self, initial_ds, indices, expected
+  ):
+    seed = 123
+    ds1 = initial_ds.seed(seed)
+    self.assertEqual(ds1._getitems(indices), expected)
+
   def test_seed_with_shuffle(self):
     seed = 125
     ds1 = dataset.MapDataset.range(15).seed(seed).shuffle()
