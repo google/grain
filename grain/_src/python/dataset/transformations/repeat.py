@@ -16,6 +16,7 @@ import sys
 from typing import Optional, Sequence, TypeVar
 
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset import stats
 
 T = TypeVar("T")
 
@@ -73,3 +74,72 @@ class RepeatMapDataset(dataset.MapDataset[T]):
       # Use elements from the first epoch.
       index = index % self._parent_length
     return self._stats.record_output_spec(self._parent[index])
+
+
+class _RepeatDatasetIterator(dataset.DatasetIterator[T]):
+  """Iterator that repeats elements from parent iterator."""
+
+  _MUTATES_ELEMENT_SPEC = False
+
+  def __init__(
+      self,
+      parent: dataset.DatasetIterator[T],
+      num_epochs: int | None,
+  ):
+    super().__init__(parent)
+    self._num_epochs = num_epochs
+    self._epoch = 0
+    self._parent_starting_state = self._parent.get_state()
+
+  @stats.record_next_duration_if_output
+  def __next__(self):
+    timer = stats.Timer()
+    if self._epoch == self._num_epochs:
+      raise StopIteration
+    while True:
+      try:
+        elem = next(self._parent)
+        with self._stats.record_self_time(offset_ns=timer.value()):
+          return self._stats.record_output_spec(elem)
+      except StopIteration as exc:
+        with timer:
+          self._epoch += 1
+          if self._num_epochs is not None and self._epoch == self._num_epochs:
+            raise StopIteration from exc
+          else:
+            self._parent.set_state(self._parent_starting_state)
+
+  def get_state(self):
+    return {"parent": self._parent.get_state(), "epoch": self._epoch}
+
+  def set_state(self, state):
+    self._epoch = state["epoch"]
+    self._parent.set_state(state["parent"])
+
+  def __str__(self) -> str:
+    return f"_RepeatDatasetIterator(num_epochs={self._num_epochs})"
+
+
+class RepeatIterDataset(dataset.IterDataset[T]):
+  """Repeats the underlying dataset for num_epochs.
+
+  If num_epochs is None, repeats indefinitely.
+  Note that unlike RepeatMapDataset, RepeatIterDataset does not support
+  re-seeding for each epoch. Each epoch will be identical.
+  """
+
+  def __init__(
+      self,
+      parent: dataset.IterDataset[T],
+      num_epochs: Optional[int] = None,
+  ):
+    super().__init__(parent)
+    if num_epochs is not None and num_epochs <= 0:
+      raise ValueError(f"num_epochs must be positive, but got {num_epochs}.")
+    self._num_epochs = num_epochs
+
+  def __iter__(self) -> _RepeatDatasetIterator[T]:
+    return _RepeatDatasetIterator(self._parent.__iter__(), self._num_epochs)
+
+  def __str__(self) -> str:
+    return f"RepeatIterDataset(num_epochs={self._num_epochs})"

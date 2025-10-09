@@ -15,6 +15,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     over 27% compared to first-fit.
   * Adds `max_sequences_per_bin` to packing transformations to limit the number
     of sequences packed into a single bin.
+  * Introduces `grain.experimental.RepeatIterDataset`.
 
 * Breaking changes:
   * SliceMapDataset updated to use the full index relative to the parent

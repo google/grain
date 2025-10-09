@@ -214,6 +214,7 @@ py_test(
     srcs_version = "PY3",
     deps = [
         "//grain/_src/python/dataset",
+        "//grain/_src/python/testing:experimental",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
         "@pypi//typing_extensions:pkg",

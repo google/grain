@@ -56,6 +56,7 @@ from grain._src.python.dataset.transformations.prefetch import (
     ThreadPrefetchDatasetIterator,
 )
 from grain._src.python.dataset.transformations.rebatch import RebatchIterDataset
+from grain._src.python.dataset.transformations.repeat import RepeatIterDataset
 from grain._src.python.dataset.transformations.shuffle import (
     WindowShuffleMapDataset,
     WindowShuffleIterDataset,

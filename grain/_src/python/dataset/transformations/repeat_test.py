@@ -18,6 +18,7 @@ from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import repeat
+from grain._src.python.testing import experimental as testing
 from typing_extensions import override
 
 
@@ -138,6 +139,45 @@ class RepeatMapDatasetTest(parameterized.TestCase):
       self.assertNotEqual(set(first_epoch), set(second_epoch))
     else:
       self.assertEqual(first_epoch, second_epoch)
+
+
+class RepeatIterDatasetTest(parameterized.TestCase):
+
+  def test_finite_num_epochs_produces_expected_elements(self):
+    ds = dataset.MapDataset.range(4).to_iter_dataset()
+    ds = repeat.RepeatIterDataset(ds, num_epochs=3)
+    self.assertSequenceEqual(list(ds), [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3])
+
+  def test_infinite_epochs_produces_expected_elements(self):
+    ds = dataset.MapDataset.range(4).to_iter_dataset()
+    ds = repeat.RepeatIterDataset(ds, num_epochs=None)
+    results = []
+    for i, val in enumerate(ds):
+      if i == 12:
+        break
+      results.append(val)
+    self.assertSequenceEqual(results, [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3])
+
+  def test_setting_zero_epochs_raises_value_error(self):
+    ds = dataset.MapDataset.range(6).to_iter_dataset()
+    with self.assertRaises(ValueError):
+      repeat.RepeatIterDataset(ds, num_epochs=0)
+
+  def test_setting_negative_epochs_raises_value_error(self):
+    ds = dataset.MapDataset.range(6).to_iter_dataset()
+    with self.assertRaises(ValueError):
+      repeat.RepeatIterDataset(ds, num_epochs=-1)
+
+  def test_repeat_empty_dataset_is_empty(self):
+    ds = EmptyMapDataset().to_iter_dataset()
+    ds = repeat.RepeatIterDataset(ds, num_epochs=2)
+    self.assertEmpty(list(ds))
+
+  @parameterized.parameters(1, 2, 5)
+  def test_checkpointing(self, num_epochs):
+    ds = dataset.MapDataset.range(3).to_iter_dataset()
+    ds = repeat.RepeatIterDataset(ds, num_epochs=num_epochs)
+    testing.assert_equal_output_after_checkpoint(ds)
 
 
 if __name__ == "__main__":
