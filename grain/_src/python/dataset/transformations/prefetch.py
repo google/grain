@@ -40,9 +40,11 @@ from grain._src.python import shared_memory_array
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
+from grain._src.python.dataset.transformations import cache as cache_dataset
 from grain._src.python.dataset.transformations import filter as filter_dataset
 from grain._src.python.dataset.transformations import source
 import numpy as np
+
 
 T = TypeVar("T")
 
@@ -111,6 +113,16 @@ class PrefetchIterDataset(dataset.IterDataset[T]):
   def set_slice(self, sl: slice, sequential_slice: bool = False) -> None:
     """Replaces `MapDataset` parents with their sliced versions."""
     assert isinstance(self._parent, dataset.MapDataset), self._parent
+
+    # Provide CacheMapDataset with the worker index for file caching
+    if sl.start is not None:
+      to_visit = [self._parent]
+      while to_visit:
+        node = to_visit.pop(0)
+        if isinstance(node, cache_dataset.CacheMapDataset):
+          node.set_worker_index(sl.start)
+        to_visit.extend(node.parents)
+
     if not sequential_slice:
       self._parents = (self._parent.slice(sl),)
     else:
