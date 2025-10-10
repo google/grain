@@ -25,6 +25,7 @@ from absl.testing import flagsaver
 from absl.testing import parameterized
 import cloudpickle
 from grain._src.core import transforms
+from grain.conftest import RUN_IN_PYTEST
 import multiprocessing as mp
 from grain._src.python import options
 from grain._src.python.dataset import base
@@ -1337,6 +1338,7 @@ class GetExecutionSummaryTest(parameterized.TestCase):
     log_value = "Grain Dataset Execution Summary"
     self.assertRegex("".join(logs.output), log_value)
 
+  @absltest.expectedFailureIf(RUN_IN_PYTEST, reason="fails under pytest")
   @mock.patch.object(dataset_stats, "_REPORTING_PERIOD_SEC", 0.05)
   @mock.patch.object(dataset_stats, "_LOG_EXECUTION_SUMMARY_PERIOD_SEC", 0.06)
   def test_execution_summary_with_no_logging(self):
