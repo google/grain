@@ -1,4 +1,5 @@
 load("@com_google_protobuf//:protobuf.bzl", "py_proto_library")
+load("//third_party/protobuf/bazel:cc_proto_library.bzl", "cc_proto_library")
 
 default_visibility = ["//grain:__subpackages__"]
 
