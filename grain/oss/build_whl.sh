@@ -119,9 +119,7 @@ main() {
 
   $PYTHON_BIN -m pip install --force ${OUTPUT_DIR}/all_dist/grain*.whl
   $PYTHON_BIN -m pip install jax pyarrow==20.0.0 pytest parameterized
-  if (( "${PYTHON_MINOR_VERSION}" < 13 )); then
-    $PYTHON_BIN -m pip install tensorflow
-  fi
+  $PYTHON_BIN -m pip install tensorflow  --only-binary h5py
 
   pushd "${OUTPUT_DIR}/all_dist"
   # TODO: remove `-k` option and execute all tests with pytest
