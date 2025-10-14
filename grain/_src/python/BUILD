@@ -157,7 +157,6 @@ py_library(
     deps = [
         ":checkpointing",
         ":data_sources",
-        ":grain_pool",
         ":operations",
         ":options",
         ":record",
@@ -201,6 +200,7 @@ py_test(
         ":shared_memory_array",
         "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
+        "//grain/_src/python/dataset",
         "@abseil-py//absl/flags",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",

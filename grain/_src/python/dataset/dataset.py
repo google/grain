@@ -1616,6 +1616,7 @@ def apply_transformations(
         ds = ds.batch(
             transformation.batch_size,
             drop_remainder=transformation.drop_remainder,
+            batch_fn=transformation.batch_fn,
         )
       case transforms.MapTransform():
         ds = ds.map(transformation)

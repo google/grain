@@ -119,6 +119,7 @@ class FlatMapTransform(abc.ABC):
 class Batch:
   batch_size: int
   drop_remainder: bool = False
+  batch_fn: Callable[[Sequence[Any]], Any] | None = None
 
 
 Transformation = Union[

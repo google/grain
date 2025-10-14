@@ -344,6 +344,21 @@ class OperationsTest(parameterized.TestCase):
     actual_output_data = list(batch_operation(input_data))
     self.compare_output(actual_output_data, expected_output_data)
 
+  def test_batch_with_custom_batch_fn(self):
+    input_data = iter([
+        record.Record(record.RecordMetadata(index=0, record_key=3), 1),
+        record.Record(record.RecordMetadata(index=1, record_key=2), 2),
+        record.Record(record.RecordMetadata(index=2, record_key=1), 3),
+        record.Record(record.RecordMetadata(index=3, record_key=0), 4),
+    ])
+    batch_operation = BatchOperation(batch_size=2, batch_fn=lambda x: x)
+    expected_output_data = [
+        record.Record(record.RecordMetadata(index=1, record_key=None), [1, 2]),
+        record.Record(record.RecordMetadata(index=3, record_key=None), [3, 4]),
+    ]
+    actual_output_data = list(batch_operation(input_data))
+    self.compare_output(actual_output_data, expected_output_data)
+
 
 if __name__ == "__main__":
   absltest.main()

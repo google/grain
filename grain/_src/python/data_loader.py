@@ -387,11 +387,14 @@ class DataLoader:
       # Shared memory should be enabled iff worker_count > 0.
       # This replaces Batch Transform with a BatchOperation in operations list
       # if shared memory is enabled.
-      if operations and isinstance(operations[-1], transforms.Batch):
+      if operations and isinstance(
+          (last_op := operations[-1]), transforms.Batch
+      ):
         logging.info("Creating BatchOperation to enable SharedMemoryArray.")
         batch_operation = BatchOperation(
-            batch_size=operations[-1].batch_size,
-            drop_remainder=operations[-1].drop_remainder,
+            batch_size=last_op.batch_size,
+            drop_remainder=last_op.drop_remainder,
+            batch_fn=last_op.batch_fn,
         )
         batch_operation.disable_deprecation_message()
         operations = list(operations)
@@ -667,6 +670,7 @@ def _apply_transform_to_dataset(
   elif isinstance(transform, transforms.Filter):
     return ds.filter(lambda r: transform.filter(r.data))
   elif isinstance(transform, transforms.Batch):
+    values_batch_fn = transform.batch_fn or batch_ds.make_batch
 
     def batch_fn(
         records: Sequence[record.Record[_T]],
@@ -676,7 +680,7 @@ def _apply_transform_to_dataset(
       for r in records:
         last_metadata = r.metadata
         values.append(r.data)
-      batch = batch_ds.make_batch(values)
+      batch = values_batch_fn(values)
       return record.Record(
           metadata=last_metadata.remove_record_key(), data=batch
       )
