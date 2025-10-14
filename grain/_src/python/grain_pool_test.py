@@ -29,7 +29,7 @@ from grain._src.python import data_sources
 from grain._src.python import grain_pool as gp
 from grain._src.python import record
 from grain._src.python.options import MultiprocessingOptions  # pylint: disable=g-importing-member
-
+from grain.conftest import RUN_IN_PYTEST
 
 class GrainPoolTest(absltest.TestCase):
 
@@ -150,6 +150,10 @@ class GrainPoolTest(absltest.TestCase):
     for child_process in grain_pool.processes:
       self._join_and_assert_process_exitcode(child_process)
 
+  @absltest.skipIf(
+      RUN_IN_PYTEST and platform.system() == "Windows",
+      "SIGKILL signal not available on Windows."
+  )
   def test_pool_kill_child(self):
     ctx = mp.get_context("spawn")
 
