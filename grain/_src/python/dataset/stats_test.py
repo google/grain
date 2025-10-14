@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import platform
 import collections
 import contextlib
 import functools
@@ -541,6 +542,7 @@ class DebugModeStatsTest(absltest.TestCase):
     self.assertEqual(local_stats._summary.bytes_produced, 91)
 
 
+@absltest.skipIf(platform.system() == "Windows", "skipped under bazel.")
 class GraphModeStatsTest(absltest.TestCase):
 
   def setUp(self):

@@ -13,12 +13,14 @@
 # limitations under the License.
 """Tests for base.py."""
 
+import platform
 from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.python import data_sources
 from grain._src.python.dataset import base
 
 
+@absltest.skipIf(platform.system() == "Windows", "skipped on Windows under bazel.")
 class RandomAccessDataSourceTest(parameterized.TestCase):
 
   @parameterized.parameters(
