@@ -1,3 +1,5 @@
+import platform
+
 from absl import flags
 from absl.testing import absltest
 from grain._src.python.dataset.sources import parquet_dataset
@@ -41,6 +43,10 @@ WINDOWSHUFFLED_TEXT = [
 ]
 
 
+@absltest.skipIf(
+  platform.system() == "Darwin",
+  "Caused by: https://github.com/tensorflow/tensorflow/issues/98563"
+)
 class ParquetIterDatasetTest(absltest.TestCase):
 
   def setUp(self):
