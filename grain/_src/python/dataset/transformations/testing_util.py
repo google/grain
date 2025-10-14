@@ -395,23 +395,23 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
   def test_variable_key_features(self):
     input_elements = [
         {
-            "a": np.asarray([1, 2, 3]),
-            "b": np.asarray([1, 2, 3]),
+            "aaa": np.asarray([1, 2, 3]),
+            "bbb": np.asarray([1, 2, 3]),
         },
         # This element is missing the "b" feature, so we should raise an error.
         {
-            "a": np.asarray([1, 2, 3]),
+            "aaa": np.asarray([1, 2, 3]),
         },
     ]
 
-    length_struct = {"a": 3, "b": 3}
+    length_struct = {"aaa": 3, "bbb": 3}
     ld = self.packer_cls(
         source.SourceMapDataset(input_elements).to_iter_dataset(),
         num_packing_bins=1,
         length_struct=length_struct,
         **self.kwargs,
     )
-    with self.assertRaisesRegex(Exception, "'b'"):
+    with self.assertRaisesRegex(Exception, "bbb"):
       next(iter(ld))
 
   @parameterized.parameters(
