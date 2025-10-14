@@ -18,6 +18,7 @@ import pathlib
 import sys
 from typing import Union
 from unittest import mock
+import platform
 
 from absl import flags
 from absl.testing import absltest
@@ -42,6 +43,16 @@ import parameterized
 
 
 FLAGS = flags.FLAGS
+
+
+def setup_module():
+    # Set the path to test data when run via pytest.
+    # When run via bazel, FLAGS.test_srcdir is set from the
+    # BUILD file, see args = ["--test_srcdir=grain/_src/python"]
+    # in grain/_src/python/BUILD
+    import grain
+    srcdir = pathlib.Path(grain.__file__).parents[0] / "_src" / "python"
+    FLAGS["test_srcdir"].parse(str(srcdir))
 
 
 def map_function(data):
@@ -154,6 +165,7 @@ class CopyNumPyArrayToSharedMemoryTest(absltest.TestCase):
     self.assertIs(result, element)
 
 
+@absltest.skipIf(platform.system() == "Windows", "Skipped with bazel, too.")
 @parameterized.parameterized_class([
     {"num_threads_per_worker": None},
     {"num_threads_per_worker": 0},

@@ -74,3 +74,11 @@ py_library(
         "//grain/proto:execution_summary_py_pb2",
     ],
 )
+
+py_library(
+    name = "conftest",
+    srcs = [
+         "conftest.py",
+    ],
+    srcs_version = "PY3",
+)

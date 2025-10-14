@@ -56,7 +56,7 @@ tree_lib: TreeImpl = tree_lib
 
 
 @dataclasses.dataclass
-class TestClass:
+class _TestClass:
   a: int
   b: str
 

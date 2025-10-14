@@ -24,6 +24,7 @@ from unittest import mock
 from absl import flags
 from absl.testing import flagsaver
 import cloudpickle
+from grain.conftest import RUN_IN_PYTEST
 from grain._src.core import transforms
 from grain._src.python import options
 from grain._src.python import shared_memory_array
@@ -202,6 +203,9 @@ def _for_each_node(fn, nodes):
 @contextlib.contextmanager
 def _unparse_flags():
   argv = sys.argv
+  if RUN_IN_PYTEST:
+    # all cmdline arguments are for pytest (-v -k"OneTest" etc), drop'em
+    argv = [argv[1]]
   flags.FLAGS.unparse_flags()
   try:
     yield
