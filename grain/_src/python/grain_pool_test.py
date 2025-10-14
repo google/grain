@@ -17,6 +17,7 @@ from collections.abc import Iterator
 import multiprocessing
 import os
 import signal
+import platform
 import sys
 from typing import Any
 from absl import flags
@@ -29,7 +30,7 @@ from grain._src.python import data_sources
 from grain._src.python import grain_pool as gp
 from grain._src.python import record
 from grain._src.python.options import MultiprocessingOptions  # pylint: disable=g-importing-member
-from grain.conftest import RUN_IN_PYTEST
+
 
 class GrainPoolTest(absltest.TestCase):
 
@@ -151,7 +152,7 @@ class GrainPoolTest(absltest.TestCase):
       self._join_and_assert_process_exitcode(child_process)
 
   @absltest.skipIf(
-      RUN_IN_PYTEST and platform.system() == "Windows",
+      platform.system() == "Windows",
       "SIGKILL signal not available on Windows."
   )
   def test_pool_kill_child(self):

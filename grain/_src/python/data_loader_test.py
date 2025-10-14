@@ -18,6 +18,7 @@ import pathlib
 import sys
 from typing import Union
 from unittest import mock
+import platform
 
 from absl import flags
 from absl.testing import absltest
@@ -164,6 +165,7 @@ class CopyNumPyArrayToSharedMemoryTest(absltest.TestCase):
     self.assertIs(result, element)
 
 
+@absltest.skipIf(platform.system() == "Windows", "Skipped with bazel, too.")
 @parameterized.parameterized_class([
     {"num_threads_per_worker": None},
     {"num_threads_per_worker": 0},
