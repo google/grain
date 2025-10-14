@@ -668,10 +668,27 @@ def _apply_transform_to_dataset(
   elif isinstance(transform, transforms.Filter):
     return ds.filter(lambda r: transform.filter(r.data))
   elif isinstance(transform, transforms.Batch):
+
+    def batch_fn(
+        records: Sequence[record.Record[_T]],
+    ) -> record.Record[_T]:
+      values = []
+      last_metadata = records[0].metadata
+      for r in records:
+        last_metadata = r.metadata
+        values.append(r.data)
+      if transform.batch_fn is None:
+        batch = batch_ds.make_batch(values)
+      else:
+        batch = transform.batch_fn(values)
+      return record.Record(
+          metadata=last_metadata.remove_record_key(), data=batch
+      )
+
     return ds.batch(
         batch_size=transform.batch_size,
         drop_remainder=transform.drop_remainder,
-        batch_fn=transform.batch_fn,
+        batch_fn=batch_fn,
     )
   else:
     # Handle legacy operations
