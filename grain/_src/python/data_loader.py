@@ -39,6 +39,7 @@ from grain._src.python import record
 from grain._src.python.data_sources import RandomAccessDataSource
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import batch as batch_ds
+from grain._src.python.dataset.transformations import flatmap
 from grain._src.python.dataset.transformations import prefetch
 from grain._src.python.operations import BatchOperation
 from grain._src.python.operations import Operation
@@ -434,6 +435,9 @@ class DataLoader:
             "DataLoader for greater flexibility."
         )
       # pylint: enable=protected-access
+    self._use_native_dataset_checkpointing = any(
+        isinstance(op, transforms.FlatMapTransform) for op in self._operations
+    )
     self._dataset = self._create_dataset()
 
   @property
@@ -465,51 +469,22 @@ class DataLoader:
           self.multiprocessing_options,
           always_report_worker_state=True,
       )
-    ds = _DataLoaderStateIterDataset(
-        ds,
-        self._shard_options,
-        self._multiprocessing_options.num_workers,
-        self._sampler,
-        self._data_source,
-    )
+    if not self._use_native_dataset_checkpointing:
+      ds = _DataLoaderStateIterDataset(
+          ds,
+          self._shard_options,
+          self._multiprocessing_options.num_workers,
+          self._sampler,
+          self._data_source,
+      )
     return ds
 
   def __iter__(self) -> DataLoaderIterator:
-    return DataLoaderIterator(self, self._create_initial_state())
-
-  def _create_initial_state(self) -> _IteratorState:
-    """Create the initial state for checkpoints."""
-    # We have `shard_count` machines iterating over the sampler, each machine
-    # uses `num_workers` workers. We avoid a global or local (=within machine)
-    # queue distributing indices among the workers. Such queue could easily
-    # become the bottleneck. Instead, we evenly iterate over the sampler, each
-    # worker starts at a `local_offset` and does `global_num_workers` steps.
-    # The `last_seen_indices` are negative because we start reading at the
-    # next_index=last_seen_index+global_num_workers.
-    # Example:
-    # For shard_count=3 (usually 3 JAX processes) and num_workers=5 we get the
-    # following:
-    # shard_index=0 gets values [-15, -12, -9, -6, -3]
-    # shard_index=1 gets values [-14, -11, -8, -5, -2]
-    # shard_index=2 gets values [-13, -10, -7, -4, -1]
-    # The corresponding first indices read by the workers will be (since the
-    # global number of workers is 3*5=15):
-    # shard_index=0 gets values [0, 3, 6, 9, 12]
-    # shard_index=1 gets values [1, 4, 7, 10, 13]
-    # shard_index=2 gets values [2, 5, 8, 11, 14]
-    local_offset = self._shard_options.shard_index - self._global_num_workers  # pytype: disable=attribute-error
-    last_seen_indices = {
-        str(i): local_offset + i * self._shard_options.shard_count  # pytype: disable=attribute-error
-        for i in range(self._local_num_workers)
-    }
-    return {
-        _VERSION: _CHECKPOINT_VERSION_NUMBER,
-        _LAST_SEEN_INDICES: last_seen_indices,
-        _LAST_WORKER_INDEX: -1,
-        _WORKER_COUNT: self._multiprocessing_options.num_workers,
-        _SAMPLER: repr(self._sampler),
-        _DATA_SOURCE: _source_repr(self._data_source),
-    }
+    return DataLoaderIterator(
+        self,
+        state=None,
+        validate_state=not self._use_native_dataset_checkpointing,
+    )
 
   def _validate_state(self, state: _IteratorState):
     """Validates that loaded state matches data loader definition."""
@@ -560,12 +535,19 @@ class DataLoaderIterator(collections.abc.Iterator[_T]):
      distributing indices to the next worker.
   """
 
-  def __init__(self, data_loader: DataLoader, state: _IteratorState):
+  def __init__(
+      self,
+      data_loader: DataLoader,
+      state: _IteratorState | None,
+      validate_state: bool = True,
+  ):
     self._data_loader = data_loader
-    self._data_loader._validate_state(state)
-    self._state = state
+    self._validate_state = validate_state
+    if state is not None and self._validate_state:
+      self._data_loader._validate_state(state)
     self._iterator = data_loader._dataset.__iter__()  # pylint: disable=protected-access
-    self._iterator.set_state(state)
+    if state is not None:
+      self._iterator.set_state(state)
 
   def __iter__(self) -> DataLoaderIterator[_T]:
     return self
@@ -585,7 +567,8 @@ class DataLoaderIterator(collections.abc.Iterator[_T]):
       state: state to restore the underlying iterator to.
     """
     state = json.loads(state.decode())
-    self._data_loader._validate_state(state)  # pylint: disable=protected-access
+    if self._validate_state:
+      self._data_loader._validate_state(state)  # pylint: disable=protected-access
     self._iterator.set_state(state)
 
   ### BEGIN Orbax checkpointing API.
@@ -644,6 +627,27 @@ def _source_repr(source: RandomAccessDataSource) -> str:
   return repr(source)
 
 
+class _FlatMapAdapter(transforms.FlatMapTransform):
+  """Data loader adapter to pass through correct metadata."""
+
+  def __init__(self, transform: transforms.FlatMapTransform):
+    self._transform = transform
+    self.max_fan_out = transform.max_fan_out
+
+  def flat_map(self, element: record.Record) -> Sequence[record.Record]:
+    value = element.data
+    split_offset = element.metadata.index * self.max_fan_out
+    result = []
+    for split_index, split_value in enumerate(self._transform.flat_map(value)):
+      result.append(
+          record.Record(
+              metadata=record.RecordMetadata(index=split_offset + split_index),
+              data=split_value,
+          )
+      )
+    return result
+
+
 def _apply_transform_to_dataset(
     transform: transforms.Transformation | Operation,
     ds: dataset.IterDataset,
@@ -667,6 +671,8 @@ def _apply_transform_to_dataset(
             data=transform.np_random_map(r.data, r.metadata.rng),
         )
     )
+  elif isinstance(transform, transforms.FlatMapTransform):
+    return flatmap.FlatMapIterDataset(ds, _FlatMapAdapter(transform))
   elif isinstance(transform, transforms.Filter):
     return ds.filter(lambda r: transform.filter(r.data))
   elif isinstance(transform, transforms.Batch):

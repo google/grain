@@ -17,7 +17,7 @@ from collections.abc import Sequence
 import functools
 import pathlib
 import sys
-from typing import Union
+from typing import Any, Union
 from unittest import mock
 
 from absl import flags
@@ -38,8 +38,10 @@ from grain._src.python.dataset.transformations import batch
 from grain._src.python.operations import BatchOperation
 from grain._src.python.operations import FilterOperation
 from grain._src.python.operations import MapOperation
+from grain._src.python.testing.experimental import assert_equal_output_after_checkpoint
 # pylint: enable=g-importing-member
 import numpy as np
+
 import parameterized
 
 
@@ -111,6 +113,14 @@ class RandomTripletSource:
             dtype=np.float32
         )
     }
+
+
+class DuplicateElementFlatMap(transforms.FlatMapTransform):
+  max_fan_out: int = 7
+
+  def flat_map(self, element: Any) -> Any:
+    for _ in range(self.max_fan_out):
+      yield element
 
 
 class CopyNumPyArrayToSharedMemoryTest(absltest.TestCase):
@@ -785,6 +795,44 @@ class DataLoaderTest(absl_parameterized.TestCase):
     it = loader.__iter__()
     state = it.get_state()
     self.assertLess(len(state), 1000)
+
+  def test_data_loader_with_flat_map(self):
+    range_data_source = RangeDataSource(start=0, stop=8, step=1)
+    sampler = samplers.SequentialSampler(
+        num_records=len(range_data_source), shard_options=sharding.NoSharding()
+    )
+    operations = [
+        PlusOne(),
+        FilterEven(),
+        DuplicateElementFlatMap(),
+    ]
+    data_loader = data_loader_lib.DataLoader(
+        data_source=range_data_source,
+        sampler=sampler,
+        operations=operations,
+        read_options=self.read_options,
+    )
+    np.testing.assert_equal(
+        list(data_loader), [2] * 7 + [4] * 7 + [6] * 7 + [8] * 7
+    )
+
+  def test_data_loader_with_flat_map_checkpointing(self):
+    range_data_source = RangeDataSource(start=0, stop=8, step=1)
+    sampler = samplers.SequentialSampler(
+        num_records=len(range_data_source), shard_options=sharding.NoSharding()
+    )
+    operations = [
+        PlusOne(),
+        FilterEven(),
+        DuplicateElementFlatMap(),
+    ]
+    data_loader = data_loader_lib.DataLoader(
+        data_source=range_data_source,
+        sampler=sampler,
+        operations=operations,
+        read_options=self.read_options,
+    )
+    assert_equal_output_after_checkpoint(data_loader)
 
 
 class PyGrainDatasetIteratorTest(absltest.TestCase):

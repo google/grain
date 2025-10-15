@@ -201,6 +201,7 @@ py_test(
         "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
         "//grain/_src/python/dataset",
+        "//grain/_src/python/testing:experimental",
         "@abseil-py//absl/flags",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
