@@ -6,6 +6,16 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features
+
+* Breaking changes:
+
+* Deprecations:
+
+* Bug fixes
+
+## Grain 0.2.13 (October 15, 2025)
+
+* New features
   * Adds `reseed_each_epoch` option to `MapDataset.repeat` that allows to replay
     the first epoch exactly if set to False (True by default).
   * Introduces `grain.experimental.RebatchIterDataset` for efficient rebatch.
@@ -27,6 +37,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * Graduates `grain.experimental.apply_transformations` to
    `grain.{MapDataset|IterDataset}.apply`. The experimental API will soon be
     deprecated.
+
 * Bug fixes
   * Fixes memory leak on `ThreadPrefetchDatasetIterator` deletion.
 
