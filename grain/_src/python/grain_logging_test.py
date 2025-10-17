@@ -3,8 +3,10 @@ import logging
 import re
 from absl import logging as absl_logging
 from grain._src.python import grain_logging
-from grain.conftest import RUN_IN_PYTEST
+from grain import conftest
 from absl.testing import absltest
+
+RUN_IN_PYTEST = conftest.RUN_IN_PYTEST
 
 
 class GrainLoggingTest(absltest.TestCase):

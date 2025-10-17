@@ -25,7 +25,7 @@ from unittest import mock
 from absl import flags
 from absl.testing import flagsaver
 import cloudpickle
-from grain.conftest import RUN_IN_PYTEST
+from grain import conftest
 from grain._src.core import transforms
 from grain._src.python import options
 from grain._src.python import shared_memory_array
@@ -35,6 +35,8 @@ from grain.proto import execution_summary_pb2
 import numpy as np
 
 from absl.testing import absltest
+
+RUN_IN_PYTEST = conftest.RUN_IN_PYTEST
 
 
 _MAP_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)

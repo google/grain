@@ -25,7 +25,7 @@ from absl.testing import flagsaver
 from absl.testing import parameterized
 import cloudpickle
 from grain._src.core import transforms
-from grain.conftest import RUN_IN_PYTEST
+from grain import conftest
 import multiprocessing as mp
 from grain._src.python import options
 from grain._src.python.dataset import base
@@ -36,9 +36,9 @@ from grain.proto import execution_summary_pb2
 import numpy as np
 from typing_extensions import override
 
+RUN_IN_PYTEST = conftest.RUN_IN_PYTEST
 
 _T = TypeVar("_T")
-
 
 @dataclasses.dataclass(frozen=True)
 class FilterKeepingOddElementsOnly(transforms.Filter):
