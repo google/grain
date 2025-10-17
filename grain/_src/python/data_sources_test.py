@@ -17,6 +17,7 @@ from collections.abc import Sequence
 import dataclasses
 import pathlib
 import pickle
+import platform
 import random
 from typing import Any
 from unittest import mock
@@ -135,6 +136,9 @@ class InMemoryDataSourceTest(DataSourceTest):
     in_memory_ds.unlink()
 
 
+@absltest.skipIf(
+    platform.system() == "Windows", "ArrayRecord isn't supported on Windows."
+)
 class ArrayRecordDataSourceTest(DataSourceTest):
 
   def test_array_record_data_implements_random_access(self):

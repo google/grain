@@ -16,6 +16,7 @@
 from collections.abc import Sequence
 import functools
 import pathlib
+import platform
 import sys
 from typing import Any, Union
 from unittest import mock
@@ -41,11 +42,21 @@ from grain._src.python.operations import MapOperation
 from grain._src.python.testing.experimental import assert_equal_output_after_checkpoint
 # pylint: enable=g-importing-member
 import numpy as np
-
 import parameterized
 
 
 FLAGS = flags.FLAGS
+
+
+def setup_module():
+  # Set the path to test data when run via pytest.
+  # When run via bazel, FLAGS.test_srcdir is set from the
+  # BUILD file, see args = ["--test_srcdir=grain/_src/python"]
+  # in grain/_src/python/BUILD
+  import grain  # pylint: disable=g-import-not-at-top
+
+  srcdir = pathlib.Path(grain.__file__).parents[0] / "_src" / "python"
+  FLAGS["test_srcdir"].parse(str(srcdir))
 
 
 def map_function(data):
@@ -166,6 +177,9 @@ class CopyNumPyArrayToSharedMemoryTest(absltest.TestCase):
     self.assertIs(result, element)
 
 
+@absltest.skipIf(
+    platform.system() == "Windows", "Skipped due to Windows paths."
+)
 @parameterized.parameterized_class([
     {"num_threads_per_worker": None},
     {"num_threads_per_worker": 0},

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import functools
+import platform
 from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.core import transforms
@@ -42,6 +43,9 @@ class _TestMapWithRepr(transforms.MapTransform):
     return "CustomRepr"
 
 
+@absltest.skipIf(
+    platform.system() == "Windows", "Skipped due to windows paths."
+)
 class GetPrettyTransformNameTest(parameterized.TestCase):
 
   @parameterized.parameters(
