@@ -12,6 +12,7 @@ py_library(
         "//grain/_src/core:monitoring",
         "@pypi//etils:pkg",
         "@abseil-py//absl/logging",
+        "@pypi//bagz:pkg",
         "//grain/_src/core:usage_logging",
         "//grain/_src/python/dataset:stats",
     ] + select({
