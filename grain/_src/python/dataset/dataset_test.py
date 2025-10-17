@@ -838,6 +838,36 @@ class DatasetTest(parameterized.TestCase):
     self.assertNotEqual(list(ds1), list(ds3))
 
   @parameterized.parameters(
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          indices=list(range(15)),
+      ),
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          indices=[0, 1, 2],
+      ),
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          indices=[0, 5, 10],
+      ),
+      dict(
+          initial_ds=dataset.MapDataset.range(15),
+          indices=[25, 20, 15, 10, 5, 0],
+      ),
+  )
+  def test_seed_with_shuffle_get_items(self, initial_ds, indices):
+    seed = 125
+
+    ds1 = initial_ds.seed(seed).shuffle()
+    ds2 = initial_ds.seed(seed).shuffle()
+    self.assertEqual(ds1._getitems(indices), [ds1[i] for i in indices])
+    self.assertEqual(ds1._getitems(indices), ds2._getitems(indices))
+    self.assertNotEqual(ds1._getitems(indices), indices)
+
+    ds3 = initial_ds.seed(seed + 1).shuffle()
+    self.assertNotEqual(ds3._getitems(indices), ds2._getitems(indices))
+
+  @parameterized.parameters(
       dict(initial_ds=dataset.MapDataset.range(15)),
       dict(initial_ds=dataset.MapDataset.range(15).to_iter_dataset()),
   )

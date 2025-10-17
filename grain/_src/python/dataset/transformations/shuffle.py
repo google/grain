@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 import copy
-from typing import TypeVar
+from typing import Sequence, TypeVar
 
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
@@ -57,22 +57,31 @@ class ShuffleMapDataset(dataset.MapDataset[T]):
   def __str__(self) -> str:
     return "ShuffleMapDataset"
 
+  def _shuffled_index(self, index: int) -> int:
+    length = len(self._parent)
+    epoch, index_in_epoch = divmod(index, length)
+    # Note:
+    #   - index_shuffle expects 32-bit integers
+    #   - we use different seeds for each epoch to ensure that the shuffle is
+    #     different for each epoch
+    per_epoch_seed = (self._seed + epoch) % 2**32
+    shuffled_index_in_epoch = index_shuffle.index_shuffle(
+        index_in_epoch, max_index=length - 1, seed=per_epoch_seed, rounds=4
+    )
+    return shuffled_index_in_epoch + epoch * length
+
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
     with self._stats.record_self_time():
-      length = len(self._parent)
-      epoch, index_in_epoch = divmod(index, length)
-      # Note:
-      #   - index_shuffle expects 32-bit integers
-      #   - we use different seeds for each epoch to ensure that the shuffle is
-      #     different for each epoch
-      per_epoch_seed = (self._seed + epoch) % 2**32
-      shuffled_index_in_epoch = index_shuffle.index_shuffle(
-          index_in_epoch, max_index=length - 1, seed=per_epoch_seed, rounds=4
-      )
-      shuffled_index = shuffled_index_in_epoch + epoch * length
+      shuffled_index = self._shuffled_index(index)
     return self._parent[shuffled_index]
+
+  def _getitems(self, indices: Sequence[int]):
+    shuffled_indices = []
+    for index in indices:
+      shuffled_indices.append(self._shuffled_index(index))
+    return self._parent._getitems(shuffled_indices)  # pylint: disable=protected-access
 
 
 class WindowShuffleMapDataset(dataset.MapDataset[T]):
