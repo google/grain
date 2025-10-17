@@ -16,6 +16,7 @@
 from collections.abc import Iterator
 import multiprocessing
 import os
+import platform
 import signal
 import sys
 from typing import Any
@@ -150,6 +151,9 @@ class GrainPoolTest(absltest.TestCase):
     for child_process in grain_pool.processes:
       self._join_and_assert_process_exitcode(child_process)
 
+  @absltest.skipIf(
+      platform.system() == "Windows", "SIGKILL signal not available on Windows."
+  )
   def test_pool_kill_child(self):
     ctx = mp.get_context("spawn")
 

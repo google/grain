@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import platform
 from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.core import sharding
@@ -23,6 +24,7 @@ import grain._src.python.testing.experimental as test_util
 import numpy as np
 
 
+@absltest.skipIf(platform.system() == "Windows", "Skipped under bazel.")
 class ElasticIteratorTest(parameterized.TestCase):
 
   @parameterized.parameters(
