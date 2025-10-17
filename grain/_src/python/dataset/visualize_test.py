@@ -13,6 +13,7 @@
 # limitations under the License.
 import re
 
+import platform
 from absl.testing import absltest
 from grain._src.core import transforms
 import multiprocessing as mp
@@ -205,6 +206,7 @@ class _ExpensiveSource:
     return b"this should not be returned"
 
 
+@absltest.skipIf(platform.system() == "Windows", "skipped under bazel.")
 class VisualizeTest(absltest.TestCase):
 
   def _assert_visualization(self, ds, expected):
