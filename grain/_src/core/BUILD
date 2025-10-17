@@ -182,3 +182,36 @@ py_test(
         "@abseil-py//absl/testing:absltest",
     ],
 )
+
+py_library(
+    name = "profiler",
+    srcs = ["profiler.py"],
+    srcs_version = "PY3",
+    deps = ["@abseil-py//absl/logging"],
+)
+
+py_test(
+    name = "profiler_test_no_framework",
+    srcs = ["profiler_test.py"],
+    main = "profiler_test.py",
+    srcs_version = "PY3",
+    deps = [
+        ":profiler",
+        "@abseil-py//absl/testing:absltest",
+    ],
+)
+
+py_test(
+    name = "profiler_test_with_jax",
+    srcs = ["profiler_test.py"],
+    env = {
+        "EXPECTED_FRAMEWORK": "jax",
+    },
+    main = "profiler_test.py",
+    srcs_version = "PY3",
+    deps = [
+        ":profiler",
+        "@abseil-py//absl/testing:absltest",
+        "@pypi//jax:pkg",  # buildcleaner: keep
+    ],
+)

@@ -33,23 +33,13 @@ import weakref
 from absl import logging
 from grain._src.core import config as grain_config
 from grain._src.core import monitoring as grain_monitoring
+from grain._src.core import profiler
 from grain._src.core import tree_lib
 from grain._src.python.dataset import base
 from grain._src.python.dataset import stats_utils
 from grain.proto import execution_summary_pb2
 
 from grain._src.core import monitoring
-
-# Conditionally import profiler from JAX.
-# TODO: refactor this to conditionally import profiler from all
-# supported frameworks (e.g. TF/JAX/PyTorch)
-try:
-  from jax import profiler  # pylint: disable=g-import-not-at-top # pytype: disable=import-error
-
-  _TRACE_ANNOTATION = profiler.TraceAnnotation
-except ImportError:
-  logging.warning("Failed to import TraceAnnotation.")
-  _TRACE_ANNOTATION = None
 
 
 # Registry of weak references to output dataset iterators for collecting
@@ -321,8 +311,8 @@ def record_next_duration_if_output(next_fn):
 
   @functools.wraps(next_fn)
   def wrapper(iterator):
-    if _TRACE_ANNOTATION and _TRACE_ANNOTATION.is_enabled():
-      with _TRACE_ANNOTATION(
+    if profiler.is_enabled():
+      with profiler.TraceAnnotation(
           f"{iterator.__class__.__name__}.{next_fn.__name__}",
           _ipl_stage_name=str(iterator),
           _ipl_stage_id=id(iterator),
@@ -358,13 +348,20 @@ def trace_input_pipeline(stage_category: str = IPL_CAT_UNKNOWN, **trace_kwargs):
   Returns:
     The wrapped function.
   """
+  if not profiler.is_loaded():
+    # If the profiler is not loaded, we return a noop wrapper to avoid
+    # unnecessary function tracing.
+    def noop_wrapper(func):
+      return func
+
+    return noop_wrapper
 
   def inner_wrapper(func):
 
     @functools.wraps(func)
     def wrapped(self, *args, **kwargs):
-      if _TRACE_ANNOTATION and _TRACE_ANNOTATION.is_enabled():
-        with _TRACE_ANNOTATION(
+      if profiler.is_enabled():
+        with profiler.TraceAnnotation(
             f"{self.__class__.__name__}.{func.__name__}",
             _ipl_stage_name=str(self),
             _ipl_stage_id=id(self),
@@ -383,12 +380,14 @@ def trace_input_pipeline(stage_category: str = IPL_CAT_UNKNOWN, **trace_kwargs):
 
 def trace_input_pipeline_prefetch(func):
   """Decorator to trace _getitem methods in prefetch."""
+  if not profiler.is_loaded():
+    return func
 
   @functools.wraps(func)
   def wrapped_get_item(*args, **kwargs):
     stats, parent, index = args  # pylint: disable=unused-variable
-    if _TRACE_ANNOTATION and _TRACE_ANNOTATION.is_enabled():
-      with _TRACE_ANNOTATION(
+    if profiler.is_enabled():
+      with profiler.TraceAnnotation(
           f"Prefetch.{func.__name__}",
           _ipl_dataset_name=str(parent),
           _ipl_dataset_index=index,

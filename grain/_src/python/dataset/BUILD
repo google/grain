@@ -120,6 +120,7 @@ py_library(
         ":stats_utils",
         "//grain/_src/core:config",
         "//grain/_src/core:monitoring",
+        "//grain/_src/core:profiler",
         "//grain/_src/core:tree_lib",
         "//grain/proto:execution_summary_py_pb2",
         "@abseil-py//absl/logging",
