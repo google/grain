@@ -48,6 +48,17 @@ import parameterized
 FLAGS = flags.FLAGS
 
 
+def setup_module():
+  # Set the path to test data when run via pytest.
+  # When run via bazel, FLAGS.test_srcdir is set from the
+  # BUILD file, see args = ["--test_srcdir=grain/_src/python"]
+  # in grain/_src/python/BUILD
+  import grain  # pylint: disable=g-import-not-at-top
+
+  srcdir = pathlib.Path(grain.__file__).parents[0] / "_src" / "python"
+  FLAGS["test_srcdir"].parse(str(srcdir))
+
+
 def map_function(data):
   return data + 1
 
