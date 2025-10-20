@@ -300,52 +300,48 @@ def pretty_format_summary(
   return table.get_pretty_wrapped_summary()
 
 
-def record_next_duration_if_output(next_fn):
-  """Records the duration of the `__next__` call on the output iterator node.
-
-  Expected to be used as follows:
-  ```
-  class MyMapDatasetIterator(DatasetIterator):
-    ...
-    @stats.record_next_duration_if_output
-    def __next__(self):
-      ...
-  ```
-
-  Args:
-    next_fn: The `__next__` function to wrap.
-
-  Returns:
-    The wrapped `next_fn`.
-  """
-
-  @functools.wraps(next_fn)
-  def wrapper(iterator):
-    if _TRACE_ANNOTATION and _TRACE_ANNOTATION.is_enabled():
-      with _TRACE_ANNOTATION(
-          f"{iterator.__class__.__name__}.{next_fn.__name__}",
-          _ipl_stage_name=str(iterator),
-          _ipl_stage_id=id(iterator),
-      ):
-        start_time = time.perf_counter_ns()
-        result = next_fn(iterator)
-    else:
-      start_time = time.perf_counter_ns()
-      result = next_fn(iterator)
-
-    if iterator._stats._is_output:  # pylint:disable=protected-access
-      next_duration_ns = time.perf_counter_ns() - start_time
-      _next_duration_ns_histogram.Record(next_duration_ns)
-    return result
-
-  return wrapper
-
-
 # Input pipeline stage categories.
 IPL_CAT_PREPROCESSING = "preprocessing"
 IPL_CAT_READ = "read"
 IPL_CAT_ENQUEUE = "enqueue"
 IPL_CAT_UNKNOWN = "unknown"
+
+
+def record_next_duration_if_output(stage_category: str = IPL_CAT_ENQUEUE):
+  """Records the duration of the `__next__` call on the output iterator node.
+
+  Args:
+    stage_category: The category of the input pipeline stage.
+
+  Returns:
+    A decorator that records the duration of the `__next__` call.
+  """
+
+  def inner_wrapper(next_fn):
+
+    @functools.wraps(next_fn)
+    def wrapper(iterator):
+      if _TRACE_ANNOTATION and _TRACE_ANNOTATION.is_enabled():
+        with _TRACE_ANNOTATION(
+            f"{iterator.__class__.__name__}.{next_fn.__name__}",
+            _ipl_stage_name=str(iterator),
+            _ipl_stage_id=id(iterator),
+            _ipl_stage_cat=stage_category,
+        ):
+          start_time = time.perf_counter_ns()
+          result = next_fn(iterator)
+      else:
+        start_time = time.perf_counter_ns()
+        result = next_fn(iterator)
+
+      if iterator._stats._is_output:  # pylint: disable=protected-access
+        next_duration_ns = time.perf_counter_ns() - start_time
+        _next_duration_ns_histogram.Record(next_duration_ns)
+      return result
+
+    return wrapper
+
+  return inner_wrapper
 
 
 def trace_input_pipeline(stage_category: str = IPL_CAT_UNKNOWN, **trace_kwargs):

@@ -200,7 +200,7 @@ class _WindowShuffleDatasetIterator(dataset.DatasetIterator[T]):
         seed=self._global_seed + self._window_index, window=self._window
     )
 
-  @stats.record_next_duration_if_output
+  @stats.record_next_duration_if_output(stage_category=stats.IPL_CAT_ENQUEUE)
   def __next__(self):
     # Window is empty, fill up the next window.
     if not self._window:

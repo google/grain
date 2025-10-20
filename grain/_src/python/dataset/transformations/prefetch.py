@@ -183,7 +183,9 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
         raise_threshold=self._ctx.dataset_options.filter_raise_threshold_ratio,
     )
 
-  @dataset_stats.record_next_duration_if_output
+  @dataset_stats.record_next_duration_if_output(
+      stage_category=dataset_stats.IPL_CAT_ENQUEUE
+  )
   def __next__(self) -> T:
     # The time recorded here is the time spent in prefetch node to return an
     # element, including the time spent in parent node.
@@ -673,7 +675,9 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   def __iter__(self) -> dataset.DatasetIterator[T]:
     return self
 
-  @dataset_stats.record_next_duration_if_output
+  @dataset_stats.record_next_duration_if_output(
+      stage_category=dataset_stats.IPL_CAT_ENQUEUE
+  )
   def __next__(self) -> T:
     self._ensure_iterator_initialized()
     # The time recorded here is the time spent in prefetch node to return an
@@ -911,7 +915,9 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     )
     self._prefetch_thread.start()
 
-  @dataset_stats.record_next_duration_if_output
+  @dataset_stats.record_next_duration_if_output(
+      stage_category=dataset_stats.IPL_CAT_ENQUEUE
+  )
   def __next__(self):
     timer = dataset_stats.Timer()
     with timer:
