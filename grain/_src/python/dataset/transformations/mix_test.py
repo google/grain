@@ -38,7 +38,7 @@ class ExplicitSelectionMap(base.DatasetSelectionMap):
     return self._selection_map(index)
 
 
-class MixedLazyMapTest(absltest.TestCase):
+class SelectionMapTest(absltest.TestCase):
 
   def setUp(self):
     super().setUp()
@@ -172,6 +172,15 @@ class MixedMapDatasetTest(absltest.TestCase):
     # Heigher weight for second dataset.
     ds = mix.MixedMapDataset([ds1, ds2, ds3], proportions=[1, 2, 1])
     self.assertLen(ds, 5 + 10 + 5)
+
+  def test_repr(self):
+    ds = mix.MixedMapDataset([self.even_ds, self.odd_ds], [0.4, 0.6])
+    self.assertEqual(
+        repr(ds),
+        "MixedMapDataset(parent_lengths=[5, 5],"
+        " selection_map=SelectionWithProportionsMap(proportions=(100, 150),"
+        " length=8))",
+    )
 
   def test_mixing_equal_probability_with_integer_proportions(self):
     mixed_lzds = mix.MixedMapDataset(

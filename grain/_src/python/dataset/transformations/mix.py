@@ -65,6 +65,12 @@ class SelectionWithProportionsMap(base.DatasetSelectionMap):
     )
     return input_index, index
 
+  def __repr__(self):
+    return (
+        f"SelectionWithProportionsMap(proportions={self._proportions}, "
+        f"length={self._length})"
+    )
+
 
 class MixedMapDataset(dataset.MapDataset[T]):
   """LazyDataset for mixtures."""
@@ -101,6 +107,15 @@ class MixedMapDataset(dataset.MapDataset[T]):
 
   def __str__(self):
     return f"MixedMapDataset[{len(self._parents)} parents]"
+
+  def __repr__(self):
+    # Note that we use parent lengths instead of parent representations because
+    # the component datasets will likely not have `__repr__` implemented
+    # resulting in unstable output.
+    return (
+        f"MixedMapDataset(parent_lengths={[len(p) for p in self._parents]}, "
+        f"selection_map={repr(self._selection_map)})"
+    )
 
   def __getitem__(self, index):
     if isinstance(index, slice):
