@@ -1,3 +1,16 @@
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import pathlib
 
 from absl import flags
@@ -6,12 +19,24 @@ from grain._src.python.dataset.sources import tfrecord_dataset
 import grain.python as pygrain
 
 
+def setup_module():
+  # Set the path to test data when run via pytest.
+  # When run via bazel, FLAGS.test_srcdir is set from the
+  # BUILD file, see args = ["--test_srcdir=grain/_src/python"]
+  # in grain/_src/python/dataset/sources/BUILD
+  import grain  # pylint: disable=g-import-not-at-top
+
+  srcdir = pathlib.Path(grain.__file__).parents[0] / "_src" / "python"
+  flags.FLAGS["test_srcdir"].parse(str(srcdir))
+
+
 class TFRecordIterDatasetTest(absltest.TestCase):
 
   def setUp(self):
     super().setUp()
     self.testdata_dir = pathlib.Path(flags.FLAGS.test_srcdir)
     self.testdata_file_path = self.testdata_dir
+    self.testdata_file_path /= "testdata"
     self.testdata_file_path /= "morris_sequence_first_5.tfrecord"
     self.expected_data = [
         b"1",

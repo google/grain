@@ -12,7 +12,7 @@ authors = [
 ]
 dependencies = [
     "absl-py",
-    "array-record>=0.8.0a1; sys_platform != 'win32'",
+    "array-record>=0.8.1; sys_platform != 'win32'",
     "cloudpickle",
     "dm-tree",
     "etils[epath,epy]",
@@ -51,4 +51,4 @@ homepage = "https://github.com/google/grain"
 include = ["grain*"]
 
 [tool.setuptools.package-data]
-"*" = ["*.so", "*.pyd"]
+"*" = ["*.so", "*.pyd", "testdata/*.array_record-*", "testdata/*.tfrecord"]
