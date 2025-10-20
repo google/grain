@@ -54,7 +54,7 @@ main() {
   bazel clean
   bazel build ... --action_env PYTHON_BIN_PATH="${PYTHON_BIN}" --action_env MACOSX_DEPLOYMENT_TARGET='11.0'
 
-  if [ "$RUN_TESTS" = true ] ; then
+  if [ "$RUN_TESTS_WITH_BAZEL" = true ] ; then
     bazel test --verbose_failures --test_output=errors ... --action_env PYTHON_BIN_PATH="${PYTHON_BIN}"
   fi
 
@@ -117,14 +117,16 @@ main() {
 
   printf '%s : "=== Output wheel file is in: %s\n' "$(date)" "${DEST}"
 
-  $PYTHON_BIN -m pip install --force ${OUTPUT_DIR}/all_dist/grain*.whl
-  $PYTHON_BIN -m pip install jax pyarrow==20.0.0 pytest parameterized
-  $PYTHON_BIN -m pip install tensorflow  --only-binary h5py
+  if [ "$RUN_TESTS_WITH_BAZEL" = false ] ; then
+    $PYTHON_BIN -m pip install --force ${OUTPUT_DIR}/all_dist/grain*.whl
+    $PYTHON_BIN -m pip install jax pyarrow==20.0.0 pytest parameterized
+    $PYTHON_BIN -m pip install tensorflow  --only-binary h5py
 
-  pushd "${OUTPUT_DIR}/all_dist"
-  # TODO: remove `-k` option and execute all tests with pytest
-  $PYTHON_BIN -m pytest --pyargs grain -k "TreeJaxTest or FirstFitPackIterDatasetTest or JaxImportTest or TFImportTest or SharedMemoryArrayTest or PackingTest"
-  popd
+    pushd "${OUTPUT_DIR}/all_dist"
+    # TODO: remove `-k` option and execute all tests with pytest
+    $PYTHON_BIN -m pytest --pyargs grain -k "TreeJaxTest or FirstFitPackIterDatasetTest or JaxImportTest or TFImportTest or SharedMemoryArrayTest or PackingTest"
+    popd
+  fi
 }
 
 main "$@"

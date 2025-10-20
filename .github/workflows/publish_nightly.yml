@@ -13,5 +13,5 @@ jobs:
       id-token: write
     with:
       pypi_project_url: https://pypi.org/project/grain-nightly
-      run_tests: false
+      run_tests_with_bazel: false
       is_nightly: true

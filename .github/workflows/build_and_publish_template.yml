@@ -8,7 +8,7 @@ on:
       pypi_project_url:
         required: true
         type: string
-      run_tests:
+      run_tests_with_bazel:
         required: true
         type: boolean
       is_nightly:
@@ -71,7 +71,7 @@ jobs:
           export BAZEL_VERSION="${USE_BAZEL_VERSION}"
           export OUTPUT_DIR="${TEMP_DIR}"
           export SOURCE_DIR="${TEMP_DIR}"
-          export RUN_TESTS=${{ inputs.run_tests }}
+          export RUN_TESTS_WITH_BAZEL=${{ inputs.run_tests_with_bazel }}
           export IS_NIGHTLY=${{ inputs.is_nightly }}
           . "${SOURCE_DIR}"'/grain/oss/runner_common.sh'
           build_and_test_grain

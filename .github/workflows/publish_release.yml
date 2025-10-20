@@ -3,8 +3,8 @@ name: Build and Publish Release
 on:
   workflow_dispatch:
     inputs:
-      run_tests:
-        description: 'Run unit tests'
+      run_tests_with_bazel:
+        description: 'Run unit tests with Bazel. Otherwise, run with Pytest.'
         required: false
         default: true
         type: boolean
@@ -17,5 +17,5 @@ jobs:
       id-token: write
     with:
       pypi_project_url: https://pypi.org/project/grain
-      run_tests: ${{ inputs.run_tests }}
+      run_tests_with_bazel: ${{ inputs.run_tests_with_bazel }}
       is_nightly: false
