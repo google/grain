@@ -15,7 +15,7 @@
 
 import functools
 import threading
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, Sequence, TypeVar
 
 from grain._src.core import transforms
 from grain._src.python.dataset import dataset
@@ -98,14 +98,21 @@ class MapMapDataset(dataset.MapDataset[T]):
   def __str__(self) -> str:
     return f"MapMapDataset(transform={self._transform_name})"
 
+  def _map_element(self, element: Any) -> T:
+    if element is None:
+      return None
+    return self._map_fn(element)
+
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
     element = self._parent[index]
     with self._stats.record_self_time():
-      if element is None:
-        return None
-      return self._stats.record_output_spec(self._map_fn(element))
+      return self._stats.record_output_spec(self._map_element(element))
+
+  def _getitems(self, indices: Sequence[int]):
+    elements = self._parent._getitems(indices)  # pylint: disable=protected-access
+    return [self._map_element(element) for element in elements]
 
 
 class RandomMapMapDataset(dataset.MapDataset[T]):

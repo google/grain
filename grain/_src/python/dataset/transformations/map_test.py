@@ -119,6 +119,33 @@ class MapMapDatasetTest(parameterized.TestCase):
     ]
     self.assertEqual(expected_data, actual_data)
 
+  @parameterized.parameters(
+      dict(
+          map_cls=MapWithNoTransform,
+          indices=list(range(10)),
+          expected_data=list(range(10)),
+      ),
+      dict(
+          map_cls=MapWithNoTransform,
+          indices=[0, 4, 8],
+          expected_data=[0, 4, 8],
+      ),
+      dict(
+          map_cls=MapWithTransform,
+          indices=list(range(10)),
+          expected_data=[i + 1 for i in range(10)],
+      ),
+      dict(
+          map_cls=MapWithTransform,
+          indices=[0, 4, 8],
+          expected_data=[1, 5, 9],
+      ),
+  )
+  def test_map_data_with_get_items(self, map_cls, indices, expected_data):
+    ds = map_ds.MapMapDataset(self.range_ds, map_cls())
+    actual_data = ds._getitems(indices)
+    self.assertEqual(expected_data, actual_data)
+
   def test_map_checkpointing(self):
     ds = self.range_ds.map(MapWithTransform())
     assert_equal_output_after_checkpoint(ds)
