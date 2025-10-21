@@ -101,7 +101,7 @@ class _Dataset:
   def _default_seed(self) -> int | None:
     """Should be used as a seed if no seed is provided."""
     aggregated_seed = []
-    # Note that the traversal order must be determisitic.
+    # Note that the traversal order must be deterministic.
     # pylint:  disable=protected-access
     to_visit = [(self, 0)]
     while to_visit:
@@ -1260,7 +1260,7 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
 
     WARNING: If the dataset contains many-to-one transformations (such as
     ``batch``), output of prefetch may change if you change the number of
-    workers. However, it is still going to be determisitic.
+    workers. However, it is still going to be deterministic.
 
     Args:
       multiprocessing_options: options for the prefetching processes.
@@ -1286,7 +1286,7 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
     WARNING: If the dataset contains many-to-one transformations (such as
     ``filter``) or stateful transformations (such as packing), output of
     ``mp_prefetch`` may change if ``num_workers`` is changed. However, it is
-    still going to be determisitic. If you need elasticity in the number of
+    still going to be deterministic. If you need elasticity in the number of
     prefetch workers, consider moving many-to-one and stateful transformations
     to after ``mp_prefetch`` or outside of the Grain pipeline.
 
