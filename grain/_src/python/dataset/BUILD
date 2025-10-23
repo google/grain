@@ -83,35 +83,6 @@ py_test(
 )
 
 py_library(
-    name = "visualize",
-    srcs = ["visualize.py"],
-    srcs_version = "PY3",
-    deps = [
-        ":dataset",
-        "//grain/_src/core:tree_lib",
-        "//grain/_src/python:options",
-    ],
-)
-
-py_test(
-    name = "visualize_test",
-    srcs = ["visualize_test.py"],
-    srcs_version = "PY3",
-    target_compatible_with = select({
-        "@platforms//os:windows": ["@platforms//:incompatible"],
-        "//conditions:default": [],
-    }),
-    deps = [
-        ":dataset",
-        ":visualize",
-        "//grain/_src/core:transforms",
-        "//grain/_src/python:options",
-        "@abseil-py//absl/testing:absltest",
-        "@pypi//numpy:pkg",
-    ],
-)
-
-py_library(
     name = "stats",
     srcs = ["stats.py"],
     srcs_version = "PY3",
