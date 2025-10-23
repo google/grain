@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Implements slice transformation."""
-from typing import TypeVar
+from typing import Sequence, TypeVar
 
 from grain._src.python.dataset import dataset
 
@@ -35,17 +35,26 @@ class SliceMapDataset(dataset.MapDataset[T]):
   def __len__(self) -> int:
     return self._length
 
+  def _sliced_index(self, index: int) -> int:
+    parent_epoch, relative_offset = divmod(index, len(self))
+    return (
+        self._start
+        + relative_offset * self._step
+        + parent_epoch * self._parent_length
+    )
+
   def __getitem__(self, index):
     if isinstance(index, slice):
       return SliceMapDataset(self, index)
     with self._stats.record_self_time():
-      parent_epoch, relative_offset = divmod(index, len(self))
-      parent_index = (
-          self._start
-          + relative_offset * self._step
-          + parent_epoch * self._parent_length
-      )
+      parent_index = self._sliced_index(index)
     return self._parent[parent_index]
+
+  def _getitems(self, indices: Sequence[int]):
+    parent_indices = []
+    for index in indices:
+      parent_indices.append(self._sliced_index(index))
+    return self._parent._getitems(parent_indices)  # pylint: disable=protected-access
 
   def __str__(self) -> str:
     return f"SliceMapDataset[{self._start}:{self._stop}:{self._step}]"

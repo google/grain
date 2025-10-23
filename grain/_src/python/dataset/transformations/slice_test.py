@@ -71,6 +71,18 @@ class SliceMapDatasetTest(parameterized.TestCase):
     ds_items = [ds[i] for i in range(len(ds))]
     self.assertSequenceEqual(ds_items, list(range(20))[start:stop:step])
 
+  def test_getitem_with_slice_on_sliced_dataset(self):
+    ds = dataset.MapDataset.range(20)
+    # First slice creates a SliceMapDataset
+    sliced_ds = ds[2:18:2]  # Expected: [2, 4, 6, 8, 10, 12, 14, 16]
+    self.assertIsInstance(sliced_ds, slice_ds.SliceMapDataset)
+    self.assertSequenceEqual(list(sliced_ds), [2, 4, 6, 8, 10, 12, 14, 16])
+
+    # Second slice on the already sliced dataset
+    re_sliced_ds = sliced_ds[1:6:2]  # Expected: [4, 8, 12]
+    self.assertIsInstance(re_sliced_ds, slice_ds.SliceMapDataset)
+    self.assertSequenceEqual(list(re_sliced_ds), [4, 8, 12])
+
   @parameterized.parameters(
       itertools.product(range(-8, 8), range(-9, 8), [-2, -1, 1, 2])
   )
@@ -81,10 +93,47 @@ class SliceMapDatasetTest(parameterized.TestCase):
     ds_items = list(ds_iter)
     self.assertSequenceEqual(ds_items, list(range(20))[start:stop:step])
 
+  @parameterized.parameters(
+      dict(
+          slice_args=(1, 8, 2),  # range(20)[1:8:2] -> [1, 3, 5, 7]
+          indices=[0, 1, 3],
+          expected_data=[1, 3, 7],
+      ),
+      dict(
+          slice_args=(None, 5, None),  # range(20)[:5] -> [0, 1, 2, 3, 4]
+          indices=[0, 1, 2, 3, 4],
+          expected_data=[0, 1, 2, 3, 4],
+      ),
+      dict(
+          slice_args=(8, 2, -2),  # range(20)[8:2:-2] -> [8, 6, 4]
+          indices=[0, 2],
+          expected_data=[8, 4],
+      ),
+      dict(
+          slice_args=(
+              5,
+              None,
+              None,
+          ),  # range(20)[5:] -> [5, 6, ..., 19], len 15
+          indices=[15, 16],  # next epoch
+          expected_data=[5, 6],
+      ),
+  )
+  def test_getitems(self, slice_args, indices, expected_data):
+    ds = dataset.MapDataset.range(20)
+    ds = slice_ds.SliceMapDataset(ds, slice(*slice_args))
+    actual_data = ds._getitems(indices)
+    self.assertSequenceEqual(actual_data, expected_data)
+
   def test_slice_of_empty_dataset_is_empty(self):
     ds = EmptyMapDataset()
     ds = slice_ds.SliceMapDataset(ds, slice(0, 10))
     self.assertEmpty(ds)
+
+  def test_init_raises_error_for_non_slice_object(self):
+    ds = dataset.MapDataset.range(10)
+    with self.assertRaisesRegex(ValueError, "sl is not a slice: <class 'int'>"):
+      slice_ds.SliceMapDataset(ds, 5)  # type: ignore
 
   def test_accessing_items_beyond_len_minus_one_succeeds(self):
     ds = dataset.MapDataset.range(20)
