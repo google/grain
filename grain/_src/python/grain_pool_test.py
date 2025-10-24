@@ -29,6 +29,7 @@ import multiprocessing as mp
 from grain._src.python import data_sources
 from grain._src.python import grain_pool as gp
 from grain._src.python import record
+from grain._src.python import variable_size_queue
 from grain._src.python.options import MultiprocessingOptions  # pylint: disable=g-importing-member
 
 
@@ -50,11 +51,19 @@ class GrainPoolTest(absltest.TestCase):
     get_element_producer_fn = GetElementProducerFn()
     # unparse the flags explicitly
     flags.FLAGS.unparse_flags()
-
+    ctx = mp.get_context("spawn")
+    options = MultiprocessingOptions(num_workers=4, per_worker_buffer_size=1)
+    worker_output_queues = [
+        variable_size_queue.VariableSizeMultiprocessingQueue(
+            options.per_worker_buffer_size, ctx
+        )
+        for _ in range(options.num_workers)
+    ]
     _ = gp.GrainPool(
-        ctx=mp.get_context("spawn"),
+        ctx=ctx,
         get_element_producer_fn=get_element_producer_fn,
-        options=MultiprocessingOptions(num_workers=4, per_worker_buffer_size=1),
+        options=options,
+        worker_output_queues=worker_output_queues,
     )
 
   def test_pool_equal_split_in_memory_data_source(self):
@@ -71,10 +80,19 @@ class GrainPoolTest(absltest.TestCase):
     get_element_producer_fn = GetElementProducerFn()
 
     output_elements = []
+    ctx = mp.get_context("spawn")
+    options = MultiprocessingOptions(num_workers=4, per_worker_buffer_size=1)
+    worker_output_queues = [
+        variable_size_queue.VariableSizeMultiprocessingQueue(
+            options.per_worker_buffer_size, ctx
+        )
+        for _ in range(options.num_workers)
+    ]
     with gp.GrainPool(
-        ctx=mp.get_context("spawn"),
+        ctx=ctx,
         get_element_producer_fn=get_element_producer_fn,
-        options=MultiprocessingOptions(num_workers=4, per_worker_buffer_size=1),
+        options=options,
+        worker_output_queues=worker_output_queues,
     ) as grain_pool:
       for element in grain_pool:
         output_elements.append(element)
@@ -100,11 +118,18 @@ class GrainPoolTest(absltest.TestCase):
     get_element_producer_fn = GetElementProducerFn()
 
     options = MultiprocessingOptions(num_workers=4, per_worker_buffer_size=1)
+    worker_output_queues = [
+        variable_size_queue.VariableSizeMultiprocessingQueue(
+            options.per_worker_buffer_size, ctx
+        )
+        for _ in range(options.num_workers)
+    ]
     output_elements = []
     with gp.GrainPool(
         ctx=ctx,
         get_element_producer_fn=get_element_producer_fn,
         options=options,
+        worker_output_queues=worker_output_queues,
     ) as grain_pool:
       for element in grain_pool:
         output_elements.append(element)
@@ -133,11 +158,18 @@ class GrainPoolTest(absltest.TestCase):
     get_element_producer_fn = GetElementProducerFn()
 
     options = MultiprocessingOptions(num_workers=4, per_worker_buffer_size=1)
+    worker_output_queues = [
+        variable_size_queue.VariableSizeMultiprocessingQueue(
+            options.per_worker_buffer_size, ctx
+        )
+        for _ in range(options.num_workers)
+    ]
     output_elements = []
     with gp.GrainPool(
         ctx=ctx,
         get_element_producer_fn=get_element_producer_fn,
         options=options,
+        worker_output_queues=worker_output_queues,
     ) as grain_pool:
       for element in grain_pool:
         output_elements.append(element)
@@ -166,10 +198,17 @@ class GrainPoolTest(absltest.TestCase):
     get_element_producer_fn = GetElementProducerFn()
 
     options = MultiprocessingOptions(num_workers=4, per_worker_buffer_size=1)
+    worker_output_queues = [
+        variable_size_queue.VariableSizeMultiprocessingQueue(
+            options.per_worker_buffer_size, ctx
+        )
+        for _ in range(options.num_workers)
+    ]
     with gp.GrainPool(
         ctx=ctx,
         get_element_producer_fn=get_element_producer_fn,
         options=options,
+        worker_output_queues=worker_output_queues,
     ) as grain_pool:
       child_pid = grain_pool.processes[0].pid
       os.kill(child_pid, signal.SIGKILL)
@@ -192,6 +231,12 @@ class GrainPoolTest(absltest.TestCase):
     get_element_producer_fn = GetElementProducerFn()
 
     options = MultiprocessingOptions(num_workers=4, per_worker_buffer_size=1)
+    worker_output_queues = [
+        variable_size_queue.VariableSizeMultiprocessingQueue(
+            options.per_worker_buffer_size, ctx
+        )
+        for _ in range(options.num_workers)
+    ]
 
     # Users should generally use the with statement, here we test if GrainPool
     # was created without the "with statement", that object deletion would
@@ -200,6 +245,7 @@ class GrainPoolTest(absltest.TestCase):
         ctx=ctx,
         get_element_producer_fn=get_element_producer_fn,
         options=options,
+        worker_output_queues=worker_output_queues,
     )
 
     child_processes = grain_pool.processes

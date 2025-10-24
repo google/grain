@@ -224,6 +224,7 @@ py_library(
         ":options",
         ":record",
         ":shared_memory_array",
+        ":variable_size_queue",
         "//grain/_src/core:config",
         "//grain/_src/core:monitoring",
         "//grain/_src/core:parallel",
@@ -245,6 +246,7 @@ py_test(
         ":grain_pool",
         ":options",
         ":record",
+        ":variable_size_queue",
         "//grain/_src/core:config",
         "//grain/_src/core:monitoring",
         "@abseil-py//absl/flags",
@@ -368,5 +370,21 @@ py_library(
     deps = [
         "//grain/_src/core:sharding",
         "@pypi//etils:pkg",
+    ],
+)
+
+py_library(
+    name = "variable_size_queue",
+    srcs = ["variable_size_queue.py"],
+    srcs_version = "PY3",
+)
+
+py_test(
+    name = "variable_size_queue_test",
+    srcs = ["variable_size_queue_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":variable_size_queue",
+        "@abseil-py//absl/testing:absltest",
     ],
 )
