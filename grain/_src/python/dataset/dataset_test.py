@@ -24,7 +24,7 @@ from absl.testing import absltest
 from absl.testing import flagsaver
 from absl.testing import parameterized
 import cloudpickle
-from grain import conftest
+from grain._src.core import pytest
 from grain._src.core import transforms
 import multiprocessing as mp
 from grain._src.python import options
@@ -1369,7 +1369,7 @@ class GetExecutionSummaryTest(parameterized.TestCase):
     self.assertRegex("".join(logs.output), log_value)
 
   @absltest.expectedFailureIf(
-      conftest.RUN_IN_PYTEST, reason="Logging doesn't work under pytest."
+      pytest.RUN_IN_PYTEST, reason="Logging doesn't work under pytest."
   )
   @mock.patch.object(dataset_stats, "_REPORTING_PERIOD_SEC", 0.05)
   @mock.patch.object(dataset_stats, "_LOG_EXECUTION_SUMMARY_PERIOD_SEC", 0.06)

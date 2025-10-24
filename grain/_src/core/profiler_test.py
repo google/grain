@@ -9,9 +9,7 @@ from grain._src.core import profiler
 class ProfilerTest(absltest.TestCase):
 
   def test_framework(self):
-    expected_framework = (
-        os.environ.get("EXPECTED_FRAMEWORK") or profiler._NO_FRAMEWORK
-    )
+    expected_framework = os.environ.get("EXPECTED_FRAMEWORK") or "jax"
     self.assertEqual(profiler.framework, expected_framework)
 
   def test_trace_annotation(self):

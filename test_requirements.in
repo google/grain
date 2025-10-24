@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is the list of our Python third_party dependencies that Bazel should
-# pull from PyPi.
+# This is the list of our Python testing dependencies that Bazel should pull
+# from PyPi.
 # Note that requirements.txt must be re-generated using 
 # bazel run //:requirements.update in the OSS version.
 array-record
@@ -22,8 +22,8 @@ dm-tree
 etils[epath,epy]
 cloudpickle
 jax
-jaxtyping
 numpy
 attrs
 pyarrow
+pytest
 parameterized

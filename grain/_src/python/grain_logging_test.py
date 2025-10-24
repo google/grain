@@ -1,7 +1,7 @@
 import logging
 import re
 from absl import logging as absl_logging
-from grain import conftest
+from grain._src.core import pytest
 from grain._src.python import grain_logging
 from absl.testing import absltest
 
@@ -9,7 +9,7 @@ from absl.testing import absltest
 class GrainLoggingTest(absltest.TestCase):
 
   @absltest.expectedFailureIf(
-      conftest.RUN_IN_PYTEST, reason='Logging is broken under pytest.'
+      pytest.RUN_IN_PYTEST, reason='Logging is broken under pytest.'
   )
   def test_prefix_is_part_of_message(self):
     # self.assertLogs() doesn't format the messages, so we have to resort to
@@ -25,7 +25,7 @@ class GrainLoggingTest(absltest.TestCase):
     )
 
   @absltest.expectedFailureIf(
-      conftest.RUN_IN_PYTEST, reason='Logging is broken under pytest.'
+      pytest.RUN_IN_PYTEST, reason='Logging is broken under pytest.'
   )
   def test_message_is_kept(self):
     grain_logging.set_process_identifier_prefix('Foo')

@@ -25,7 +25,7 @@ from unittest import mock
 from absl import flags
 from absl.testing import flagsaver
 import cloudpickle
-from grain import conftest
+from grain._src.core import pytest
 from grain._src.core import transforms
 from grain._src.python import options
 from grain._src.python import shared_memory_array
@@ -204,7 +204,7 @@ def _for_each_node(fn, nodes):
 @contextlib.contextmanager
 def _unparse_flags():
   argv = sys.argv
-  if conftest.RUN_IN_PYTEST:
+  if pytest.RUN_IN_PYTEST:
     # All cmdline arguments are for pytest (-v -k"OneTest" etc), drop'em.
     argv = [argv[1]]
   flags.FLAGS.unparse_flags()

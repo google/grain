@@ -68,7 +68,7 @@ py_test(
         ":base",
         ":dataset",
         ":stats",
-        "//grain:conftest",
+        "//grain/_src/core:pytest",
         "//grain/_src/core:transforms",
         "//grain/_src/python:options",
         "//grain/_src/python/testing:experimental",
@@ -135,7 +135,7 @@ py_test(
     deps = [
         ":dataset",
         ":stats",
-        "//grain:conftest",
+        "//grain/_src/core:pytest",
         "//grain/_src/core:transforms",
         "//grain/_src/python:options",
         "//grain/_src/python:shared_memory_array",

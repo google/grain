@@ -8,9 +8,12 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 * New features
 
 * Breaking changes:
+  * Removes `grain[testing]` PyPi build. It is an implementation detail and
+    should not be publicly visible.
 
 * Deprecations:
-  * Deprecates `grain.python.experimental.visualize_dataset`. Use visualization mode instead.
+  * Deprecates `grain.python.experimental.visualize_dataset`. Use visualization
+    mode instead.
 
 * Bug fixes
 

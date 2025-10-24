@@ -16,7 +16,6 @@ dependencies = [
     "cloudpickle",
     "dm-tree",
     "etils[epath,epy]",
-    "more-itertools>=9.1.0",
     "numpy",
     "protobuf>=5.28.3",
 ]
@@ -30,16 +29,6 @@ classifiers = [
 ]
 
 [project.optional-dependencies]
-testing = [
-    "pytest",
-    "attrs",
-    "dill",
-    "jax",
-    "jaxlib",
-    "jaxtyping",
-    "pyarrow",
-    "tensorflow-datasets",
-]
 parquet = [
     "pyarrow",
 ]

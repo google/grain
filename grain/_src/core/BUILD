@@ -193,6 +193,9 @@ py_library(
 py_test(
     name = "profiler_test_no_framework",
     srcs = ["profiler_test.py"],
+    env = {
+        "EXPECTED_FRAMEWORK": "NO_FRAMEWORK",
+    },
     main = "profiler_test.py",
     srcs_version = "PY3",
     deps = [
@@ -214,4 +217,12 @@ py_test(
         "@abseil-py//absl/testing:absltest",
         "@pypi//jax:pkg",  # buildcleaner: keep
     ],
+)
+
+py_library(
+    name = "pytest",
+    srcs = [
+        "pytest.py",
+    ],
+    srcs_version = "PY3",
 )
