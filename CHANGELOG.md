@@ -6,12 +6,14 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features
+  * Adds Python 3.14 build.
 
 * Breaking changes:
   * Removes `grain[testing]` PyPi build. It is an implementation detail and
     should not be publicly visible.
 
 * Deprecations:
+  * Deprecates Python 3.10 support.
   * Deprecates `grain.python.experimental.visualize_dataset`. Use visualization
     mode instead.
 

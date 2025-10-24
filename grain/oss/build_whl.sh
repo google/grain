@@ -56,7 +56,7 @@ main() {
 
   if [ "$RUN_TESTS_WITH_BAZEL" = true ] ; then
     # To update the test requirements, run 
-    # bazel run //:requirements_${PYTHON_MAJOR_VERSION}_${PYTHON_MINOR_VERSION}.update
+    bazel run //:requirements_${PYTHON_MAJOR_VERSION}_${PYTHON_MINOR_VERSION}.update
     bazel test --verbose_failures --test_output=errors ... --action_env PYTHON_BIN_PATH="${PYTHON_BIN}"
   fi
 
@@ -122,7 +122,9 @@ main() {
   if [ "$RUN_TESTS_WITH_BAZEL" = false ] ; then
     $PYTHON_BIN -m pip install --force ${OUTPUT_DIR}/all_dist/grain*.whl
     $PYTHON_BIN -m pip install -r test_requirements.in  --only-binary pyarrow
-    $PYTHON_BIN -m pip install tensorflow  --only-binary h5py
+    if (( "${PYTHON_MINOR_VERSION}" < 14 )); then
+      $PYTHON_BIN -m pip install tensorflow  --only-binary h5py
+    fi
 
     pushd "${OUTPUT_DIR}/all_dist"
     $PYTHON_BIN -m pytest --pyargs grain
