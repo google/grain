@@ -50,7 +50,10 @@ class SourceMapDataset(dataset.MapDataset):
         self._source, base.SupportsBatchedReadRandomAccessDataSource
     ):
       return super()._getitems(indices)
-    return self._source._getitems([index % len(self) for index in indices])  # pylint: disable=protected-access
+    elements = self._source._getitems(  # pylint: disable=protected-access
+        [index % len(self) for index in indices]
+    )
+    return self._stats.record_output_spec_for_batch(elements)
 
   def _get_sequential_slice(self, sl: slice) -> slice:
     """Returns the sequential slice per worker."""
