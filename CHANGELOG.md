@@ -32,6 +32,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * Introduces `grain.experimental.RepeatIterDataset`.
   * Adds custom batching function support to `grain.DataLoader`.
   * Adds `grain.experimental.FlatMapTransform` support to `grain.DataLoader`.
+  * Introduces `grain.experimental.CacheIterDataset` for caching parent dataset.
 
 * Breaking changes:
   * SliceMapDataset updated to use the full index relative to the parent

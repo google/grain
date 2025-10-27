@@ -34,6 +34,7 @@ from grain._src.python.dataset.sources.parquet_dataset import ParquetIterDataset
 from grain._src.python.dataset.sources.tfrecord_dataset import TFRecordIterDataset
 
 from grain._src.python.dataset.transformations.batch import batch_and_pad
+from grain._src.python.dataset.transformations.cache import CacheIterDataset
 from grain._src.python.dataset.transformations.flatmap import (
     FlatMapMapDataset,
     FlatMapIterDataset,
