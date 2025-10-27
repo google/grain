@@ -37,6 +37,7 @@ import multiprocessing as mp
 from grain._src.python import grain_pool
 from grain._src.python import options as grain_options
 from grain._src.python import shared_memory_array
+from grain._src.python import variable_size_queue
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
@@ -760,6 +761,14 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         f"multiprocessing_options={self._multiprocessing_options})"
     )
 
+  def set_per_worker_buffer_size(self, per_worker_buffer_size: int):
+    if self._raw_iterator is None:
+      raise ValueError(
+          "Cannot change per worker buffer size before the iterator has been"
+          " initialized."
+      )
+    self._raw_iterator.set_per_worker_buffer_size(per_worker_buffer_size)
+
 
 class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
   """Iterable dataset that uses a synchronized queue for prefetching.
@@ -858,8 +867,8 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._closed = False
     self._prefetch_thread: threading.Thread | None = None
     self._prefetch_should_stop: threading.Event = threading.Event()
-    self._buffer: queue.Queue[tuple[T, StateT, Exception | None]] = queue.Queue(
-        maxsize=self._prefetch_buffer_size
+    self._buffer: variable_size_queue.VariableSizeQueue = (
+        variable_size_queue.VariableSizeQueue(self._prefetch_buffer_size)
     )
 
   # pytype: disable=attribute-error
@@ -952,6 +961,12 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     # Clear the buffer again in case the prefetch loop added more elements on
     # exit.
     self._clear_buffer()
+
+  def set_prefetch_buffer_size(self, prefetch_buffer_size: int):
+    if prefetch_buffer_size <= 0:
+      raise ValueError("`prefetch_buffer_size` must be positive.")
+    self._prefetch_buffer_size = prefetch_buffer_size
+    self._buffer.set_max_size(prefetch_buffer_size)
 
   def get_state(self) -> StateT:
     return self._step_zero_state if self._state is None else self._state

@@ -69,6 +69,7 @@ from grain._src.python import grain_logging
 from grain._src.python import multiprocessing_common
 from grain._src.python import record
 from grain._src.python import shared_memory_array
+from grain._src.python import variable_size_queue
 from grain._src.python.options import MultiprocessingOptions  # pylint: disable=g-importing-member
 
 
@@ -225,7 +226,7 @@ def _worker_loop(
     *,
     args_queue: queues.Queue,
     errors_queue: queues.Queue,
-    output_queue: queues.Queue,
+    output_queue: variable_size_queue.VariableSizeMultiprocessingQueue,
     termination_event: synchronize.Event,
     start_profiling_event: synchronize.Event,
     stop_profiling_event: synchronize.Event,
@@ -342,6 +343,9 @@ class GrainPool(Iterator[T]):
       options: MultiprocessingOptions,
       worker_init_fn: Callable[[int, int], None] | None = None,
       stats_in_queues: tuple[queues.Queue, ...] | None = None,
+      worker_output_queues: list[
+          variable_size_queue.VariableSizeMultiprocessingQueue
+      ],
   ):
     """Initialise a Grain Pool.
 
@@ -362,11 +366,13 @@ class GrainPool(Iterator[T]):
         the total worker count.
       stats_in_queues: Queue to propagate execution summary from child processes
         to the parent.
+      worker_output_queues: list of queues for each worker to output elements
+        to.
     """
     self.num_processes = options.num_workers
     logging.info("Grain pool will use %i processes.", self.num_processes)
     self.worker_args_queues = []
-    self.worker_output_queues = []
+    self.worker_output_queues = worker_output_queues
     self.processes = []
     # Reader termination should always result in worker termination. However,
     # worker termination should not shut down the reader: workers are terminated
@@ -396,11 +402,10 @@ class GrainPool(Iterator[T]):
 
     for worker_index in range(self.num_processes):
       worker_args_queue = ctx.Queue(1)
-      worker_output_queue = ctx.Queue(options.per_worker_buffer_size)
       process_kwargs = dict(
           args_queue=worker_args_queue,
           errors_queue=self.worker_error_queue,
-          output_queue=worker_output_queue,
+          output_queue=self.worker_output_queues[worker_index],
           stats_out_queue=(
               self.stats_in_queues[worker_index]
               if self.stats_in_queues
@@ -434,7 +439,6 @@ class GrainPool(Iterator[T]):
           target=_worker_loop, kwargs=process_kwargs, daemon=True
       )
       self.worker_args_queues.append(worker_args_queue)
-      self.worker_output_queues.append(worker_output_queue)
       self.processes.append(process)
 
     logging.info("Grain pool will start child processes.")
@@ -589,6 +593,27 @@ _QueueElement = Union[
 ]
 
 
+class _ThreadPoolContainer:
+  """Container for ThreadPool to allow replacing it."""
+
+  def __init__(self, processes: int):
+    self.pool = pool.ThreadPool(processes)
+
+  def apply_async(self, *args, **kwargs):
+    return self.pool.apply_async(*args, **kwargs)
+
+  def close(self):
+    self.pool.close()
+
+  def join(self):
+    self.pool.join()
+
+  def replace_pool(self, num_threads: int):
+    old_pool = self.pool
+    self.pool = pool.ThreadPool(num_threads)
+    old_pool.close()
+
+
 def _open_shared_memory_for_leaf(element: Any) -> Any:
   if isinstance(element, shared_memory_array.SharedMemoryArrayMetadata):
     element = shared_memory_array.SharedMemoryArray.from_metadata(element)
@@ -610,6 +635,9 @@ def _process_elements_in_grain_pool(
     get_element_producer_fn: GetElementProducerFn,
     multiprocessing_options: MultiprocessingOptions,
     reader_queue: queue.Queue[_QueueElement],
+    worker_output_queues: list[
+        variable_size_queue.VariableSizeMultiprocessingQueue
+    ],
     thread_pool: pool.ThreadPool,
     termination_event: threading.Event,
     start_profiling_event: synchronize.Event | None,
@@ -636,6 +664,7 @@ def _process_elements_in_grain_pool(
         options=multiprocessing_options,
         worker_init_fn=worker_init_fn,
         stats_in_queues=stats_in_queues,
+        worker_output_queues=worker_output_queues,
     ) as g_pool:
       for element in g_pool:
         if read_thread_should_stop():
@@ -714,6 +743,7 @@ class MultiProcessIterator(Iterator[T]):
     self._last_worker_index = worker_index_to_start_reading - 1
     self._worker_init_fn = worker_init_fn
     self._reader_queue = None
+    self._worker_output_queues = None
     self._reader_thread_pool = None
     self._termination_event = None
     self._reader_thread = None
@@ -736,15 +766,26 @@ class MultiProcessIterator(Iterator[T]):
         self._multiprocessing_options.num_workers
         * self._multiprocessing_options.per_worker_buffer_size
     )
-    self._reader_queue = queue.Queue(maxsize=max_buffered_elements)
-    self._reader_thread_pool = pool.ThreadPool(max_buffered_elements)
+    self._reader_queue = variable_size_queue.VariableSizeQueue(
+        max_buffered_elements
+    )
+    self._reader_thread_pool = _ThreadPoolContainer(max_buffered_elements)
     self._termination_event = threading.Event()
+    ctx = mp.get_context("spawn")
+    self._worker_output_queues = []
+    for _ in range(self._multiprocessing_options.num_workers):
+      self._worker_output_queues.append(
+          variable_size_queue.VariableSizeMultiprocessingQueue(
+              self._multiprocessing_options.per_worker_buffer_size, ctx
+          )
+      )
     self._reader_thread = threading.Thread(
         target=_process_elements_in_grain_pool,
         kwargs=dict(
             get_element_producer_fn=self._get_element_producer_fn,
             multiprocessing_options=self._multiprocessing_options,
             reader_queue=self._reader_queue,
+            worker_output_queues=self._worker_output_queues,
             thread_pool=self._reader_thread_pool,
             termination_event=self._termination_event,
             start_profiling_event=self._start_profiling_event,
@@ -775,6 +816,7 @@ class MultiProcessIterator(Iterator[T]):
     self._reader_thread_pool = None
     self._reader_thread = None
     self._reader_queue = None
+    self._worker_output_queues = None
 
   def __enter__(self):
     self.start_prefetch()
@@ -809,7 +851,7 @@ class MultiProcessIterator(Iterator[T]):
           "MultiProcessIterator is in an invalid state. Note that"
           " MultiProcessIterator should be used with a 'with' statement."
       )
-    element = multiprocessing_common.get_element_from_queue(
+    element = multiprocessing_common.get_element_from_queue(  # pytype: disable=wrong-arg-types
         self._reader_queue, self._termination_event.is_set  # pytype: disable=attribute-error
     )
     if isinstance(element, Exception):
@@ -826,9 +868,31 @@ class MultiProcessIterator(Iterator[T]):
       )
 
     result = multiprocessing_common.get_async_result(
-        element.async_result, self._termination_event.is_set
+        element.async_result, self._termination_event.is_set  # pytype: disable=attribute-error
     )
     if isinstance(result, multiprocessing_common._SystemTerminated):  # pylint: disable=protected-access
       raise StopIteration
     self._last_worker_index = element.worker_index
     return result
+
+  def set_per_worker_buffer_size(self, per_worker_buffer_size: int):
+    """Sets the per worker buffer size."""
+    if self._worker_output_queues is None or self._reader_queue is None:
+      raise ValueError(
+          "Cannot change per worker buffer size before the iterator has been"
+          " initialized."
+      )
+    for q in self._worker_output_queues:
+      q.set_max_size(per_worker_buffer_size)
+    self._reader_queue.set_max_size(
+        per_worker_buffer_size * self._multiprocessing_options.num_workers
+    )
+    self._multiprocessing_options = dataclasses.replace(
+        self._multiprocessing_options,
+        per_worker_buffer_size=per_worker_buffer_size,
+    )
+    new_thread_count = (
+        self._multiprocessing_options.num_workers
+        * self._multiprocessing_options.per_worker_buffer_size
+    )
+    self._reader_thread_pool.replace_pool(new_thread_count)  # pytype: disable=attribute-error

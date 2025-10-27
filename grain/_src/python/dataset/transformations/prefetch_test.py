@@ -917,8 +917,96 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
         ],
     )
 
+  def test_set_per_worker_buffer_size_increase(self):
+    ds = dataset.MapDataset.range(10).map(lambda x: x + 1).to_iter_dataset()
+    mp_options = options.MultiprocessingOptions(
+        num_workers=1, per_worker_buffer_size=1
+    )
+    ds = prefetch.MultiprocessPrefetchIterDataset(
+        ds,
+        mp_options,
+    )
+    it = cast(prefetch._MultiprocessPrefetchDatasetIterator, ds.__iter__())
+    self.assertEqual(next(it), 1)
+    time.sleep(1)
+    self.assertEqual(
+        it._raw_iterator._multiprocessing_options.per_worker_buffer_size, 1  # pytype: disable=attribute-error
+    )
+    it.set_per_worker_buffer_size(2)
+    self.assertEqual(
+        it._raw_iterator._multiprocessing_options.per_worker_buffer_size, 2  # pytype: disable=attribute-error
+    )
+    self.assertEqual(next(it), 2)
+    self.assertEqual(list(it), list(range(3, 11)))
+
+  def test_set_per_worker_buffer_size_decrease(self):
+    ds = dataset.MapDataset.range(10).map(lambda x: x + 1).to_iter_dataset()
+    mp_options = options.MultiprocessingOptions(
+        num_workers=1, per_worker_buffer_size=2
+    )
+    ds = prefetch.MultiprocessPrefetchIterDataset(
+        ds,
+        mp_options,
+    )
+    it = cast(prefetch._MultiprocessPrefetchDatasetIterator, ds.__iter__())
+    self.assertEqual(next(it), 1)
+    time.sleep(1)
+    self.assertEqual(
+        it._raw_iterator._multiprocessing_options.per_worker_buffer_size, 2  # pytype: disable=attribute-error
+    )
+    it.set_per_worker_buffer_size(1)
+    self.assertEqual(
+        it._raw_iterator._multiprocessing_options.per_worker_buffer_size, 1  # pytype: disable=attribute-error
+    )
+    self.assertEqual(next(it), 2)
+    self.assertEqual(list(it), list(range(3, 11)))
+
+  def test_set_per_worker_buffer_size_to_trigger_error(self):
+    def f(x):
+      if x >= 5:
+        raise ValueError(f'x={x} is too large')
+      return x
+
+    ds = (
+        dataset.MapDataset.range(10)
+        .map(f)
+        .to_iter_dataset(
+            read_options=options.ReadOptions(prefetch_buffer_size=0)
+        )
+    )
+    mp_options = options.MultiprocessingOptions(
+        num_workers=1, per_worker_buffer_size=1
+    )
+    it = prefetch.MultiprocessPrefetchIterDataset(ds, mp_options).__iter__()
+    it = cast(prefetch._MultiprocessPrefetchDatasetIterator, it)
+    self.assertEqual(next(it), 0)
+    it.set_per_worker_buffer_size(10)
+    next(it)
+    time.sleep(3)
+    q = it._raw_iterator._reader_queue  # pytype: disable=attribute-error
+    # Prefetching will end once an error is put into the reader queue. The
+    # elements 2, 3, 4 will be in the queue along with the error for 5.
+    self.assertEqual(q.qsize(), 4)
+
 
 class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
+
+  def _wait_for_buffer_size(
+      self,
+      it: prefetch.ThreadPrefetchDatasetIterator,
+      size: int,
+      timeout_s: float = 5,
+  ):
+    """Waits until iterator's buffer reaches size."""
+    start_time = time.time()
+    while it._buffer.qsize() != size:
+      if time.time() - start_time > timeout_s:
+        raise TimeoutError(
+            f'Buffer size {it._buffer.qsize()} did not reach {size} within'
+            f' {timeout_s} seconds.'
+        )
+      time.sleep(0.01)
+    self.assertEqual(it._buffer.qsize(), size)
 
   def setUp(self):
     super().setUp()
@@ -1147,6 +1235,50 @@ class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
         _ = next(it)
       if close:
         it.close()  # pytype: disable=attribute-error
+
+  def test_set_prefetch_buffer_size_increase(self):
+    ds = prefetch.ThreadPrefetchIterDataset(self.ds, prefetch_buffer_size=1)
+    it = ds.__iter__()
+    self.assertIsInstance(it, prefetch.ThreadPrefetchDatasetIterator)
+    it = cast(prefetch.ThreadPrefetchDatasetIterator, it)
+
+    self.assertEqual(it._prefetch_buffer_size, 1)
+    self.assertEqual(next(it), 1)
+    self._wait_for_buffer_size(it, 1)
+
+    it.set_prefetch_buffer_size(2)
+    self.assertEqual(it._prefetch_buffer_size, 2)
+    self.assertEqual(next(it), 3)
+    self._wait_for_buffer_size(it, 2)
+    self.assertEqual(next(it), 5)
+    self._wait_for_buffer_size(it, 2)
+
+  def test_set_prefetch_buffer_size_decrease(self):
+    ds = prefetch.ThreadPrefetchIterDataset(self.ds, prefetch_buffer_size=2)
+    it = ds.__iter__()
+    self.assertIsInstance(it, prefetch.ThreadPrefetchDatasetIterator)
+    it = cast(prefetch.ThreadPrefetchDatasetIterator, it)
+
+    self.assertEqual(it._prefetch_buffer_size, 2)
+    self.assertEqual(next(it), 1)
+    self._wait_for_buffer_size(it, 2)  # 3, 5
+    it.set_prefetch_buffer_size(1)
+    self.assertEqual(it._prefetch_buffer_size, 1)
+    self.assertEqual(it._buffer.qsize(), 2)  # 3, 5
+    self.assertEqual(next(it), 3)  # reads 3, buffer has 5
+    self.assertEqual(it._buffer.qsize(), 1)  # 5
+    self.assertEqual(next(it), 5)  # reads 5, buffer has 0
+    self._wait_for_buffer_size(it, 1)  # prefetch gets 7
+
+  def test_set_prefetch_buffer_size_to_0_raises_error(self):
+    ds = prefetch.ThreadPrefetchIterDataset(self.ds, prefetch_buffer_size=1)
+    it = ds.__iter__()
+    self.assertIsInstance(it, prefetch.ThreadPrefetchDatasetIterator)
+    it = cast(prefetch.ThreadPrefetchDatasetIterator, it)
+    with self.assertRaisesRegex(
+        ValueError, '`prefetch_buffer_size` must be positive.'
+    ):
+      it.set_prefetch_buffer_size(0)
 
 
 if __name__ == '__main__':
