@@ -274,14 +274,9 @@ class BatchMapDatasetTest(parameterized.TestCase):
       ),
   )
   def test_batch_size_2(self, use_jax: bool, initial_ds, expected):
-    def test_batch_size_2_actual_equals_expected(
-        expect_parallel_batch: bool = False,
-    ):
+
+    def test_batch_size_2_actual_equals_expected():
       ds = batch.BatchMapDataset(initial_ds, batch_size=2)
-      if expect_parallel_batch:
-        self.assertIsInstance(ds._batch_fn, batch._MakeBatchParallel)
-      else:
-        self.assertIs(ds._batch_fn, batch.make_batch)
       self.assertLen(ds, len(expected))  # 10 // 2 = 5.
       actual = [ds[i] for i in range(len(ds))]
       np.testing.assert_allclose(actual, expected)
@@ -365,16 +360,10 @@ class BatchMapDatasetTest(parameterized.TestCase):
   )
   def test_batch_size_3(self, drop_remainder: bool, initial_ds, expected):
 
-    def test_batch_size_3_actual_equals_expected(
-        expect_parallel_batch: bool = False,
-    ):
+    def test_batch_size_3_actual_equals_expected():
       ds = batch.BatchMapDataset(
           initial_ds, batch_size=3, drop_remainder=drop_remainder
       )
-      if expect_parallel_batch:
-        self.assertIsInstance(ds._batch_fn, batch._MakeBatchParallel)
-      else:
-        self.assertIs(ds._batch_fn, batch.make_batch)
       self.assertLen(ds, len(expected))
       actual = [ds[i] for i in range(len(ds))]
       for i in range(len(ds)):

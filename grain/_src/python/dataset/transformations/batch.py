@@ -259,8 +259,7 @@ class BatchMapDataset(dataset.MapDataset[T]):
       drop_remainder: Whether to drop the last batch if it is smaller than
         batch_size.
       batch_fn: A function that takes a list of elements and returns a batch.
-        Defaults to stacking the elements along a new batch dimension. If
-        defined, the parallelized batch experiment will be disabled.
+        Defaults to stacking the elements along a new batch dimension.
     """
     super().__init__(parent)
     if batch_size <= 0:
@@ -278,8 +277,6 @@ class BatchMapDataset(dataset.MapDataset[T]):
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
     self._batch_fn = make_batch if batch_fn is None else batch_fn
-    if _is_parallel_batch_experiment_enabled() and batch_fn is None:
-      self._batch_fn = _MakeBatchParallel()
     if self._drop_remainder:
       self._length = len(self._parent) // self._batch_size
     else:
