@@ -5,6 +5,16 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 
 ## Unreleased
 
+* New features:
+
+* Breaking changes:
+
+* Deprecations:
+
+* Bug fixes:
+
+## Grain 0.2.14 (October 30, 2025)
+
 * New features
   * Adds Python 3.14 build.
   * Replaces `dm-tree` dependency with pure Python implementation for Pytree
@@ -20,8 +30,6 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * Deprecates Python 3.10 support.
   * Deprecates `grain.python.experimental.visualize_dataset`. Use visualization
     mode instead.
-
-* Bug fixes
 
 ## Grain 0.2.13 (October 15, 2025)
 
