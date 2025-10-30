@@ -26,10 +26,10 @@ py_test(
     srcs = ["batch_test.py"],
     srcs_version = "PY3",
     deps = [
+        "//grain/_src/core:tree_lib",
         "//grain/_src/python/dataset",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
-        "@pypi//dm_tree:pkg",
         "@pypi//jax:pkg",  # buildcleaner: keep
         "@pypi//numpy:pkg",
     ],
@@ -83,10 +83,10 @@ py_library(
     srcs_version = "PY3",
     deps = [
         ":packing",
+        "//grain/_src/core:tree_lib",
         "//grain/_src/python/dataset",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
-        "@pypi//dm_tree:pkg",
         "@pypi//jax:pkg",
         "@pypi//numpy:pkg",
     ],
@@ -148,9 +148,9 @@ py_library(
     srcs_version = "PY3",
     deps = [
         ":packing_packed_batch",
+        "//grain/_src/core:tree_lib",
         "//grain/_src/python/dataset",
         "//grain/_src/python/dataset:stats",
-        "@pypi//dm_tree:pkg",
         "@pypi//etils:pkg",
         "@pypi//numpy:pkg",
     ],
@@ -324,11 +324,11 @@ py_test(
     srcs = ["rebatch_test.py"],
     srcs_version = "PY3",
     deps = [
+        "//grain/_src/core:tree_lib",
         "//grain/_src/python/dataset",
         "//grain/_src/python/testing:experimental",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
-        "@pypi//dm_tree:pkg",
         "@pypi//numpy:pkg",
     ],
 )

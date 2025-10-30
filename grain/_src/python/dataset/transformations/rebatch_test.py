@@ -15,12 +15,12 @@
 
 from absl.testing import absltest
 from absl.testing import parameterized
+from grain._src.core import tree_lib
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import batch
 from grain._src.python.dataset.transformations import rebatch
 from grain._src.python.testing.experimental import assert_equal_output_after_checkpoint
 import numpy as np
-import tree
 
 
 class RebatchIterDatasetTest(parameterized.TestCase):
@@ -36,7 +36,7 @@ class RebatchIterDatasetTest(parameterized.TestCase):
           ),
       )
 
-    tree.map_structure_with_path(_check_equivalence, actual, expected)
+    tree_lib.map_structure_with_path(_check_equivalence, actual, expected)
 
   def _get_test_dataset_ten_elements(
       self, batch_size, rebatch_size, drop_remainder=False

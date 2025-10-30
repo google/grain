@@ -20,12 +20,12 @@ from unittest import mock
 
 from absl.testing import absltest
 from absl.testing import parameterized
+from grain._src.core import tree_lib
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import batch
 from grain._src.python.dataset.transformations import repeat
 from grain._src.python.dataset.transformations import source
 import numpy as np
-import tree
 
 
 class MakeBatchTest(absltest.TestCase):
@@ -293,7 +293,7 @@ class BatchMapDatasetTest(parameterized.TestCase):
       ds = source.SourceMapDataset([{"a": f"element_{i}"} for i in range(10)])
 
       def _batch_fn(xs):
-        return tree.map_structure(lambda *x: tuple(x), *xs)
+        return tree_lib.map_structure(lambda *x: tuple(x), *xs)
 
       ds = batch.BatchMapDataset(ds, batch_size=2, batch_fn=_batch_fn)
       self.assertLen(ds, 5)  # 10 // 2 = 5.
@@ -563,7 +563,7 @@ class BatchIterDatasetTest(parameterized.TestCase):
       ).to_iter_dataset()
 
       def _batch_fn(xs):
-        return tree.map_structure(lambda *x: tuple(x), *xs)
+        return tree_lib.map_structure(lambda *x: tuple(x), *xs)
 
       iter_ds = batch.BatchIterDataset(
           iter_ds, batch_size=2, batch_fn=_batch_fn

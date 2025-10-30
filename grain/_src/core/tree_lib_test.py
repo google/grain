@@ -17,11 +17,13 @@ Since the tree_lib.py only re-directs the actual implementations this test does
 not try to cover the actual functionality, but rather the re-direction
 correctness.
 """
+
 import dataclasses
 from typing import Protocol, runtime_checkable
 
 from absl.testing import absltest
 from absl.testing import parameterized
+import attrs
 from grain._src.core import tree_lib
 import numpy as np
 
@@ -59,6 +61,18 @@ tree_lib: TreeImpl = tree_lib
 class _TestClass:
   a: int
   b: str
+
+
+class MyClass:
+
+  def __init__(self, c):
+    self.c = c
+
+
+@attrs.define
+class MyAttrs:
+  d: int
+  e: str
 
 
 class TreeTest(parameterized.TestCase):
@@ -107,8 +121,8 @@ class TreeTest(parameterized.TestCase):
           testcase_name="simple",
           structure={"A": "v2", "B": 1232.4, "C": np.ndarray([1, 2, 3])},
           expected_output={
-              "A": "<class 'str'>[]",
-              "B": "<class 'float'>[]",
+              "A": "str[]",
+              "B": "float[]",
               "C": "float64[1, 2, 3]",
           },
       ),
@@ -116,7 +130,7 @@ class TreeTest(parameterized.TestCase):
           testcase_name="nested",
           structure={"A": "v2", "B": {"C": np.ndarray([1, 2, 3])}},
           expected_output={
-              "A": "<class 'str'>[]",
+              "A": "str[]",
               "B": {"C": "float64[1, 2, 3]"},
           },
       ),
@@ -129,8 +143,55 @@ class TreeTest(parameterized.TestCase):
   def test_spec_like(self, structure, expected_output):
     self.assertEqual(tree_lib.spec_like(structure), expected_output)
 
-  # The two tests below exercise behavior only without a Jax dependency present.
-  # The OSS testing runs with Jax always present so we skip them.
+  def test_spec_like_with_class(self):
+    self.assertIn(
+        tree_lib.spec_like({"B": 1232.4, "C": MyClass(1)}),
+        [
+            {
+                "B": "float[]",
+                "C": "MyClass[]",
+            },
+        ],
+    )
+
+  def test_spec_like_with_list(self):
+    self.assertEqual(
+        tree_lib.spec_like({
+            "B": 1232.4,
+            "C": [
+                _TestClass(a=1, b="v2"),
+                _TestClass(a=2, b="v2"),
+            ],
+        }),
+        {
+            "B": "float[]",
+            "C": "list<_TestClass>[2]",
+        },
+    )
+
+  def test_spec_like_with_dataclass(self):
+    self.assertEqual(
+        tree_lib.spec_like(_TestClass(a=1, b="v2")),
+        "_TestClass\n{'a': 'int[]', 'b': 'str[]'}[]",
+    )
+
+  def test_spec_like_with_unknown_shape(self):
+    self.assertEqual(
+        tree_lib.spec_like({
+            "B": [np.zeros([2]), np.zeros([1])],
+            "C": [],
+        }),
+        {"B": "list<ndarray>[unknown shape]", "C": "list<>[0]"},
+    )
+
+  def test_spec_like_with_attrs(self):
+    self.assertIn(
+        tree_lib.spec_like(MyAttrs(d=1, e="v2")),
+        [
+            "MyAttrs\n{'d': 'int[]', 'e': 'str[]'}[]",
+            "MyAttrs\n{'d': 'int[]', 'e': 'str[]'}[]",
+        ],
+    )
 
 
 if __name__ == "__main__":

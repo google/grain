@@ -16,11 +16,11 @@
 from collections.abc import Sequence
 from typing import Any, Type
 
+from grain._src.core import tree_lib
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
 from grain._src.python.dataset.transformations import packing_packed_batch
 import numpy as np
-import tree
 
 
 class PackingDatasetIterator(dataset.DatasetIterator):
@@ -144,8 +144,8 @@ class PackingDatasetIterator(dataset.DatasetIterator):
     self._packed_batch = self._current_batch.get_packed_batch()
     # Detect number of bins. The last batch can be partial.
     self._packed_batch_num_bins = max(
-        tree.flatten(
-            tree.map_structure(lambda x: x.shape[0], self._packed_batch)
+        tree_lib.flatten(
+            tree_lib.map_structure(lambda x: x.shape[0], self._packed_batch)
         )
     )
     assert self._packed_batch_num_bins <= self._num_packing_bins
@@ -175,7 +175,9 @@ class PackingDatasetIterator(dataset.DatasetIterator):
           next_row = self._shuffled_rows[self._next_row]
         else:
           next_row = self._next_row
-        element = tree.map_structure(lambda x: x[next_row], self._packed_batch)
+        element = tree_lib.map_structure(
+            lambda x: x[next_row], self._packed_batch
+        )
         self._next_row += 1
         self._counter += 1
         if self._next_row >= self._packed_batch_num_bins:
@@ -206,7 +208,7 @@ class PackingDatasetIterator(dataset.DatasetIterator):
 
       with timer:
         # Remove elements not in packing struct.
-        element = tree.map_structure_up_to(
+        element = tree_lib.map_structure_up_to(
             self._length_struct, lambda x: x, element
         )
 
@@ -237,7 +239,7 @@ class PackingDatasetIterator(dataset.DatasetIterator):
 
           if self._current_batch.try_add_to_batch(element) is not None:
             # If a single example can't fit in an empty batch, it's an error.
-            element_shape = tree.map_structure(lambda x: x.shape, element)
+            element_shape = tree_lib.map_structure(lambda x: x.shape, element)
             raise ValueError(
                 "Could not add element to empty packed batch! Packed batch has"
                 f" packing sequence_lengths: {self._length_struct} while"

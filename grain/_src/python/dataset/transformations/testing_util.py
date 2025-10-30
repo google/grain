@@ -7,11 +7,11 @@ from collections.abc import Sequence
 from typing import Any, Type
 from absl.testing import absltest
 from absl.testing import parameterized
+from grain._src.core import tree_lib
 from grain._src.python.dataset.transformations import packing
 from grain._src.python.dataset.transformations import source
 from jax import numpy as jnp
 import numpy as np
-import tree
 
 
 def _assert_trees_equal(actual, expected):
@@ -25,7 +25,7 @@ def _assert_trees_equal(actual, expected):
         ),
     )
 
-  tree.map_structure_with_path(_check_equivalence, actual, expected)
+  tree_lib.map_structure_with_path(_check_equivalence, actual, expected)
 
 
 def _common_test_body(
@@ -1248,7 +1248,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
         input_elements,
         expected_elements,
         length_struct,
-        pack_alignment_struct=tree.map_structure(
+        pack_alignment_struct=tree_lib.map_structure(
             lambda x: pack_alignment, length_struct
         ),
         padding_struct=padding_struct,

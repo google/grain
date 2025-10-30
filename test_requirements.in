@@ -18,7 +18,6 @@
 # bazel run //:requirements.update in the OSS version.
 array-record
 absl-py
-dm-tree
 etils[epath,epy]
 cloudpickle
 jax

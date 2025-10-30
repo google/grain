@@ -6,6 +6,9 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features
+  * Replaces `dm-tree` dependency with pure Python implementation for Pytree
+    manipulation. Note that it's only used if `jax` is not installed. If `jax`
+    can be imported -- uses `jax.tree_util` instead.
 
 * Breaking changes:
   * Removes `grain[testing]` PyPi build. It is an implementation detail and

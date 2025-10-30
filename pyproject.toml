@@ -14,7 +14,6 @@ dependencies = [
     "absl-py",
     "array-record>=0.8.1; sys_platform != 'win32'",
     "cloudpickle",
-    "dm-tree",
     "etils[epath,epy]",
     "numpy",
     "protobuf>=5.28.3",

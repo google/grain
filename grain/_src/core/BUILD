@@ -122,7 +122,7 @@ py_library(
     ],
     srcs_version = "PY3",
     deps = [
-        "@pypi//dm_tree:pkg",
+        "@pypi//etils:pkg",
         "@pypi//numpy:pkg",
     ],
 )
@@ -136,6 +136,7 @@ py_library(
         ":tree_lib",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
+        "@pypi//attrs:pkg",
         "@pypi//numpy:pkg",
     ],
 )
@@ -161,7 +162,6 @@ py_test(
         ":tree_lib",
         ":tree_test_lib",
         "@abseil-py//absl/testing:absltest",
-        "@pypi//attrs:pkg",
         "@pypi//jax:pkg",
         "@pypi//numpy:pkg",
     ],

@@ -42,52 +42,43 @@ _MAP_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
   ││  
   ││
   ╲╱
-"<class 'int'>[]"
+'int[]'
 
   ││
   ││  WithOptionsMapDataset
   ││
   ╲╱
-"<class 'int'>[]"
+'int[]'
 
   ││
   ││  ShuffleMapDataset
   ││
   ╲╱
-"<class 'int'>[]"
+'int[]'
 
   ││
   ││  SliceMapDataset[1:10:3]
   ││
   ╲╱
-"<class 'int'>[]"
+'int[]'
 
   ││
   ││  MapWithIndexMapDataset(transform=_add_dummy_metadata @ .../python/dataset/stats_test.py:XXX)
   ││
   ╲╱
-{'data': "<class 'int'>[]",
- 'dataset_index': "<class 'int'>[]",
- 'epoch': "<class 'int'>[]",
- 'index': "<class 'int'>[]"}
+{'data': 'int[]', 'dataset_index': 'int[]', 'epoch': 'int[]', 'index': 'int[]'}
 
   ││
   ││  MapMapDataset(transform=_identity @ .../python/dataset/stats_test.py:XXX)
   ││
   ╲╱
-{'data': "<class 'int'>[]",
- 'dataset_index': "<class 'int'>[]",
- 'epoch': "<class 'int'>[]",
- 'index': "<class 'int'>[]"}
+{'data': 'int[]', 'dataset_index': 'int[]', 'epoch': 'int[]', 'index': 'int[]'}
 
   ││
   ││  RepeatMapDataset(num_epochs=2)
   ││
   ╲╱
-{'data': "<class 'int'>[]",
- 'dataset_index': "<class 'int'>[]",
- 'epoch': "<class 'int'>[]",
- 'index': "<class 'int'>[]"}
+{'data': 'int[]', 'dataset_index': 'int[]', 'epoch': 'int[]', 'index': 'int[]'}
 """
 
 _ITER_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
@@ -95,28 +86,25 @@ _ITER_DATASET_REPR = r"""RangeMapDataset(start=0, stop=10, step=1)
   ││  
   ││
   ╲╱
-"<class 'int'>[]"
+'int[]'
 
   ││
   ││  ShuffleMapDataset
   ││
   ╲╱
-"<class 'int'>[]"
+'int[]'
 
   ││
   ││  PrefetchDatasetIterator(read_options=ReadOptions(num_threads=16, prefetch_buffer_size=500), allow_nones=False)
   ││
   ╲╱
-"<class 'int'>[]"
+'int[]'
 
   ││
   ││  MapDatasetIterator(transform=<lambda> @ .../python/dataset/stats_test.py:XXX)
   ││
   ╲╱
-{'data': "<class 'int'>[]",
- 'dataset_index': "<class 'int'>[]",
- 'epoch': "<class 'int'>[]",
- 'index': "<class 'int'>[]"}
+{'data': 'int[]', 'dataset_index': 'int[]', 'epoch': 'int[]', 'index': 'int[]'}
 
   ││
   ││  BatchDatasetIterator(batch_size=2, drop_remainder=False)
@@ -135,25 +123,25 @@ RangeMapDataset(start=0, stop=10, step=1)
   ││  
   ││
   ╲╱
-"<class 'int'>[]"
+'int[]'
 
   ││
   ││  ShuffleMapDataset
   ││
   ╲╱
-"<class 'int'>[]"
+'int[]'
 
   ││
   ││  MixedMapDataset[2 parents]
   ││
   ╲╱
-"<class 'int'>[]"
+'int[]'
 
   ││
   ││  MapMapDataset(transform=_AddOne)
   ││
   ╲╱
-"<class 'int'>[]"
+'int[]'
 """
 
 
@@ -361,7 +349,7 @@ class DebugModeStatsTest(absltest.TestCase):
             min_processing_time_ns=400_000,
             max_processing_time_ns=0,
             num_produced_elements=0,
-            output_spec="<class 'int'>[]",
+            output_spec="int[]",
         )
     )
     dummy_summary.nodes[1].CopyFrom(
@@ -374,7 +362,7 @@ class DebugModeStatsTest(absltest.TestCase):
             min_processing_time_ns=400,
             max_processing_time_ns=40000,
             num_produced_elements=10,
-            output_spec="<class 'int'>[]",
+            output_spec="int[]",
             is_output=True,
             is_prefetch=True,
             bytes_consumed=100000,
@@ -391,7 +379,7 @@ class DebugModeStatsTest(absltest.TestCase):
             min_processing_time_ns=4000,
             max_processing_time_ns=40_000_000,
             num_produced_elements=10,
-            output_spec="<class 'int'>[]",
+            output_spec="int[]",
         )
     )
     dummy_summary.nodes[3].CopyFrom(
@@ -404,7 +392,7 @@ class DebugModeStatsTest(absltest.TestCase):
             max_processing_time_ns=400_000_000,
             num_produced_elements=10,
             inputs=[],
-            output_spec="<class 'int'>[]",
+            output_spec="int[]",
         )
     )
     dummy_summary.nodes[4].CopyFrom(
@@ -417,7 +405,7 @@ class DebugModeStatsTest(absltest.TestCase):
             max_processing_time_ns=0,
             num_produced_elements=0,
             inputs=[],
-            output_spec="<class 'int'>[]",
+            output_spec="int[]",
         )
     )
 
@@ -456,7 +444,7 @@ class DebugModeStatsTest(absltest.TestCase):
             min_processing_time_ns=400,
             max_processing_time_ns=40000,
             num_produced_elements=10,
-            output_spec="<class 'int'>[]",
+            output_spec="int[]",
             is_output=True,
         )
     )
@@ -469,7 +457,7 @@ class DebugModeStatsTest(absltest.TestCase):
             min_processing_time_ns=4000,
             max_processing_time_ns=40_000_000,
             num_produced_elements=10,
-            output_spec="<class 'int'>[]",
+            output_spec="int[]",
             is_prefetch=True,
         )
     )
@@ -482,7 +470,7 @@ class DebugModeStatsTest(absltest.TestCase):
             min_processing_time_ns=400_000,
             max_processing_time_ns=400_000_000,
             num_produced_elements=10,
-            output_spec="<class 'int'>[]",
+            output_spec="int[]",
         )
     )
     dummy_summary.nodes[3].CopyFrom(
@@ -494,7 +482,7 @@ class DebugModeStatsTest(absltest.TestCase):
             max_processing_time_ns=4000_000,
             num_produced_elements=10,
             inputs=[],
-            output_spec="<class 'int'>[]",
+            output_spec="int[]",
         )
     )
     stats._populate_wait_time_ratio(dummy_summary)
