@@ -181,7 +181,7 @@ class BatchOperation(Generic[_IN, _OUT]):
     for index, input_record in enumerate(input_records[1:]):
       try:
         tree_lib.assert_same_structure(first_record, input_record)
-      except AssertionError:
+      except (AssertionError, ValueError):
         non_matching_records_indices.append(index + 1)
         non_matching_records.append(input_record)
 

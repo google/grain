@@ -51,6 +51,11 @@ main() {
   # MODULE.bazel file.
   write_to_bazelrc "common --check_direct_dependencies=error"
 
+  # Unset these from the local environment to avoid interference with the
+  # hermetic rules_python interpreter that we use for the build.
+  unset PYTHONPATH
+  unset PYTHONHOME
+
   bazel clean
   bazel build ... --action_env PYTHON_BIN_PATH="${PYTHON_BIN}" --action_env MACOSX_DEPLOYMENT_TARGET='11.0'
 
@@ -122,7 +127,10 @@ main() {
   if [ "$RUN_TESTS_WITH_BAZEL" = false ] ; then
     $PYTHON_BIN -m pip install --force ${OUTPUT_DIR}/all_dist/grain*.whl
     $PYTHON_BIN -m pip install -r test_requirements.in  --only-binary pyarrow
-    $PYTHON_BIN -m pip install tensorflow  --only-binary h5py
+    # TF does not have Python 3.14 support yet.
+    if (( "${PYTHON_MINOR_VERSION}" < 14 )); then
+      $PYTHON_BIN -m pip install tensorflow  --only-binary h5py
+    fi
 
     pushd "${OUTPUT_DIR}/all_dist"
     $PYTHON_BIN -m pytest --pyargs grain

@@ -13,7 +13,7 @@ jobs:
 
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
         os: [ubuntu-latest]
 
     steps:
@@ -29,7 +29,7 @@ jobs:
           export PYTHON_MAJOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f1)
           export PYTHON_MINOR_VERSION=$(echo $PYTHON_VERSION | cut -d. -f2)
           export BAZEL_VERSION="7.2.1"
-          export AUDITWHEEL_PLATFORM="manylinux2014_x86_64"
+          export AUDITWHEEL_PLATFORM="manylinux_2_28_x86_64"
           export RUN_TESTS_WITH_BAZEL="true"
           cd /tmp/grain
           DOCKER_BUILDKIT=1 docker build --progress=plain --no-cache \
