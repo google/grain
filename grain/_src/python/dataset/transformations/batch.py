@@ -129,6 +129,13 @@ def make_batch(values: Sequence[T]) -> T:
   if not values:
     raise ValueError("Cannot batch 0 values. Please file a bug.")
 
+  if len(values) == 1:
+    return tree_lib.map_structure(
+        # x[np.newaxis, ...] is sightly faster but only works for np.ndarray.
+        lambda x: np.expand_dims(x, axis=0),
+        values[0],
+    )
+
   try:
     return tree_lib.map_structure(lambda *xs: np.stack(xs), *values)
 
