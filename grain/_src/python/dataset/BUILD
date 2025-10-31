@@ -51,6 +51,7 @@ py_library(
         "//grain/_src/python:grain_pool",
         "//grain/_src/python:options",
         "//grain/_src/python:shared_memory_array",
+        "//grain/_src/python:variable_size_queue",
         "//grain/proto:execution_summary_py_pb2",
         "@abseil-py//absl/logging",
         "@pypi//cloudpickle:pkg",
