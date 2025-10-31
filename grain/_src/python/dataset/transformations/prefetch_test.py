@@ -1151,6 +1151,7 @@ class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
   @parameterized.parameters(["naive", "close", "context"])
   def test_early_break_continues_prefetching(self, method: str):
     count = 0
+    count_lock = threading.Lock()
 
     class SlowCountingSource:
       def __len__(self):
@@ -1159,7 +1160,8 @@ class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
       def __getitem__(self, index):
         nonlocal count
         time.sleep(0.1)
-        count += 1
+        with count_lock:
+          count += 1
         return index
 
     read_options = options.ReadOptions(num_threads=2)
