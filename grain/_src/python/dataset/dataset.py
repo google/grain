@@ -1413,6 +1413,11 @@ class DatasetIterator(Iterator[T], abc.ABC):
 
     This method also closes all parent iterators in the pipeline to ensure
     complete resource cleanup.
+
+    Note: Resource cleanup also occurs via __del__ when the iterator is garbage
+    collected, but since garbage collection is not guaranteed in CPython, this
+    method should be called explicitly or used with a context manager to ensure
+    timely resource cleanup.
     """
     if self._closed:
       return
