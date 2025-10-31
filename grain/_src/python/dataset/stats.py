@@ -660,6 +660,27 @@ class Stats(abc.ABC):
     """Records bytes produced by this node."""
     ...
 
+  def record_output_spec_for_batch(
+      self, elements: Sequence[T | None]
+  ) -> Sequence[T | None]:
+    """Records output spec for a batch of elements.
+
+    This method calls `record_output_spec` on the first non-None element of
+    the batch.
+
+    Args:
+      elements: sequence of elements to record the spec of.
+
+    Returns:
+      The original sequence of elements.
+    """
+    if elements:
+      for element in elements:
+        if element is not None:
+          self.record_output_spec(element)
+          break
+    return elements
+
   def _visualize_dataset_graph(self):
     """Generates Dataset visualization graph."""
     # TODO:Save the graph to a dot file for advanced visualization.

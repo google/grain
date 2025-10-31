@@ -387,7 +387,9 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
       A sequence containing the retrieved elements and/or `None` for missing
       elements, maintaining the order of the input `indices`.
     """
-    return [self.__getitem__(i) for i in indices]
+    return self._stats.record_output_spec_for_batch(
+        [self.__getitem__(i) for i in indices]
+    )
 
   def apply(
       self,
