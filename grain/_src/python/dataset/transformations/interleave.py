@@ -84,6 +84,7 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
 
   @stats.record_next_duration_if_output
   def __next__(self) -> T:
+    self._assert_not_closed()
     while True:
       if iterator_to_use := self._iterators_in_use[self._next_index_in_cycle]:
         try:
@@ -138,6 +139,16 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
         iterator = self._datasets[index_in_datasets].__iter__()
         iterator.set_state(it_state)
         self._iterators_in_use[index_in_cycle] = iterator
+
+  def close(self) -> None:
+    """Closes the iterator and shuts down the iterator prefetching."""
+    if self._closed:
+      return
+    self._closed = True
+    self._prefetch_ds_iter.close()
+    for iterator in self._iterators_in_use:
+      if iterator is not None:
+        iterator.close()
 
   def __str__(self) -> str:
     return (

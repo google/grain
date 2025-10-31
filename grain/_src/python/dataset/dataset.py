@@ -1357,6 +1357,7 @@ class DatasetIterator(Iterator[T], abc.ABC):
         to_visit.extend(current._parents)
     else:
       self._ctx: base.IteratorContext = base.IteratorContext()
+    self._closed = False
 
   @property
   def _parent(self) -> DatasetIterator:
@@ -1386,8 +1387,52 @@ class DatasetIterator(Iterator[T], abc.ABC):
     """
 
   @abc.abstractmethod
-  def set_state(self, state: dict[str, Any]):
+  def set_state(self, state: dict[str, Any]) -> None:
     """Sets the current state of the iterator."""
+
+  ### BEGIN Orbax checkpointing API.
+  # See orbax.checkpoint.v1.handlers.StatefulCheckpointable for more details.
+  # See https://orbax.readthedocs.io/en/latest/ for usage examples.
+
+  async def save(
+      self, directory: checkpointing.PathAwaitingCreation
+  ) -> Awaitable[None]:
+    """Saves the iterator state to a directory.
+
+    The current state (`get_state`) is used for saving, so any updates to the
+    state after returning from this method will not affect the saved checkpoint.
+
+    Args:
+      directory: A path in the process of being created. Must call
+        await_creation before accessing the physical path.
+
+    Returns:
+      A coroutine that has not been awaited. This is called by Orbax in a
+      background thread to perform I/O without blocking the main thread.
+    """
+    state = json.dumps(self.get_state(), indent=4)
+    return checkpointing.background_save(directory, state)
+
+  async def load(self, directory: epath.Path) -> Awaitable[None]:
+    """Loads the iterator state from a directory.
+
+    The state may be loaded and set in a background thread. The main thread
+    should not alter the state content while the load is in progress.
+
+    Args:
+      directory: The directory to load the state from.
+
+    Returns:
+      A coroutine that has not been awaited. This is called by Orbax in a
+      background thread to perform I/O without blocking the main thread.
+    """
+
+    def set_state_fn(state: str):
+      self.set_state(json.loads(state))
+
+    return checkpointing.background_load(directory, set_state_fn)
+
+  ### END Orbax checkpointing API.
 
   def start_prefetch(self) -> None:
     """Asynchronously starts processing and buffering elements.
@@ -1402,6 +1447,30 @@ class DatasetIterator(Iterator[T], abc.ABC):
     recover the model.
     """
     raise NotImplementedError
+
+  def close(self) -> None:
+    """Closes the iterator and releases resources.
+
+    This method is idempotent and safe to call multiple times.
+    After calling ``close``, the iterator will raise ``ValueError`` on any
+    subsequent calls to ``__next__``.
+
+    Recursively closes all parent iterators in the pipeline to ensure complete
+    resource cleanup.
+
+    NOTE: Resource cleanup occurs via ``__del__`` when the iterator is garbage
+    collected, but since garbage collection is not guaranteed in CPython, this
+    method can be called explicitly to ensure explicit blocking cleanup.
+    """
+    if self._closed:
+      return
+    self._closed = True
+    for parent in self._parents:
+      parent.close()
+
+  def _assert_not_closed(self) -> None:
+    if self._closed:
+      raise ValueError(f"Trying to advance a closed iterator: '{self}'.")
 
   # pytype: disable=attribute-error
   # pylint: disable=protected-access
@@ -1458,49 +1527,8 @@ class DatasetIterator(Iterator[T], abc.ABC):
   # pytype: enable=attribute-error
   # pylint: enable=protected-access
 
-  ### BEGIN Orbax checkpointing API.
-  # See orbax.checkpoint.v1.handlers.StatefulCheckpointable for more details.
-  # See https://orbax.readthedocs.io/en/latest/ for usage examples.
-
-  async def save(
-      self, directory: checkpointing.PathAwaitingCreation
-  ) -> Awaitable[None]:
-    """Saves the iterator state to a directory.
-
-    The current state (`get_state`) is used for saving, so any updates to the
-    state after returning from this method will not affect the saved checkpoint.
-
-    Args:
-      directory: A path in the process of being created. Must call
-        await_creation before accessing the physical path.
-
-    Returns:
-      A coroutine that has not been awaited. This is called by Orbax in a
-      background thread to perform I/O without blocking the main thread.
-    """
-    state = json.dumps(self.get_state(), indent=4)
-    return checkpointing.background_save(directory, state)
-
-  async def load(self, directory: epath.Path) -> Awaitable[None]:
-    """Loads the iterator state from a directory.
-
-    The state may be loaded and set in a background thread. The main thread
-    should not alter the state content while the load is in progress.
-
-    Args:
-      directory: The directory to load the state from.
-
-    Returns:
-      A coroutine that has not been awaited. This is called by Orbax in a
-      background thread to perform I/O without blocking the main thread.
-    """
-
-    def set_state_fn(state: str):
-      self.set_state(json.loads(state))
-
-    return checkpointing.background_load(directory, set_state_fn)
-
-  ### END Orbax checkpointing API.
+  def __del__(self):
+    self.close()
 
 
 class _WithSeedMapDataset(MapDataset[T]):
