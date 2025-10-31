@@ -185,6 +185,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   @dataset_stats.record_next_duration_if_output
   def __next__(self) -> T:
+    self._assert_not_closed()
     # The time recorded here is the time spent in prefetch node to return an
     # element, including the time spent in parent node.
     timer = dataset_stats.Timer()
@@ -302,6 +303,20 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
       # Allows the old executor to finish running the tasks it was already
       # assigned asynchronously.
       old_executor.shutdown(wait=False)
+
+  def close(self) -> None:
+    """Shuts down the thread pool executor and cancels all pending futures."""
+    if self._closed:
+      return
+    self._closed = True
+    # Shutdown the thread pool executor if it exists.
+    if hasattr(self, "_executor"):
+      self._executor.shutdown(wait=False)
+      # Cancel all pending futures in the buffer.
+      while self._buffer:
+        future = self._buffer.popleft()
+        future.cancel()
+      self._buffer = None
 
 
 def _iterator_with_context(
@@ -675,6 +690,7 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   @dataset_stats.record_next_duration_if_output
   def __next__(self) -> T:
+    self._assert_not_closed()
     self._ensure_iterator_initialized()
     # The time recorded here is the time spent in prefetch node to return an
     # element, including the time spent in parent node.
@@ -759,6 +775,14 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         "MultiprocessPrefetchDatasetIterator("
         f"multiprocessing_options={self._multiprocessing_options})"
     )
+
+  def close(self) -> None:
+    """Shuts down the prefetching threads and multiprocessing pool."""
+    if self._closed:
+      return
+    self._closed = True
+    if self._raw_iterator is not None:
+      self._raw_iterator.stop_prefetch()
 
 
 class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
@@ -854,8 +878,6 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._step_zero_state: StateT = parent.get_state()
     self._state: StateT | None = None
 
-    # Whether this iterator is closed, meaning it should no longer be used.
-    self._closed = False
     self._prefetch_thread: threading.Thread | None = None
     self._prefetch_should_stop: threading.Event = threading.Event()
     self._buffer: queue.Queue[tuple[T, StateT, Exception | None]] = queue.Queue(
@@ -966,6 +988,3 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         "ThreadPrefetchDatasetIterator("
         f"prefetch_buffer_size={self._prefetch_buffer_size})"
     )
-
-  def __del__(self):
-    self._stop_prefetch()
