@@ -36,6 +36,7 @@ class _LimitDatasetIterator(dataset.DatasetIterator[T]):
 
   @stats.record_next_duration_if_output
   def __next__(self):
+    self._assert_not_closed()
     if self._count_elements_read >= self._count:
       raise StopIteration
     value = next(self._parent)

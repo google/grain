@@ -56,6 +56,7 @@ class _InMemoryCacheDatasetIterator(dataset.DatasetIterator[T]):
 
   @stats.record_next_duration_if_output
   def __next__(self) -> T:
+    self._assert_not_closed()
     timer = stats.Timer()
     if self._cache_filled:
       with self._stats.record_self_time():

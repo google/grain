@@ -202,6 +202,7 @@ class _WindowShuffleDatasetIterator(dataset.DatasetIterator[T]):
 
   @stats.record_next_duration_if_output
   def __next__(self):
+    self._assert_not_closed()
     # Window is empty, fill up the next window.
     if not self._window:
       if self._parent_exhausted:

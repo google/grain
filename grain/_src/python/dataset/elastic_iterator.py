@@ -91,6 +91,7 @@ class ElasticIterator(dataset.DatasetIterator):
     return self
 
   def __next__(self) -> Any:
+    self._assert_not_closed()
     result = next(self._iterator)
     self._global_next_index += self._global_batch_size
     return result

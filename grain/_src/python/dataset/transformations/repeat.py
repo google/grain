@@ -93,6 +93,7 @@ class _RepeatDatasetIterator(dataset.DatasetIterator[T]):
 
   @stats.record_next_duration_if_output
   def __next__(self):
+    self._assert_not_closed()
     timer = stats.Timer()
     if self._epoch == self._num_epochs:
       raise StopIteration

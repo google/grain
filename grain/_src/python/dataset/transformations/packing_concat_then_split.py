@@ -398,6 +398,7 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
 
   @stats.record_next_duration_if_output
   def __next__(self):
+    self._assert_not_closed()
     if self._packed_elements:
       self._state.elements_from_buffer_after_checkpoint += 1
       return self._stats.record_output_spec(self._packed_elements.popleft())

@@ -219,6 +219,7 @@ class _MapDatasetIterator(dataset.DatasetIterator[T]):
 
   @stats.record_next_duration_if_output
   def __next__(self):
+    self._assert_not_closed()
     element = next(self._parent)
     with self._stats.record_self_time():
       if element is not None:
@@ -254,6 +255,7 @@ class _RandomMapDatasetIterator(dataset.DatasetIterator[T]):
 
   @stats.record_next_duration_if_output
   def __next__(self):
+    self._assert_not_closed()
     element = next(self._parent)
     with self._stats.record_self_time():
       if element is not None:
@@ -300,6 +302,7 @@ class _MapWithIndexDatasetIterator(dataset.DatasetIterator[T]):
 
   @stats.record_next_duration_if_output
   def __next__(self):
+    self._assert_not_closed()
     element = next(self._parent)
     with self._stats.record_self_time():
       if element is not None:
