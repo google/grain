@@ -17,10 +17,19 @@ import sys
 from typing import Callable, Tuple
 
 from absl.testing import absltest
+from grain._src.core import transforms
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset.transformations import flatmap
 from grain._src.python.dataset.transformations import mix
 import numpy as np
+
+
+class FlatMap(transforms.FlatMapTransform):
+  max_fan_out: int = 10
+
+  def flat_map(self, element: int) -> list[int]:
+    return [i for i in range(element)]
 
 
 class ExplicitSelectionMap(base.DatasetSelectionMap):
@@ -189,6 +198,41 @@ class MixedMapDatasetTest(absltest.TestCase):
     actual_values = [mixed_lzds[i] for i in range(10)]
     expected_values = [val for val in range(10)]
     self.assertEqual(expected_values, actual_values)
+
+  def test_filter_before_mix_raises_error(self):
+    with self.assertRaises(ValueError):
+      _ = mix.MixedMapDataset(
+          parents=[
+              dataset.MapDataset.range(10, 20),
+              dataset.MapDataset.range(10).filter(lambda x: x % 2 == 0),
+          ],
+          proportions=[1, 1],
+      )
+
+  def test_filter_before_mix_with_allow_sparse_transformations(self):
+    ds = mix.MixedMapDataset(
+        parents=[
+            dataset.MapDataset.range(10, 20),
+            dataset.MapDataset.range(10).filter(lambda x: x % 2 == 0),
+        ],
+        proportions=[1, 1],
+        allow_sparse_transformations=True,
+    )
+    self.assertEqual(
+        list(ds), [10, 0, 11, 12, 2, 13, 14, 4, 15, 16, 6, 17, 18, 8, 19]
+    )
+
+  def test_flatmap_before_mix_raises_error(self):
+    with self.assertRaises(ValueError):
+      _ = mix.MixedMapDataset(
+          parents=[
+              dataset.MapDataset.range(10),
+              flatmap.FlatMapMapDataset(
+                  dataset.MapDataset.range(10), FlatMap()
+              ),
+          ],
+          proportions=[1, 1],
+      )
 
   def test_mixing_equal_probability_with_float_proportions(self):
     mixed_lzds = mix.MixedMapDataset(
@@ -474,6 +518,18 @@ class MixedIterDatasetTest(absltest.TestCase):
         np.testing.assert_array_equal(
             next(ds_iter), values_without_interruption[i]
         )
+
+  def test_mix_with_filter(self):
+    ds = mix.MixedIterDataset(
+        parents=[
+            dataset.MapDataset.range(10).to_iter_dataset(),
+            dataset.MapDataset.range(10, 20)
+            .filter(lambda x: x % 2 == 0)
+            .to_iter_dataset(),
+        ],
+        proportions=[1, 1],
+    )
+    self.assertEqual(list(ds), [0, 10, 1, 12, 2, 14, 3, 16, 4, 18, 5])
 
 
 class ConcatenateLazyMapTest(absltest.TestCase):
