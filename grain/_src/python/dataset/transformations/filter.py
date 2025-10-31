@@ -149,6 +149,7 @@ class _FilterDatasetIterator(dataset.DatasetIterator[T]):
 
   @dataset_stats.record_next_duration_if_output
   def __next__(self):
+    self._assert_not_closed()
     value = None
     passed_filter = False
     timer = dataset_stats.Timer()

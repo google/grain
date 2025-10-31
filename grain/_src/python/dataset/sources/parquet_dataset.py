@@ -54,6 +54,7 @@ class _ParquetDatasetIterator(dataset.DatasetIterator[T]):
       self._np_table[table.field(i).name] = table.column(i).to_numpy()
 
   def __next__(self):
+    self._assert_not_closed()
     if self._index_within_row_group >= self._row_group_len:
       if self._row_group < self._pq_file.num_row_groups - 1:
         self._row_group += 1

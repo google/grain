@@ -185,6 +185,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   @dataset_stats.record_next_duration_if_output
   def __next__(self) -> T:
+    self._assert_not_closed()
     if self._closed:
       raise StopIteration("Iterator is closed.")
     # The time recorded here is the time spent in prefetch node to return an
@@ -698,6 +699,7 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   @dataset_stats.record_next_duration_if_output
   def __next__(self) -> T:
+    self._assert_not_closed()
     self._ensure_iterator_initialized()
     # The time recorded here is the time spent in prefetch node to return an
     # element, including the time spent in parent node.
@@ -936,6 +938,7 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   @dataset_stats.record_next_duration_if_output
   def __next__(self):
+    self._assert_not_closed()
     timer = dataset_stats.Timer()
     with timer:
       self.start_prefetch()

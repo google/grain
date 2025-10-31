@@ -1408,7 +1408,7 @@ class DatasetIterator(Iterator[T], abc.ABC):
     """Closes the iterator and releases any resources.
 
     This method is idempotent and safe to call multiple times.
-    After calling close(), the iterator will raise StopIteration on any
+    After calling close(), the iterator will raise ValueError on any
     subsequent calls to __next__().
 
     This method also closes all parent iterators in the pipeline to ensure
@@ -1421,6 +1421,10 @@ class DatasetIterator(Iterator[T], abc.ABC):
     for parent in self._parents:
       if hasattr(parent, 'close'):
         parent.close()
+
+  def _assert_not_closed(self) -> None:
+    if self._closed:
+      raise ValueError(f"The iterator '{self}' is closed.")
 
   def __enter__(self) -> 'DatasetIterator[T]':
     return self

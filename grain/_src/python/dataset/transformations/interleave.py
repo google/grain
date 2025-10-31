@@ -84,6 +84,7 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
 
   @stats.record_next_duration_if_output
   def __next__(self) -> T:
+    self._assert_not_closed()
     while True:
       if iterator_to_use := self._iterators_in_use[self._next_index_in_cycle]:
         try:

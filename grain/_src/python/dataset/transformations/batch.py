@@ -222,6 +222,7 @@ class _BatchDatasetIterator(dataset.DatasetIterator[T]):
 
   @stats.record_next_duration_if_output
   def __next__(self) -> T:
+    self._assert_not_closed()
     values = []
     for _ in range(self._batch_size):
       try:

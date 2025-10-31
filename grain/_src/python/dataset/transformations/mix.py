@@ -158,6 +158,7 @@ class _MixedDatasetIterator(dataset.DatasetIterator[T]):
 
   @stats.record_next_duration_if_output
   def __next__(self):
+    self._assert_not_closed()
     if self._stop:
       # Although there may be elements available in some parent datasets, do not
       # sample once stop signal is turned on.

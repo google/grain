@@ -82,6 +82,7 @@ class _ZipDatasetIterator(dataset.DatasetIterator[T]):
 
   @dataset_stats.record_next_duration_if_output
   def __next__(self) -> tuple[T, ...]:
+    self._assert_not_closed()
     with self._stats.record_self_time():
       # Can't use for a `for` loop because we need to raise StopIteration from
       # the inner iterators.

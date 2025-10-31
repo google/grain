@@ -98,6 +98,7 @@ class _RebatchDatasetIterator(dataset.DatasetIterator):
 
   @stats.record_next_duration_if_output
   def __next__(self):
+    self._assert_not_closed()
     timer = stats.Timer()
 
     batch_dim_needed = self._batch_size

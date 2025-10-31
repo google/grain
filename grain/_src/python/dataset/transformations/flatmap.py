@@ -96,6 +96,7 @@ class _FlatMapDatasetIterator(dataset.DatasetIterator[T]):
 
   @dataset_stats.record_next_duration_if_output
   def __next__(self):
+    self._assert_not_closed()
     timer = dataset_stats.Timer()
     while self._has_consumed_all_buffer_elements():
       # Stores the previous state so that we can checkpoint this iterator

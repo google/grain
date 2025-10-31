@@ -86,6 +86,7 @@ class _TFRecordDatasetIterator(dataset.DatasetIterator[T]):
     self._reader = _TFRecordReader(path)
 
   def __next__(self) -> T:
+    self._assert_not_closed()
     return next(self._reader)
 
   def get_state(self) -> dict[str, int]:

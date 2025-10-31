@@ -168,6 +168,7 @@ class PackingDatasetIterator(dataset.DatasetIterator):
 
   @dataset_stats.record_next_duration_if_output
   def __next__(self):
+    self._assert_not_closed()
     timer = dataset_stats.Timer()
     if self._packed_batch is not None:
       with self._stats.record_self_time(offset_ns=timer.value()):
