@@ -1417,10 +1417,8 @@ class DatasetIterator(Iterator[T], abc.ABC):
     if self._closed:
       return
     self._closed = True
-    # Close parent iterators
     for parent in self._parents:
-      if hasattr(parent, 'close'):
-        parent.close()
+      parent.close()
 
   def _assert_not_closed(self) -> None:
     if self._closed:
