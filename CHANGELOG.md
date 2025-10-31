@@ -12,6 +12,9 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 * Deprecations:
 
 * Bug fixes:
+  * Fixes a bug in grain.experimental.ConcatThenSplitIterDataset where
+    full-length features would get packed behind non-full-length features for no
+    good reason.
 
 ## Grain 0.2.14 (October 30, 2025)
 

@@ -456,6 +456,9 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
           # The element has a full-length feature, so it's considered already
           # packed because split_full_length_features=False.
           self._packed_elements.append(self._pack_elements([current_element]))
+          if not buffer:
+            # Buffer is empty, so we emit the full-length sequence right away.
+            break
           continue
       self._remainder_element = self._maybe_add_to_buffer(
           current_element, buffer=buffer, tokens_in_buffer=tokens_in_buffer
