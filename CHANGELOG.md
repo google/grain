@@ -6,6 +6,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features:
+  * Add public `DatasetIterator.close` API as an explicit blocking alternative
+    to a cleanup during GC.
 
 * Breaking changes:
 
