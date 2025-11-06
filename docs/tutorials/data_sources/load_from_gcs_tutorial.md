@@ -40,10 +40,12 @@ The gcsfuse CLI offers various configurable options, detailed at https://cloud.g
 # Mount a Cloud Storage bucket or location, without the gs:// prefix.
 mount_path = "my-bucket"  # or a location like "my-bucket/path/to/mount"
 local_path = f"./mnt/gs/{mount_path}"
+grain_lib = !(pip list| grep grain | awk '{print $2}')
+app_name = "grain-gcsfuse/" + grain_lib[0]
 
 !mkdir -p {local_path}
 # The flags below are configured to improve GCS data loading performance. Users are encouraged to explore alternative settings and we would greatly appreciate any feedback or insights shared with the Grain team.
-!gcsfuse --implicit-dirs --type-cache-max-size-mb=-1 --stat-cache-max-size-mb=-1 --kernel-list-cache-ttl-secs=-1 --metadata-cache-ttl-secs=-1 {mount_path} {local_path}
+!gcsfuse --implicit-dirs --type-cache-max-size-mb=-1 --stat-cache-max-size-mb=-1 --kernel-list-cache-ttl-secs=-1 --metadata-cache-ttl-secs=-1 --app-name={app_name} {mount_path} {local_path}
 ```
 
 ```python id="j2e8nv0j_Y23"
