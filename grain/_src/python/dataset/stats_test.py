@@ -297,9 +297,9 @@ class DebugModeStatsTest(absltest.TestCase):
     reported_self_time = 0
 
     def mock_report(node):
-      while node._self_times_buffer:
+      while node._self_times_buffer:  # pytype: disable=attribute-error
         nonlocal reported_self_time
-        reported_self_time += node._self_times_buffer.pop()
+        reported_self_time += node._self_times_buffer.pop()  # pytype: disable=attribute-error
       for p in node._parents:
         p.report()
 
