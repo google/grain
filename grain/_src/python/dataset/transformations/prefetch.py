@@ -144,8 +144,9 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._map_parent = parent
     self._dataset_length = len(parent)
     self._read_options = read_options
-    self._next_index = 0
-    self._buffer = None
+    self._next_returned_index = 0
+    self._next_buffered_index = 0
+    self._buffer = collections.deque()
     self._lock = threading.Lock()
     self._prefetch_buffer_size = (
         read_options.prefetch_buffer_size if read_options.num_threads > 0 else 0
@@ -192,43 +193,16 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     # We loop here to skip all None elements (in case the underlying dataset
     # is sparse), if self._allow_nones = False, else we return Nones too.
     while True:
-      if self._next_index == self._dataset_length:
+      if self._next_returned_index == self._dataset_length:
         break
       with self._lock, timer:
         if self._prefetch_buffer_size > 0:
           if not self._buffer:
-            indices = range(
-                self._next_index,
-                min(
-                    self._next_index + self._prefetch_buffer_size,
-                    self._dataset_length,
-                ),
-            )
-            # Stats initialization is not thread-safe, so we trigger map parent
-            # stats initialization before multithreaded prefetching.
-            _ = self._stats
-            self._buffer = collections.deque(
-                self._executor.submit(
-                    functools.partial(_getitem, self._stats, self._map_parent),
-                    i,
-                )
-                for i in indices
-            )
+            # Fill the buffer on the first iteration.
+            self._fill_buffer()
           element = self._buffer.popleft()
           # Prefetch elements until the buffer is full again.
-          for idx in range(
-              self._next_index + len(self._buffer) + 1,
-              min(
-                  self._next_index + self._prefetch_buffer_size + 1,
-                  self._dataset_length,
-              ),
-          ):
-            self._buffer.append(
-                self._executor.submit(
-                    functools.partial(_getitem, self._stats, self._map_parent),
-                    idx,
-                )
-            )
+          self._fill_buffer()
           element = element.result()
         else:
           # In case prefetch buffer size was decreased, we still want to consume
@@ -237,9 +211,10 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
             element = self._buffer.popleft().result()
           else:
             element = self._stats.record_bytes_consumed(
-                self._map_parent[self._next_index]
+                self._map_parent[self._next_returned_index]
             )
-        self._next_index += 1
+            self._next_buffered_index += 1
+        self._next_returned_index += 1
       return_element = self._allow_nones or element is not None
       self._threshold_checker.check(return_element)
       if return_element:
@@ -249,18 +224,25 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     raise StopIteration
 
   def get_state(self):
-    return {"next_index": self._next_index}
+    return {"next_index": self._next_returned_index}
 
   def set_state(self, state):
     with self._lock:
-      self._next_index = state["next_index"]
-      if self._next_index < 0 or self._next_index > self._dataset_length:
+      self._next_returned_index = state["next_index"]
+      self._next_buffered_index = self._next_returned_index
+      if (
+          self._next_returned_index < 0
+          or self._next_returned_index > self._dataset_length
+      ):
         raise IndexError(
-            f"Checkpoint `next_index` {self._next_index} is out of range for"
-            f" dataset of length {self._dataset_length}."
+            f"Checkpoint `next_index` {self._next_returned_index} is out of"
+            f" range for dataset of length {self._dataset_length}."
         )
       if self._prefetch_buffer_size > 0:
-        self._buffer = None
+        # Cancel all pending futures in the buffer.
+        while self._buffer:
+          future = self._buffer.popleft()
+          future.cancel()
 
   def __str__(self) -> str:
     return (
@@ -304,6 +286,25 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
       # assigned asynchronously.
       old_executor.shutdown(wait=False)
 
+  def _fill_buffer(self):
+    while (
+        len(self._buffer) < self._prefetch_buffer_size
+        and self._next_buffered_index < self._dataset_length
+    ):
+      # Note that we trigger creation of `_stats` in this (single) thread, it is
+      # important because the stats initialization is not thread-safe.
+      self._buffer.append(
+          self._executor.submit(
+              functools.partial(_getitem, self._stats, self._map_parent),
+              self._next_buffered_index,
+          )
+      )
+      self._next_buffered_index += 1
+
+  def start_prefetch(self):
+    if self._prefetch_buffer_size > 0:
+      self._fill_buffer()
+
   def close(self) -> None:
     """Shuts down the thread pool executor and cancels all pending futures."""
     if self._closed:
@@ -316,7 +317,6 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
       while self._buffer:
         future = self._buffer.popleft()
         future.cancel()
-      self._buffer = None
 
 
 def _iterator_with_context(
@@ -819,8 +819,6 @@ class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
   def __iter__(self) -> dataset.DatasetIterator[T]:
     parent_iter = self._parent.__iter__()
     if self._prefetch_buffer_size == 0:
-      # Avoid raising a NotImplemented error and make a noop instead.
-      parent_iter.start_prefetch = lambda: None
       return parent_iter
     return ThreadPrefetchDatasetIterator(
         parent_iter, self._prefetch_buffer_size

@@ -138,7 +138,7 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     ds_iter = iter(prefetch_lazy_iter_ds_large_buffer)
     self.assertIsInstance(ds_iter, prefetch.PrefetchDatasetIterator)
     ds_iter = cast(prefetch.PrefetchDatasetIterator, ds_iter)
-    self.assertIsNone(ds_iter._buffer)
+    self.assertEmpty(ds_iter._buffer)
     _ = next(ds_iter)
     self.assertLen(ds_iter._buffer, prefetch_buffer_size)
     _ = [next(ds_iter) for _ in range(14)]
@@ -380,6 +380,48 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     self.assertEqual(ds_iter._num_threads, 5)
     self.assertEqual(ds_iter._executor._max_workers, 5)
     self.assertEqual([next(ds_iter) for _ in range(10)], list(range(10, 20)))
+
+  @parameterized.product(
+      start_prefetch_calls=[1, 10],
+      num_threads=[0, 16],
+  )
+  def test_start_prefetch(
+      self,
+      start_prefetch_calls: int,
+      num_threads: int,
+  ):
+    ds = dataset.MapDataset.range(10)
+    ds = ds.map(lambda x: x)
+    ds = prefetch.PrefetchIterDataset(
+        ds, read_options=options.ReadOptions(num_threads)
+    )
+
+    it = ds.__iter__()
+    for _ in range(start_prefetch_calls):
+      it.start_prefetch()
+    # Check that the buffer was filled before we start processing elements.
+    if num_threads > 0:
+      self.assertNotEmpty(it._buffer)  # pytype: disable=attribute-error
+
+    self.assertEqual(list(it), list(range(10)))
+
+  @parameterized.parameters(True, False)
+  def test_stats_are_initialized_in_a_single_thread(self, start_prefetch: bool):
+    stats_init_threads = set()
+
+    class FilterMapDataset(filter_lazy_dataset.FilterMapDataset):
+
+      def _initialize_stats(self, *args, **kwargs):
+        stats_init_threads.add(threading.get_ident())
+        return super()._initialize_stats(*args, **kwargs)
+
+    ds = FilterMapDataset(dataset.MapDataset.range(10), lambda x: x > 2)
+    ds = prefetch.PrefetchIterDataset(ds, read_options=options.ReadOptions())
+    it = ds.__iter__()
+    if start_prefetch:
+      it.start_prefetch()
+    _ = list(it)
+    self.assertEqual(stats_init_threads, {threading.get_ident()})
 
 
 class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):

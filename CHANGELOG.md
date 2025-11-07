@@ -8,6 +8,9 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 * New features:
   * Add public `DatasetIterator.close` API as an explicit blocking alternative
     to a cleanup during GC.
+  * `DatasetIterator.start_prefetch` now propagates to the first asynchronous
+    parent iterator instead of raising `NotImplemented`. This API is useful for
+    hiding first batch processing behind model checkpoint recovery.
 
 * Breaking changes:
 

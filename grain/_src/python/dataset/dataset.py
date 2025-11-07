@@ -1435,18 +1435,19 @@ class DatasetIterator(Iterator[T], abc.ABC):
   ### END Orbax checkpointing API.
 
   def start_prefetch(self) -> None:
-    """Asynchronously starts processing and buffering elements.
+    """Starts processing elements in the first asynchronous parent iterator.
 
-    NOTE: Only available on iterators of asynchronous transformations.
-
-    Can be useful when the iterator can be created in advance but the elements
-    are not needed immediately. For instance, when recovering iterator and model
-    from a checkpoint, recover the iterator first, call ``start_prefech`` and
-    then recover the model. This way the time to get the first batch from the
+    Useful when the iterator can be created in advance but the elements are not
+    needed immediately. For instance, when recovering iterator and model from a
+    checkpoint, recover the iterator first, call ``start_prefech`` and then
+    recover the model. This way the time to get the first batch from the
     iterator will be partially or fully hidden behind the time it takes to
     recover the model.
+
+    This method is idempotent and safe to call multiple times.
     """
-    raise NotImplementedError
+    for parent in self._parents:
+      parent.start_prefetch()
 
   def close(self) -> None:
     """Closes the iterator and releases resources.
