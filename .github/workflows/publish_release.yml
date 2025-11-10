@@ -19,3 +19,4 @@ jobs:
       pypi_project_url: https://pypi.org/project/grain
       run_tests_with_bazel: ${{ inputs.run_tests_with_bazel }}
       is_nightly: false
+      is_ci_tests: false

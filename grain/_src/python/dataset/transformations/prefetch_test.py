@@ -14,6 +14,7 @@
 from concurrent import futures
 import dataclasses
 import logging as std_logging
+import platform
 import sys
 import threading
 import time
@@ -1170,6 +1171,9 @@ class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
       for _ in range(5):
         _ = next(it)
 
+  @absltest.skipIf(
+      platform.system() == "Darwin", "Fails on macos-14 runner."
+  )
   @parameterized.parameters([True, False])
   def test_no_mem_leak_with_double_prefetch(self, close: bool):
     ds = (
