@@ -276,7 +276,9 @@ class DebugModeStatsTest(absltest.TestCase):
 
     def mock_report(node):
       while node._self_times_buffer:
-        reported_self_times[id(node)] += node._self_times_buffer.pop()
+        reported_self_times[
+            id(node)
+        ] += node._self_times_buffer.pop().duration_ns
       for p in node._parents:
         p.report()
 
@@ -299,7 +301,7 @@ class DebugModeStatsTest(absltest.TestCase):
     def mock_report(node):
       while node._self_times_buffer:  # pytype: disable=attribute-error
         nonlocal reported_self_time
-        reported_self_time += node._self_times_buffer.pop()  # pytype: disable=attribute-error
+        reported_self_time += node._self_times_buffer.pop().duration_ns  # pytype: disable=attribute-error
       for p in node._parents:
         p.report()
 

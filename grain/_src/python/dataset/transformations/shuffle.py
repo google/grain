@@ -78,9 +78,8 @@ class ShuffleMapDataset(dataset.MapDataset[T]):
     return self._parent[shuffled_index]
 
   def _getitems(self, indices: Sequence[int]):
-    shuffled_indices = []
-    for index in indices:
-      shuffled_indices.append(self._shuffled_index(index))
+    with self._stats.record_self_time(num_elements=len(indices)):
+      shuffled_indices = [self._shuffled_index(index) for index in indices]
     return self._parent._getitems(shuffled_indices)  # pylint: disable=protected-access
 
 

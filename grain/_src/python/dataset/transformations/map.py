@@ -108,11 +108,18 @@ class MapMapDataset(dataset.MapDataset[T]):
       return self.slice(index)
     element = self._parent[index]
     with self._stats.record_self_time():
-      return self._stats.record_output_spec(self._map_element(element))
+      mapped_element = self._map_element(element)
+      return (
+          self._stats.record_output_spec(mapped_element)
+          if mapped_element is not None
+          else None
+      )
 
   def _getitems(self, indices: Sequence[int]):
     elements = self._parent._getitems(indices)  # pylint: disable=protected-access
-    return [self._map_element(element) for element in elements]
+    with self._stats.record_self_time(num_elements=len(indices)):
+      processed_elements = [self._map_element(element) for element in elements]
+      return self._stats.record_output_spec_for_batch(processed_elements)
 
 
 class RandomMapMapDataset(dataset.MapDataset[T]):

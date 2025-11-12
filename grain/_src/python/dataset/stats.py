@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import abc
+import collections
 from collections.abc import Sequence
 import contextlib
 import dataclasses
@@ -578,7 +579,7 @@ class Stats(abc.ABC):
 
   @contextlib.contextmanager
   @abc.abstractmethod
-  def record_self_time(self, offset_ns: float = 0):
+  def record_self_time(self, *, num_elements: int = 1, offset_ns: float = 0):
     """Records time spent in this node's transfromation.
 
     Thread-safe.
@@ -604,6 +605,8 @@ class Stats(abc.ABC):
     ```
 
     Args:
+      num_elements: (Optional.) Number of elements processed in this node.
+        Default to 1.
       offset_ns: (Optional.) A offset to add to the self time measured by this
         function. Default to 0.
     """
@@ -660,6 +663,27 @@ class Stats(abc.ABC):
     """Records bytes produced by this node."""
     ...
 
+  def record_output_spec_for_batch(
+      self, elements: Sequence[T | None]
+  ) -> Sequence[T | None]:
+    """Records output spec for a batch of elements.
+
+    This method calls `record_output_spec` on the first non-None element of
+    the batch.
+
+    Args:
+      elements: sequence of elements to record the spec of.
+
+    Returns:
+      The original sequence of elements.
+    """
+    if elements:
+      for element in elements:
+        if element is not None:
+          self.record_output_spec(element)
+          break
+    return elements
+
   def _visualize_dataset_graph(self):
     """Generates Dataset visualization graph."""
     # TODO:Save the graph to a dot file for advanced visualization.
@@ -708,7 +732,7 @@ class _DefaultStats(Stats):
     super().__init__(config, parents)
 
   @contextlib.contextmanager
-  def record_self_time(self, offset_ns: int = 0):
+  def record_self_time(self, *, num_elements: int = 1, offset_ns: int = 0):
     yield
 
   def record_output_spec(self, element: T) -> T:
@@ -736,7 +760,7 @@ class _VisualizationStats(Stats):
     return _VisualizationStats, (self._config.name, self._parents)
 
   @contextlib.contextmanager
-  def record_self_time(self, offset_ns: int = 0):
+  def record_self_time(self, *, num_elements: int = 1, offset_ns: int = 0):
     yield
 
   def record_output_spec(self, element: T) -> T:
@@ -763,6 +787,11 @@ class _VisualizationStats(Stats):
     logging.info(msg)
     if _running_in_colab():
       print(msg)
+
+
+_RecordedSelfTime = collections.namedtuple(
+    "RecordedSelfTime", ["duration_ns", "num_elements"]
+)
 
 
 class _ExecutionStats(_VisualizationStats):
@@ -887,13 +916,15 @@ class _ExecutionStats(_VisualizationStats):
     return result
 
   @contextlib.contextmanager
-  def record_self_time(self, offset_ns: int = 0):
+  def record_self_time(self, num_elements: int = 1, offset_ns: int = 0):
     start_time = time.perf_counter_ns()
     try:
       yield
     finally:
       self._self_times_buffer.append(
-          time.perf_counter_ns() - start_time + offset_ns
+          _RecordedSelfTime(
+              (time.perf_counter_ns() - start_time + offset_ns), num_elements
+          )
       )
       if self._is_output:
         # We avoid acquiring `_reporting_thread_init_lock` here to avoid lock
@@ -923,18 +954,22 @@ class _ExecutionStats(_VisualizationStats):
 
   def report(self):
     while self._self_times_buffer:
-      # Each record in _self_times_buffer corresponds to a single element.
-      self._summary.num_produced_elements += 1
-      # Execution Summary must be cummulative from the beginning.
-      self_time_ns = self._self_times_buffer.pop()
+      recorded_self_time = self._self_times_buffer.pop()
+      if recorded_self_time.num_elements <= 0:
+        continue
+
+      self._summary.num_produced_elements += recorded_self_time.num_elements
+      self._summary.total_processing_time_ns += recorded_self_time.duration_ns
+      per_element_duration_ns = (
+          recorded_self_time.duration_ns // recorded_self_time.num_elements
+      )
       self._summary.min_processing_time_ns = min(
-          self._summary.min_processing_time_ns, self_time_ns
+          self._summary.min_processing_time_ns, per_element_duration_ns
       )
       self._summary.max_processing_time_ns = max(
-          self._summary.max_processing_time_ns, self_time_ns
+          self._summary.max_processing_time_ns, per_element_duration_ns
       )
-      self._summary.total_processing_time_ns += self_time_ns
-      _self_time_ns_histogram.Record(self_time_ns, self._config.name)
+      _self_time_ns_histogram.Record(per_element_duration_ns, self._config.name)
     while self._consumed_memory_buffer:
       self._summary.bytes_consumed += self._consumed_memory_buffer.pop()
     while self._produced_memory_buffer:

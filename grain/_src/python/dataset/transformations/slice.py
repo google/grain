@@ -51,9 +51,8 @@ class SliceMapDataset(dataset.MapDataset[T]):
     return self._parent[parent_index]
 
   def _getitems(self, indices: Sequence[int]):
-    parent_indices = []
-    for index in indices:
-      parent_indices.append(self._sliced_index(index))
+    with self._stats.record_self_time(num_elements=len(indices)):
+      parent_indices = [self._sliced_index(index) for index in indices]
     return self._parent._getitems(parent_indices)  # pylint: disable=protected-access
 
   def __str__(self) -> str:

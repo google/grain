@@ -65,7 +65,7 @@ class RepeatMapDataset(dataset.MapDataset[T]):
   def _getitems(self, indices: Sequence[int]):
     if not self._reseed_each_epoch:
       indices = [index % self._parent_length for index in indices]
-    return self._parent._getitems(indices)  # pylint: disable=protected-access
+    return self._stats.record_output_spec_for_batch(self._parent._getitems(indices))  # pylint: disable=protected-access
 
   def __getitem__(self, index):
     if isinstance(index, slice):
