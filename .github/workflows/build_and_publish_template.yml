@@ -14,6 +14,9 @@ on:
       is_nightly:
         required: true
         type: boolean
+      is_ci_tests:
+        required: true
+        type: boolean
 
 defaults:
   run:
@@ -32,6 +35,19 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13", "3.14"]
         os: [ubuntu-22.04, ubuntu-22.04-arm, macos-14, windows-2022]
+        is-ci-tests:
+          - ${{ inputs.is_ci_tests }}
+        exclude:
+          - is-ci-tests: true
+        include:
+          - python-version: "3.11"
+            os: ubuntu-22.04
+          - python-version: "3.12"
+            os: macos-14
+          - python-version: "3.13"
+            os: windows-2022
+          - python-version: "3.14"
+            os: ubuntu-22.04-arm
 
     env:
       USE_BAZEL_VERSION: "7.2.1"
@@ -76,6 +92,7 @@ jobs:
           . "${SOURCE_DIR}"'/grain/oss/runner_common.sh'
           build_and_test_grain
       - name: Upload Grain artifacts
+        if: ${{ inputs.is_ci_tests == 'false' }}
         uses: actions/upload-artifact@v4
         with:
           name: built-grain-wheels-${{ matrix.os }}-${{ matrix.python-version }}
@@ -83,6 +100,7 @@ jobs:
 
   publish-wheel:
     runs-on: ubuntu-22.04
+    if: ${{ inputs.is_ci_tests == 'false' }}
     needs: build-and-test
     permissions:
       id-token: write

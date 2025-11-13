@@ -44,7 +44,7 @@ build_and_test_grain() {
         --env PYTHON_MINOR_VERSION="${PYTHON_MINOR_VERSION}" \
         --env BAZEL_VERSION="${BAZEL_VERSION}" \
         --env AUDITWHEEL_PLATFORM="${AUDITWHEEL_PLATFORM}" \
-        --env RUN_TESTS="$RUN_TESTS" \
+        --env RUN_TESTS_WITH_BAZEL="${RUN_TESTS_WITH_BAZEL}" \
         --env IS_NIGHTLY="${IS_NIGHTLY}" \
         -v "${SOURCE_DIR}":"${OUTPUT_DIR}" \
         --name grain grain:"${PYTHON_VERSION}" \
