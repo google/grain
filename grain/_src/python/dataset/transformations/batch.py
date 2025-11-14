@@ -27,6 +27,7 @@ from grain._src.core import tree_lib
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
 from grain._src.python.dataset.transformations import filter as filter_ds
+from grain._src.python.dataset.transformations import flatmap as flatmap_ds
 import numpy as np
 
 
@@ -274,11 +275,14 @@ class BatchMapDataset(dataset.MapDataset[T]):
     to_check = [parent]
     while to_check:
       next_ds = to_check.pop()
-      if isinstance(next_ds, filter_ds.FilterMapDataset):
+      if isinstance(next_ds, filter_ds.FilterMapDataset) or isinstance(
+          next_ds, flatmap_ds.FlatMapMapDataset
+      ):
         raise ValueError(
-            "`MapDataset.batch` can not follow `MapDataset.filter` "
-            "because `filter` can discard elements. Convert `MapDataset` to "
-            "`IterDataset` with `to_iter_dataset()` before calling `batch`."
+            "`MapDataset.batch` can not follow `MapDataset.filter` or"
+            " `FlatMapMapDataset` because both `filter` and `flatmap` can"
+            " discard elements. Convert `MapDataset` to `IterDataset` with"
+            " `to_iter_dataset()` before calling `batch`."
         )
       to_check.extend(next_ds.parents)
     self._batch_size = batch_size
