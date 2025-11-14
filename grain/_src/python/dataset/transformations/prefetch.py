@@ -986,3 +986,301 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         "ThreadPrefetchDatasetIterator("
         f"prefetch_buffer_size={self._prefetch_buffer_size})"
     )
+
+
+class ProcessPrefetchIterDataset(dataset.IterDataset[T]):
+  """Iterable dataset that uses a background process for prefetching."""
+
+  def __init__(
+      self,
+      parent: dataset.IterDataset[T],
+      prefetch_buffer_size: int,
+      worker_init_fn: Callable[[], None] | None = None,
+      always_report_worker_state: bool = False,
+  ):
+    if prefetch_buffer_size <= 0:
+      raise ValueError(
+          "`prefetch_buffer_size` must be greater than 0, got "
+          f"{prefetch_buffer_size}."
+      )
+    super().__init__(parent)
+    self._prefetch_buffer_size = prefetch_buffer_size
+    self._worker_init_fn = worker_init_fn
+    self._always_report_worker_state = always_report_worker_state
+
+  def __str__(self) -> str:
+    return (
+        "ProcessPrefetchIterDataset("
+        f"prefetch_buffer_size={self._prefetch_buffer_size})"
+    )
+
+  def __iter__(self) -> dataset.DatasetIterator[T]:
+    return ProcessPrefetchDatasetIterator(
+        self._parent,
+        self._prefetch_buffer_size,
+        self._worker_init_fn,
+        self._always_report_worker_state,
+    )
+
+
+def _iterator_elements_process_loop(
+    pickled_ds: bytes,
+    buffer: queues.Queue[tuple[Any, StateT | None, Exception | None]],
+    should_stop: synchronize.Event,
+    set_state_event: synchronize.Event,
+    set_state_queue: queues.Queue[tuple[StateT, int]],
+    initial_state: StateT,
+    iterations_to_skip: int,
+    stats_out_queue: queues.Queue[Any] | None,
+    start_profiling_event: synchronize.Event | None,
+    stop_profiling_event: synchronize.Event | None,
+    worker_init_fn: Callable[[], None] | None,
+    always_report_worker_state: bool,
+):
+  """Prefetches elements in a separate process."""
+  try:
+    if worker_init_fn:
+      worker_init_fn()
+    ds = cloudpickle.loads(pickled_ds)
+    it = ds.__iter__()
+    min_shm_size = it._ctx.dataset_options.min_shm_size  # pylint: disable=protected-access
+    if initial_state is not None:
+      it.set_state(initial_state)
+    # Skip the required number of iterations after the last recorded state.
+    for _ in range(iterations_to_skip):
+      _ = next(it)
+    # Set the stats queue in worker process to send stats to the main process.
+    it._stats._config.stats_out_queue = stats_out_queue  # pylint: disable=protected-access
+    last_recorded_state_time = time.time()
+    parent_exhausted = False
+    while not should_stop.is_set():
+      if set_state_event.is_set():
+        set_state_event.clear()
+        parent_exhausted = False
+        new_state, iterations_to_skip_after_set_state = set_state_queue.get()
+        it.set_state(new_state)
+        for _ in range(iterations_to_skip_after_set_state):
+          _ = next(it)
+        buffer.put((_SetStatePlaceholder(), None, None))
+      if parent_exhausted:
+        # Avoid busy-waiting when parent iterator is exhausted due to an
+        # error. Wait until set_state_event or should_stop is set.
+        set_state_event.wait(0.01)
+        continue
+      now = time.time()
+      try:
+        element = it.__next__()
+      except Exception as e:  # pylint: disable=broad-except
+        buffer.put((None, None, e))
+        parent_exhausted = True
+        continue
+      element = _copy_struct_to_shm(element, min_size=min_shm_size)
+      # If the node is prefetch, we already record the bytes produced in it's
+      # __next__ method.
+      if not it._stats._config.is_prefetch:  # pylint: disable=protected-access
+        it._stats.record_bytes_produced(element)  # pylint: disable=protected-access
+      if (
+          always_report_worker_state
+          or now - last_recorded_state_time >= _RECORD_STATE_INTERVAL_S
+      ):
+        last_recorded_state_time = now
+        buffer.put((element, it.get_state(), None))  # pytype: disable=attribute-error
+      else:
+        buffer.put((element, None, None))
+  except Exception as e:  # pylint: disable=broad-except
+    buffer.put((None, None, e))
+
+
+class _SetStatePlaceholder:
+  """Placeholder to indicate set_state has completed in worker process."""
+
+
+class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
+  """Iterator that performs prefetching using a background process."""
+
+  _MUTATES_ELEMENT_SPEC = False
+
+  def __init__(
+      self,
+      parent: dataset.IterDataset[T],
+      prefetch_buffer_size: int,
+      worker_init_fn: Callable[[], None] | None = None,
+      always_report_worker_state: bool = False,
+  ):
+    super().__init__()
+    self._iter_parent = parent
+    self._prefetch_buffer_size = prefetch_buffer_size
+    self._worker_init_fn = worker_init_fn
+    self._always_report_worker_state = always_report_worker_state
+    # Since the parent iterator is going to be created in each subprocess, and
+    # the options are propagated during iterator creation, we need to manually
+    # propagate them.
+    self._ctx.dataset_options = _get_dataset_options(parent)
+
+    self._process_ctx = mp.get_context("spawn")
+    self._state: StateT | None = None
+    self._prefetch_process: Any | None = None
+    self._prefetch_should_stop: synchronize.Event = self._process_ctx.Event()
+    self._set_state_event: synchronize.Event = self._process_ctx.Event()
+    self._set_state_queue: queues.Queue[tuple[StateT, int]] = (
+        self._process_ctx.Queue(1)
+    )
+    self._buffer: queues.Queue[tuple[T, StateT | None, Exception | None]] = (
+        self._process_ctx.Queue(maxsize=self._prefetch_buffer_size)
+    )
+    self._stats_in_queue = self._process_ctx.Queue(maxsize=5)
+    self._start_profiling_event = self._process_ctx.Event()
+    self._stop_profiling_event = self._process_ctx.Event()
+    self._iterations_to_skip = 0
+    self._set_state_count = 0
+
+  # pytype: disable=attribute-error
+  # pylint: disable=protected-access
+  def _initialize_stats(
+      self, execution_tracking_mode: base.ExecutionTrackingMode
+  ):
+    # This method is needed to set `is_prefetch` to `True` in the stats config.
+    self._stats = _initialize_prefetch_stats(
+        self,
+        execution_tracking_mode,
+        [],
+        stats_in_queues=(self._stats_in_queue,),
+    )
+    return self._stats
+
+  @functools.cached_property
+  def _stats(self):
+    return self._initialize_stats(
+        self._ctx.dataset_options.execution_tracking_mode
+    )
+
+  # pytype: enable=attribute-error
+  # pylint: enable=protected-access
+
+  def start_prefetch(self) -> None:
+    """Starts prefetching elements in background.
+
+    Raises:
+      ValueError: If the iterator has been closed.
+    """
+    if self._closed:
+      raise ValueError("Attempting to use a closed iterator.")
+    if self._prefetch_process is not None:
+      return
+
+    self._prefetch_should_stop.clear()
+    self._prefetch_process = self._process_ctx.Process(
+        target=_iterator_elements_process_loop,
+        kwargs=dict(
+            pickled_ds=cloudpickle.dumps(self._iter_parent),
+            buffer=self._buffer,
+            should_stop=self._prefetch_should_stop,
+            set_state_event=self._set_state_event,
+            set_state_queue=self._set_state_queue,
+            initial_state=self._state,
+            iterations_to_skip=self._iterations_to_skip,
+            stats_out_queue=self._stats_in_queue,
+            start_profiling_event=self._start_profiling_event,
+            stop_profiling_event=self._stop_profiling_event,
+            worker_init_fn=self._worker_init_fn,
+            always_report_worker_state=self._always_report_worker_state,
+        ),
+        daemon=True,
+        name=f"grain-process-prefetch-{str(self)}",
+    )
+    self._prefetch_process.start()
+    shared_memory_array.SharedMemoryArray.enable_async_del(1)
+
+  @dataset_stats.record_next_duration_if_output
+  def __next__(self):
+    timer = dataset_stats.Timer()
+    with timer:
+      self.start_prefetch()
+      # Loop until we get a non-stale element.
+      while True:
+        element, state, err = self._buffer.get()
+        if isinstance(element, _SetStatePlaceholder):
+          self._set_state_count -= 1
+        elif self._set_state_count == 0:
+          break
+      if err is not None:
+        self._stop_prefetch()
+        raise err
+      if state is None:
+        self._iterations_to_skip += 1
+      else:
+        self._iterations_to_skip = 0
+        self._state = state
+    with self._stats.record_self_time(offset_ns=timer.value()):
+      element = self._stats.record_bytes_produced(element)
+      return self._stats.record_output_spec(_open_struct_from_shm(element))
+
+  def close(self):
+    """Stops the iterator. No further calls to the iterator are expected."""
+    self._closed = True
+    self._stop_prefetch()
+
+  def _clear_buffer(self):
+    while True:
+      try:
+        self._buffer.get_nowait()
+      except queue.Empty:
+        return
+
+  def _clear_set_state_queue(self):
+    try:
+      self._set_state_queue.get_nowait()
+      self._set_state_count -= 1
+    except queue.Empty:
+      return
+
+  def _stop_prefetch(self):
+    """Stops the prefetching process if it's currently running."""
+    if self._prefetch_process is None:
+      return
+
+    self._prefetch_should_stop.set()
+    # Remove entries from the buffer to unblock the producer, so that it checks
+    # producer_running.is_set() and exits.
+    self._clear_buffer()
+    self._prefetch_process.join(10)
+    if self._prefetch_process.is_alive():
+      print("GC: Killing prefetch process")
+      self._prefetch_process.kill()
+    else:
+      print("GC: Prefetch process is already dead")
+    self._prefetch_process = None
+    # Clear the buffer again in case the prefetch loop added more elements on
+    # exit.
+    self._clear_buffer()
+    self._clear_set_state_queue()
+    self._set_state_count = 0
+
+  def get_state(self) -> StateT:
+    if self._state is None:
+      worker_state = self._iter_parent.__iter__().get_state()
+    else:
+      worker_state = self._state
+    return {
+        "worker_state": worker_state,
+        "iterations_to_skip": self._iterations_to_skip,
+    }
+
+  def set_state(self, state: StateT):
+    self._state = state["worker_state"]
+    self._iterations_to_skip = state["iterations_to_skip"]
+    if self._prefetch_process is not None:
+      # Remove any pending set_state calls.
+      self._clear_set_state_queue()
+      self._set_state_queue.put((self._state, self._iterations_to_skip))
+      # Signal the prefetch process to start processing set_state calls.
+      self._set_state_event.set()
+      # Increment the number of _SetStatePlaceholders that need to be skipped to
+      # avoid stale elements in the buffer.
+      self._set_state_count += 1
+
+  def __str__(self) -> str:
+    return (
+        "ProcessPrefetchDatasetIterator("
+        f"prefetch_buffer_size={self._prefetch_buffer_size})"
+    )
