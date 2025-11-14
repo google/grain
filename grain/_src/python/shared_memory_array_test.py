@@ -12,16 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Tests for shared memory array."""
+
 from multiprocessing import shared_memory
 import platform
 import threading
 import time
 from unittest import mock
+
 from absl.testing import absltest
 from absl.testing import parameterized
 import multiprocessing
 from grain._src.python import record
 from grain._src.python.operations import BatchOperation
+from grain._src.python.shared_memory_array import copy_to_shm
+from grain._src.python.shared_memory_array import open_from_shm
 from grain._src.python.shared_memory_array import SharedMemoryArray
 from grain._src.python.shared_memory_array import SharedMemoryArrayMetadata
 import jax
@@ -178,6 +182,49 @@ class SharedMemoryArrayTest(parameterized.TestCase):
         self.assertEqual(
             2 * max_outstanding_requests, mock_close_shm_async.call_count
         )
+
+  def test_copy_and_open_shm_single_array(self):
+    arr = np.arange(10).astype(np.int32)
+    shm_struct = copy_to_shm(arr)
+    self.assertIsInstance(shm_struct, SharedMemoryArrayMetadata)
+    opened_struct = open_from_shm(shm_struct)
+    self.assertIsInstance(opened_struct, SharedMemoryArray)
+    np.testing.assert_array_equal(opened_struct, arr)
+    self.assertTrue(opened_struct._unlink_on_del)
+
+  def test_copy_and_open_shm_nested_structure(self):
+    arr = np.arange(10).astype(np.int32)
+    arr2 = np.arange(5).astype(np.int32)
+    struct = {"a": arr, "b": [arr2, arr], "c": 123}
+    shm_struct = copy_to_shm(struct)
+    self.assertIsInstance(shm_struct["a"], SharedMemoryArrayMetadata)
+    self.assertIsInstance(shm_struct["b"][0], SharedMemoryArrayMetadata)
+    self.assertIsInstance(shm_struct["b"][1], SharedMemoryArrayMetadata)
+    self.assertEqual(shm_struct["c"], 123)
+
+    opened_struct = open_from_shm(shm_struct)
+    self.assertIsInstance(opened_struct["a"], SharedMemoryArray)
+    np.testing.assert_array_equal(opened_struct["a"], arr)
+    self.assertTrue(opened_struct["a"]._unlink_on_del)
+    self.assertIsInstance(opened_struct["b"][0], SharedMemoryArray)
+    np.testing.assert_array_equal(opened_struct["b"][0], arr2)
+    self.assertTrue(opened_struct["b"][0]._unlink_on_del)
+    self.assertIsInstance(opened_struct["b"][1], SharedMemoryArray)
+    np.testing.assert_array_equal(opened_struct["b"][1], arr)
+    self.assertTrue(opened_struct["b"][1]._unlink_on_del)
+    self.assertEqual(opened_struct["c"], 123)
+
+  def test_copy_and_open_shm_min_size(self):
+    arr = np.arange(10).astype(np.int32)  # 40 bytes
+    shm_struct = copy_to_shm(arr, min_size=100)
+    self.assertIsInstance(shm_struct, np.ndarray)
+    np.testing.assert_array_equal(shm_struct, arr)
+    shm_struct = copy_to_shm(arr, min_size=10)
+    self.assertIsInstance(shm_struct, SharedMemoryArrayMetadata)
+    opened_struct = open_from_shm(shm_struct)
+    self.assertIsInstance(opened_struct, SharedMemoryArray)
+    np.testing.assert_array_equal(opened_struct, arr)
+    self.assertTrue(opened_struct._unlink_on_del)
 
 
 if __name__ == "__main__":

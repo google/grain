@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import dataclasses
+import functools
 import math
 import mmap
 from multiprocessing import pool
@@ -22,6 +23,7 @@ from multiprocessing import shared_memory
 import threading
 from typing import Any, Iterable
 
+from grain._src.core import tree_lib
 import numpy as np
 import numpy.typing as npt
 
@@ -182,3 +184,41 @@ class SharedMemoryArray(np.ndarray):
         _del_shm(shm, unlink=self._unlink_on_del)
     else:
       _del_shm(shm, unlink=self._unlink_on_del)
+
+
+def _copy_leaf_to_shm(leaf: Any, min_size: int = 0) -> Any:
+  """Copies `leaf` to shared memory if it's a big enough numpy array."""
+  if isinstance(leaf, SharedMemoryArray):
+    return leaf.metadata
+  if (
+      not isinstance(leaf, np.ndarray)
+      or leaf.dtype.hasobject
+      or not leaf.flags.c_contiguous
+      or math.prod(leaf.shape) == 0
+      or leaf.nbytes < min_size
+  ):
+    return leaf
+
+  shared_memory_arr = SharedMemoryArray(leaf.shape, leaf.dtype)
+  np.copyto(shared_memory_arr, leaf, casting="no")
+  return shared_memory_arr.metadata
+
+
+def copy_to_shm(struct: Any, min_size: int = 0) -> Any:
+  """Copies leaf ndarrays of the structure to shared memory."""
+  return tree_lib.map_structure(
+      functools.partial(_copy_leaf_to_shm, min_size=min_size), struct
+  )
+
+
+def _open_leaf_from_shm(leaf: Any) -> Any:
+  """Recovers `leaf` from shared memory if it's a numpy array metadata."""
+  if isinstance(leaf, SharedMemoryArrayMetadata):
+    leaf = SharedMemoryArray.from_metadata(leaf)
+    leaf.unlink_on_del()
+  return leaf
+
+
+def open_from_shm(struct: Any) -> Any:
+  """Recovers leaf ndarrays of the structure from shared memory."""
+  return tree_lib.map_structure(_open_leaf_from_shm, struct)
