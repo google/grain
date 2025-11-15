@@ -41,6 +41,7 @@ from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
 from grain._src.python.dataset.transformations import filter as filter_dataset
+from grain._src.python.dataset.transformations import interleave
 from grain._src.python.dataset.transformations import source
 import numpy as np
 
@@ -986,3 +987,74 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         "ThreadPrefetchDatasetIterator("
         f"prefetch_buffer_size={self._prefetch_buffer_size})"
     )
+
+
+class _MpContextIterDataset(dataset.IterDataset[T]):
+  """Sets mp_context on iterator."""
+
+  def __init__(
+      self,
+      parent: dataset.IterDataset[T],
+      mp_context: base.MultiprocessingContext,
+  ):
+    super().__init__(parent)
+    self._mp_context = mp_context
+
+  def __iter__(self) -> dataset.DatasetIterator[T]:
+    it = self._parent.__iter__()
+    it._ctx.mp_context = self._mp_context
+    return it
+
+  def __str__(self) -> str:
+    return f"_MpContextIterDataset(mp_context={self._mp_context})"
+
+
+class MultithreadPrefetchIterDataset(dataset.IterDataset[T]):
+  """Uses a pool of threads to prefetch elements ahead of time.
+
+  This is a thread-based alternative to `MultiprocessPrefetchIterDataset`
+  intended to be used with free-threaded Python.
+  """
+
+  def __init__(
+      self,
+      parent: dataset.IterDataset[T],
+      multiprocessing_options: grain_options.MultiprocessingOptions,
+      sequential_slice: bool = False,
+  ):
+    super().__init__(parent)
+    if multiprocessing_options.num_workers < 0:
+      raise ValueError(
+          "`num_workers` must be greater than or equal to 0, got "
+          f"{multiprocessing_options.num_workers}."
+      )
+    self._multiprocessing_options = multiprocessing_options
+    self._sequential_slice = sequential_slice
+
+  def __str__(self) -> str:
+    return f"MultithreadPrefetchIterDataset(multiprocessing_options={self._multiprocessing_options})"
+
+  def __iter__(self) -> dataset.DatasetIterator[T]:
+    if self._multiprocessing_options.num_workers == 0:
+      return self._parent.__iter__()
+
+    shards = []
+    for i in range(self._multiprocessing_options.num_workers):
+      ds = copy.deepcopy(self._parent)
+      _set_slice_iter_dataset(
+          ds, slice(i, None, self._multiprocessing_options.num_workers)
+      )
+      shards.append(
+          _MpContextIterDataset(
+              ds,
+              base.MultiprocessingContext(
+                  process_index=i,
+                  process_count=self._multiprocessing_options.num_workers,
+              ),
+          )
+      )
+
+    ds = interleave.InterleaveIterDataset(
+        shards, cycle_length=self._multiprocessing_options.num_workers
+    )
+    return ds.__iter__()

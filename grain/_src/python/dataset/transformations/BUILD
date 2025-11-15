@@ -10,6 +10,7 @@ filegroup(
         "batch.py",
         "filter.py",
         "flatmap.py",
+        "interleave.py",
         "map.py",
         "mix.py",
         "prefetch.py",
