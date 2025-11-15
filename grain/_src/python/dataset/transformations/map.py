@@ -161,17 +161,34 @@ class RandomMapMapDataset(dataset.MapDataset[T]):
   def __str__(self) -> str:
     return f"RandomMapMapDataset(transform={self._transform_name})"
 
+  def _random_map_element(self, element: Any, index: int) -> T:
+    if element is None:
+      return None
+    rng = self._rng_pool.acquire_rng(index)
+    element = self._map_fn(element, rng)
+    self._rng_pool.release_rng(rng)
+    return element
+
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
     element = self._parent[index]
     with self._stats.record_self_time():
-      if element is None:
-        return None
-      rng = self._rng_pool.acquire_rng(index)
-      element = self._map_fn(element, rng)
-      self._rng_pool.release_rng(rng)
-      return self._stats.record_output_spec(element)
+      mapped_element = self._random_map_element(element, index)
+      return (
+          self._stats.record_output_spec(mapped_element)
+          if mapped_element is not None
+          else None
+      )
+
+  def _getitems(self, indices: Sequence[int]):
+    elements = self._parent._getitems(indices)  # pylint: disable=protected-access
+    with self._stats.record_self_time(num_elements=len(indices)):
+      processed_elements = [
+          self._random_map_element(element, index)
+          for element, index in zip(elements, indices)
+      ]
+    return self._stats.record_output_spec_for_batch(processed_elements)
 
 
 class MapWithIndexMapDataset(dataset.MapDataset[T]):
@@ -201,14 +218,31 @@ class MapWithIndexMapDataset(dataset.MapDataset[T]):
   def __str__(self) -> str:
     return f"MapWithIndexMapDataset(transform={self._transform_name})"
 
+  def _map_with_index_fn(self, index: int, element: Any) -> T:
+    if element is None:
+      return None
+    return self._map_fn(index, element)
+
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
     element = self._parent[index]
     with self._stats.record_self_time():
-      if element is None:
-        return None
-      return self._stats.record_output_spec(self._map_fn(index, element))
+      mapped_element = self._map_with_index_fn(index, element)
+      return (
+          self._stats.record_output_spec(mapped_element)
+          if mapped_element is not None
+          else None
+      )
+
+  def _getitems(self, indices: Sequence[int]):
+    elements = self._parent._getitems(indices)  # pylint: disable=protected-access
+    with self._stats.record_self_time(num_elements=len(indices)):
+      processed_elements = [
+          self._map_with_index_fn(index, element)
+          for index, element in zip(indices, elements)
+      ]
+    return self._stats.record_output_spec_for_batch(processed_elements)
 
 
 class _MapDatasetIterator(dataset.DatasetIterator[T]):
