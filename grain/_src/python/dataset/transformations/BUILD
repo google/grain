@@ -360,3 +360,40 @@ py_test(
         "@pypi//numpy:pkg",
     ],
 )
+
+py_library(
+    name = "process_prefetch",
+    srcs = ["process_prefetch.py"],
+    srcs_version = "PY3",
+    deps = [
+        "//grain/_src/core:config",
+        "//grain/_src/core:tree_lib",
+        "//grain/_src/python:shared_memory_array",
+        "//grain/_src/python/dataset",
+        "//grain/_src/python/dataset:base",
+        "//grain/_src/python/dataset:stats",
+        "//grain/_src/python/dataset/transformations:interleave",
+        "@abseil-py//absl/flags",
+        "@pypi//cloudpickle:pkg",
+        "@pypi//numpy:pkg",
+    ],
+)
+
+py_test(
+    name = "process_prefetch_test",
+    timeout = "long",
+    srcs = ["process_prefetch_test.py"],
+    shard_count = 50,
+    srcs_version = "PY3",
+    deps = [
+        ":process_prefetch",
+        "//grain/_src/core:transforms",
+        "//grain/_src/python:options",
+        "//grain/_src/python/dataset",
+        "//grain/_src/python/dataset:base",
+        "@abseil-py//absl/logging",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+        "@pypi//numpy:pkg",
+    ],
+)
