@@ -50,6 +50,7 @@ import builtins
 from collections.abc import Awaitable, Callable, Iterable, Iterator, Sequence
 import functools
 import json
+import sys
 from typing import Any, Generic, TypeVar, Union, cast, overload
 import warnings
 
@@ -1290,6 +1291,9 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
     prefetch workers, consider moving many-to-one and stateful transformations
     to after ``mp_prefetch`` or outside of the Grain pipeline.
 
+    NOTE: In free-threaded Python builds, this implementation switches to
+    multithreading, ignoring ``worker_init_fn``.
+
     Args:
       options: options for the prefetching processes. ``options.num_workers``
         must be greater than or equal to 0. If ``options.num_workers`` is 0,
@@ -1312,6 +1316,18 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
     # pylint: disable=g-import-not-at-top
     from grain._src.python.dataset.transformations import prefetch
     # pylint: enable=g-import-not-at-top
+    if is_in_free_threaded_python():
+      if worker_init_fn is not None:
+        warnings.warn(
+            "Free-threaded Python is used: `mp_prefetch` falls back to"
+            " thread-based implementation and `worker_init_fn` is ignored."
+        )
+      return prefetch.multithread_prefetch(
+          self,
+          num_threads=options.num_workers,
+          buffer_size=options.per_worker_buffer_size,
+          sequential_slice=sequential_slice,
+      )
     return prefetch.MultiprocessPrefetchIterDataset(
         self,
         multiprocessing_options=options,
@@ -1684,3 +1700,8 @@ def get_execution_summary(
     )
   return execution_stats._get_execution_summary()
   # pylint: enable=protected-access
+
+
+def is_in_free_threaded_python() -> bool:
+  """Returns whether Python is running in free-threaded mode."""
+  return hasattr(sys, "_is_gil_enabled") and not sys._is_gil_enabled()  # pylint: disable=protected-access
