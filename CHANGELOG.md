@@ -11,6 +11,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * `DatasetIterator.start_prefetch` now propagates to the first asynchronous
     parent iterator instead of raising `NotImplemented`. This API is useful for
     hiding first batch processing behind model checkpoint recovery.
+  * Introduces `grain.experimental.multithread_prefetch` as an
+    alternative to multiprocessing prefetch in free-threading Python.
 
 * Breaking changes:
 

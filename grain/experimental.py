@@ -53,6 +53,7 @@ from grain._src.python.dataset.transformations.packing_concat_then_split import 
     ConcatThenSplitIterDataset,
 )
 from grain._src.python.dataset.transformations.prefetch import (
+    multithread_prefetch,
     ThreadPrefetchIterDataset,
     ThreadPrefetchDatasetIterator,
 )

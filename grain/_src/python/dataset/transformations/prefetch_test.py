@@ -567,7 +567,7 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
     )
     with self.assertRaisesRegex(
         ValueError,
-        'Having multiple `MultiprocessPrefetchIterDataset`s is not allowed.',
+        'Nesting multiprocessing or multithreading is not allowed.',
     ):
       _ = prefetch.MultiprocessPrefetchIterDataset(
           ds,
@@ -1227,6 +1227,181 @@ class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
       self.assertGreater(count, 0)
       time.sleep(1)
       self.assertGreater(count, 8)
+
+
+class _MpContextCheckIterDataset(dataset.IterDataset[_T]):
+
+  def __iter__(self) -> dataset.DatasetIterator[_T]:
+    return _MpContextCheckIterator(self._parent.__iter__())
+
+
+class _MpContextCheckIterator(dataset.DatasetIterator[_T]):
+
+  def __next__(self) -> tuple[_T, base.MultiprocessingContext]:
+    element = next(self._parent)
+    return (element, self._ctx.mp_context)
+
+  def get_state(self):
+    return self._parent.get_state()
+
+  def set_state(self, state):
+    self._parent.set_state(state)
+
+
+class MultithreadPrefetchIterDatasetTest(parameterized.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    self.ds = dataset.MapDataset.range(20).to_iter_dataset()
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='no_prefetch',
+          num_workers=0,
+          per_worker_buffer_size=0,
+      ),
+      dict(
+          testcase_name='thread',
+          num_workers=1,
+          per_worker_buffer_size=1,
+      ),
+      dict(
+          testcase_name='2_threads_large_buffer',
+          num_workers=2,
+          per_worker_buffer_size=20,
+      ),
+      dict(
+          testcase_name='4_threads_huge_buffer',
+          num_workers=4,
+          per_worker_buffer_size=200,
+      ),
+  )
+  def test_prefetch_data(self, num_workers: int, per_worker_buffer_size: int):
+    prefetch_lazy_iter_ds = prefetch.multithread_prefetch(
+        self.ds,
+        num_threads=num_workers,
+        buffer_size=per_worker_buffer_size,
+    )
+    ds_iter = prefetch_lazy_iter_ds.__iter__()
+    if num_workers > 0:
+      ds_iter.start_prefetch()
+    actual = list(ds_iter)
+    expected = list(range(20))
+    self.assertSequenceEqual(actual, expected)
+
+  def test_checkpoint(self):
+    ds = prefetch.multithread_prefetch(
+        self.ds,
+        num_threads=2,
+        buffer_size=5,
+    )
+    ds_iter = ds.__iter__()
+    ds_iter.start_prefetch()
+
+    max_steps = 20
+    values_without_interruption = []
+    checkpoints = []
+    for _ in range(max_steps):
+      checkpoints.append(ds_iter.get_state())
+      values_without_interruption.append(next(ds_iter))
+
+    for starting_step in [0, 5, 13, 19]:
+      ds_iter.set_state(checkpoints[starting_step])
+      ds_iter.start_prefetch()
+      for i in range(starting_step, max_steps):
+        value = next(ds_iter)
+        print(value)
+        self.assertEqual(value, values_without_interruption[i])
+
+  def test_set_state_on_fresh_iterator(self):
+    ds = prefetch.multithread_prefetch(
+        self.ds,
+        num_threads=2,
+        buffer_size=2,
+    )
+    ds_iter = ds.__iter__()
+    ds_iter.start_prefetch()
+
+    max_steps = 20
+    values_without_interruption = []
+    checkpoints = []
+    for _ in range(max_steps):
+      checkpoints.append(ds_iter.get_state())
+      values_without_interruption.append(next(ds_iter))
+
+    for starting_step in [0, 5, 13, 19]:
+      ds_iter = ds.__iter__()
+      ds_iter.set_state(checkpoints[starting_step])
+      ds_iter.start_prefetch()
+      for i in range(starting_step, max_steps):
+        value = next(ds_iter)
+        self.assertEqual(value, values_without_interruption[i])
+
+  def test_get_state_doesnt_start_prefetch(self):
+    event = threading.Event()
+
+    def f(x):
+      event.set()
+      return x
+
+    ds = dataset.MapDataset.source([1, 2, 3]).map(f).to_iter_dataset()
+    ds = prefetch.multithread_prefetch(
+        ds,
+        num_threads=2,
+        buffer_size=10,
+    )
+    it = ds.__iter__()
+    it.get_state()
+    time.sleep(1)
+    self.assertFalse(event.is_set())
+
+  def test_does_not_hang_after_stop_iteration(self):
+    ds = dataset.MapDataset.source([1, 2, 3]).repeat(100).to_iter_dataset()
+    ds = prefetch.multithread_prefetch(
+        ds,
+        num_threads=2,
+        buffer_size=10,
+    )
+    it = ds.__iter__()
+    it.start_prefetch()
+
+  def test_fails_with_multiprocess_prefetch_parent(self):
+    ds = prefetch.MultiprocessPrefetchIterDataset(
+        self.ds,
+        options.MultiprocessingOptions(num_workers=2),
+    )
+    with self.assertRaisesRegex(
+        ValueError,
+        'Nesting multiprocessing or multithreading is not allowed.',
+    ):
+      _ = prefetch.multithread_prefetch(
+          ds,
+          num_threads=1,
+          buffer_size=1,
+      )
+
+  def test_mp_context_is_set_correctly(self):
+    num_workers = 4
+    ds = dataset.MapDataset.range(20).to_iter_dataset()
+    ds = _MpContextCheckIterDataset(ds)
+    ds = ds.map(lambda x: x)
+    ds = prefetch.multithread_prefetch(
+        ds,
+        num_threads=num_workers,
+        buffer_size=1,
+    )
+
+    results = list(ds)
+    self.assertLen(results, 20)
+
+    # Check that elements are interleaved correctly.
+    elements = [r[0] for r in results]
+    self.assertEqual(elements, list(range(20)))
+
+    # Check mp_context.
+    for i, (_, context) in enumerate(results):
+      self.assertEqual(context.process_index, i % num_workers)
+      self.assertEqual(context.process_count, num_workers)
 
 
 if __name__ == '__main__':
