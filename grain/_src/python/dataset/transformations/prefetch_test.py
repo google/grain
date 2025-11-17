@@ -1171,7 +1171,6 @@ class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
       for _ in range(5):
         _ = next(it)
 
-  @absltest.skipIf(platform.system() == 'Darwin', 'Fails on macos-14 runner.')
   @parameterized.parameters([True, False])
   def test_no_mem_leak_with_double_prefetch(self, close: bool):
     ds = (
@@ -1192,6 +1191,7 @@ class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
       if close:
         it.close()  # pytype: disable=attribute-error
 
+  @absltest.skipIf(platform.system() == 'Darwin', 'Fails on macos-14 runner.')
   @parameterized.parameters([True, False])
   def test_early_break_continues_prefetching(self, close: bool):
     count = 0

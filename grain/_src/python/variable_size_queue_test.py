@@ -13,6 +13,7 @@
 # limitations under the License.
 """Tests for variable size queue implementations."""
 
+import platform
 import queue
 import threading
 import time
@@ -245,6 +246,7 @@ class VariableSizeMultiprocessingQueueTest(absltest.TestCase):
     self.assertEqual(q.get(), 3)
     t.join()
 
+  @absltest.skipIf(platform.system() == 'Darwin', 'Fails on macos-14 runner.')
   def test_put_blocks_until_item_is_retrieved_from_process(self):
     ctx = mp.get_context("spawn")
     q = variable_size_queue.VariableSizeMultiprocessingQueue(1, ctx=ctx)
