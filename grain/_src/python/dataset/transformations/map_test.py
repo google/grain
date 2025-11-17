@@ -204,6 +204,19 @@ class RandomMapMapDatasetTest(parameterized.TestCase):
     with self.assertRaises(ValueError):
       map_ds.RandomMapMapDataset(self.range_ds, transform)
 
+  @parameterized.parameters(
+      dict(indices=list(range(10))),
+      dict(indices=[0, 4, 8]),
+      dict(indices=[3, 1, 7, 2]),
+  )
+  def test_random_map_data_with_get_items(self, indices):
+    ds = map_ds.RandomMapMapDataset(
+        self.range_ds, RandomMapWithDeterminismTransform(), seed=42
+    )
+    expected_data = [ds[i] for i in indices]
+    actual_data = ds._getitems(indices)
+    np.testing.assert_equal(expected_data, actual_data)
+
   @parameterized.parameters(0, 1, 42)
   def test_random_map_checkpointing(self, random_map_seed):
     ds = map_ds.RandomMapMapDataset(
@@ -309,7 +322,7 @@ class RandomMapIterDatasetTest(parameterized.TestCase):
     assert_equal_output_after_checkpoint(ds)
 
 
-class MapWithIndexMapDatasetTest(absltest.TestCase):
+class MapWithIndexMapDatasetTest(parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
@@ -327,6 +340,17 @@ class MapWithIndexMapDatasetTest(absltest.TestCase):
     self.assertEqual(ds[3], (3, 3))
     self.assertEqual(ds[4], (4, 4))
     self.assertEqual(ds[5], (5, 5))
+
+  @parameterized.parameters(
+      dict(indices=list(range(3, 6))),
+      dict(indices=[3, 4, 5]),
+      dict(indices=[4, 3, 5]),
+  )
+  def test_map_with_index_data_with_get_items(self, indices):
+    ds = map_ds.MapWithIndexMapDataset(self.range_ds, AddIndexTransform())
+    expected_data = [ds[i] for i in indices]
+    actual_data = ds._getitems(indices)
+    self.assertEqual(expected_data, actual_data)
 
 
 class MapWithIndexIterDatasetTest(absltest.TestCase):
