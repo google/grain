@@ -8,6 +8,7 @@ on:
 
 jobs:
   call-workflow:
+    name: Build & Test
     uses: ./.github/workflows/build_and_publish_template.yml
     permissions:
       contents: read
