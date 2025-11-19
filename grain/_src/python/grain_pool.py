@@ -419,6 +419,9 @@ class GrainPool(Iterator[T]):
               ),
           ),
       )
+      print(f"worker_index: {worker_index}")
+      print(f"worker_count: {options.num_workers}")
+      print(f"enable_profiling: {options.enable_profiling}")
       # The process kwargs must all be pickable and will be unpickle before
       # absl.app.run() is called. We send arguments via a queue to ensure that
       # they are unpickled after absl.app.run() was called in the child
