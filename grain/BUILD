@@ -32,11 +32,11 @@ py_library(
         "sources.py",
         "transforms.py",
     ],
-    srcs_version = "PY3",
     data = select({
         "@platforms//os:windows": ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.pyd"],
        "//conditions:default": ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
     }),
+    srcs_version = "PY3",
     # Implicit build flag
     visibility = ["//visibility:public"],
     deps = [
