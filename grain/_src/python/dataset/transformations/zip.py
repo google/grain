@@ -44,6 +44,14 @@ class ZipMapDataset(dataset.MapDataset[T]):
       return self.slice(index)
     return tuple(p[index] for p in self._parents)
 
+  def _getitems(self, indices: Sequence[int]):
+    # p._getitems(indices) returns a list of elements of the requested indices.
+    # We get a list of lists that we need to zip.
+    parent_elements = [
+        p._getitems(indices) for p in self.parents  # pylint: disable=protected-access
+    ]
+    return list(zip(*parent_elements))
+
   def __str__(self) -> str:
     return f"ZipMapDataset(parents={self._parents}"
 

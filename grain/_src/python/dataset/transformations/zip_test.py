@@ -55,6 +55,19 @@ class ZipMapDatasetTest(parameterized.TestCase):
     for i in range(20):
       self.assertEqual(ds[i], tuple(i + ds_idx for ds_idx in ds_idx_list))
 
+  @parameterized.parameters(
+      {"ds_idx_list": x}
+      for x in list(itertools.combinations(range(3), 3))
+      + list(itertools.combinations(range(3), 2))
+      + list(itertools.combinations(range(3), 1))
+  )
+  def test_getitems(self, ds_idx_list):
+    ds = zip_ds.ZipMapDataset(parents=[self.ds_list[i] for i in ds_idx_list])
+    indices = [0, 5, 19]
+    expected_elements = [ds[i] for i in indices]
+    actual_elements = ds._getitems(indices)
+    self.assertEqual(expected_elements, actual_elements)
+
 
 class ZipIterDatasetTest(parameterized.TestCase):
 
