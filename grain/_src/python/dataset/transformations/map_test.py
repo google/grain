@@ -15,9 +15,11 @@
 
 import dataclasses
 import operator
+from unittest import mock
 from absl.testing import absltest
 from absl.testing import parameterized
 import cloudpickle
+from grain._src.core import config
 from grain._src.core import transforms
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import map as map_ds
