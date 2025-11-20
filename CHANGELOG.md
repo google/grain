@@ -13,6 +13,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     hiding first batch processing behind model checkpoint recovery.
   * Introduces `grain.experimental.multithread_prefetch` as an
     alternative to multiprocessing prefetch in free-threading Python.
+  * Switches to multithreading instead of multiprocessing in
+    `IterDataset.mp_prefetch` when free-threaded Python is detected.
 
 * Breaking changes:
 
