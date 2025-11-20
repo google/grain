@@ -14,14 +14,29 @@
 """LazyDataset data sources."""
 from __future__ import annotations
 
+import time
 from typing import Sequence, Union
 
 from absl import logging
+from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import sharding
 from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
+
+from grain._src.core import monitoring
+
+_source_read_time_ns_histogram = monitoring.EventMetric(
+    "/grain/python/dataset/source_read_time_ns",
+    metadata=monitoring.Metadata(
+        description="Histogram of source read time in nanoseconds.",
+        units=monitoring.Units.NANOSECONDS,
+    ),
+    root=grain_monitoring.get_monitoring_root(),
+    fields=[("source", str)],
+    bucketer=monitoring.Bucketer.PowersOf(2.0),
+)
 
 
 class SourceMapDataset(dataset.MapDataset):
@@ -43,7 +58,13 @@ class SourceMapDataset(dataset.MapDataset):
     if isinstance(index, slice):
       return self.slice(index)
     with self._stats.record_self_time():
-      return self._stats.record_output_spec(self._source[index % len(self)])
+      start_time = time.perf_counter_ns()
+      result = self._stats.record_output_spec(self._source[index % len(self)])
+      stop_time = time.perf_counter_ns()
+      _source_read_time_ns_histogram.Record(
+          stop_time - start_time, self._source.__class__.__name__
+      )
+      return result
 
   def _getitems(self, indices: Sequence[int]):
     if not isinstance(
