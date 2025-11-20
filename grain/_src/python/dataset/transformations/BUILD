@@ -27,6 +27,7 @@ py_test(
     srcs = ["batch_test.py"],
     srcs_version = "PY3",
     deps = [
+        "//grain/_src/core:transforms",
         "//grain/_src/core:tree_lib",
         "//grain/_src/python/dataset",
         "@abseil-py//absl/testing:absltest",
