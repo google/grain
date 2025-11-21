@@ -62,7 +62,6 @@ py_library(
         "//grain/_src/python/dataset/sources:parquet_dataset",
         "//grain/_src/python/dataset/sources:tfrecord_dataset",
         "//grain/_src/python/dataset/transformations:cache",
-        "//grain/_src/python/dataset/transformations:interleave",
         "//grain/_src/python/dataset/transformations:prefetch_autotune",
         "//grain/_src/python/dataset/transformations:limit",
         "//grain/_src/python/dataset/transformations:packing",

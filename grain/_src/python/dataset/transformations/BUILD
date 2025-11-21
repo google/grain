@@ -245,23 +245,11 @@ py_test(
     ],
 )
 
-py_library(
-    name = "interleave",
-    srcs = ["interleave.py"],
-    srcs_version = "PY3",
-    deps = [
-        "//grain/_src/python:options",
-        "//grain/_src/python/dataset",
-        "//grain/_src/python/dataset:stats",
-    ],
-)
-
 py_test(
     name = "interleave_test",
     srcs = ["interleave_test.py"],
     srcs_version = "PY3",
     deps = [
-        ":interleave",
         "//grain/_src/python:options",
         "//grain/_src/python/dataset",
         "@abseil-py//absl/testing:absltest",
