@@ -18,6 +18,8 @@ from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.python import data_sources
 from grain._src.python.dataset import base
+import jax
+import numpy as np
 
 
 @absltest.skipIf(
@@ -104,6 +106,21 @@ class IteratorContextTest(parameterized.TestCase):
         ValueError, "Cannot merge contexts from different worker processes"
     ):
       a.merge(b)
+
+
+class ShapeDtypeStructTest(parameterized.TestCase):
+
+  def test_shape_dtype_struct_implements_protocol(self):
+    self.assertIsInstance(
+        base.ShapeDtypeStruct(shape=(1, 2), dtype=np.float32),
+        base.ShapeDtypeStructProtocol,
+    )
+
+  def test_jax_shape_dtype_struct_implements_protocol(self):
+    self.assertIsInstance(
+        jax.ShapeDtypeStruct(shape=(1, 2), dtype=np.float32),
+        base.ShapeDtypeStructProtocol,
+    )
 
 
 if __name__ == "__main__":

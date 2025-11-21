@@ -424,6 +424,14 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     _ = list(it)
     self.assertEqual(stats_init_threads, {threading.get_ident()})
 
+  def test_element_spec(self):
+    ds = prefetch.PrefetchIterDataset(
+        self.range_ds, read_options=options.ReadOptions()
+    )
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(spec.shape, ())
+    self.assertEqual(spec.dtype, np.int64)
+
 
 class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
 

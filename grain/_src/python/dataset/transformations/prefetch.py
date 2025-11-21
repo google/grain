@@ -128,6 +128,10 @@ class PrefetchIterDataset(dataset.IterDataset[T]):
         self._parent, self._read_options, self._allow_nones
     )
 
+  @property
+  def _element_spec(self) -> Any:
+    return dataset.get_element_spec(self._parent)
+
 
 class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
   """Iterator that performs prefetching using a thread pool."""
