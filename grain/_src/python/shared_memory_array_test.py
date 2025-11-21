@@ -153,21 +153,36 @@ class SharedMemoryArrayTest(parameterized.TestCase):
     )
     original_close_shm_async = SharedMemoryArray.close_shm_async
 
+    # Use a semaphore to track completed async deletions.
+    completed_sem = threading.Semaphore(0)
+    # Use a thread-safe counter because mock.call_count is not thread-safe in
+    # free-threaded Python.
+    call_count = 0
+    count_lock = threading.Lock()
+
     def my_close_shm_async(shm, unlink_on_del):
       original_close_shm_async(shm, unlink_on_del)
+      with count_lock:
+        nonlocal call_count
+        call_count += 1
+      completed_sem.release()
 
     with mock.patch.object(
         SharedMemoryArray, "close_shm_async", side_effect=my_close_shm_async
-    ) as mock_close_shm_async:
+    ):
       with self.subTest("first_round_of_requests"):
         shm_metadatas = [
             _create_and_delete_shm() for _ in range(max_outstanding_requests)
         ]
         for metadata in shm_metadatas:
           _wait_for_deletion(metadata)
-        self.assertEqual(
-            max_outstanding_requests, mock_close_shm_async.call_count
-        )
+        # Wait for all async deletions to complete to ensure the semaphore in
+        # SharedMemoryArray is released.
+        for _ in range(max_outstanding_requests):
+          completed_sem.acquire()
+        with count_lock:
+          self.assertEqual(max_outstanding_requests, call_count)
+
       with self.subTest("second_round_of_requests"):
         # Do it again to make sure the pool is reused.
         shm_metadatas = [
@@ -175,9 +190,10 @@ class SharedMemoryArrayTest(parameterized.TestCase):
         ]
         for metadata in shm_metadatas:
           _wait_for_deletion(metadata)
-        self.assertEqual(
-            2 * max_outstanding_requests, mock_close_shm_async.call_count
-        )
+        for _ in range(max_outstanding_requests):
+          completed_sem.acquire()
+        with count_lock:
+          self.assertEqual(2 * max_outstanding_requests, call_count)
 
 
 if __name__ == "__main__":
