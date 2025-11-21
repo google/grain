@@ -45,6 +45,7 @@ py_test(
         "//grain/_src/python/dataset",
         "//grain/_src/python/dataset:base",
         "@abseil-py//absl/testing:absltest",
+        "@pypi//numpy:pkg",
     ],
 )
 
@@ -74,6 +75,7 @@ py_test(
     deps = [
         "//grain/_src/python/dataset",
         "@abseil-py//absl/testing:absltest",
+        "@pypi//numpy:pkg",
     ],
 )
 

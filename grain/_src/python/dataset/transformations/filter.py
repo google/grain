@@ -62,6 +62,10 @@ class FilterMapDataset(dataset.MapDataset[T]):
         return element
       return None
 
+  @property
+  def _element_spec(self) -> Any:
+    return dataset.get_element_spec(self._parent)
+
   def __str__(self) -> str:
     return f"FilterMapDataset(transform={self._transform_name})"
 
@@ -204,6 +208,10 @@ class FilterIterDataset(dataset.IterDataset[T]):
         filter_fn=self._filter_fn,
         transform_name=self._transform_name,
     )
+
+  @property
+  def _element_spec(self) -> Any:
+    return dataset.get_element_spec(self._parent)
 
   def __str__(self) -> str:
     return f"FilterIterDataset(transform={self._transform_name})"

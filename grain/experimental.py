@@ -87,3 +87,7 @@ from grain._src.python.dataset.transformations.prefetch_autotune import (
     pick_performance_config,
     PerformanceConfig,
 )
+
+from grain._src.python.dataset.dataset import (
+    get_element_spec,
+)

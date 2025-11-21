@@ -20,6 +20,7 @@ from unittest import mock
 from absl.testing import absltest
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import source
+import numpy as np
 
 
 class _MyRandomAccessDataSource:
@@ -214,6 +215,12 @@ class RangeMapDatasetTest(absltest.TestCase):
         slice(worker_index, None, workers_count), sequential_slice=True
     )
     self.assertEqual(list(ds), [14, 15, 16, 17, 18, 19, 20])
+
+  def test_element_spec(self):
+    ds = source.RangeMapDataset(12)
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(spec.shape, ())
+    self.assertEqual(spec.dtype, np.int64)
 
 
 if __name__ == "__main__":

@@ -21,6 +21,7 @@ from grain._src.core import transforms
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import filter as filter_dataset
+import numpy as np
 
 
 @dataclasses.dataclass(frozen=True)
@@ -94,6 +95,14 @@ class FilterMapDatasetTest(absltest.TestCase):
     ]
     self.assertEqual(expected_data, actual_data)
 
+  def test_element_spec(self):
+    ds = filter_dataset.FilterMapDataset(
+        self.range_ds, FilterEvenElementsOnly()
+    )
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(spec.shape, ())
+    self.assertEqual(spec.dtype, np.int64)
+
 
 class FilterIterDatasetTest(absltest.TestCase):
 
@@ -160,6 +169,14 @@ class FilterIterDatasetTest(absltest.TestCase):
         r" skipped 100.00 \% of the last seen 1000 elements.",
     ):
       _ = list(ds)
+
+  def test_element_spec(self):
+    ds = filter_dataset.FilterIterDataset(
+        self.range_iter_ds, FilterEvenElementsOnly()
+    )
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(spec.shape, ())
+    self.assertEqual(spec.dtype, np.int64)
 
 
 class FilterValidatorTest(absltest.TestCase):

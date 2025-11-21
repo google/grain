@@ -116,6 +116,19 @@ class _Dataset:
     seed_sequence = np.random.SeedSequence(aggregated_seed)
     return seed_sequence.generate_state(1, dtype=np.uint32)[0]
 
+  @property
+  def _element_spec(self) -> Any:  # PyTree[ShapeDtypeStructProtocol]
+    """Returns specification of the elements produced by this dataset.
+
+    Does not instantiate iterator, perform any data reads or transformations.
+
+    WARNING: This feature is experimental.
+    """
+    raise NotImplementedError(
+        "`element_spec` inference is not implemented for"
+        f" {self.__class__.__name__}"
+    )
+
   # TODO: Define a more precise type signature for this method,
   # once pytype fully supports Concatenate and ParamSpec
   # (b/217789659, https://github.com/google/pytype/issues/786):
@@ -1684,3 +1697,16 @@ def get_execution_summary(
     )
   return execution_stats._get_execution_summary()
   # pylint: enable=protected-access
+
+
+def get_element_spec(
+    ds: MapDataset | IterDataset,
+) -> Any:  # PyTree[ShapeDtypeStructProtocol]
+  """Returns specification of the elements produced by this dataset.
+
+  Does not instantiate iterator, perform any data reads or transformations.
+
+  Args:
+    ds: `MapDataset` or `IterDataset` to get the element spec from.
+  """
+  return ds._element_spec  # pylint: disable=protected-access
