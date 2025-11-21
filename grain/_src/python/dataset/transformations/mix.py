@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import bisect
+import collections
 from collections.abc import Sequence
 import sys
 from typing import Any, TypeVar
@@ -24,6 +25,7 @@ from grain._src.core import exceptions
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
+
 
 Element = Any
 T = TypeVar("T")  # pylint: disable=invalid-name
@@ -130,9 +132,37 @@ class MixedMapDataset(dataset.MapDataset[T]):
       if sys.version_info >= (3, 11):
         e.add_note(
             f"Exception caught while processing dataset @ {dataset_index=},"
-            f" {index_in_dataset=}"
         )
       raise e
+
+  def _getitems(self, indices: Sequence[int]) -> Sequence[T | None]:
+    """Returns a sequence of elements corresponding to the given indices."""
+
+    with self._stats.record_self_time(num_elements=len(indices)):
+      parent_and_key_pairs = [self._selection_map[i] for i in indices]
+
+      # Group indices by parent.
+      # parent_to_keys will store {parent_idx: [key1, key2, ...]}
+      # where key is the index in the parent dataset.
+      parent_to_keys = collections.defaultdict(list)
+      # parent_to_original_indices will store {parent_idx: [original_idx1, ...]}
+      # where original_idx is the position in the input `indices` list.
+      parent_to_original_indices = collections.defaultdict(list)
+
+      for i, (parent_idx, key) in enumerate(parent_and_key_pairs):
+        parent_to_keys[parent_idx].append(key)
+        parent_to_original_indices[parent_idx].append(i)
+
+    mixed_elements = [None] * len(indices)
+    for parent_idx, keys in parent_to_keys.items():
+      # Call _getitems for each parent.
+      parent_elements = self.parents[parent_idx]._getitems(keys)  # pylint: disable=protected-access
+      original_indices = parent_to_original_indices[parent_idx]
+      # Assign elements to their proper index in the final mixed dataset.
+      for i, element in enumerate(parent_elements):
+        mixed_elements[original_indices[i]] = element
+
+    return self._stats.record_output_spec_for_batch(mixed_elements)
 
 
 class _MixedDatasetIterator(dataset.DatasetIterator[T]):
