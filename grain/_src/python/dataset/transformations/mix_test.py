@@ -475,6 +475,101 @@ class MixedIterDatasetTest(absltest.TestCase):
             next(ds_iter), values_without_interruption[i]
         )
 
+  def test_checkpoint_recovery_with_changed_weights(self):
+    ds1 = dataset.MapDataset.range(10).to_iter_dataset()
+    ds2 = dataset.MapDataset.range(10, 20).to_iter_dataset()
+    ds3 = dataset.MapDataset.range(20, 30).to_iter_dataset()
+    ds = dataset.IterDataset.mix(
+        {"ds1": ds1, "ds2": ds2, "ds3": ds3},
+        {"ds1": 0.2, "ds2": 0.3, "ds3": 0.5},
+    )
+    ds_iter = ds.__iter__()
+    values_before_checkpoint = [next(ds_iter) for _ in range(10)]
+    self.assertEqual(
+        values_before_checkpoint, [0, 10, 20, 11, 21, 1, 22, 12, 23, 24]
+    )
+    checkpoint = ds_iter.get_state()
+    ds1 = dataset.MapDataset.range(10).to_iter_dataset()
+    ds2 = dataset.MapDataset.range(10, 20).to_iter_dataset()
+    ds3 = dataset.MapDataset.range(20, 30).to_iter_dataset()
+    ds = dataset.IterDataset.mix(
+        {"ds1": ds1, "ds2": ds2, "ds3": ds3},
+        {"ds1": 0.2, "ds2": 0.3, "ds3": 0.5},
+    )
+    ds_iter = ds.__iter__()
+    ds_iter.set_state(checkpoint)
+    self.assertEqual(
+        list(ds_iter), [2, 13, 25, 14, 26, 3, 27, 15, 28, 29, 4, 16]
+    )
+
+  def test_checkpoint_recovery_with_fewer_datasets(self):
+    ds1 = dataset.MapDataset.range(10).to_iter_dataset()
+    ds2 = dataset.MapDataset.range(10, 20).to_iter_dataset()
+    ds3 = dataset.MapDataset.range(20, 30).to_iter_dataset()
+    ds = dataset.IterDataset.mix(
+        {"ds1": ds1, "ds2": ds2, "ds3": ds3},
+        {"ds1": 0.2, "ds2": 0.3, "ds3": 0.5},
+    )
+    ds_iter = ds.__iter__()
+    values_before_checkpoint = [next(ds_iter) for _ in range(10)]
+    self.assertEqual(
+        values_before_checkpoint, [0, 10, 20, 11, 21, 1, 22, 12, 23, 24]
+    )
+    checkpoint = ds_iter.get_state()
+    ds1 = dataset.MapDataset.range(10).to_iter_dataset()
+    ds2 = dataset.MapDataset.range(10, 20).to_iter_dataset()
+    ds = dataset.IterDataset.mix(
+        {"ds1": ds1, "ds2": ds2},
+        {"ds1": 0.2, "ds2": 0.3},
+    )
+    ds_iter = ds.__iter__()
+    ds_iter.set_state(checkpoint)
+    self.assertEqual(
+        list(ds_iter), [2, 13, 3, 14, 15, 4, 16, 5, 17, 18, 6, 19, 7]
+    )
+
+  def test_checkpoint_recovery_with_more_datasets(self):
+    ds1 = dataset.MapDataset.range(10).to_iter_dataset()
+    ds2 = dataset.MapDataset.range(10, 20).to_iter_dataset()
+    ds = dataset.IterDataset.mix({"ds1": ds1, "ds2": ds2})
+    ds_iter = ds.__iter__()
+    values_before_checkpoint = [next(ds_iter) for _ in range(10)]
+    self.assertEqual(
+        values_before_checkpoint, [0, 10, 1, 11, 2, 12, 3, 13, 4, 14]
+    )
+    checkpoint = ds_iter.get_state()
+    ds3 = dataset.MapDataset.range(20, 30).to_iter_dataset()
+    ds = dataset.IterDataset.mix({"ds1": ds1, "ds2": ds2, "ds3": ds3})
+    ds_iter = ds.__iter__()
+    ds_iter.set_state(checkpoint)
+    self.assertEqual(
+        list(ds_iter), [15, 20, 5, 16, 21, 6, 17, 22, 7, 18, 23, 8, 19, 24, 9]
+    )
+
+  def test_checkpoint_recovery_with_different_mixture(self):
+    ds1 = dataset.MapDataset.range(10).to_iter_dataset()
+    ds2 = dataset.MapDataset.range(10, 20).to_iter_dataset()
+    ds3 = dataset.MapDataset.range(20, 30).to_iter_dataset()
+    ds = dataset.IterDataset.mix(
+        {"ds1": ds1, "ds2": ds2, "ds3": ds3},
+        {"ds1": 1, "ds2": 1, "ds3": 1},
+    )
+    ds_iter = ds.__iter__()
+    values_before_checkpoint = [next(ds_iter) for _ in range(10)]
+    self.assertEqual(
+        values_before_checkpoint, [0, 10, 20, 1, 11, 21, 2, 12, 22, 3]
+    )
+    checkpoint = ds_iter.get_state()
+    ds4 = dataset.MapDataset.range(30, 40).to_iter_dataset()
+    ds = dataset.IterDataset.mix(
+        {"ds2": ds2, "ds4": ds4}, {"ds2": 0.6, "ds4": 0.4}
+    )
+    ds_iter = ds.__iter__()
+    ds_iter.set_state(checkpoint)
+    self.assertEqual(
+        list(ds_iter), [13, 14, 30, 15, 31, 16, 17, 32, 18, 33, 19]
+    )
+
 
 class ConcatenateLazyMapTest(absltest.TestCase):
 
