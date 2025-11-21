@@ -89,6 +89,9 @@ class _ZipDatasetIterator(dataset.DatasetIterator[T]):
     self._strict = strict
 
   @dataset_stats.record_next_duration_if_output
+  @dataset_stats.trace_input_pipeline_next(
+      stage_category=dataset_stats.IPL_CAT_PREFETCH
+  )
   def __next__(self) -> tuple[T, ...]:
     with self._stats.record_self_time():
       # Can't use for a `for` loop because we need to raise StopIteration from
