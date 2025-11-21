@@ -13,6 +13,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     hiding first batch processing behind model checkpoint recovery.
   * Introduces `grain.experimental.multithread_prefetch` as an
     alternative to multiprocessing prefetch in free-threading Python.
+  * Adds support for changing `IterDataset.mix` components and weights after a checkpoint.
 
 * Breaking changes:
 
