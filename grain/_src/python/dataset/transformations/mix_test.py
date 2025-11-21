@@ -169,7 +169,7 @@ class MixedMapDatasetTest(absltest.TestCase):
     # Equal proportions.
     ds = mix.MixedMapDataset([ds1, ds2, ds3])
     self.assertLen(ds, 15)
-    # Heigher weight for second dataset.
+    # Higher weight for second dataset.
     ds = mix.MixedMapDataset([ds1, ds2, ds3], proportions=[1, 2, 1])
     self.assertLen(ds, 5 + 10 + 5)
 
@@ -332,6 +332,98 @@ class MixedMapDatasetTest(absltest.TestCase):
     )
 
     self.assertEqual(list(ds), expected_dataset)
+
+  def test_getitems_mixing_equal_probability(self):
+    mixed_ds = mix.MixedMapDataset(parents=[self.even_ds, self.odd_ds])
+    # Request a batch of indices that results in interleaved elements
+    indices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    actual_values = mixed_ds._getitems(indices)
+    expected_values = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    self.assertEqual(expected_values, actual_values)
+
+  def test_getitems_mixing_with_float_proportions(self):
+    mixed_ds = mix.MixedMapDataset(
+        parents=[self.even_ds, self.odd_ds], proportions=[0.75, 0.25]
+    )
+    indices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    actual_values = mixed_ds._getitems(indices)
+    expected_values = [0, 2, 4, 1, 6, 8, 0, 3, 2, 4]
+    self.assertEqual(expected_values, actual_values)
+
+  def test_getitems_mixing_with_integer_proportions(self):
+    mixed_ds = mix.MixedMapDataset(
+        parents=[self.even_ds, self.odd_ds], proportions=[1, 2]
+    )
+    indices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    actual_values = mixed_ds._getitems(indices)
+    expected_values = [0, 1, 3, 2, 5, 7, 4, 9, 1, 6]
+    self.assertEqual(expected_values, actual_values)
+
+  def test_getitems_interleaved_map(self):
+    def _inteleaved_dataset(index):
+      if index > 9:
+        raise IndexError("index our of range")
+      ds = index % 2
+      ds_index = index // 2
+      return (ds, ds_index)
+
+    interleaved_map = ExplicitSelectionMap(10, _inteleaved_dataset)
+
+    ds = mix.MixedMapDataset(
+        parents=[self.even_ds, self.odd_ds], selection_map=interleaved_map
+    )
+
+    expected_dataset = list(range(10))
+    self.assertEqual(ds._getitems(list(range(10))), expected_dataset)
+
+  def test_getitems_sequential_map(self):
+    def _sequential_dataset(index):
+      if index > 9:
+        raise IndexError("index our of range")
+      if index < 5:
+        ds = 0
+      else:
+        ds = 1
+      ds_index = index % 5
+      return (ds, ds_index)
+
+    sequential_map = ExplicitSelectionMap(10, _sequential_dataset)
+
+    ds = mix.MixedMapDataset(
+        parents=[self.even_ds, self.odd_ds], selection_map=sequential_map
+    )
+
+    expected_dataset = list(range(0, 10, 2)) + list(range(1, 10, 2))
+    self.assertEqual(ds._getitems(list(range(10))), expected_dataset)
+
+  def test_getitems_subset_and_shuffle_map(self):
+    first_epoch = [0, 1, 2, 3, 4]
+    second_epoch = [1, 0, 3, 2, 4]
+
+    expected_dataset = first_epoch + second_epoch
+
+    def _subset_and_shuffle_dataset(index):
+      if index > 9:
+        raise IndexError("index our of range")
+      if index < 5:
+        ds = index % 2
+        ds_index = index // 2
+      else:
+        mapped_index = second_epoch[index - 5]
+        ds = mapped_index % 2
+        ds_index = mapped_index // 2
+      return (ds, ds_index)
+
+    subset_and_shuffle_map = ExplicitSelectionMap(
+        10, _subset_and_shuffle_dataset
+    )
+
+    ds = mix.MixedMapDataset(
+        parents=[self.even_ds, self.odd_ds],
+        selection_map=subset_and_shuffle_map,
+    )
+
+    self.assertEqual(ds._getitems(list(range(10))), expected_dataset)
 
 
 class MixedIterDatasetTest(absltest.TestCase):
@@ -531,6 +623,17 @@ class ConcatenateLazyMapTest(absltest.TestCase):
         ValueError, "Cannot concatenate infinite datasets"
     ):
       _ = mix._ConcatSelectionMap([zeros, ones])
+
+  def test_getitems_concatenate_finite_datasets(self):
+    evens = dataset.MapDataset.range(0, 10, 2)
+    odds = dataset.MapDataset.range(1, 10, 2)
+    ds = mix.ConcatenateMapDataset([evens, odds])
+    self.assertLen(evens, 5)
+    self.assertLen(odds, 5)
+    self.assertLen(ds, 10)
+
+    expected_values = [0, 2, 4, 6, 8, 1, 3, 5, 7, 9]
+    self.assertEqual(ds._getitems(list(range(10))), expected_values)
 
 
 if __name__ == "__main__":
