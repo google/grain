@@ -239,6 +239,7 @@ class MapDatasetMeta(abc.ABCMeta):
       cls,
       datasets: Sequence[MapDataset[T]],
       weights: Sequence[float] | None = None,
+      allow_sparse_transformations: bool = False,
   ) -> MapDataset[T]:
     """Returns a dataset that mixes input datasets with the given weights.
 
@@ -247,7 +248,14 @@ class MapDatasetMeta(abc.ABCMeta):
     input datasets before mixing.
 
     If you need to shuffle the mixed dataset while preserving the correct
-    proportions, you should shuffle the input datasets before mixing.
+    weights, you should shuffle the input datasets before mixing.
+
+    WARNING: Sparse transformations, such as filter, are disallowed before
+    `MapDataset.mix` by default. If you need to filter data before mixing, use
+    `IterDataset.mix` instead. You can disable this check by setting
+    `allow_sparse_transformations` to `True` if you know what you are doing.
+    This will result in the provided weights being respected with element
+    counts before filtering, not after.
 
     Example usage::
 
@@ -259,6 +267,8 @@ class MapDatasetMeta(abc.ABCMeta):
       datasets: The datasets to mix.
       weights: The weights to use for mixing. Defaults to uniform weights if not
         specified.
+      allow_sparse_transformations: Whether to allow sparse transformations,
+        such as filter, before mixing. See warning above.
 
     Returns:
       A MapDataset that represents a mixture of the input datasets according
@@ -268,22 +278,35 @@ class MapDatasetMeta(abc.ABCMeta):
     # pylint: disable=g-import-not-at-top
     from grain._src.python.dataset.transformations import mix
     # pylint: enable=g-import-not-at-top
-    return mix.MixedMapDataset(parents=datasets, proportions=weights)
+    return mix.MixedMapDataset(
+        parents=datasets,
+        proportions=weights,
+        allow_sparse_transformations=allow_sparse_transformations,
+    )
 
   def select_from_datasets(
       cls,
       datasets: Sequence[MapDataset[T]],
       selection_map: base.DatasetSelectionMap,
+      allow_sparse_transformations: bool = False,
   ) -> MapDataset[T]:
     """Returns a dataset selected from the inputs accoridng to the given map.
 
     Allows more general types of dataset mixing than ``mix``.
+
+    WARNING: Sparse transformations, such as filter, are disallowed before
+    `MapDataset.select_from_datasets` by default because the provided selection
+    logic will likely not account for the filtering. If it does and you know
+    what you're doing, you can disable this check by setting
+    `allow_sparse_transformations` to `True`
 
     Args:
       datasets: The datasets to select from.
       selection_map: Mapping from index within the mixed dataset to a selected
         dataset index and index within that dataset. Length of the resulting
         dataset will be determined by the length of the ``selection_map``.
+      allow_sparse_transformations: Whether to allow sparse transformations,
+        such as filter, before selecting. See warning above.
 
     Returns:
       A MapDataset that represents a mixture of the input datasets according
@@ -293,7 +316,11 @@ class MapDatasetMeta(abc.ABCMeta):
     # pylint: disable=g-import-not-at-top
     from grain._src.python.dataset.transformations import mix
     # pylint: enable=g-import-not-at-top
-    return mix.MixedMapDataset(parents=datasets, selection_map=selection_map)
+    return mix.MixedMapDataset(
+        parents=datasets,
+        selection_map=selection_map,
+        allow_sparse_transformations=allow_sparse_transformations,
+    )
 
   def concatenate(cls, datasets: Sequence[MapDataset[T]]) -> MapDataset[T]:
     """Returns a dataset of elements from all input datasets.

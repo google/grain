@@ -136,6 +136,7 @@ py_test(
     srcs = ["mix_test.py"],
     srcs_version = "PY3",
     deps = [
+        "//grain/_src/core:transforms",
         "//grain/_src/python/dataset",
         "//grain/_src/python/dataset:base",
         "@abseil-py//absl/testing:absltest",
