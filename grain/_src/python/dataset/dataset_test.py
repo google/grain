@@ -31,6 +31,7 @@ from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
+from grain._src.python.dataset.transformations import prefetch
 import grain._src.python.testing.experimental as test_util
 from grain.proto import execution_summary_pb2
 import numpy as np
@@ -1181,6 +1182,21 @@ class DatasetTest(parameterized.TestCase):
             np.array([5]),
         ],
     )
+
+  def test_mp_prefetch_switches_to_threads_for_free_threaded_python(self):
+    ds = dataset.MapDataset.range(15).to_iter_dataset()
+    prefetched_ds = ds.mp_prefetch()
+    is_free_threaded = (
+        hasattr(sys, "_is_gil_enabled") and not sys._is_gil_enabled()
+    )
+    if is_free_threaded:
+      self.assertNotIsInstance(
+          prefetched_ds, prefetch.MultiprocessPrefetchIterDataset
+      )
+    else:
+      self.assertIsInstance(
+          prefetched_ds, prefetch.MultiprocessPrefetchIterDataset
+      )
 
 
 class TfRandomMapAlwaysAddingOne(transforms.TfRandomMapTransform):
