@@ -50,6 +50,7 @@ import builtins
 from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Sequence
 import functools
 import json
+import threading
 from typing import Any, Generic, TypeVar, Union, cast, overload
 import warnings
 
@@ -67,6 +68,7 @@ import numpy as np
 from grain._src.core import monitoring
 
 
+_usage_logging_lock = threading.Lock()
 _api_usage_counter = monitoring.Counter(
     "/grain/python/lazy_dataset/api",
     metadata=monitoring.Metadata(
@@ -358,7 +360,8 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
       parents = tuple(parents)
     super().__init__(parents)
     self._parents = cast(Sequence[MapDataset], self._parents)
-    usage_logging.log_event("MapDataset", tag_3="PyGrain")
+    with _usage_logging_lock:
+      usage_logging.log_event("MapDataset", tag_3="PyGrain")
     _api_usage_counter.Increment("MapDataset")
 
   @property
@@ -977,7 +980,8 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
     self._parents = cast(
         Sequence[Union[MapDataset, IterDataset]], self._parents
     )
-    usage_logging.log_event("IterDataset", tag_3="PyGrain")
+    with _usage_logging_lock:
+      usage_logging.log_event("IterDataset", tag_3="PyGrain")
     _api_usage_counter.Increment("IterDataset")
 
   @property
