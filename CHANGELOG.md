@@ -15,6 +15,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     alternative to multiprocessing prefetch in free-threading Python.
   * Adds experimental support for static `{Map|Iter}Dataset` element
     specification inference.
+  * Adds support for changing `IterDataset.mix` components and weights after a checkpoint.
 
 * Breaking changes:
 

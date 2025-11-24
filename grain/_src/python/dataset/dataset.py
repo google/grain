@@ -47,7 +47,7 @@ from __future__ import annotations
 
 import abc
 import builtins
-from collections.abc import Awaitable, Callable, Iterable, Iterator, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Sequence
 import functools
 import json
 from typing import Any, Generic, TypeVar, Union, cast, overload
@@ -918,14 +918,19 @@ class IterDatasetMeta(abc.ABCMeta):
 
   def mix(
       cls,
-      datasets: Sequence[IterDataset[T]],
-      weights: Sequence[float] | None = None,
+      datasets: Sequence[IterDataset[T]] | Mapping[str, IterDataset[T]],
+      weights: Sequence[float] | Mapping[str, float] | None = None,
   ) -> IterDataset[T]:
     """Returns a dataset that mixes input datasets with the given weights.
 
     NOTE: Stops producing elements once *any* input dataset is exhausted. If
     you need an infinite mixed dateset consider repeating the input datasets
     before mixing.
+
+    If `datasets` is a mapping, it is possible to recover from a checkpoint with
+    different components and/or weights. Component states will be recoverd from
+    the checkpoint by key. If a component state is not found, the component will
+    start from the beginning.
 
     Example usage::
 
@@ -937,7 +942,8 @@ class IterDatasetMeta(abc.ABCMeta):
     Args:
       datasets: The datasets to mix.
       weights: The weights to use for mixing. Defaults to uniform weights if not
-        specified.
+        specified. If `datasets` is a mapping, `weights` must be a mapping with
+        the same keys.
 
     Returns:
       A dataset that represents a mixture of the input datasets according to the

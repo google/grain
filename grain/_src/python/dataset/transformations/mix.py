@@ -18,12 +18,14 @@ from __future__ import annotations
 import bisect
 from collections.abc import Sequence
 import sys
-from typing import Any, TypeVar
+from typing import Any, Mapping, TypeVar
 
 from grain._src.core import exceptions
+from grain._src.core import tree_lib
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
+
 
 Element = Any
 T = TypeVar("T")  # pylint: disable=invalid-name
@@ -148,10 +150,15 @@ class _MixedDatasetIterator(dataset.DatasetIterator[T]):
 
   def __init__(
       self,
-      parents: Sequence[dataset.DatasetIterator[T]],
-      proportions: Sequence[int] | None,
+      parents: (
+          Sequence[dataset.DatasetIterator[T]]
+          | Mapping[str, dataset.DatasetIterator[T]]
+      ),
+      proportions: Sequence[int],
   ):
-    super().__init__(parents)
+    flat_parents = tree_lib.flatten(parents)
+    super().__init__(flat_parents)
+    self._parents_structure = parents
     self._proportions = tuple(proportions)
     self._index = 0
     self._stop = False
@@ -181,14 +188,23 @@ class _MixedDatasetIterator(dataset.DatasetIterator[T]):
 
   def get_state(self):
     return {
-        "parents": [parent.get_state() for parent in self._parents],
+        "parents": tree_lib.map_structure(
+            lambda p: p.get_state(), self._parents_structure
+        ),
         "index": self._index,
         "stop": self._stop,
     }
 
   def set_state(self, state):
-    for parent, parent_state in zip(self._parents, state["parents"]):
-      parent.set_state(parent_state)
+    parents_state = state["parents"]
+    if isinstance(self._parents_structure, Sequence):
+      for parent, parent_state in zip(self._parents, parents_state):
+        parent.set_state(parent_state)
+    else:
+      for key, parent in self._parents_structure.items():
+        if (parent_state := parents_state.get(key)) is not None:
+          parent.set_state(parent_state)
+
     self._index = state["index"]
     self._stop = state["stop"]
 
@@ -204,24 +220,30 @@ class MixedIterDataset(dataset.IterDataset[T]):
 
   def __init__(
       self,
-      parents: Sequence[dataset.IterDataset],
-      proportions: Sequence[float] | None = None,
+      parents: (
+          Sequence[dataset.IterDataset] | Mapping[str, dataset.IterDataset]
+      ),
+      proportions: Sequence[float] | Mapping[str, float] | None = None,
   ):
-    super().__init__(parents)
+    flat_parents = tree_lib.flatten(parents)
+    super().__init__(flat_parents)
+    self._parents_structure = parents
     # Normalize proportions
     if proportions is None:
-      proportions = [1] * len(parents)
-    elif 0 in proportions:
+      proportions = [1] * len(flat_parents)
+    else:
+      proportions = tree_lib.flatten(proportions)
+
+    if 0 in proportions:
       raise ValueError("Must specify all non-zero proportions for mixing.")
     else:
       proportions = _float_to_int_proportions(proportions)
-    assert len(parents) == len(proportions)
+    assert len(flat_parents) == len(proportions)
     self._proportions = proportions
 
-  def __iter__(self) -> _MixedDatasetIterator[T]:
-    parent_iters = [parent.__iter__() for parent in self.parents]
+  def __iter__(self) -> dataset.DatasetIterator[T]:
     return _MixedDatasetIterator(
-        parent_iters,
+        tree_lib.map_structure(lambda p: p.__iter__(), self._parents_structure),
         proportions=self._proportions,
     )
 
