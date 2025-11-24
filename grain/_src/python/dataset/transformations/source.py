@@ -15,15 +15,52 @@
 
 from __future__ import annotations
 
+import threading
+import time
 from typing import Any, Sequence, Union
 
 from absl import logging
+from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import sharding
 from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
 import numpy as np
+
+from grain._src.core import monitoring
+
+
+_source_read_time_ns_histogram = monitoring.EventMetric(
+    "/grain/python/dataset/source_read_time_ns",
+    metadata=monitoring.Metadata(
+        description="Histogram of source read time in nanoseconds.",
+        units=monitoring.Units.NANOSECONDS,
+    ),
+    root=grain_monitoring.get_monitoring_root(),
+    fields=[("source", str)],
+    bucketer=monitoring.Bucketer.PowersOf(2.0),
+)
+
+_metric_lock = threading.Lock()
+
+
+def _maybe_record_source_read_time(
+    elapsed_time_ns: int, source_name: str
+) -> None:
+  """Records the source read time in nanoseconds if metric lock is available.
+
+  To avoid contention and potential slowness, we only record the time if the
+  lock is immediately available.
+
+  Args:
+    elapsed_time_ns: The elapsed time in nanoseconds.
+    source_name: The name of the source.
+  """
+
+  if _metric_lock.acquire(blocking=False):
+    _source_read_time_ns_histogram.Record(elapsed_time_ns, source_name)
+    _metric_lock.release()
 
 
 class SourceMapDataset(dataset.MapDataset):
@@ -45,7 +82,13 @@ class SourceMapDataset(dataset.MapDataset):
     if isinstance(index, slice):
       return self.slice(index)
     with self._stats.record_self_time():
-      return self._stats.record_output_spec(self._source[index % len(self)])
+      start_time = time.perf_counter_ns()
+      result = self._stats.record_output_spec(self._source[index % len(self)])
+      stop_time = time.perf_counter_ns()
+      _maybe_record_source_read_time(
+          stop_time - start_time, self._source.__class__.__name__
+      )
+      return result
 
   def _getitems(self, indices: Sequence[int]):
     if not isinstance(
