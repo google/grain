@@ -8,6 +8,9 @@ py_library(
         "base.py",
     ],
     srcs_version = "PY3",
+    deps = [
+        "@pypi//numpy:pkg",
+    ],
 )
 
 py_test(
@@ -23,6 +26,8 @@ py_test(
         "//grain/_src/python:data_sources",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
+        "@pypi//jax:pkg",
+        "@pypi//numpy:pkg",
     ],
 )
 

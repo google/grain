@@ -26,8 +26,31 @@ import enum
 import typing
 from typing import Generic, Protocol, TypeVar
 
+import numpy as np
+
 
 T = TypeVar("T")
+
+
+@typing.runtime_checkable
+class ShapeDtypeStructProtocol(Protocol):
+  """Protocol for a structure that has a shape and dtype."""
+
+  @property
+  def shape(self) -> tuple[int | None, ...]:
+    ...
+
+  @property
+  def dtype(self) -> np.DTypeLike:
+    ...
+
+
+@dataclasses.dataclass(slots=True, frozen=True)
+class ShapeDtypeStruct(ShapeDtypeStructProtocol):
+  """A structure that has a shape and dtype."""
+
+  shape: tuple[int | None, ...]
+  dtype: np.typing.DTypeLike
 
 
 @typing.runtime_checkable
@@ -44,7 +67,7 @@ class RandomAccessDataSource(Protocol[T]):
 class SupportsBatchedReadRandomAccessDataSource(
     RandomAccessDataSource[T], Protocol[T]
 ):
-  """Interface for datasources that support efficient random access and batched reads."""
+  """Interface for sources that support efficient random access and batched reads."""
 
   def _getitems(self, indices: Sequence[int]) -> Sequence[T]:
     """Returns the values for the given record_keys.

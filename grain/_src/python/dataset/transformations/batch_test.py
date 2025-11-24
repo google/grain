@@ -505,6 +505,22 @@ class BatchMapDatasetTest(parameterized.TestCase):
         ],
     )
 
+  @parameterized.parameters(
+      dict(batch_size=3, drop_remainder=True, expected_shape=(3,)),
+      dict(batch_size=5, drop_remainder=False, expected_shape=(None,)),
+  )
+  def test_element_spec(
+      self,
+      batch_size: int,
+      drop_remainder: bool,
+      expected_shape: tuple[int | None, ...],
+  ):
+    ds = dataset.MapDataset.range(0, 10)
+    ds = batch.BatchMapDataset(ds, batch_size, drop_remainder)
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(spec.shape, expected_shape)
+    self.assertEqual(spec.dtype, np.int64)
+
 
 class BatchIterDatasetTest(parameterized.TestCase):
 
@@ -658,6 +674,22 @@ class BatchIterDatasetTest(parameterized.TestCase):
             {"x": np.array([9, 0, 0, 0])},
         ],
     )
+
+  @parameterized.parameters(
+      dict(batch_size=3, drop_remainder=True, expected_shape=(3,)),
+      dict(batch_size=5, drop_remainder=False, expected_shape=(None,)),
+  )
+  def test_element_spec(
+      self,
+      batch_size: int,
+      drop_remainder: bool,
+      expected_shape: tuple[int | None, ...],
+  ):
+    ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
+    ds = batch.BatchIterDataset(ds, batch_size, drop_remainder)
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(spec.shape, expected_shape)
+    self.assertEqual(spec.dtype, np.int64)
 
 
 if __name__ == "__main__":

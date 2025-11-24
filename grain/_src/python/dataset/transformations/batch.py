@@ -24,6 +24,7 @@ import sys
 from typing import Any, Callable, TypeVar, cast
 
 from grain._src.core import tree_lib
+from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
 from grain._src.python.dataset.transformations import filter as filter_ds
@@ -249,6 +250,25 @@ class _BatchDatasetIterator(dataset.DatasetIterator[T]):
     )
 
 
+def _get_batch_element_spec(
+    input_spec: Any,
+    batch_size: int,
+    drop_remainder: bool,
+    batch_fn: Callable[[Sequence[Any]], Any],
+):
+  if batch_fn != make_batch and not isinstance(batch_fn, _MakeBatchParallel):  # pylint: disable=comparison-with-callable
+    raise NotImplementedError(
+        "Element spec inference is not supported with custom batching functions"
+    )
+  batch_size = batch_size if drop_remainder else None
+  return tree_lib.map_structure(
+      lambda x: base.ShapeDtypeStruct(
+          shape=(batch_size,) + x.shape, dtype=x.dtype
+      ),
+      input_spec,
+  )
+
+
 class BatchMapDataset(dataset.MapDataset[T]):
   """Batch transformation for non-sparse MapDatasets."""
 
@@ -333,6 +353,15 @@ class BatchMapDataset(dataset.MapDataset[T]):
           )
         raise e
 
+  @property
+  def _element_spec(self) -> Any:
+    return _get_batch_element_spec(
+        dataset.get_element_spec(self._parent),
+        self._batch_size,
+        self._drop_remainder,
+        self._batch_fn,
+    )
+
   def __str__(self) -> str:
     return (
         f"BatchMapDataset(batch_size={self._batch_size},"
@@ -377,6 +406,15 @@ class BatchIterDataset(dataset.IterDataset[T]):
         self._batch_size,
         drop_remainder=self._drop_remainder,
         batch_fn=self._batch_fn,
+    )
+
+  @property
+  def _element_spec(self) -> Any:
+    return _get_batch_element_spec(
+        dataset.get_element_spec(self._parent),
+        self._batch_size,
+        self._drop_remainder,
+        self._batch_fn,
     )
 
   def __str__(self) -> str:

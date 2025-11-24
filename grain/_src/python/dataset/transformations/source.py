@@ -11,10 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""LazyDataset data sources."""
+"""MapDataset source wrapper."""
+
 from __future__ import annotations
 
-from typing import Sequence, Union
+from typing import Any, Sequence, Union
 
 from absl import logging
 from grain._src.core import sharding
@@ -22,6 +23,7 @@ from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
+import numpy as np
 
 
 class SourceMapDataset(dataset.MapDataset):
@@ -156,3 +158,7 @@ class RangeMapDataset(dataset.MapDataset[int]):
         ),
         allow_nones=allow_nones,
     )
+
+  @property
+  def _element_spec(self) -> Any:
+    return base.ShapeDtypeStruct(shape=(), dtype=np.int64)

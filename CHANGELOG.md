@@ -6,13 +6,15 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features:
-  * Add public `DatasetIterator.close` API as an explicit blocking alternative
+  * Adds public `DatasetIterator.close` API as an explicit blocking alternative
     to a cleanup during GC.
   * `DatasetIterator.start_prefetch` now propagates to the first asynchronous
     parent iterator instead of raising `NotImplemented`. This API is useful for
     hiding first batch processing behind model checkpoint recovery.
   * Introduces `grain.experimental.multithread_prefetch` as an
     alternative to multiprocessing prefetch in free-threading Python.
+  * Adds experimental support for static `{Map|Iter}Dataset` element
+    specification inference.
 
 * Breaking changes:
 
