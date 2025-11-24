@@ -13,6 +13,7 @@
 # limitations under the License.
 """Tests for batch transformation."""
 
+import dataclasses
 import functools
 import importlib
 import sys
@@ -20,9 +21,11 @@ from unittest import mock
 
 from absl.testing import absltest
 from absl.testing import parameterized
+from grain._src.core import transforms
 from grain._src.core import tree_lib
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import batch
+from grain._src.python.dataset.transformations import flatmap
 from grain._src.python.dataset.transformations import repeat
 from grain._src.python.dataset.transformations import source
 import numpy as np
@@ -469,6 +472,23 @@ class BatchMapDatasetTest(parameterized.TestCase):
         "`MapDataset.batch` can not follow `MapDataset.filter`",
     ):
       _ = batch.BatchMapDataset(ds, batch_size=3, drop_remainder=True)
+
+  def test_batch_after_flatmap_raises_error(self):
+    @dataclasses.dataclass(frozen=True)
+    class TestFlatMapTransform(transforms.FlatMapTransform):
+      max_fan_out: int
+
+      def flat_map(self, element: int):
+        for i in range(self.max_fan_out):
+          yield i
+
+    ds = dataset.MapDataset.range(0, 10)
+    ds = flatmap.FlatMapMapDataset(ds, TestFlatMapTransform(max_fan_out=5))
+    with self.assertRaisesRegex(
+        ValueError,
+        "`MapDataset.batch` can not follow `FlatMapMapDataset`",
+    ):
+      _ = batch.BatchMapDataset(ds, batch_size=2)
 
   def test_batch_with_padding(self):
     ds = dataset.MapDataset.range(1, 10).map(lambda x: {"x": x})
