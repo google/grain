@@ -17,6 +17,7 @@ import sys
 from typing import Callable, Tuple
 
 from absl.testing import absltest
+from absl.testing import parameterized
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import mix
@@ -154,7 +155,7 @@ class SelectionMapTest(absltest.TestCase):
     self.assertEqual(expected_dataset, unrolled_dataset)
 
 
-class MixedMapDatasetTest(absltest.TestCase):
+class MixedMapDatasetTest(parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
@@ -169,7 +170,7 @@ class MixedMapDatasetTest(absltest.TestCase):
     # Equal proportions.
     ds = mix.MixedMapDataset([ds1, ds2, ds3])
     self.assertLen(ds, 15)
-    # Heigher weight for second dataset.
+    # Higher weight for second dataset.
     ds = mix.MixedMapDataset([ds1, ds2, ds3], proportions=[1, 2, 1])
     self.assertLen(ds, 5 + 10 + 5)
 
@@ -332,6 +333,99 @@ class MixedMapDatasetTest(absltest.TestCase):
     )
 
     self.assertEqual(list(ds), expected_dataset)
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name="equal_proportions",
+          proportions=[1, 1],
+          expected_values=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+      ),
+      dict(
+          testcase_name="float_proportions",
+          proportions=[0.75, 0.25],
+          expected_values=[0, 2, 4, 1, 6, 8, 0, 3, 2, 4],
+      ),
+      dict(
+          testcase_name="integer_proportions",
+          proportions=[1, 2],
+          expected_values=[0, 1, 3, 2, 5, 7, 4, 9, 1, 6],
+      ),
+  )
+  def test_getitems_mixing(self, proportions, expected_values):
+    mixed_ds = mix.MixedMapDataset(
+        parents=[self.even_ds, self.odd_ds],
+        proportions=proportions,
+    )
+    # Request a batch of indices that results in interleaved elements
+    indices = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    actual_values = mixed_ds._getitems(indices)
+    self.assertEqual(expected_values, actual_values)
+
+  def test_getitems_interleaved_map(self):
+    def _inteleaved_dataset(index):
+      if index > 9:
+        raise IndexError("index our of range")
+      ds = index % 2
+      ds_index = index // 2
+      return (ds, ds_index)
+
+    interleaved_map = ExplicitSelectionMap(10, _inteleaved_dataset)
+
+    ds = mix.MixedMapDataset(
+        parents=[self.even_ds, self.odd_ds], selection_map=interleaved_map
+    )
+
+    expected_dataset = list(range(10))
+    self.assertEqual(ds._getitems(list(range(10))), expected_dataset)
+
+  def test_getitems_sequential_map(self):
+    def _sequential_dataset(index):
+      if index > 9:
+        raise IndexError("index our of range")
+      if index < 5:
+        ds = 0
+      else:
+        ds = 1
+      ds_index = index % 5
+      return (ds, ds_index)
+
+    sequential_map = ExplicitSelectionMap(10, _sequential_dataset)
+
+    ds = mix.MixedMapDataset(
+        parents=[self.even_ds, self.odd_ds], selection_map=sequential_map
+    )
+
+    expected_dataset = list(range(0, 10, 2)) + list(range(1, 10, 2))
+    self.assertEqual(ds._getitems(list(range(10))), expected_dataset)
+
+  def test_getitems_subset_and_shuffle_map(self):
+    first_epoch = [0, 1, 2, 3, 4]
+    second_epoch = [1, 0, 3, 2, 4]
+
+    expected_dataset = first_epoch + second_epoch
+
+    def _subset_and_shuffle_dataset(index):
+      if index > 9:
+        raise IndexError("index our of range")
+      if index < 5:
+        ds = index % 2
+        ds_index = index // 2
+      else:
+        mapped_index = second_epoch[index - 5]
+        ds = mapped_index % 2
+        ds_index = mapped_index // 2
+      return (ds, ds_index)
+
+    subset_and_shuffle_map = ExplicitSelectionMap(
+        10, _subset_and_shuffle_dataset
+    )
+
+    ds = mix.MixedMapDataset(
+        parents=[self.even_ds, self.odd_ds],
+        selection_map=subset_and_shuffle_map,
+    )
+
+    self.assertEqual(ds._getitems(list(range(10))), expected_dataset)
 
 
 class MixedIterDatasetTest(absltest.TestCase):
@@ -626,6 +720,17 @@ class ConcatenateLazyMapTest(absltest.TestCase):
         ValueError, "Cannot concatenate infinite datasets"
     ):
       _ = mix._ConcatSelectionMap([zeros, ones])
+
+  def test_getitems_concatenate_finite_datasets(self):
+    evens = dataset.MapDataset.range(0, 10, 2)
+    odds = dataset.MapDataset.range(1, 10, 2)
+    ds = mix.ConcatenateMapDataset([evens, odds])
+    self.assertLen(evens, 5)
+    self.assertLen(odds, 5)
+    self.assertLen(ds, 10)
+
+    expected_values = [0, 2, 4, 6, 8, 1, 3, 5, 7, 9]
+    self.assertEqual(ds._getitems(list(range(10))), expected_values)
 
 
 if __name__ == "__main__":
