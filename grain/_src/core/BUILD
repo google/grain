@@ -86,12 +86,6 @@ py_test(
 )
 
 py_library(
-    name = "usage_logging",
-    srcs = ["usage_logging.py"],
-    srcs_version = "PY3",
-)
-
-py_library(
     name = "transforms",
     srcs = ["transforms.py"],
     srcs_version = "PY3",

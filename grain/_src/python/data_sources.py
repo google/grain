@@ -36,7 +36,6 @@ from absl import logging
 from etils import epath
 
 from grain._src.core import monitoring as grain_monitoring
-from grain._src.core import usage_logging
 from grain._src.python.dataset import stats as dataset_stats
 
 from grain._src.core import monitoring  # pylint: disable=g-bad-import-order

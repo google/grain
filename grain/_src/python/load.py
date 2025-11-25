@@ -5,7 +5,6 @@ from typing import Optional
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import sharding
 from grain._src.core import transforms
-from grain._src.core import usage_logging
 from grain._src.python import data_loader
 from grain._src.python import data_sources
 from grain._src.python import options
@@ -55,7 +54,6 @@ def load(
   Returns:
     DataLoader for this dataset.
   """
-  usage_logging.log_event("load", tag_3="PyGrain")
   _api_usage_counter.Increment("load")
   sampler = samplers.IndexSampler(
       num_records=len(source),

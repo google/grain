@@ -56,7 +56,6 @@ import warnings
 from etils import epath
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import transforms
-from grain._src.core import usage_logging
 from grain._src.python import checkpointing
 from grain._src.python import options as grain_options
 from grain._src.python.dataset import base
@@ -358,7 +357,6 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
       parents = tuple(parents)
     super().__init__(parents)
     self._parents = cast(Sequence[MapDataset], self._parents)
-    usage_logging.log_event("MapDataset", tag_3="PyGrain")
     _api_usage_counter.Increment("MapDataset")
 
   @property
@@ -977,7 +975,6 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
     self._parents = cast(
         Sequence[Union[MapDataset, IterDataset]], self._parents
     )
-    usage_logging.log_event("IterDataset", tag_3="PyGrain")
     _api_usage_counter.Increment("IterDataset")
 
   @property

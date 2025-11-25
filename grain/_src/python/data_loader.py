@@ -30,7 +30,6 @@ from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import sharding
 from grain._src.core import transforms
 from grain._src.core import tree_lib
-from grain._src.core import usage_logging
 import multiprocessing as mp
 from grain._src.python import checkpointing
 from grain._src.python import operations as ops
@@ -369,7 +368,6 @@ class DataLoader:
       enable_profiling: If True, profiling info is logged. Note, it only
         supports worker_count >= 1 at the moment.
     """
-    usage_logging.log_event("PyGrainDataLoader", tag_3="PyGrain")
     _api_usage_counter.Increment("DataLoader")
     if worker_count and worker_count < 0:
       raise ValueError(

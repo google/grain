@@ -51,7 +51,6 @@ py_library(
         "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
         "//grain/_src/core:tree_lib",
-        "//grain/_src/core:usage_logging",
         "//grain/_src/python:checkpointing",
         "//grain/_src/python:grain_pool",
         "//grain/_src/python:options",
