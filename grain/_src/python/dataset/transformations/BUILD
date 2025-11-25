@@ -14,6 +14,7 @@ filegroup(
         "map.py",
         "mix.py",
         "prefetch.py",
+        "process_prefetch.py",
         "rebatch.py",
         "repeat.py",
         "shuffle.py",
@@ -347,6 +348,24 @@ py_test(
         "//grain/_src/python:options",
         "//grain/_src/python/dataset",
         "//grain/_src/python/testing:experimental",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+        "@pypi//numpy:pkg",
+    ],
+)
+
+py_test(
+    name = "process_prefetch_test",
+    timeout = "long",
+    srcs = ["process_prefetch_test.py"],
+    shard_count = 50,
+    srcs_version = "PY3",
+    deps = [
+        "//grain/_src/core:transforms",
+        "//grain/_src/python:options",
+        "//grain/_src/python/dataset",
+        "//grain/_src/python/dataset:base",
+        "@abseil-py//absl/logging",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
         "@pypi//numpy:pkg",

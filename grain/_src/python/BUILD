@@ -335,6 +335,7 @@ py_library(
     srcs = ["shared_memory_array.py"],
     srcs_version = "PY3",
     deps = [
+        "//grain/_src/core:tree_lib",
         "@pypi//numpy:pkg",
     ],
 )

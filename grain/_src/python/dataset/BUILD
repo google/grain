@@ -56,6 +56,7 @@ py_library(
         "//grain/_src/python:options",
         "//grain/_src/python:shared_memory_array",
         "//grain/proto:execution_summary_py_pb2",
+        "@abseil-py//absl/flags",
         "@abseil-py//absl/logging",
         "@pypi//cloudpickle:pkg",
         "@pypi//etils:pkg",
