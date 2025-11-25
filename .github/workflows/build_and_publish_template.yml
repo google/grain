@@ -92,7 +92,7 @@ jobs:
           . "${SOURCE_DIR}"'/grain/oss/runner_common.sh'
           build_and_test_grain
       - name: Upload Grain artifacts
-        if: ${{ inputs.is_ci_tests == 'false' }}
+        if: ${{ inputs.is_ci_tests == 'false' || inputs.is_ci_tests == false }}
         uses: actions/upload-artifact@v4
         with:
           name: built-grain-wheels-${{ matrix.os }}-${{ matrix.python-version }}
@@ -100,7 +100,7 @@ jobs:
 
   publish-wheel:
     runs-on: ubuntu-22.04
-    if: ${{ inputs.is_ci_tests == 'false' }}
+    if: ${{ inputs.is_ci_tests == 'false' || inputs.is_ci_tests == false }}
     needs: build-and-test
     permissions:
       id-token: write
