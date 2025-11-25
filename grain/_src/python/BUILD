@@ -14,6 +14,7 @@ py_library(
         "@abseil-py//absl/logging",
         "//grain/_src/core:usage_logging",
         "//grain/_src/python/dataset:stats",
+        "//grain/_src/python/dataset:base",
     ] + select({
         "@platforms//os:windows": [],
         "//conditions:default": ["@pypi//array_record:pkg"],
