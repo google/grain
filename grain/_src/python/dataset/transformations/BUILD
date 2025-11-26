@@ -257,6 +257,7 @@ py_test(
     deps = [
         "//grain/_src/python:options",
         "//grain/_src/python/dataset",
+        "//grain/_src/python/dataset:base",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
     ],

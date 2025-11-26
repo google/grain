@@ -16,6 +16,7 @@ from absl.testing import absltest
 from absl.testing import parameterized
 import multiprocessing as mp
 from grain._src.python import options
+from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import interleave
 
@@ -140,6 +141,16 @@ class MixedIterDatasetTest(parameterized.TestCase):
     ds = interleave.InterleaveIterDataset(ds, cycle_length=5)
     ds = ds.mp_prefetch(options.MultiprocessingOptions(num_workers=3))
     self.assertEqual(list(ds), [1, 2, 3, 4, 5, 3, 4, 2, 3, 4, 5, 4, 5, 5, 5])
+
+  def test_options_propagated(self):
+    ds1 = dataset.MapDataset.source([1]).repeat(1000).to_iter_dataset()
+    ds1 = ds1.filter(lambda x: False)
+    ds2 = dataset.MapDataset.source([2]).repeat(1000).to_iter_dataset()
+    ds = interleave.InterleaveIterDataset([ds1, ds2], cycle_length=1)
+    ds_options = base.DatasetOptions(filter_raise_threshold_ratio=0.1)
+    ds = dataset.WithOptionsIterDataset(ds, ds_options)
+    with self.assertRaisesRegex(ValueError, r"skipped 100\.00 %"):
+      list(ds)
 
 
 if __name__ == "__main__":

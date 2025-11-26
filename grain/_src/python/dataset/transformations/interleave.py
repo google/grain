@@ -16,6 +16,7 @@
 from collections.abc import Sequence
 import functools
 from typing import TypeVar
+import weakref
 
 from grain._src.python import options as grain_options
 from grain._src.python.dataset import dataset
@@ -24,20 +25,6 @@ from grain._src.python.dataset.transformations import prefetch
 
 
 T = TypeVar("T")
-
-
-def _add_prefetch_and_make_iterator(
-    ds: dataset.IterDataset[T] | dataset.MapDataset[T],
-    prefetch_buffer_size: int,
-) -> dataset.DatasetIterator[T]:
-  if isinstance(ds, dataset.MapDataset):
-    # Prefetch is automatically added in `MapDataset.__iter__`.
-    return ds.__iter__()
-  iterator = prefetch.ThreadPrefetchIterDataset(
-      ds, prefetch_buffer_size=prefetch_buffer_size
-  ).__iter__()
-  iterator.start_prefetch()
-  return iterator
 
 
 class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
@@ -63,7 +50,14 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
         .map(
             functools.partial(
                 _add_prefetch_and_make_iterator,
-                prefetch_buffer_size=self._iter_buffer_size,
+                # We use weakref to avoid a circular reference. The
+                # _InterleaveDatasetIterator holds a reference to the
+                # prefetch iterator in `self._prefetch_ds_iter`.
+                # The call to `_add_prefetch_and_make_iterator` (and the
+                # partial object) would hold a reference to the
+                # _InterleaveDatasetIterator. This would prolong its lifetime
+                # leading to increased resource usage.
+                interleave_iterator=weakref.ref(self),
             )
         )
         .to_iter_dataset(
@@ -155,6 +149,43 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
         f"InterleaveDatasetIterator([{len(self._datasets)} datasets],"
         f" cycle_length={self._cycle_length})"
     )
+
+
+def _add_prefetch_and_make_iterator(
+    ds: dataset.IterDataset[T] | dataset.MapDataset[T],
+    interleave_iterator: weakref.ref[_InterleaveDatasetIterator[T]],
+) -> dataset.DatasetIterator[T]:
+  """Adds prefetching to an IterDataset and returns an iterator.
+
+  If the input is a MapDataset, prefetching is handled by `MapDataset.__iter__`.
+  If the input is an IterDataset, a `ThreadPrefetchIterDataset` is used to
+  add prefetching.
+
+  Args:
+    ds: The dataset to create an iterator from.
+    interleave_iterator: The `InterleaveDatasetIterator` instance.
+
+  Returns:
+    A `dataset.DatasetIterator` for the given dataset, with prefetching
+    enabled if applicable.
+
+  Raises:
+    RuntimeError: If the interleave_iterator has been garbage collected.
+  """
+  interleave_iterator_obj = interleave_iterator()
+  if interleave_iterator_obj is None:
+    raise RuntimeError("InterleaveDatasetIterator has been garbage collected.")
+  if isinstance(ds, dataset.MapDataset):
+    # Prefetch is automatically added in `MapDataset.__iter__`.
+    return ds.__iter__()
+  iterator = prefetch.ThreadPrefetchIterDataset(
+      ds, prefetch_buffer_size=interleave_iterator_obj._iter_buffer_size  # pylint: disable=protected-access
+  ).__iter__()
+  # Propagate options applied after InterleaveIterDataset to the iterators that
+  # are being interleaved.
+  iterator._ctx.dataset_options = interleave_iterator_obj._ctx.dataset_options.merge(iterator._ctx.dataset_options)  # pylint: disable=protected-access
+  iterator.start_prefetch()
+  return iterator
 
 
 class InterleaveIterDataset(dataset.IterDataset[T]):
