@@ -340,6 +340,8 @@ class BatchMapDataset(dataset.MapDataset[T]):
     start += epoch * len(self._parent)
     stop += epoch * len(self._parent)
     values = self._get_parent_items_fn(range(start, stop))
+    if self._drop_remainder and len(values) < self._batch_size:
+      raise StopIteration
     with self._stats.record_self_time():
       try:
         return self._stats.record_output_spec(self._batch_fn(values))
