@@ -818,10 +818,6 @@ class _ExecutionStats(_VisualizationStats):
     self._last_update_time = 0
     self._last_report_time = 0
     self._summary_dispatcher = None
-    if self._config.stats_out_queue:
-      self._summary_dispatcher = self._send_stats_to_main_process_loop
-    elif self._config.log_summary:
-      self._summary_dispatcher = self._logging_execution_summary_loop
 
   def __reduce__(self):
     return _ExecutionStats, (self._config, self._parents)
@@ -939,6 +935,10 @@ class _ExecutionStats(_VisualizationStats):
                   target=self._reporting_loop, daemon=True
               )
               self._reporting_thread.start()
+        if self._config.stats_out_queue:
+          self._summary_dispatcher = self._send_stats_to_main_process_loop
+        elif self._config.log_summary:
+          self._summary_dispatcher = self._logging_execution_summary_loop
         if (
             self._summary_dispatcher_thread is None
             and self._summary_dispatcher is not None
