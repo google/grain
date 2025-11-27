@@ -1392,6 +1392,27 @@ class GetExecutionSummaryTest(parameterized.TestCase):
     log_value = "Grain Dataset Execution Summary"
     self.assertNotIn(log_value, "".join(logs.output))
 
+  @flagsaver.flagsaver(grain_py_debug_mode=True)
+  def test_execution_summary_with_mp_prefetch(self):
+    ds = dataset.MapDataset.range(10000).map(MapTransformAddingOne())
+    ds = ds.to_iter_dataset()
+    ds = ds.mp_prefetch(options.MultiprocessingOptions(num_workers=1))
+    it = ds.__iter__()
+    _ = list(it)
+    time.sleep(5)
+    summary = dataset.get_execution_summary(it)
+    node_names = {node.name for node in summary.nodes.values()}
+    self.assertTrue(any("RangeMapDataset" in name for name in node_names))
+    self.assertTrue(any("MapMapDataset" in name for name in node_names))
+    self.assertTrue(
+        any("PrefetchDatasetIterator" in name for name in node_names)
+    )
+    self.assertTrue(
+        any(
+            "MultiprocessPrefetchDatasetIterator" in name for name in node_names
+        )
+    )
+
 
 class GetElementSpecTest(parameterized.TestCase):
 
