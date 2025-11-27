@@ -77,6 +77,7 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     ] * self._cycle_length
 
   @stats.record_next_duration_if_output
+  @stats.trace_input_pipeline_next(stage_category=stats.IPL_CAT_PREFETCH)
   def __next__(self) -> T:
     self._assert_not_closed()
     while True:

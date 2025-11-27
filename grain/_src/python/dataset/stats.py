@@ -311,19 +311,9 @@ def record_next_duration_if_output(next_fn):
   """
 
   @functools.wraps(next_fn)
-  def wrapper(iterator):
-    if profiler.is_enabled():
-      with profiler.TraceAnnotation(
-          f"{iterator.__class__.__name__}.{next_fn.__name__}",
-          _ipl_stage_name=str(iterator),
-          _ipl_stage_id=id(iterator),
-      ):
-        start_time = time.perf_counter_ns()
-        result = next_fn(iterator)
-    else:
-      start_time = time.perf_counter_ns()
-      result = next_fn(iterator)
-
+  def wrapper(iterator, *args, **kwargs):
+    start_time = time.perf_counter_ns()
+    result = next_fn(iterator, *args, **kwargs)
     if iterator._stats._is_output:  # pylint:disable=protected-access
       next_duration_ns = time.perf_counter_ns() - start_time
       _next_duration_ns_histogram.Record(next_duration_ns)
@@ -337,6 +327,8 @@ IPL_CAT_PREPROCESSING = "preprocessing"
 IPL_CAT_READ = "read"
 IPL_CAT_ENQUEUE = "enqueue"
 IPL_CAT_UNKNOWN = "unknown"
+# This stage is for prefetch overheads on main thread.
+IPL_CAT_PREFETCH = "prefetch"
 
 
 def trace_input_pipeline(stage_category: str = IPL_CAT_UNKNOWN, **trace_kwargs):
@@ -402,6 +394,40 @@ def trace_input_pipeline_prefetch(func):
     return result
 
   return wrapped_get_item
+
+
+def trace_input_pipeline_next(stage_category: str = IPL_CAT_PREFETCH):
+  """Decorator to trace __next__ methods for input pipeline analysis.
+
+  Args:
+    stage_category: The category of the input pipeline stage.
+
+  Returns:
+    A decorator that adds TraceAnnotation with IPL metadata.
+  """
+  if not profiler.is_loaded():
+
+    def noop_wrapper(func):
+      return func
+
+    return noop_wrapper
+
+  def inner_wrapper(next_fn):
+    @functools.wraps(next_fn)
+    def wrapper(iterator, *args, **kwargs):
+      if profiler.is_enabled():
+        with profiler.TraceAnnotation(
+            f"{iterator.__class__.__name__}.{next_fn.__name__}",
+            _ipl_stage_name=str(iterator),
+            _ipl_stage_id=id(iterator),
+            _ipl_stage_cat=stage_category,
+        ):
+          return next_fn(iterator, *args, **kwargs)
+      return next_fn(iterator, *args, **kwargs)
+
+    return wrapper
+
+  return inner_wrapper
 
 
 class HashableWeakRef:
