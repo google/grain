@@ -16,6 +16,16 @@ alias(
     visibility = ["//visibility:public"],
 )
 
+alias(
+    name = "prism",
+    actual = "//third_party/py/grain/_src/prism:debug_server",
+    visibility = [
+        "//learning/gemini/cms:users",
+        "//learning/gemini/gemax:users",
+        "//learning/gemini/prod:users",
+    ],
+)
+
 py_library(
     name = "grain",
     srcs = [
