@@ -28,6 +28,7 @@ from grain._src.python.shared_memory_array import copy_to_shm
 from grain._src.python.shared_memory_array import open_from_shm
 from grain._src.python.shared_memory_array import SharedMemoryArray
 from grain._src.python.shared_memory_array import SharedMemoryArrayMetadata
+from grain._src.python.shared_memory_array import unlink_shm
 import jax
 import numpy as np
 
@@ -225,6 +226,26 @@ class SharedMemoryArrayTest(parameterized.TestCase):
     self.assertIsInstance(opened_struct, SharedMemoryArray)
     np.testing.assert_array_equal(opened_struct, arr)
     self.assertTrue(opened_struct._unlink_on_del)
+
+  def test_unlink_shm(self):
+    arr = np.arange(10).astype(np.int32)
+    arr2 = np.arange(5).astype(np.int32)
+    struct = {"a": arr, "b": [arr2, arr], "c": 123}
+    shm_struct = copy_to_shm(struct)
+    names = [
+        shm_struct["a"].name,
+        shm_struct["b"][0].name,
+        shm_struct["b"][1].name,
+    ]
+    # Check that SHMs exist.
+    for name in names:
+      self.assertIsNotNone(shared_memory.SharedMemory(name=name, create=False))
+
+    unlink_shm(shm_struct)
+
+    for name in names:
+      with self.assertRaises(FileNotFoundError):
+        shared_memory.SharedMemory(name=name, create=False)
 
 
 if __name__ == "__main__":
