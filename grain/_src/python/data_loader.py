@@ -39,7 +39,6 @@ from grain._src.python.data_sources import RandomAccessDataSource
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import batch as batch_ds
 from grain._src.python.dataset.transformations import flatmap
-from grain._src.python.dataset.transformations import prefetch
 from grain._src.python.operations import BatchOperation
 from grain._src.python.operations import Operation
 from grain._src.python.samplers import Sampler
@@ -462,10 +461,8 @@ class DataLoader:
       ds = _apply_transform_to_dataset(operation, ds)
     ds = ds.map(lambda r: r.data)
     if self.multiprocessing_options.num_workers > 0:
-      ds = prefetch.MultiprocessPrefetchIterDataset(
-          ds,
+      ds = ds.mp_prefetch(
           self.multiprocessing_options,
-          always_report_worker_state=True,
       )
     if not self._use_native_dataset_checkpointing:
       ds = _DataLoaderStateIterDataset(
