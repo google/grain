@@ -22,19 +22,18 @@ limitations under the License.
 // https://eprint.iacr.org/2013/404
 // and following recommendations in
 // https://nsacyber.github.io/simon-speck/implementations/ImplementationGuide1.1.pdf.
-// However we use a single fixed key size and support arbtitary block sizes.
-// Further we fixed the number of rounds in the Feistel structuro to be always
+// However we use a single fixed key size and support arbitrary block sizes.
+// Further we fixed the number of rounds in the Feistel structure to be always
 // 4. This reduces the computational cost and still gives good shuffle behavior.
 //
-// Warning: Given the modifications descripted above this implementation should
-// not be used for application that require cryptograhic secure RNGs.
+// Warning: Given the modifications description above this implementation should
+// not be used for application that require cryptographic secure RNGs.
 
 #include "grain/_src/python/experimental/index_shuffle/index_shuffle.h"
 
 #include <assert.h>
 
 #include <algorithm>
-#include <array>
 #include <bitset>
 #include <cmath>
 #include <cstdint>
@@ -120,6 +119,8 @@ uint64_t index_shuffle(const uint64_t index, const uint64_t max_index,
   assert(block_size > 0 && block_size % 2 == 0 && block_size <= 64);
   // At least 4 rounds and number of rounds must be even.
   assert(rounds >= 4 && rounds % 2 == 0);
+  // Assert the index is bounded by [0, max_index].
+  assert(index >= 0 && index <= max_index);
 #define HANDLE_BLOCK_SIZE(B) \
   case B:                    \
     return impl::index_shuffle<B>(index, max_index, seed, rounds);

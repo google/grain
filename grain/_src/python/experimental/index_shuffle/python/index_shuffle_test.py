@@ -42,6 +42,20 @@ class IndexShuffleTest(absltest.TestCase):
         0, index_shuffle.index_shuffle(index=0, max_index=0, seed=0, rounds=4)
     )
 
+  def test_index_shuffle_invalid_rounds(self):
+    regex = r'rounds must be an even integer >= 4'
+    with self.assertRaisesRegex(ValueError, regex):
+      index_shuffle.index_shuffle(index=0, max_index=8, seed=33, rounds=2)
+    with self.assertRaisesRegex(ValueError, regex):
+      index_shuffle.index_shuffle(index=0, max_index=8, seed=76, rounds=5)
+
+  def test_index_shuffle_invalid_index(self):
+    regex = r'index must be in \[0, max_index\]'
+    with self.assertRaisesRegex(ValueError, regex):
+      index_shuffle.index_shuffle(index=-1, max_index=8, seed=33, rounds=4)
+    with self.assertRaisesRegex(ValueError, regex):
+      index_shuffle.index_shuffle(index=9, max_index=8, seed=76, rounds=4)
+
 
 if __name__ == '__main__':
   absltest.main()
