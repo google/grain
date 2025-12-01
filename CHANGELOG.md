@@ -6,6 +6,16 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features:
+
+* Breaking changes:
+
+* Deprecations:
+
+* Bug fixes:
+
+## Grain 0.2.15 (November 25, 2025)
+
+* New features:
   * Adds public `DatasetIterator.close` API as an explicit blocking alternative
     to a cleanup during GC.
   * `DatasetIterator.start_prefetch` now propagates to the first asynchronous
@@ -15,13 +25,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     alternative to multiprocessing prefetch in free-threading Python.
   * Adds experimental support for static `{Map|Iter}Dataset` element
     specification inference.
-  * Adds support for changing `IterDataset.mix` components and weights after a checkpoint.
-
-* Breaking changes:
-
-* Deprecations:
-
-* Bug fixes:
+  * Adds support for changing `IterDataset.mix` components and weights after a
+    checkpoint.
 
 ## Grain 0.2.14 (October 30, 2025)
 
