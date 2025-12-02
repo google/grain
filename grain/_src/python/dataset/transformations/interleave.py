@@ -214,7 +214,7 @@ class InterleaveIterDataset(dataset.IterDataset[T]):
 
   def __init__(
       self,
-      datasets: Sequence[dataset.IterDataset[T] | dataset.MapDataset[T]],
+      datasets: dataset.MapDataset[T] | Sequence[dataset.IterDataset[T] | dataset.MapDataset[T]],
       *,
       cycle_length: int,
       num_make_iter_threads: int = 1,
