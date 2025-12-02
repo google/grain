@@ -311,10 +311,13 @@ class BatchMapDataset(dataset.MapDataset[T]):
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
     self._batch_fn = make_batch if batch_fn is None else batch_fn
+    self._length = self._get_length()
+
+  def _get_length(self) -> int:
     if self._drop_remainder:
-      self._length = len(self._parent) // self._batch_size
+      return len(self._parent) // self._batch_size
     else:
-      self._length = math.ceil(len(self._parent) / self._batch_size)
+      return math.ceil(len(self._parent) / self._batch_size)
 
   @functools.cached_property
   def _get_parent_items_fn(self):
