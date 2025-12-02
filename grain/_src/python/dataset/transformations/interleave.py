@@ -15,7 +15,7 @@
 
 from collections.abc import Sequence
 import functools
-from typing import TypeVar
+from typing import Any, TypeVar
 import weakref
 
 from grain._src.python import options as grain_options
@@ -75,12 +75,16 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     self._iterators_in_use: list[dataset.DatasetIterator[T] | None] = [
         None
     ] * self._cycle_length
+    self._exhausted_iterator_state: list[dict[str, Any] | None] = [
+        None
+    ] * self._cycle_length
 
   @stats.record_next_duration_if_output
   def __next__(self) -> T:
     self._assert_not_closed()
     while True:
       if iterator_to_use := self._iterators_in_use[self._next_index_in_cycle]:
+        state = iterator_to_use.get_state()
         try:
           result = iterator_to_use.__next__()
           self._next_index_in_cycle = (
@@ -88,6 +92,7 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
           ) % self._cycle_length
           return result
         except StopIteration:
+          self._exhausted_iterator_state[self._next_index_in_cycle] = state
           self._iterators_in_use[self._next_index_in_cycle] = None
           continue
       if self._next_index_in_datasets < len(self._datasets):
@@ -106,23 +111,35 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
         ) % self._cycle_length
 
   def get_state(self):
+    iterators_in_use_states = [None] * self._cycle_length
+    for i in range(self._cycle_length):
+      it = self._iterators_in_use[i]
+      if it is not None:
+        iterators_in_use_states[i] = it.get_state()
+      elif self._exhausted_iterator_state[i] is not None:
+        iterators_in_use_states[i] = self._exhausted_iterator_state[i]
+      else:
+        try:
+          it = next(self._prefetch_ds_iter)
+        except StopIteration:
+          break
+        self._iterators_in_use[i] = it
+        iterators_in_use_states[i] = it.get_state()
+        self._iterators_in_use_indices[i] = self._next_index_in_datasets
+        self._next_index_in_datasets += 1
     return {
-        "prefetch_ds_iter_states": self._prefetch_ds_iter.get_state(),
         "next_index_in_cycle": self._next_index_in_cycle,
         "next_index_in_datasets": self._next_index_in_datasets,
         "iterators_in_use_indices": self._iterators_in_use_indices.copy(),
-        "iterators_in_use_states": [
-            (None if it is None else it.get_state())
-            for it in self._iterators_in_use
-        ],
+        "iterators_in_use_states": iterators_in_use_states,
     }
 
   def set_state(self, state):
-    self._prefetch_ds_iter.set_state(state["prefetch_ds_iter_states"])
+    self._prefetch_ds_iter.set_state(
+        {"next_index": state["next_index_in_datasets"]}
+    )
     self._next_index_in_cycle = state["next_index_in_cycle"]
     self._next_index_in_datasets = state["next_index_in_datasets"]
-    if not self._next_index_in_datasets and not self._next_index_in_cycle:
-      return
     self._iterators_in_use_indices = state["iterators_in_use_indices"]
     for index_in_cycle, (index_in_datasets, it_state) in enumerate(
         zip(self._iterators_in_use_indices, state["iterators_in_use_states"])
@@ -130,7 +147,10 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
       if it_state is None:
         self._iterators_in_use[index_in_cycle] = None
       else:
-        iterator = self._datasets[index_in_datasets].__iter__()
+        iterator = _add_prefetch_and_make_iterator(
+            self._datasets[index_in_datasets],
+            interleave_iterator=weakref.ref(self),
+        )
         iterator.set_state(it_state)
         self._iterators_in_use[index_in_cycle] = iterator
 
