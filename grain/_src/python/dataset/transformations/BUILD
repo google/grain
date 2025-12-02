@@ -125,6 +125,7 @@ py_test(
     srcs = ["map_test.py"],
     srcs_version = "PY3",
     deps = [
+        "//grain/_src/core:config",
         "//grain/_src/core:transforms",
         "//grain/_src/python/dataset",
         "//grain/_src/python/testing:experimental",
