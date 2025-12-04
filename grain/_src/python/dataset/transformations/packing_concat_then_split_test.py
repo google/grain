@@ -657,6 +657,46 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
         ],
     )
 
+  @parameterized.named_parameters(
+      dict(
+          testcase_name="oversized_feature_first",
+          data=[{"observation": [2, 2], "index": 1}],
+          length_struct={"observation": 1, "index": 1},
+      ),
+      dict(
+          testcase_name="oversized_feature_second",
+          data=[{"index": 1, "observation": [2, 2]}],
+          length_struct={"index": 1, "observation": 1},
+      ),
+  )
+  def test_oversized_feature_prevents_full_length_optimization(
+      self, data, length_struct
+  ):
+    ds = packing_concat_then_split.ConcatThenSplitIterDataset(
+        dataset.MapDataset.source(data).to_iter_dataset(),
+        length_struct=length_struct,
+        split_full_length_features=False,
+        meta_features={"index"},
+    )
+    actual_elements = list(ds)
+    self.assert_equal_elements(
+        actual_elements,
+        [
+            {
+                "observation": np.asarray([2]),
+                "observation_segment_ids": np.asarray([1]),
+                "observation_positions": np.asarray([0]),
+                "index": np.asarray([1]),
+            },
+            {
+                "observation": np.asarray([2]),
+                "observation_segment_ids": np.asarray([1]),
+                "observation_positions": np.asarray([0]),
+                "index": np.asarray([1]),
+            },
+        ],
+    )
+
   def assert_equal_elements(
       self,
       actual_elements: list[dict[str, np.ndarray]],

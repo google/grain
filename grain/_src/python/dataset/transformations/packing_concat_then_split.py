@@ -261,14 +261,17 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
     )
     self._arange.flags.writeable = False
 
-  def _has_full_length_feature(self, element: _CtsElement) -> bool:
-    """Returns True if at least one features has its target sequence length."""
+  def _can_optimize_as_full_length(self, element: _CtsElement) -> bool:
+    """Returns True if the element can be passed through as full length."""
+    has_full_length_feature = False
     for key, target_sequence_length in self._config.length_struct.items():
       feature = element.get_sliced_features(key)
       sequence_length = 1 if np.ndim(feature) == 0 else len(feature)
+      if sequence_length > target_sequence_length:
+        return False
       if sequence_length == target_sequence_length:
-        return True
-    return False
+        has_full_length_feature = True
+    return has_full_length_feature
 
   def _pack_elements(
       self, elements: Sequence[_CtsElement]
@@ -452,7 +455,7 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
           slices=self._empty_slices(),
       )
       if not self._config.split_full_length_features:
-        if self._has_full_length_feature(current_element):
+        if self._can_optimize_as_full_length(current_element):
           # The element has a full-length feature, so it's considered already
           # packed because split_full_length_features=False.
           self._packed_elements.append(self._pack_elements([current_element]))
