@@ -105,20 +105,30 @@ class WindowShuffleMapDataset(dataset.MapDataset[T]):
   def __str__(self) -> str:
     return "WindowShuffleMapDataset"
 
+  def _shuffled_index(self, index: int) -> int:
+    window_index, index_in_window = divmod(index, self._window_size)
+    seed = self._seed + window_index
+    shuffled_index_in_window = index_shuffle.index_shuffle(
+        index_in_window,
+        max_index=self._window_size - 1,
+        seed=seed,
+        rounds=4,
+    )
+    return shuffled_index_in_window + window_index * self._window_size
+
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
     with self._stats.record_self_time():
-      window_index, index_in_window = divmod(index, self._window_size)
-      seed = self._seed + window_index
-      index_in_window = index_shuffle.index_shuffle(
-          index_in_window,
-          max_index=self._window_size - 1,
-          seed=seed,
-          rounds=4,
-      )
-      index = index_in_window + window_index * self._window_size
-    return self._stats.record_output_spec(self._parent[index])
+      shuffled_index = self._shuffled_index(index)
+    return self._stats.record_output_spec(self._parent[shuffled_index])
+
+  def _getitems(self, indices: Sequence[int]):
+    with self._stats.record_self_time(num_elements=len(indices)):
+      shuffled_indices = [self._shuffled_index(index) for index in indices]
+    return self._stats.record_output_spec_for_batch(
+        self._parent._getitems(shuffled_indices)  # pylint: disable=protected-access
+    )
 
 
 class WindowShuffleIterDataset(dataset.IterDataset[T]):

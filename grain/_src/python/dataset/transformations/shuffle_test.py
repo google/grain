@@ -102,6 +102,47 @@ class WindowShuffleMapDatasetTest(absltest.TestCase):
     self.assertLen(shuffled_indices_epoch2, 400)
     self.assertNotEqual(shuffled_indices, shuffled_indices_epoch2)
 
+  def test_getitems(self):
+    window_size = 10
+    ds = shuffle.WindowShuffleMapDataset(
+        dataset.MapDataset.range(400), window_size=window_size, seed=42
+    )
+    shuffled_indices = ds._getitems(range(400))
+    self.assertLen(shuffled_indices, 400)
+    for i in range(0, 400, window_size):
+      # Check that elements in each window are shuffled but stay within their
+      # original window bounds.
+      window_elements = shuffled_indices[i : i + window_size]
+      original_window_elements = list(range(i, i + window_size))
+      self.assertCountEqual(window_elements, original_window_elements)
+    # Check consistency with __getitem__
+    self.assertEqual(shuffled_indices, [ds[i] for i in range(400)])
+
+  def test_getitems_multi_epochs(self):
+    window_size = 10
+    ds = shuffle.WindowShuffleMapDataset(
+        dataset.MapDataset.range(400),
+        window_size=window_size,
+        seed=42,
+    )
+    shuffled_indices_epoch1 = ds._getitems(range(400))
+    shuffled_indices_epoch2 = ds._getitems(range(400, 800))
+    self.assertLen(shuffled_indices_epoch1, 400)
+    self.assertLen(shuffled_indices_epoch2, 400)
+    self.assertNotEqual(shuffled_indices_epoch1, shuffled_indices_epoch2)
+
+    for i in range(0, 400, window_size):
+      # Check that elements in each window are shuffled but stay within their
+      # original window bounds for epoch 1.
+      window_elements_epoch1 = shuffled_indices_epoch1[i : i + window_size]
+      original_window_elements = list(range(i, i + window_size))
+      self.assertCountEqual(window_elements_epoch1, original_window_elements)
+
+      # Check that elements in each window are shuffled but stay within their
+      # original window bounds for epoch 2.
+      window_elements_epoch2 = shuffled_indices_epoch2[i : i + window_size]
+      self.assertCountEqual(window_elements_epoch2, original_window_elements)
+
   def test_iter(self):
     window_size = 10
     ds = shuffle.WindowShuffleMapDataset(
