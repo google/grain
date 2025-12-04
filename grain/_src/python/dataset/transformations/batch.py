@@ -36,7 +36,7 @@ T = TypeVar("T")
 S = TypeVar("S")
 
 
-def _is_batch_pushdown_experiment_enabled() -> bool:
+def _is_batch_map_pushdown_experiment_enabled() -> bool:
   return False
 
 
@@ -323,7 +323,7 @@ class BatchMapDataset(dataset.MapDataset[T]):
   def _get_parent_items_fn(self):
     # Leverage batch pushdown API to retrieve multiple items at once if the
     # experiment is enabled.
-    if _is_batch_pushdown_experiment_enabled():
+    if _is_batch_map_pushdown_experiment_enabled():
       return lambda items: self._parent._getitems(list(items))  # pylint: disable=protected-access
     return lambda items: [self._parent[i] for i in items]
 
