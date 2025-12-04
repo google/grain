@@ -15,7 +15,7 @@
 
 import functools
 import threading
-from typing import Any, Callable, Sequence, TypeVar
+from typing import Any, Callable, Protocol, Sequence, TypeVar, runtime_checkable
 
 from grain._src.core import transforms
 from grain._src.python.dataset import dataset
@@ -71,7 +71,71 @@ class RngPool:
       self._generator_cache.append(rng)
 
 
-class MapMapDataset(dataset.MapDataset[T]):
+@runtime_checkable
+class SupportsElementSpecInference(Protocol):
+  """A protocol for transformations supporting element spec inference."""
+
+  def output_spec(self, input_spec: Any) -> Any:
+    ...
+
+
+class _ElementSpecFromTransformMapDatasetMixin(dataset.MapDataset[T]):
+  """Mixin for element spec inference for `MapDataset`s accepting a transform.
+
+  We have both `MapDataset` and `IterDataset` variants to avoid diamond
+  inheritance pattern.
+  """
+
+  def __init__(self, parent: dataset.MapDataset, transform: Any):
+    super().__init__(parent)
+    self._transform = transform
+
+  @functools.cached_property
+  def _transform_name(self):
+    return transforms.get_pretty_transform_name(self._transform)
+
+  @property
+  def _element_spec(self) -> Any:
+    if not isinstance(self._transform, SupportsElementSpecInference):
+      raise ValueError(
+          "Cannot infer element spec for transform"
+          f" {self._transform_name} because it does not implement `output_spec`"
+          f" method. Implement `{self._transform_name}.output_spec(self,"
+          " input_spec: PyTree[ShapeDtypeStructProtocol]) -> "
+          " PyTree[ShapeDtypeStructProtocol]` to enable element spec inference."
+      )
+    return self._transform.output_spec(self._parent._element_spec)  # pylint: disable=protected-access
+
+
+class _ElementSpecFromTransformIterDatasetMixin(dataset.IterDataset[T]):
+  """Mixin for element spec inference for `IterDataset`s accepting a transform.
+
+  We have both `MapDataset` and `IterDataset` variants to avoid diamond
+  inheritance pattern.
+  """
+
+  def __init__(self, parent: dataset.IterDataset, transform: Any):
+    super().__init__(parent)
+    self._transform = transform
+
+  @functools.cached_property
+  def _transform_name(self):
+    return transforms.get_pretty_transform_name(self._transform)
+
+  @property
+  def _element_spec(self) -> Any:
+    if not isinstance(self._transform, SupportsElementSpecInference):
+      raise ValueError(
+          "Cannot infer element spec for transform"
+          f" {self._transform_name} because it does not implement `output_spec`"
+          f" method. Implement `{self._transform_name}.output_spec(self,"
+          " input_spec: PyTree[ShapeDtypeStructProtocol]) -> "
+          " PyTree[ShapeDtypeStructProtocol]` to enable element spec inference."
+      )
+    return self._transform.output_spec(self._parent._element_spec)  # pylint: disable=protected-access
+
+
+class MapMapDataset(_ElementSpecFromTransformMapDatasetMixin[T]):
   """Map transformation for MapDataset."""
 
   def __init__(
@@ -79,21 +143,14 @@ class MapMapDataset(dataset.MapDataset[T]):
       parent: dataset.MapDataset,
       transform: transforms.MapTransform | Callable[[Any], T],
   ):
-    super().__init__(parent)
+    super().__init__(parent, transform)
     if isinstance(transform, transforms.MapTransform):
-      # Use the transform class name. The `cached_property` below will not
-      # be called.
-      self._transform_name = transform.__class__.__name__
       self._map_fn = transform.map
     else:
       self._map_fn = transform
 
   def __len__(self) -> int:
     return len(self._parent)
-
-  @functools.cached_property
-  def _transform_name(self):
-    return transforms.get_pretty_transform_name(self._map_fn)
 
   def __str__(self) -> str:
     return f"MapMapDataset(transform={self._transform_name})"
@@ -122,7 +179,7 @@ class MapMapDataset(dataset.MapDataset[T]):
       return self._stats.record_output_spec_for_batch(processed_elements)
 
 
-class RandomMapMapDataset(dataset.MapDataset[T]):
+class RandomMapMapDataset(_ElementSpecFromTransformMapDatasetMixin[T]):
   """Random map transformation for MapDataset."""
 
   def __init__(
@@ -134,11 +191,8 @@ class RandomMapMapDataset(dataset.MapDataset[T]):
       ),
       seed: int | None = None,
   ):
-    super().__init__(parent)
+    super().__init__(parent, transform)
     if isinstance(transform, transforms.RandomMapTransform):
-      # Use the transform class name. The `cached_property` below will not
-      # be called.
-      self._transform_name = transform.__class__.__name__
       self._map_fn = transform.random_map
     else:
       self._map_fn = transform
@@ -153,10 +207,6 @@ class RandomMapMapDataset(dataset.MapDataset[T]):
 
   def __len__(self) -> int:
     return len(self._parent)
-
-  @functools.cached_property
-  def _transform_name(self):
-    return transforms.get_pretty_transform_name(self._map_fn)
 
   def __str__(self) -> str:
     return f"RandomMapMapDataset(transform={self._transform_name})"
@@ -191,7 +241,7 @@ class RandomMapMapDataset(dataset.MapDataset[T]):
     return self._stats.record_output_spec_for_batch(processed_elements)
 
 
-class MapWithIndexMapDataset(dataset.MapDataset[T]):
+class MapWithIndexMapDataset(_ElementSpecFromTransformMapDatasetMixin[T]):
   """Map with index transformation for MapDataset."""
 
   def __init__(
@@ -199,12 +249,9 @@ class MapWithIndexMapDataset(dataset.MapDataset[T]):
       parent: dataset.MapDataset,
       transform: transforms.MapWithIndex | Callable[[int, Any], T],
   ):
-    super().__init__(parent)
+    super().__init__(parent, transform)
     if isinstance(transform, transforms.MapWithIndex):
       self._map_fn = transform.map_with_index
-      # Use the transform class name. The `cached_property` below will not
-      # be called.
-      self._transform_name = transform.__class__.__name__
     else:
       self._map_fn = transform
 
@@ -362,7 +409,7 @@ class _MapWithIndexDatasetIterator(dataset.DatasetIterator[T]):
     return f"MapWithIndexDatasetIterator(transform={self._transform_name})"
 
 
-class RandomMapIterDataset(dataset.IterDataset[T]):
+class RandomMapIterDataset(_ElementSpecFromTransformIterDatasetMixin[T]):
   """Random map transformation for IterDataset."""
 
   def __init__(
@@ -374,11 +421,8 @@ class RandomMapIterDataset(dataset.IterDataset[T]):
       ),
       seed: int | None = None,
   ):
-    super().__init__(parent)
+    super().__init__(parent, transform)
     if isinstance(transform, transforms.RandomMapTransform):
-      # Use the transform class name. The `cached_property` below will not
-      # be called.
-      self._transform_name = transform.__class__.__name__
       self._map_fn = transform.random_map
     else:
       self._map_fn = transform
@@ -389,10 +433,6 @@ class RandomMapIterDataset(dataset.IterDataset[T]):
           " `ds.seed(seed)` before any random transformations or pass it"
           " directly with `ds.random_map(transform, seed=seed)`."
       )
-
-  @functools.cached_property
-  def _transform_name(self):
-    return transforms.get_pretty_transform_name(self._map_fn)
 
   def __iter__(self) -> _RandomMapDatasetIterator[T]:
     return _RandomMapDatasetIterator(
@@ -406,7 +446,7 @@ class RandomMapIterDataset(dataset.IterDataset[T]):
     return f"RandomMapIterDataset(transform={self._transform_name})"
 
 
-class MapIterDataset(dataset.IterDataset[T]):
+class MapIterDataset(_ElementSpecFromTransformIterDatasetMixin[T]):
   """Map transformation for IterDatasets."""
 
   def __init__(
@@ -414,18 +454,11 @@ class MapIterDataset(dataset.IterDataset[T]):
       parent: dataset.IterDataset,
       transform: transforms.MapTransform | Callable[[Any], T],
   ):
-    super().__init__(parent)
+    super().__init__(parent, transform)
     if isinstance(transform, transforms.MapTransform):
-      # Use the transform class name. The `cached_property` below will not
-      # be called.
-      self._transform_name = transform.__class__.__name__
       self._map_fn = transform.map
     else:
       self._map_fn = transform
-
-  @functools.cached_property
-  def _transform_name(self):
-    return transforms.get_pretty_transform_name(self._map_fn)
 
   def __iter__(self) -> _MapDatasetIterator[T]:
     return _MapDatasetIterator(
@@ -438,7 +471,7 @@ class MapIterDataset(dataset.IterDataset[T]):
     return f"MapIterDataset(transform={self._transform_name})"
 
 
-class MapWithIndexIterDataset(dataset.IterDataset[T]):
+class MapWithIndexIterDataset(_ElementSpecFromTransformIterDatasetMixin[T]):
   """Map with index transformation for IterDatasets."""
 
   def __init__(
@@ -446,18 +479,11 @@ class MapWithIndexIterDataset(dataset.IterDataset[T]):
       parent: dataset.IterDataset,
       transform: transforms.MapWithIndex | Callable[[int, Any], T],
   ):
-    super().__init__(parent)
+    super().__init__(parent, transform)
     if isinstance(transform, transforms.MapWithIndex):
-      # Use the transform class name. The `cached_property` below will not
-      # be called.
-      self._transform_name = transform.__class__.__name__
       self._map_fn = transform.map_with_index
     else:
       self._map_fn = transform
-
-  @functools.cached_property
-  def _transform_name(self):
-    return transforms.get_pretty_transform_name(self._map_fn)
 
   def __iter__(self) -> _MapWithIndexDatasetIterator[T]:
     return _MapWithIndexDatasetIterator(

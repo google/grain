@@ -17,18 +17,38 @@ import dataclasses
 import functools
 import importlib
 import sys
+from typing import Any
 from unittest import mock
 
 from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.core import transforms
 from grain._src.core import tree_lib
+from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import batch
 from grain._src.python.dataset.transformations import flatmap
 from grain._src.python.dataset.transformations import repeat
 from grain._src.python.dataset.transformations import source
 import numpy as np
+
+
+class MapWithElementSpecInference(transforms.MapTransform):
+
+  def map(self, element: int):
+    return {
+        "parsed": np.full((10, 10), element),
+        "nested": {"record": str(element)},
+    }
+
+  def output_spec(self, input_spec: Any) -> Any:
+    assert input_spec == base.ShapeDtypeStruct(
+        shape=(), dtype=np.int64
+    ), input_spec
+    return {
+        "parsed": base.ShapeDtypeStruct(shape=(10, 10), dtype=np.int64),
+        "nested": {"record": base.ShapeDtypeStruct(shape=(), dtype=str)},
+    }
 
 
 class MakeBatchTest(absltest.TestCase):
@@ -690,6 +710,19 @@ class BatchIterDatasetTest(parameterized.TestCase):
     spec = dataset.get_element_spec(ds)
     self.assertEqual(spec.shape, expected_shape)
     self.assertEqual(spec.dtype, np.int64)
+
+  def test_element_spec_nested(self):
+    ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
+    ds = ds.map(MapWithElementSpecInference())
+    ds = batch.BatchIterDataset(ds, batch_size=3, drop_remainder=True)
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(
+        spec,
+        {
+            "nested": {"record": base.ShapeDtypeStruct(shape=(3,), dtype=str)},
+            "parsed": base.ShapeDtypeStruct(shape=(3, 10, 10), dtype=np.int64),
+        },
+    )
 
 
 if __name__ == "__main__":

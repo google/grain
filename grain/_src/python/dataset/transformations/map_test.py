@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Tests for map transformation."""
-
 import dataclasses
 import operator
+from typing import Any
 from absl.testing import absltest
 from absl.testing import parameterized
 import cloudpickle
 from grain._src.core import transforms
+from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import map as map_ds
 from grain._src.python.testing.experimental import assert_equal_output_after_checkpoint
@@ -52,6 +53,24 @@ class MapWithTransform(transforms.MapTransform):
     return element + 1
 
 
+class MapWithElementSpecInference(transforms.MapTransform):
+
+  def map(self, element: int):
+    return {
+        "parsed": np.full((10, 10), element),
+        "nested": {"record": str(element)},
+    }
+
+  def output_spec(self, input_spec: Any) -> Any:
+    assert input_spec == base.ShapeDtypeStruct(
+        shape=(), dtype=np.int64
+    ), input_spec
+    return {
+        "parsed": base.ShapeDtypeStruct(shape=(10, 10), dtype=np.int64),
+        "nested": {"record": base.ShapeDtypeStruct(shape=(), dtype=str)},
+    }
+
+
 @dataclasses.dataclass(frozen=True)
 class RandomMapWithTransform(transforms.RandomMapTransform):
 
@@ -67,11 +86,42 @@ class RandomMapWithDeterminismTransform(transforms.RandomMapTransform):
     return element + rng.integers(0, 10)
 
 
+class RandomMapWithElementSpecInference(transforms.RandomMapTransform):
+
+  def random_map(self, element: int, rng: np.random.Generator):
+    return {
+        "nested": {"record": element + rng.integers(0, 10)},
+    }
+
+  def output_spec(self, input_spec: Any) -> Any:
+    assert input_spec == base.ShapeDtypeStruct(
+        shape=(), dtype=np.int64
+    ), input_spec
+    return {
+        "nested": {"record": base.ShapeDtypeStruct(shape=(), dtype=np.int64)},
+    }
+
+
 @dataclasses.dataclass(frozen=True)
 class AddIndexTransform(transforms.MapWithIndex):
 
   def map_with_index(self, index: int, element: int):
     return (index, element)
+
+
+class AddIndexWithElementSpecInference(transforms.MapWithIndex):
+
+  def map_with_index(self, index: int, element: int):
+    return (index, element)
+
+  def output_spec(self, input_spec: Any) -> Any:
+    assert input_spec == base.ShapeDtypeStruct(
+        shape=(), dtype=np.int64
+    ), input_spec
+    return (
+        base.ShapeDtypeStruct(shape=(), dtype=np.int64),
+        base.ShapeDtypeStruct(shape=(), dtype=np.int64),
+    )
 
 
 class MapMapDatasetTest(parameterized.TestCase):
@@ -150,6 +200,28 @@ class MapMapDatasetTest(parameterized.TestCase):
     ds = self.range_ds.map(MapWithTransform())
     assert_equal_output_after_checkpoint(ds)
 
+  def test_map_element_spec_inference(self):
+    ds = map_ds.MapMapDataset(self.range_ds, MapWithElementSpecInference())
+    self.assertEqual(
+        ds._element_spec,
+        {
+            "parsed": base.ShapeDtypeStruct(shape=(10, 10), dtype=np.int64),
+            "nested": {"record": base.ShapeDtypeStruct(shape=(), dtype=str)},
+        },
+    )
+
+  def test_map_element_spec_inference_raises_error(self):
+    ds = map_ds.MapMapDataset(self.range_ds, MapWithNoTransform())
+    with self.assertRaisesRegex(ValueError, "does not implement `output_spec`"):
+      _ = ds._element_spec
+
+  def test_map_element_spec_propagets_output_spec_error(self):
+    ds = map_ds.MapMapDataset(
+        self.range_ds.batch(2), MapWithElementSpecInference()
+    )
+    with self.assertRaises(AssertionError):
+      _ = ds._element_spec
+
 
 class RandomMapMapDatasetTest(parameterized.TestCase):
 
@@ -224,6 +296,26 @@ class RandomMapMapDatasetTest(parameterized.TestCase):
     )
     assert_equal_output_after_checkpoint(ds)
 
+  def test_random_map_element_spec_inference(self):
+    ds = map_ds.RandomMapMapDataset(
+        self.range_ds, RandomMapWithElementSpecInference(), seed=0
+    )
+    self.assertEqual(
+        ds._element_spec,
+        {
+            "nested": {
+                "record": base.ShapeDtypeStruct(shape=(), dtype=np.int64)
+            },
+        },
+    )
+
+  def test_random_map_element_spec_inference_raises_error(self):
+    ds = map_ds.RandomMapMapDataset(
+        self.range_ds, RandomMapWithTransform(), seed=0
+    )
+    with self.assertRaisesRegex(ValueError, "does not implement `output_spec`"):
+      _ = ds._element_spec
+
 
 class MapIterDatasetTest(parameterized.TestCase):
 
@@ -258,6 +350,23 @@ class MapIterDatasetTest(parameterized.TestCase):
   def test_map_checkpointing(self):
     ds = self.range_iter_ds.map(MapWithTransform())
     assert_equal_output_after_checkpoint(ds)
+
+  def test_map_element_spec_inference(self):
+    ds = map_ds.MapIterDataset(
+        self.range_iter_ds, MapWithElementSpecInference()
+    )
+    self.assertEqual(
+        ds._element_spec,
+        {
+            "parsed": base.ShapeDtypeStruct(shape=(10, 10), dtype=np.int64),
+            "nested": {"record": base.ShapeDtypeStruct(shape=(), dtype=str)},
+        },
+    )
+
+  def test_map_element_spec_inference_raises_error(self):
+    ds = map_ds.MapIterDataset(self.range_iter_ds, MapWithNoTransform())
+    with self.assertRaisesRegex(ValueError, "does not implement `output_spec`"):
+      _ = ds._element_spec
 
 
 class RandomMapIterDatasetTest(parameterized.TestCase):
@@ -321,6 +430,26 @@ class RandomMapIterDatasetTest(parameterized.TestCase):
     )
     assert_equal_output_after_checkpoint(ds)
 
+  def test_random_map_element_spec_inference(self):
+    ds = map_ds.RandomMapIterDataset(
+        self.range_iter_ds, RandomMapWithElementSpecInference(), seed=0
+    )
+    self.assertEqual(
+        ds._element_spec,
+        {
+            "nested": {
+                "record": base.ShapeDtypeStruct(shape=(), dtype=np.int64)
+            },
+        },
+    )
+
+  def test_random_map_element_spec_inference_raises_error(self):
+    ds = map_ds.RandomMapIterDataset(
+        self.range_iter_ds, RandomMapWithTransform(), seed=0
+    )
+    with self.assertRaisesRegex(ValueError, "does not implement `output_spec`"):
+      _ = ds._element_spec
+
 
 class MapWithIndexMapDatasetTest(parameterized.TestCase):
 
@@ -352,6 +481,23 @@ class MapWithIndexMapDatasetTest(parameterized.TestCase):
     actual_data = ds._getitems(indices)
     self.assertEqual(expected_data, actual_data)
 
+  def test_map_with_index_element_spec_inference(self):
+    ds = map_ds.MapWithIndexMapDataset(
+        self.range_ds, AddIndexWithElementSpecInference()
+    )
+    self.assertEqual(
+        ds._element_spec,
+        (
+            base.ShapeDtypeStruct(shape=(), dtype=np.int64),
+            base.ShapeDtypeStruct(shape=(), dtype=np.int64),
+        ),
+    )
+
+  def test_map_with_index_element_spec_inference_raises_error(self):
+    ds = map_ds.MapWithIndexMapDataset(self.range_ds, AddIndexTransform())
+    with self.assertRaisesRegex(ValueError, "does not implement `output_spec`"):
+      _ = ds._element_spec
+
 
 class MapWithIndexIterDatasetTest(absltest.TestCase):
 
@@ -378,6 +524,23 @@ class MapWithIndexIterDatasetTest(absltest.TestCase):
   def test_map_with_index_checkpointing(self):
     ds = self.range_iter_ds.map_with_index(AddIndexTransform())
     assert_equal_output_after_checkpoint(ds)
+
+  def test_map_with_index_element_spec_inference(self):
+    ds = map_ds.MapWithIndexIterDataset(
+        self.range_iter_ds, AddIndexWithElementSpecInference()
+    )
+    self.assertEqual(
+        ds._element_spec,
+        (
+            base.ShapeDtypeStruct(shape=(), dtype=np.int64),
+            base.ShapeDtypeStruct(shape=(), dtype=np.int64),
+        ),
+    )
+
+  def test_map_with_index_element_spec_inference_raises_error(self):
+    ds = map_ds.MapWithIndexIterDataset(self.range_iter_ds, AddIndexTransform())
+    with self.assertRaisesRegex(ValueError, "does not implement `output_spec`"):
+      _ = ds._element_spec
 
 
 if __name__ == "__main__":

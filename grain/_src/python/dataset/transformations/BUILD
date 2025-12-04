@@ -31,6 +31,7 @@ py_test(
         "//grain/_src/core:transforms",
         "//grain/_src/core:tree_lib",
         "//grain/_src/python/dataset",
+        "//grain/_src/python/dataset:base",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
         "@pypi//jax:pkg",  # buildcleaner: keep
@@ -127,6 +128,7 @@ py_test(
     deps = [
         "//grain/_src/core:transforms",
         "//grain/_src/python/dataset",
+        "//grain/_src/python/dataset:base",
         "//grain/_src/python/testing:experimental",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
