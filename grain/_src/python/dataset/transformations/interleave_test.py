@@ -19,6 +19,7 @@ from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import interleave
+from grain._src.python.testing.experimental import assert_equal_output_after_checkpoint
 
 
 _INTERLEAVE_TEST_CASES = (
@@ -151,6 +152,14 @@ class MixedIterDatasetTest(parameterized.TestCase):
     ds = dataset.WithOptionsIterDataset(ds, ds_options)
     with self.assertRaisesRegex(ValueError, r"skipped 100\.00 %"):
       list(ds)
+
+  def test_checkpointing_comprehensive(self):
+    ds = [
+        dataset.MapDataset.source([i]).repeat(i).to_iter_dataset()
+        for i in range(1, 6)
+    ]
+    ds = interleave.InterleaveIterDataset(ds, cycle_length=5)
+    assert_equal_output_after_checkpoint(ds)
 
 
 if __name__ == "__main__":

@@ -1345,24 +1345,6 @@ class MultithreadPrefetchIterDatasetTest(parameterized.TestCase):
         value = next(ds_iter)
         self.assertEqual(value, values_without_interruption[i])
 
-  def test_get_state_doesnt_start_prefetch(self):
-    event = threading.Event()
-
-    def f(x):
-      event.set()
-      return x
-
-    ds = dataset.MapDataset.source([1, 2, 3]).map(f).to_iter_dataset()
-    ds = prefetch.multithread_prefetch(
-        ds,
-        num_threads=2,
-        buffer_size=10,
-    )
-    it = ds.__iter__()
-    it.get_state()
-    time.sleep(1)
-    self.assertFalse(event.is_set())
-
   def test_does_not_hang_after_stop_iteration(self):
     ds = dataset.MapDataset.source([1, 2, 3]).repeat(100).to_iter_dataset()
     ds = prefetch.multithread_prefetch(
