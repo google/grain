@@ -50,6 +50,12 @@ def _is_parallel_batch_experiment_enabled():
 # batching experiment is enabled.
 _PARALLEL_BATCHING_MIN_BYTES = 256 * 1024
 
+# The threshold (in elements) for falling back to the serial `np.stack` batching
+# implementation. If the number of elements to be batched is smaller than this
+# threshold, the serial `np.stack` implementation will be used instead even if
+# the parallel batching experiment is enabled.
+_PARALLEL_BATCHING_MIN_BATCH_SIZE = 4
+
 
 class _MakeBatchParallel:
   """A callable class for batching sequences of structured data in parallel.
@@ -399,7 +405,11 @@ class BatchIterDataset(dataset.IterDataset[T]):
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
     self._batch_fn = make_batch if batch_fn is None else batch_fn
-    if _is_parallel_batch_experiment_enabled() and batch_fn is None:
+    if (
+        _is_parallel_batch_experiment_enabled()
+        and batch_fn is None
+        and batch_size >= _PARALLEL_BATCHING_MIN_BATCH_SIZE
+    ):
       self._batch_fn = _MakeBatchParallel()
 
   def __iter__(self) -> _BatchDatasetIterator[T]:
