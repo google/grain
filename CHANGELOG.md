@@ -10,6 +10,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 * Breaking changes:
 
 * Deprecations:
+  * Deprecates `grain.python.experimental.MultiprocessPrefetchIterDataset`,
+    use the graduated version instead: `grain.IterDataset.mp_prefetch`.
 
 * Bug fixes:
 
