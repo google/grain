@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-import copy
 import functools
 from multiprocessing import queues
 from multiprocessing import synchronize
@@ -62,6 +61,8 @@ _PARENT_EXHAUSTED_WAIT_S = 0.5
 # Timeout for getting an element from the worker process.
 _QUEUE_WAIT_TIMEOUT_S = 1
 
+is_in_worker_process = False
+
 
 def _run_all(fns: Sequence[Callable[[], None]]):
   for fn in fns:
@@ -88,27 +89,6 @@ def _get_dataset_options(ds: dataset.IterDataset) -> base.DatasetOptions:
       result = result.merge(parent.options)
     to_visit.extend(parent.parents)
   return result
-
-
-def _validate_no_nested_process_prefetch(
-    ds: dataset.MapDataset | dataset.IterDataset,
-):
-  """Checks that there are no nested process prefetch nodes."""
-  to_check: list[dataset.MapDataset | dataset.IterDataset] = [ds]
-  while to_check:
-    d = to_check.pop(0)
-    if isinstance(
-        d,
-        (
-            ProcessPrefetchIterDataset,
-            prefetch.MultiprocessPrefetchIterDataset,
-        ),
-    ):
-      raise ValueError(
-          "Nesting prefetching with processes is not allowed, but found "
-          f"{type(d).__name__} under a ProcessPrefetchIterDataset."
-      )
-    to_check.extend(d.parents)
 
 
 def _check_picklable(
@@ -150,7 +130,20 @@ def _serialize_dataset(ds: dataset.IterDataset) -> bytes:
 
 
 class ProcessPrefetchIterDataset(dataset.IterDataset[T]):
-  """Iterable dataset that uses a background process for prefetching."""
+  """Iterable dataset that uses a background process for prefetching.
+
+  This dataset transformation accepts an IterDataset and prefetches elements
+  from it in a separate process, buffering up to `buffer_size` elements.
+
+  Attributes:
+    parent: The dataset to prefetch from.
+    buffer_size: The size of the buffer used for prefetching.
+    worker_init_fn: An optional function to run in the worker process at
+      startup.
+    sl: An optional slice to apply to the dataset in the worker process before
+      iteration starts.
+    sequential_slice: Whether to use sequential slicing if `sl` is provided.
+  """
 
   def __init__(
       self,
@@ -165,7 +158,6 @@ class ProcessPrefetchIterDataset(dataset.IterDataset[T]):
     super().__init__(parent)
     self._buffer_size = buffer_size
     self._worker_init_fn = worker_init_fn
-    _validate_no_nested_process_prefetch(self._parent)
 
   def __str__(self) -> str:
     return f"ProcessPrefetchIterDataset(buffer_size={self._buffer_size})"
@@ -192,6 +184,8 @@ def _put_dataset_elements_in_buffer(
     debug_flags: dict[str, Any],
 ):
   """Prefetches elements in a separate process."""
+  global is_in_worker_process
+  is_in_worker_process = True
   try:
     parse_debug_flags_fn = cloudpickle.loads(pickled_parse_debug_flags_fn)
     parse_debug_flags_fn(debug_flags)
@@ -469,6 +463,31 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     return f"ProcessPrefetchDatasetIterator(buffer_size={self._buffer_size})"
 
 
+class _LazySliceIterDataset(dataset.IterDataset[T]):
+  """Applies slice to the parent dataset in the worker process."""
+
+  def __init__(
+      self,
+      parent: dataset.IterDataset[T],
+      sl: slice,
+      sequential_slice: bool,
+  ):
+    super().__init__(parent)
+    self._slice = sl
+    self._sequential_slice = sequential_slice
+
+  def __iter__(self) -> dataset.DatasetIterator[T]:
+    if not is_in_worker_process:
+      return self._parent.__iter__()
+    prefetch._set_slice_iter_dataset(
+        self._parent, self._slice, self._sequential_slice
+    )
+    return self._parent.__iter__()
+
+  def __str__(self) -> str:
+    return f"_LazySliceIterDataset(slice={self._slice})"
+
+
 def multiprocess_prefetch(
     ds: dataset.IterDataset[T],
     num_workers: int = 0,
@@ -503,10 +522,12 @@ def multiprocess_prefetch(
     if num_workers == 1:
       worker_ds = ds
     else:
-      worker_ds = copy.deepcopy(ds)
-      prefetch._set_slice_iter_dataset(  # pylint: disable=protected-access
-          worker_ds, slice(i, None, num_workers), sequential_slice
+      worker_ds = _LazySliceIterDataset(
+          ds,
+          slice(i, None, num_workers),
+          sequential_slice,
       )
+
     worker_ds = prefetch._MpContextIterDataset(  # pylint: disable=protected-access
         worker_ds,
         base.MultiprocessingContext(
