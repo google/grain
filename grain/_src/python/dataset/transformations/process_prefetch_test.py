@@ -28,7 +28,6 @@ import multiprocessing as mp
 from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
-from grain._src.python.dataset.transformations import prefetch
 from grain._src.python.dataset.transformations import process_prefetch
 import numpy as np
 
@@ -264,23 +263,6 @@ class ProcessPrefetchIterDatasetTest(parameterized.TestCase):
         ValueError, 'UnpicklableObject is not picklable'
     ):
       list(ds)
-
-  def test_fails_with_nested_prefetch(self):
-    ds1 = process_prefetch.ProcessPrefetchIterDataset(self.ds, buffer_size=1)
-    with self.assertRaisesRegex(
-        ValueError,
-        'Nesting prefetching with processes is not allowed',
-    ):
-      process_prefetch.ProcessPrefetchIterDataset(ds1, buffer_size=1)
-
-    ds2 = prefetch.MultiprocessPrefetchIterDataset(
-        self.ds, options.MultiprocessingOptions(num_workers=1)
-    )
-    with self.assertRaisesRegex(
-        ValueError,
-        'Nesting prefetching with processes is not allowed',
-    ):
-      process_prefetch.ProcessPrefetchIterDataset(ds2, buffer_size=1)
 
   def test_reports_worker_crash(self):
     def failing_transform(element):

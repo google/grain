@@ -16,34 +16,23 @@
 from __future__ import annotations
 
 import collections
-from collections.abc import Callable, Iterator, Sequence
-import contextlib
+from collections.abc import Iterator, Sequence
 import copy
 import functools
-import math
 from multiprocessing import queues
-from multiprocessing import synchronize
 import queue
-import sys
 import threading
-import time
 import typing
-from typing import Any, Generic, Optional, Protocol, TypeVar
+from typing import Any, Optional, Protocol, TypeVar
 
-import cloudpickle
 from concurrent import futures
-from grain._src.core import tree_lib
-import multiprocessing as mp
-from grain._src.python import grain_pool
 from grain._src.python import options as grain_options
-from grain._src.python import shared_memory_array
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
 from grain._src.python.dataset.transformations import filter as filter_dataset
 from grain._src.python.dataset.transformations import interleave
 from grain._src.python.dataset.transformations import source
-import numpy as np
 
 T = TypeVar("T")
 
@@ -324,127 +313,6 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
         future.cancel()
 
 
-def _iterator_with_context(
-    iterator: contextlib.AbstractContextManager[Iterator[T]],
-) -> Iterator[T]:
-  with iterator as it:
-    yield from it
-
-
-def _validate_no_double_prefetch(
-    parent: dataset.MapDataset | dataset.IterDataset,
-) -> None:
-  """Checks that there are no multiple levels of parallelization."""
-  to_check: list[dataset.MapDataset | dataset.IterDataset] = [parent]
-  while to_check:
-    ds = to_check.pop(0)
-    if isinstance(ds, MultiprocessPrefetchIterDataset):
-      raise ValueError(
-          "Nesting multiprocessing or multithreading is not allowed."
-      )
-    to_check.extend(ds.parents)
-
-
-class MultiprocessPrefetchIterDataset(dataset.IterDataset[T]):
-  """Uses a pool of processes to prefetch elements ahead of time.
-
-  It usually makes sense to add this transformation in the end of the pipeline
-  since it will execute the parent IterDataset in multiple processes.
-  """
-
-  def __init__(
-      self,
-      parent: dataset.IterDataset[T],
-      multiprocessing_options: grain_options.MultiprocessingOptions,
-      worker_init_fn: Callable[[int, int], None] | None = None,
-      sequential_slice: bool = False,
-      always_report_worker_state: bool = False,
-  ):
-    if multiprocessing_options.num_workers < 0:
-      raise ValueError(
-          "`num_workers` must be greater than or equal to 0, got "
-          f"{multiprocessing_options.num_workers}."
-      )
-    super().__init__(parent)
-    self._multiprocessing_options = multiprocessing_options
-    self._worker_init_fn = worker_init_fn
-    self._sequential_slice = sequential_slice
-    _validate_no_double_prefetch(self._parent)
-    self._always_report_worker_state = always_report_worker_state
-
-  def __str__(self) -> str:
-    return (
-        "MultiprocessPrefetchIterDataset("
-        f"multiprocessing_options={self._multiprocessing_options})"
-    )
-
-  def __iter__(self) -> dataset.DatasetIterator[T]:
-    if self._multiprocessing_options.num_workers == 0:
-      return self._parent.__iter__()
-    return _MultiprocessPrefetchDatasetIterator(
-        self._parent,
-        self._multiprocessing_options,
-        self._worker_init_fn,
-        self._sequential_slice,
-        self._always_report_worker_state,
-    )
-
-
-# Keys in `MultiprocessPrefetchDatasetIterator` checkpoints.
-_WORKERS_STATE = "workers_state"
-_ITERATIONS_TO_SKIP = "iterations_to_skip"
-_LAST_WORKER_INDEX = "last_worker_index"
-
-# Minimal interval (in seconds) between consecutive state recordings in worker
-# processes of `MultiprocessPrefetchDatasetIterator`. We record the state
-# periodically to reduce the overhead of sending the state from workers.
-# Note that this is also an approximate upper bound on how long it is going to
-# take to recover from a checkpointed state. Larger values will decrease the
-# overhead of sending the updated state but will also make recovery from a
-# checkpoint longer on average.
-_RECORD_STATE_INTERVAL_S = 3
-
-
-def _copy_leaf_to_shm(leaf: Any, min_size: int = 0) -> Any:
-  """Copies `leaf` to shared memory if it's a big enough numpy array."""
-  if isinstance(leaf, shared_memory_array.SharedMemoryArray):
-    return leaf.metadata
-  if (
-      not isinstance(leaf, np.ndarray)
-      or leaf.dtype.hasobject
-      or not leaf.flags.c_contiguous
-      or math.prod(leaf.shape) == 0
-      or leaf.nbytes < min_size
-  ):
-    return leaf
-
-  shared_memory_arr = shared_memory_array.SharedMemoryArray(
-      leaf.shape, leaf.dtype
-  )
-  np.copyto(shared_memory_arr, leaf, casting="no")
-  return shared_memory_arr.metadata
-
-
-def _copy_struct_to_shm(struct: Any, min_size: int = 0) -> Any:
-  """Copies leaf ndarrays of the structure to shared memory."""
-  return tree_lib.map_structure(
-      functools.partial(_copy_leaf_to_shm, min_size=min_size), struct
-  )
-
-
-def _open_leaf_from_shm(leaf: Any) -> Any:
-  """Recovers `leaf` from shared memory if it's a numpy array metadata."""
-  if isinstance(leaf, shared_memory_array.SharedMemoryArrayMetadata):
-    leaf = shared_memory_array.SharedMemoryArray.from_metadata(leaf)
-    leaf.unlink_on_del()
-  return leaf
-
-
-def _open_struct_from_shm(struct: Any) -> Any:
-  """Recovers leaf ndarrays of the structure from shared memory."""
-  return tree_lib.map_structure(_open_leaf_from_shm, struct)
-
-
 def _set_slice_iter_dataset(
     ds: dataset.IterDataset,
     sl: slice,
@@ -501,120 +369,6 @@ def _set_slice_map_dataset(
       _set_slice_iter_dataset(parent, sl, sequential_slice)
 
 
-def _check_picklable(
-    ds: dataset.IterDataset | dataset.MapDataset,
-):
-  """Detects the first unpickle-able dataset in post-order.
-
-  Args:
-    ds: IterDataset or MapDataset to check whether it is picklable.
-
-  NOTE: This function's time complexity is O(n^2) where n is the number of
-  Grain dataset operations because `cloudpickle.dumps(ds)` will trigger
-  pickling into all the datasets. If this naive O(n^2) algorithm takes too
-  much time, we could consider doing copying `ds`, delete its parents and then
-  do `cloudpickle.dumps(new_ds)` to reduce the time complexity to O(n).
-  """
-
-  # Traverses the graph in post-order to find the first unpickle-able subtree
-  for parent in ds.parents:
-    _check_picklable(parent)
-
-  try:
-    cloudpickle.dumps(ds)
-  except Exception as e:  # pylint: disable=broad-exception-caught
-    if sys.version_info >= (3, 11):
-      e.add_note(
-          f"Dataset: {ds} cannot be pickled!"
-      )
-    raise e
-
-
-class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
-  """Implements `GetElementProducerFn` for `grain_pool.MultiProcessIterator`.
-
-  This class implements `GetElementProducerFn` with `serialize` being overridden
-  to generate better error messages if user-provided dataset is not pickle-able.
-  """
-
-  def __init__(
-      self,
-      state: dict[str, dict[str, Any] | int],
-      ds: dataset.IterDataset[T],
-      sequential_slice: bool = False,
-      always_report_worker_state: bool = False,
-  ):
-    self._state = state
-    self._ds = ds
-    self._sequential_slice = sequential_slice
-    self._always_report_worker_state = always_report_worker_state
-
-  def __call__(
-      self,
-      *,
-      worker_index: int,
-      worker_count: int,
-      start_profiling_event: synchronize.Event | None = None,
-      stop_profiling_event: synchronize.Event | None = None,
-      stats_out_queue: queues.Queue | None = None,
-  ) -> Iterator[tuple[T, Optional[dict[str, Any]]]]:
-    if worker_count > 1:
-      _set_slice_iter_dataset(
-          self._ds,
-          slice(worker_index, None, worker_count),
-          self._sequential_slice,
-      )
-    it = self._ds.__iter__()
-    it._ctx.mp_context = base.MultiprocessingContext(
-        process_index=worker_index, process_count=worker_count
-    )
-    min_shm_size = it._ctx.dataset_options.min_shm_size
-    # Recover from the last recorded state for the given worker.
-    worker_state = self._state[_WORKERS_STATE][str(worker_index)]
-    if worker_state is not None:
-      it.set_state(worker_state)
-    # Set the stats queue in worker process to send stats to the main process.
-    it._stats._config.stats_out_queue = stats_out_queue  # pytype: disable=attribute-error
-    # Skip the required number of iterations after the last recorded state.
-    for _ in range(self._state[_ITERATIONS_TO_SKIP][str(worker_index)]):
-      _ = next(it)
-    last_recorded_state_time = time.time()
-    for element in it:
-      now = time.time()
-      element = _copy_struct_to_shm(element, min_size=min_shm_size)
-      # If the node is prefetch, we already record the bytes produced in it's
-      # __next__ method.
-      if not it._stats._config.is_prefetch:
-        it._stats.record_bytes_produced(element)
-      if (
-          self._always_report_worker_state
-          or now - last_recorded_state_time >= _RECORD_STATE_INTERVAL_S
-      ):
-        last_recorded_state_time = now
-        yield (element, it.get_state())  # pytype: disable=attribute-error
-      else:
-        yield (element, None)
-
-  def serialize(self) -> bytes:
-    """Overrides the default implementation to generate better error messages."""
-
-    try:
-      return cloudpickle.dumps(self)
-    except Exception as e:  # pylint: disable=broad-except
-      # Calls `_check_picklable` to generate useful pickle errors
-      #
-      # Note: No need to check `self._state` because it should not generate
-      # unpicklable errors and it is controlled by us, not from user's code
-      # in most cases. Except for the case when users try to implement their own
-      # `MapDataset` and `IterDataset` with custom pickle-ing logic that
-      # contains unpickle-able objects.
-      _check_picklable(self._ds)
-
-      # If somehow we cannot find the dataset that is causing the pickle
-      # issues, just raise the original error
-      raise e
-
-
 def _get_dataset_options(ds: dataset.IterDataset) -> base.DatasetOptions:
   result = base.DatasetOptions()
   to_visit = [ds]
@@ -624,172 +378,6 @@ def _get_dataset_options(ds: dataset.IterDataset) -> base.DatasetOptions:
       result = result.merge(parent.options)
     to_visit.extend(parent.parents)
   return result
-
-
-class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
-  """Iterator that performs prefetching using a multiprocessing pool."""
-
-  def __init__(
-      self,
-      parent: dataset.IterDataset[T],
-      multiprocessing_options: grain_options.MultiprocessingOptions,
-      worker_init_fn: Callable[[int, int], None] | None = None,
-      sequential_slice: bool = False,
-      always_report_worker_state: bool = False,
-  ):
-    super().__init__()
-    self._iter_parent = parent
-    # Since the parent iterator is going to be created in each subprocess, and
-    # the options are propagated during iterator creation, we need to manually
-    # propagate them.
-    self._ctx.dataset_options = _get_dataset_options(parent)
-    self._multiprocessing_options = multiprocessing_options
-    self._worker_init_fn = worker_init_fn
-    self._sequential_slice = sequential_slice
-    # The underlying iterator producing elements and workers state.
-    self._iterator = None
-    # Raw reference to the underlying iterator that can be used to determine the
-    # last worker index.
-    self._raw_iterator = None
-    # Create initial state. We record state of each worker periodically together
-    # with the number of iterations without the recorded state and index of the
-    # last worker.
-    iterations_to_skip: dict[str, int] = {
-        str(i): 0 for i in range(multiprocessing_options.num_workers)
-    }
-    workers_state: dict[str, Any] = {
-        str(i): None for i in range(multiprocessing_options.num_workers)
-    }
-    self._stats_in_queues = tuple(
-        mp.get_context("spawn").Queue(maxsize=5)
-        for _ in range(multiprocessing_options.num_workers)
-    )
-    self._start_profiling_event = mp.get_context("spawn").Event()
-    self._stop_profiling_event = mp.get_context("spawn").Event()
-
-    self._state: dict[str, dict[str, Any] | int] = {
-        _WORKERS_STATE: workers_state,
-        _ITERATIONS_TO_SKIP: iterations_to_skip,
-        _LAST_WORKER_INDEX: -1,
-    }
-
-    self._always_report_worker_state = always_report_worker_state
-
-  def _initialize_stats(
-      self, execution_tracking_mode: base.ExecutionTrackingMode
-  ):
-    self._stats = _initialize_prefetch_stats(
-        self,
-        execution_tracking_mode,
-        parent_stats=[],
-        stats_in_queues=self._stats_in_queues,
-    )
-    return self._stats
-
-  @functools.cached_property
-  def _stats(self):
-    return self._initialize_stats(
-        self._ctx.dataset_options.execution_tracking_mode
-    )
-
-  def __iter__(self) -> dataset.DatasetIterator[T]:
-    return self
-
-  @dataset_stats.record_next_duration_if_output
-  def __next__(self) -> T:
-    self._assert_not_closed()
-    self._ensure_iterator_initialized()
-    # The time recorded here is the time spent in prefetch node to return an
-    # element, including the time spent in parent node.
-    timer = dataset_stats.Timer()
-    result, state = next(self._iterator)
-    with self._stats.record_self_time(offset_ns=timer.value()):
-      worker_index = self._raw_iterator.get_last_worker_index()  # pytype: disable=attribute-error
-
-      # pytype: disable=annotation-type-mismatch
-      iterations_to_skip: dict[str, Any] = self._state[_ITERATIONS_TO_SKIP]
-      worker_state: dict[str, Any] = self._state[_WORKERS_STATE]
-      # pytype: enable=annotation-type-mismatch
-
-      self._state[_LAST_WORKER_INDEX] = worker_index
-      worker_index_str = str(worker_index)
-      if state is None:
-        iterations_to_skip[worker_index_str] += 1
-      else:
-        iterations_to_skip[worker_index_str] = 0
-        worker_state[worker_index_str] = state
-    result = self._stats.record_bytes_produced(result)
-    return _open_struct_from_shm(result)
-
-  def start_prefetch(self) -> None:
-    """Prefetches elements from the iterator.
-
-    This will run background processes for prefetching. To make sure to clean up
-    the resources, it should be followed by at least one `next` call.
-    """
-    self._ensure_iterator_initialized()
-
-  def set_state(self, state: dict[str, dict[str, Any] | int]) -> None:
-    self._state = state
-    self._raw_iterator = None
-    self._iterator = None
-
-  def get_state(self) -> dict[str, Any]:
-    result = copy.deepcopy(self._state)
-    workers_state: dict[str, Any] = result[_WORKERS_STATE]  # pytype: disable=annotation-type-mismatch
-    parent_state = None
-    for worker_index, worker_state in workers_state.items():
-      # Create initial state from the parent iterator. This is to make sure the
-      # spec of the produced iterator does not change.
-      if worker_state is None:
-        parent_state = parent_state or self._iter_parent.__iter__().get_state()
-        workers_state[worker_index] = copy.deepcopy(parent_state)
-    return result
-
-  def _ensure_iterator_initialized(self) -> None:
-    if self._iterator is None:
-      self._raw_iterator = self._create_iterator_context()
-      self._raw_iterator.start_prefetch()
-      self._iterator = _iterator_with_context(self._raw_iterator)
-
-  def _create_iterator_context(self) -> grain_pool.MultiProcessIterator[T]:
-    """Creates a `MultiProcessIterator`."""
-    # Apply the latest options to the subprocess dataset. We delay this until
-    # starting subprocesses because child iterators may update them.
-    ds = dataset.WithOptionsIterDataset(
-        self._iter_parent, self._ctx.dataset_options
-    )
-    get_element_producer_fn = GetElementProducerFn(
-        self._state,
-        ds,
-        self._sequential_slice,
-        self._always_report_worker_state,
-    )
-
-    return grain_pool.MultiProcessIterator(
-        get_element_producer_fn,
-        self._multiprocessing_options,
-        (self._state[_LAST_WORKER_INDEX] + 1)
-        % self._multiprocessing_options.num_workers,
-        self._worker_init_fn,
-        self._start_profiling_event,
-        self._stop_profiling_event,
-        self._stats_in_queues,
-    )
-
-  def __str__(self) -> str:
-    return (
-        "MultiprocessPrefetchDatasetIterator("
-        f"multiprocessing_options={self._multiprocessing_options})"
-    )
-
-  def close(self) -> None:
-    """Shuts down the prefetching threads and multiprocessing pool."""
-    if self._closed:
-      return
-    self._closed = True
-    if self._raw_iterator is not None:
-      self._raw_iterator.stop_prefetch()
 
 
 class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
@@ -1017,8 +605,8 @@ class _MpContextIterDataset(dataset.IterDataset[T]):
 
 def multithread_prefetch(
     ds: dataset.IterDataset[T],
-    num_threads: int,
-    buffer_size: int,
+    num_threads: int = 0,
+    buffer_size: int = 1,
     sequential_slice: bool = False,
 ) -> dataset.IterDataset[T]:
   """Uses a pool of threads to prefetch elements ahead of time.
@@ -1043,14 +631,17 @@ def multithread_prefetch(
   if num_threads == 0:
     return ds
 
-  _validate_no_double_prefetch(ds)
+  dataset_options = _get_dataset_options(ds)
 
   shards = []
   for i in range(num_threads):
-    worker_ds = copy.deepcopy(ds)
-    _set_slice_iter_dataset(
-        worker_ds, slice(i, None, num_threads), sequential_slice
-    )
+    if num_threads == 1:
+      worker_ds = ds
+    else:
+      worker_ds = copy.deepcopy(ds)
+      _set_slice_iter_dataset(
+          worker_ds, slice(i, None, num_threads), sequential_slice
+      )
     shards.append(
         _MpContextIterDataset(
             worker_ds,
@@ -1061,6 +652,10 @@ def multithread_prefetch(
         )
     )
 
-  return interleave.InterleaveIterDataset(
+  ds = interleave.InterleaveIterDataset(
       shards, cycle_length=num_threads, iter_buffer_size=buffer_size
   )
+  # Apply options from parent dataset because interleave dataset does not
+  # propagate options.
+  ds = dataset.WithOptionsIterDataset(ds, dataset_options)
+  return ds
