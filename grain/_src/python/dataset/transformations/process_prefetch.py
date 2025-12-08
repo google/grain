@@ -16,7 +16,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-import copy
 import functools
 from multiprocessing import queues
 from multiprocessing import synchronize
@@ -41,19 +40,6 @@ T = TypeVar("T")
 # Type for the iterator state.
 StateT = dict[str, Any]
 
-# Minimal interval (in seconds) between consecutive state recordings in worker
-# processes of `_ProcessPrefetchDatasetIterator`. We record the state
-# periodically to reduce the overhead of sending the state from workers.
-# Note that this is also an approximate upper bound on how long it is going to
-# take to recover from a checkpointed state. Larger values will decrease the
-# overhead of sending the updated state but will also make recovery from a
-# checkpoint longer on average.
-_RECORD_STATE_INTERVAL_S = 3
-
-# Keys in `_ProcessPrefetchDatasetIterator` checkpoints.
-_WORKER_STATE = "worker_state"
-_ITERATIONS_TO_SKIP = "iterations_to_skip"
-
 # Timeout for killing worker processes on iterator close.
 _PROCESS_KILL_TIMEOUT_S = 10
 # Interval to wait in the worker process when the parent iterator is exhausted
@@ -61,6 +47,8 @@ _PROCESS_KILL_TIMEOUT_S = 10
 _PARENT_EXHAUSTED_WAIT_S = 0.5
 # Timeout for getting an element from the worker process.
 _QUEUE_WAIT_TIMEOUT_S = 1
+
+is_in_worker_process = False
 
 
 def _run_all(fns: Sequence[Callable[[], None]]):
@@ -88,27 +76,6 @@ def _get_dataset_options(ds: dataset.IterDataset) -> base.DatasetOptions:
       result = result.merge(parent.options)
     to_visit.extend(parent.parents)
   return result
-
-
-def _validate_no_nested_process_prefetch(
-    ds: dataset.MapDataset | dataset.IterDataset,
-):
-  """Checks that there are no nested process prefetch nodes."""
-  to_check: list[dataset.MapDataset | dataset.IterDataset] = [ds]
-  while to_check:
-    d = to_check.pop(0)
-    if isinstance(
-        d,
-        (
-            ProcessPrefetchIterDataset,
-            prefetch.MultiprocessPrefetchIterDataset,
-        ),
-    ):
-      raise ValueError(
-          "Nesting prefetching with processes is not allowed, but found "
-          f"{type(d).__name__} under a ProcessPrefetchIterDataset."
-      )
-    to_check.extend(d.parents)
 
 
 def _check_picklable(
@@ -150,7 +117,20 @@ def _serialize_dataset(ds: dataset.IterDataset) -> bytes:
 
 
 class ProcessPrefetchIterDataset(dataset.IterDataset[T]):
-  """Iterable dataset that uses a background process for prefetching."""
+  """Iterable dataset that uses a background process for prefetching.
+
+  This dataset transformation accepts an IterDataset and prefetches elements
+  from it in a separate process, buffering up to `buffer_size` elements.
+
+  Attributes:
+    parent: The dataset to prefetch from.
+    buffer_size: The size of the buffer used for prefetching.
+    worker_init_fn: An optional function to run in the worker process at
+      startup.
+    sl: An optional slice to apply to the dataset in the worker process before
+      iteration starts.
+    sequential_slice: Whether to use sequential slicing if `sl` is provided.
+  """
 
   def __init__(
       self,
@@ -165,7 +145,6 @@ class ProcessPrefetchIterDataset(dataset.IterDataset[T]):
     super().__init__(parent)
     self._buffer_size = buffer_size
     self._worker_init_fn = worker_init_fn
-    _validate_no_nested_process_prefetch(self._parent)
 
   def __str__(self) -> str:
     return f"ProcessPrefetchIterDataset(buffer_size={self._buffer_size})"
@@ -192,6 +171,8 @@ def _put_dataset_elements_in_buffer(
     debug_flags: dict[str, Any],
 ):
   """Prefetches elements in a separate process."""
+  global is_in_worker_process
+  is_in_worker_process = True
   try:
     parse_debug_flags_fn = cloudpickle.loads(pickled_parse_debug_flags_fn)
     parse_debug_flags_fn(debug_flags)
@@ -208,11 +189,9 @@ def _put_dataset_elements_in_buffer(
       if set_state_event.is_set():
         set_state_event.clear()
         parent_exhausted = False
-        new_state, iterations_to_skip_after_set_state = set_state_queue.get()
+        new_state = set_state_queue.get()
         if new_state is not None:
           it.set_state(new_state)
-        for _ in range(iterations_to_skip_after_set_state):
-          _ = next(it)
         buffer.put((_SetStateIsDone(), None, None))
       if parent_exhausted:
         # Avoid busy-waiting when parent iterator is exhausted due to an
@@ -271,7 +250,6 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._stats_in_queue = self._process_ctx.Queue(maxsize=5)
     self._start_profiling_event = self._process_ctx.Event()
     self._stop_profiling_event = self._process_ctx.Event()
-    self._iterations_to_skip = 0
     self._set_state_count = 0
     self._exhausted = False
     self._prefetch_ds_iter = None
@@ -393,11 +371,7 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         self._stop_prefetch()
         self._exhausted = True
         raise err
-      if state is None:
-        self._iterations_to_skip += 1
-      else:
-        self._iterations_to_skip = 0
-        self._state = state
+      self._state = state
     with self._stats.record_self_time(offset_ns=timer.value()):
       element = self._stats.record_bytes_produced(element)
       return shared_memory_array.open_from_shm(element)
@@ -444,20 +418,14 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   def get_state(self) -> StateT:
     if self._state is None:
-      worker_state = self._iter_parent.__iter__().get_state()
-    else:
-      worker_state = self._state
-    return {
-        _WORKER_STATE: worker_state,
-        _ITERATIONS_TO_SKIP: self._iterations_to_skip,
-    }
+      return self._iter_parent.__iter__().get_state()
+    return self._state
 
   def set_state(self, state: StateT):
-    self._state = state[_WORKER_STATE]
-    self._iterations_to_skip = state[_ITERATIONS_TO_SKIP]
+    self._state = state
     # Remove any pending set_state calls.
     self._clear_set_state_queue()
-    self._set_state_queue.put((self._state, self._iterations_to_skip))
+    self._set_state_queue.put(self._state)
     # Signal the prefetch process to start processing set_state calls.
     self._set_state_event.set()
     # Increment the number of _SetStateIsDone that need to be skipped to
@@ -467,6 +435,31 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   def __str__(self) -> str:
     return f"ProcessPrefetchDatasetIterator(buffer_size={self._buffer_size})"
+
+
+class _LazySliceIterDataset(dataset.IterDataset[T]):
+  """Applies slice to the parent dataset in the worker process."""
+
+  def __init__(
+      self,
+      parent: dataset.IterDataset[T],
+      sl: slice,
+      sequential_slice: bool,
+  ):
+    super().__init__(parent)
+    self._slice = sl
+    self._sequential_slice = sequential_slice
+
+  def __iter__(self) -> dataset.DatasetIterator[T]:
+    if not is_in_worker_process:
+      return self._parent.__iter__()
+    prefetch._set_slice_iter_dataset(
+        self._parent, self._slice, self._sequential_slice
+    )
+    return self._parent.__iter__()
+
+  def __str__(self) -> str:
+    return f"_LazySliceIterDataset(slice={self._slice})"
 
 
 def multiprocess_prefetch(
@@ -503,10 +496,12 @@ def multiprocess_prefetch(
     if num_workers == 1:
       worker_ds = ds
     else:
-      worker_ds = copy.deepcopy(ds)
-      prefetch._set_slice_iter_dataset(  # pylint: disable=protected-access
-          worker_ds, slice(i, None, num_workers), sequential_slice
+      worker_ds = _LazySliceIterDataset(
+          ds,
+          slice(i, None, num_workers),
+          sequential_slice,
       )
+
     worker_ds = prefetch._MpContextIterDataset(  # pylint: disable=protected-access
         worker_ds,
         base.MultiprocessingContext(
