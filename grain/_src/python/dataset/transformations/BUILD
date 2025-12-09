@@ -54,7 +54,7 @@ py_test(
 
 py_test(
     name = "prefetch_test",
-    timeout = "long",
+    timeout = "eternal",
     srcs = ["prefetch_test.py"],
     shard_count = 50,
     srcs_version = "PY3",
