@@ -592,15 +592,12 @@ class BatchIterDatasetTest(parameterized.TestCase):
       ),
   )
   def test_batch_size_2(self, use_jax: bool, initial_ds, expected):
-    def test_batch_size_2_actual_equals_expected(
-        expect_parallel_batch: bool = False,
-    ):
+
+    def test_batch_size_2_actual_equals_expected():
       ds = initial_ds.to_iter_dataset()
       ds = batch.BatchIterDataset(ds, batch_size=2)
-      if expect_parallel_batch:
-        self.assertIsInstance(ds._batch_fn, batch._MakeBatchParallel)
-      else:
-        self.assertIs(ds._batch_fn, batch.make_batch)
+      # Check that default serial batch is used for small batch sizes.
+      self.assertIs(ds._batch_fn, batch.make_batch)
       ds_iter = iter(ds)
       actual = [next(ds_iter) for _ in range(len(expected))]
       np.testing.assert_allclose(actual, expected)
@@ -646,6 +643,8 @@ class BatchIterDatasetTest(parameterized.TestCase):
       ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
       # drop_remainder defaults to False
       ds = batch.BatchIterDataset(ds, batch_size=3)
+      # Check that default serial batch is used for small batch sizes.
+      self.assertIs(ds._batch_fn, batch.make_batch)
       actual = list(ds)
       self.assertLen(actual, 4)
       expected = [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
@@ -666,6 +665,8 @@ class BatchIterDatasetTest(parameterized.TestCase):
     def test_batch_size_3_drop_remainder_actual_equals_expected():
       ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
       ds = batch.BatchIterDataset(ds, batch_size=3, drop_remainder=True)
+      # Check that default serial batch is used for small batch sizes.
+      self.assertIs(ds._batch_fn, batch.make_batch)
       actual = list(ds)
       self.assertLen(actual, 3)
       expected = [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
@@ -676,6 +677,78 @@ class BatchIterDatasetTest(parameterized.TestCase):
     ):
       importlib.reload(batch.tree_lib)
       test_batch_size_3_drop_remainder_actual_equals_expected()
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name="range_ds_jax",
+          use_jax=True,
+          initial_ds=dataset.MapDataset.range(0, 12),
+          expected=[[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11]],
+      ),
+      dict(
+          testcase_name="range_ds_no_jax",
+          use_jax=False,
+          initial_ds=dataset.MapDataset.range(0, 12),
+          expected=[[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11]],
+      ),
+      dict(
+          testcase_name="source_ds_jax",
+          use_jax=True,
+          initial_ds=source.SourceMapDataset([
+              np.asarray([1, 2, 3]),
+              np.asarray([4, 5, 6]),
+              np.asarray([7, 8, 9]),
+              np.asarray([10, 11, 12]),
+          ]),
+          expected=[
+              [
+                  np.asarray([1, 2, 3]),
+                  np.asarray([4, 5, 6]),
+                  np.asarray([7, 8, 9]),
+                  np.asarray([10, 11, 12]),
+              ],
+          ],
+      ),
+      dict(
+          testcase_name="source_ds_no_jax",
+          use_jax=False,
+          initial_ds=source.SourceMapDataset([
+              np.asarray([1, 2, 3]),
+              np.asarray([4, 5, 6]),
+              np.asarray([7, 8, 9]),
+              np.asarray([10, 11, 12]),
+          ]),
+          expected=[
+              [
+                  np.asarray([1, 2, 3]),
+                  np.asarray([4, 5, 6]),
+                  np.asarray([7, 8, 9]),
+                  np.asarray([10, 11, 12]),
+              ],
+          ],
+      ),
+  )
+  def test_batch_size_4_parallel_batch(
+      self, use_jax: bool, initial_ds, expected
+  ):
+    def test_batch_size_4_actual_equals_expected(
+        expect_parallel_batch: bool = False,
+    ):
+      ds = initial_ds.to_iter_dataset()
+      ds = batch.BatchIterDataset(ds, batch_size=4)
+      if expect_parallel_batch:
+        self.assertIsInstance(ds._batch_fn, batch._MakeBatchParallel)
+      else:
+        self.assertIs(ds._batch_fn, batch.make_batch)
+      ds_iter = iter(ds)
+      actual = [next(ds_iter) for _ in range(len(expected))]
+      np.testing.assert_allclose(actual, expected)
+
+    with mock.patch.dict(
+        sys.modules, {"jax": sys.modules["jax"] if use_jax else None}
+    ):
+      importlib.reload(batch.tree_lib)
+      test_batch_size_4_actual_equals_expected()
 
   def test_batch_with_padding(self):
     ds = (

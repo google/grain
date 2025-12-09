@@ -45,10 +45,16 @@ def _is_parallel_batch_experiment_enabled():
 
 
 # The threshold (in bytes) for falling back to the serial `np.stack`  batching
-# implementation. If an `np.array` has a smaller size than this threshold, the
+# implementation. If the batch has a smaller size than this threshold, the
 # serial `np.stack` implementation will be used instead even if the parallel
 # batching experiment is enabled.
-_PARALLEL_BATCHING_MIN_BYTES = 256 * 1024
+_PARALLEL_BATCHING_MIN_TOTAL_BYTES = 4 * 1024 * 1024
+
+# The threshold (in elements) for falling back to the serial `np.stack` batching
+# implementation. If the number of elements to be batched is smaller than this
+# threshold, the serial `np.stack` implementation will be used instead even if
+# the parallel batching experiment is enabled.
+_PARALLEL_BATCHING_MIN_BATCH_SIZE = 4
 
 
 class _MakeBatchParallel:
@@ -85,10 +91,9 @@ class _MakeBatchParallel:
       ):
         return np.stack(xs)
       xs = cast(Sequence[np.ndarray], xs)
-      # Fall back to the standard serial `np.stack` operation if the length of
-      # an individual np.array within `values` is smaller in size (measured in
-      # bytes) than the threshold.
-      if any(x.nbytes < _PARALLEL_BATCHING_MIN_BYTES for x in xs):
+      # Fall back to the standard serial `np.stack` operation if the size of
+      # of the entire batchis smaller (measured in bytes) than the threshold.
+      if sum(x.nbytes for x in xs) < _PARALLEL_BATCHING_MIN_TOTAL_BYTES:
         return np.stack(xs)
 
       out = np.empty([len(xs), *xs[0].shape], dtype=xs[0].dtype)
@@ -399,7 +404,11 @@ class BatchIterDataset(dataset.IterDataset[T]):
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
     self._batch_fn = make_batch if batch_fn is None else batch_fn
-    if _is_parallel_batch_experiment_enabled() and batch_fn is None:
+    if (
+        _is_parallel_batch_experiment_enabled()
+        and batch_fn is None
+        and batch_size >= _PARALLEL_BATCHING_MIN_BATCH_SIZE
+    ):
       self._batch_fn = _MakeBatchParallel()
 
   def __iter__(self) -> _BatchDatasetIterator[T]:
