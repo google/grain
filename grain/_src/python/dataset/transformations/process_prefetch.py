@@ -90,27 +90,6 @@ def _get_dataset_options(ds: dataset.IterDataset) -> base.DatasetOptions:
   return result
 
 
-def _validate_no_nested_process_prefetch(
-    ds: dataset.MapDataset | dataset.IterDataset,
-):
-  """Checks that there are no nested process prefetch nodes."""
-  to_check: list[dataset.MapDataset | dataset.IterDataset] = [ds]
-  while to_check:
-    d = to_check.pop(0)
-    if isinstance(
-        d,
-        (
-            ProcessPrefetchIterDataset,
-            prefetch.MultiprocessPrefetchIterDataset,
-        ),
-    ):
-      raise ValueError(
-          "Nesting prefetching with processes is not allowed, but found "
-          f"{type(d).__name__} under a ProcessPrefetchIterDataset."
-      )
-    to_check.extend(d.parents)
-
-
 def _check_picklable(
     ds: dataset.IterDataset | dataset.MapDataset,
 ):
@@ -165,7 +144,6 @@ class ProcessPrefetchIterDataset(dataset.IterDataset[T]):
     super().__init__(parent)
     self._buffer_size = buffer_size
     self._worker_init_fn = worker_init_fn
-    _validate_no_nested_process_prefetch(self._parent)
 
   def __str__(self) -> str:
     return f"ProcessPrefetchIterDataset(buffer_size={self._buffer_size})"
