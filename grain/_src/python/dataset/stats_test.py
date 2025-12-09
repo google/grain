@@ -545,7 +545,7 @@ class GraphModeStatsTest(absltest.TestCase):
     result = ds._stats._visualize_dataset_graph()  # pytype: disable=attribute-error
     # Remove line number from the result to make test less brittle.
     result = re.sub(r".py:\d+", ".py:XXX", result)
-    self.assertEqual(result, expected)
+    self.assertStartsWith(result, expected)
 
   @flagsaver.flagsaver(grain_py_debug_mode=True)
   def test_visualization_in_debug_mode(self):

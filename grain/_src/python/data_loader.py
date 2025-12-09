@@ -334,6 +334,15 @@ class _DataLoaderStateDatasetIterator(dataset.DatasetIterator[_T]):
     self._parent.set_state(dataset_state)
 
 
+class _DataLoaderPipelineMarkerIterDataset(dataset.IterDataset):
+  """Marks iterators of this dataset as part of a DataLoader pipeline."""
+
+  def __iter__(self) -> dataset.DatasetIterator:
+    iterator = self._parent.__iter__()
+    iterator._ctx.is_dataloader_pipeline = True  # pylint: disable=protected-access
+    return iterator
+
+
 class DataLoader:
   """DataLoader loads and transforms input data."""
 
@@ -475,7 +484,7 @@ class DataLoader:
           self._sampler,
           self._data_source,
       )
-    return ds
+    return _DataLoaderPipelineMarkerIterDataset(ds)
 
   def __iter__(self) -> DataLoaderIterator:
     return DataLoaderIterator(

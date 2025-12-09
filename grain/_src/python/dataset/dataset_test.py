@@ -31,6 +31,7 @@ from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
+from grain._src.python.dataset.transformations import prefetch
 import grain._src.python.testing.experimental as test_util
 from grain.proto import execution_summary_pb2
 import numpy as np

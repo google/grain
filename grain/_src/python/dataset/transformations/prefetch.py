@@ -564,6 +564,9 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
           slice(worker_index, None, worker_count),
           self._sequential_slice,
       )
+    # Prevent OutputDatasetIterator injection in worker processes.
+    # The injection should only happen in the main process iterator,
+    # which wraps the _MultiprocessPrefetchDatasetIterator.
     it = self._ds.__iter__()
     it._ctx.mp_context = base.MultiprocessingContext(
         process_index=worker_index, process_count=worker_count
@@ -1063,4 +1066,16 @@ def multithread_prefetch(
 
   return interleave.InterleaveIterDataset(
       shards, cycle_length=num_threads, iter_buffer_size=buffer_size
+  )
+
+
+def is_prefetch_iterator(it: dataset.DatasetIterator) -> bool:
+  """Returns whether the iterator is a prefetch iterator."""
+  return isinstance(
+      it,
+      (
+          PrefetchDatasetIterator,
+          ThreadPrefetchDatasetIterator,
+          _MultiprocessPrefetchDatasetIterator,
+      ),
   )

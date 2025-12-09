@@ -219,6 +219,8 @@ class IteratorContext:
   dataset_options: DatasetOptions = DatasetOptions()
   # Multiprocessing context of the worker process running this iterator.
   mp_context: MultiprocessingContext = MultiprocessingContext()
+  # Whether this iterator is part of a DataLoader pipeline.
+  is_dataloader_pipeline: bool = False
 
   def merge(self, other: IteratorContext) -> None:
     """Merges this context with the other in place."""
@@ -228,3 +230,6 @@ class IteratorContext:
           "Cannot merge contexts from different worker processes:"
           f" {self.mp_context} vs {other.mp_context}."
       )
+    self.is_dataloader_pipeline = (
+        self.is_dataloader_pipeline or other.is_dataloader_pipeline
+    )

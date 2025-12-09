@@ -911,6 +911,29 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
   # pylint: enable=protected-access
 
 
+def output_dataset_injector(create_iter_func: Callable[..., DatasetIterator]):
+  """Injects an _OutputIterDataset to the end of the dataset pipeline.
+
+  Args:
+    create_iter_func: The function to wrap.
+
+  Returns:
+    The wrapped function.
+  """
+
+  @functools.wraps(create_iter_func)
+  def wrapper(self, *args, **kwargs):
+    if (
+        isinstance(self, _OutputIterDataset)
+        or not hasattr(self, "has_child")
+        or self.has_child
+    ):
+      return create_iter_func(self, *args, **kwargs)
+    return _OutputIterDataset(self).__iter__(*args, **kwargs)
+
+  return wrapper
+
+
 class IterDatasetMeta(abc.ABCMeta):
   """Metaclass for ``IterDataset`` containing factory transformations."""
 
@@ -975,7 +998,13 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
     self._parents = cast(
         Sequence[Union[MapDataset, IterDataset]], self._parents
     )
-    _api_usage_counter.Increment("IterDataset")
+
+    self.has_child = False
+    for parent in self._parents:
+      if isinstance(parent, IterDataset) and hasattr(parent, "has_child"):
+        parent.has_child = True
+    if not isinstance(self, _OutputIterDataset):
+      _api_usage_counter.Increment("IterDataset")
 
   @property
   def parents(self) -> Sequence[MapDataset | IterDataset]:
@@ -1335,6 +1364,10 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
         sequential_slice=sequential_slice,
     )
 
+  def __init_subclass__(cls, **kwargs):
+    super().__init_subclass__(**kwargs)
+    cls.__iter__ = output_dataset_injector(cls.__iter__)
+
   @abc.abstractmethod
   def __iter__(self) -> DatasetIterator[T]:
     """Returns an iterator for this dataset."""
@@ -1631,6 +1664,31 @@ class WithOptionsIterDataset(IterDataset[T]):
 
   def __str__(self):
     return f"WithOptionsIterDataset(options={self.options})"
+
+
+def is_thread_prefetch_injection_enabled() -> bool:
+  """Returns whether thread prefetch injection experiment is enabled."""
+  return False
+
+
+class _OutputIterDataset(IterDataset[T]):
+  """Dataset that is injected at the end of every pipeline."""
+
+  def __iter__(self) -> DatasetIterator[T]:
+    """Performs any injection that needs to happen at the end of the pipeline."""
+
+    # Loaded lazily due to a circular dependency (dataset <-> prefetch).
+    # pylint: disable=g-import-not-at-top
+    from grain._src.python.dataset.transformations import prefetch
+    # pylint: enable=g-import-not-at-top
+    iterator = self._parent.__iter__()
+    if (
+        is_thread_prefetch_injection_enabled()
+        and not iterator._ctx.is_dataloader_pipeline  # pylint: disable=protected-access
+    ):
+      if not prefetch.is_prefetch_iterator(iterator):
+        iterator = prefetch.ThreadPrefetchDatasetIterator(iterator, 1)
+    return iterator
 
 
 _ConsistentDatasetType = TypeVar(
