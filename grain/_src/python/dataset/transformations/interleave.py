@@ -15,10 +15,11 @@
 
 from collections.abc import Sequence
 import functools
-from typing import TypeVar
+from typing import Any, TypeVar
 import weakref
 
 from grain._src.python import options as grain_options
+from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
 from grain._src.python.dataset.transformations import prefetch
@@ -75,25 +76,51 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     self._iterators_in_use: list[dataset.DatasetIterator[T] | None] = [
         None
     ] * self._cycle_length
+    self._exhausted_iterator_state: list[dict[str, Any] | None] = [
+        None
+    ] * self._cycle_length
+    self._parent_stats: list[stats.Stats | None] = [None] * self._cycle_length
 
   @stats.record_next_duration_if_output
   def __next__(self) -> T:
     self._assert_not_closed()
+    _ = self._stats  # eagerly initialize stats
     while True:
       if iterator_to_use := self._iterators_in_use[self._next_index_in_cycle]:
         try:
           result = iterator_to_use.__next__()
+          # Get the stats object of the iterator that is being used.
+          # pylint: disable=protected-access
+          if (
+              self._parent_stats[self._next_index_in_cycle] is None
+              or self._parent_stats[self._next_index_in_cycle]
+              != iterator_to_use._stats
+          ):
+            self._parent_stats[self._next_index_in_cycle] = (
+                iterator_to_use._stats
+            )
+            self._stats._parents = [
+                p for p in self._parent_stats if p is not None
+            ]
+          # pylint: enable=protected-access
           self._next_index_in_cycle = (
               self._next_index_in_cycle + 1
           ) % self._cycle_length
           return result
         except StopIteration:
+          self._exhausted_iterator_state[self._next_index_in_cycle] = (
+              iterator_to_use.get_state()
+          )
           self._iterators_in_use[self._next_index_in_cycle] = None
+          self._next_index_in_cycle = (
+              self._next_index_in_cycle + 1
+          ) % self._cycle_length
           continue
       if self._next_index_in_datasets < len(self._datasets):
         self._iterators_in_use[self._next_index_in_cycle] = next(
             self._prefetch_ds_iter
         )
+        self._exhausted_iterator_state[self._next_index_in_cycle] = None
         self._iterators_in_use_indices[self._next_index_in_cycle] = (
             self._next_index_in_datasets
         )
@@ -106,33 +133,57 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
         ) % self._cycle_length
 
   def get_state(self):
+    iterators_in_use_states = [None] * self._cycle_length
+    for i in range(self._cycle_length):
+      it = self._iterators_in_use[i]
+      if it is not None:
+        iterators_in_use_states[i] = it.get_state()
+      elif self._exhausted_iterator_state[i] is not None:
+        iterators_in_use_states[i] = self._exhausted_iterator_state[i]
+      else:
+        try:
+          it = next(self._prefetch_ds_iter)
+        except StopIteration:
+          break
+        self._iterators_in_use[i] = it
+        iterators_in_use_states[i] = it.get_state()
+        self._iterators_in_use_indices[i] = self._next_index_in_datasets
+        self._next_index_in_datasets += 1
+    exhausted = [
+        self._exhausted_iterator_state[i] is not None
+        for i in range(self._cycle_length)
+    ]
     return {
-        "prefetch_ds_iter_states": self._prefetch_ds_iter.get_state(),
         "next_index_in_cycle": self._next_index_in_cycle,
         "next_index_in_datasets": self._next_index_in_datasets,
         "iterators_in_use_indices": self._iterators_in_use_indices.copy(),
-        "iterators_in_use_states": [
-            (None if it is None else it.get_state())
-            for it in self._iterators_in_use
-        ],
+        "iterators_in_use_states": iterators_in_use_states,
+        "exhausted": exhausted,
     }
 
   def set_state(self, state):
-    self._prefetch_ds_iter.set_state(state["prefetch_ds_iter_states"])
+    self._prefetch_ds_iter.set_state(
+        {"next_index": state["next_index_in_datasets"]}
+    )
     self._next_index_in_cycle = state["next_index_in_cycle"]
     self._next_index_in_datasets = state["next_index_in_datasets"]
-    if not self._next_index_in_datasets and not self._next_index_in_cycle:
-      return
     self._iterators_in_use_indices = state["iterators_in_use_indices"]
+    exhausted = state["exhausted"]
     for index_in_cycle, (index_in_datasets, it_state) in enumerate(
         zip(self._iterators_in_use_indices, state["iterators_in_use_states"])
     ):
       if it_state is None:
         self._iterators_in_use[index_in_cycle] = None
-      else:
-        iterator = self._datasets[index_in_datasets].__iter__()
+      elif not exhausted[index_in_cycle]:
+        iterator = _add_prefetch_and_make_iterator(
+            self._datasets[index_in_datasets],
+            interleave_iterator=weakref.ref(self),
+        )
         iterator.set_state(it_state)
         self._iterators_in_use[index_in_cycle] = iterator
+      else:
+        self._exhausted_iterator_state[index_in_cycle] = it_state
+        self._iterators_in_use[index_in_cycle] = None
 
   def close(self) -> None:
     """Closes the iterator and shuts down the iterator prefetching."""
@@ -143,6 +194,31 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     for iterator in self._iterators_in_use:
       if iterator is not None:
         iterator.close()
+
+  def _initialize_stats(
+      self, execution_tracking_mode: base.ExecutionTrackingMode
+  ) -> stats.Stats:
+    config = stats.StatsConfig(
+        name=str(self),
+        transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
+        iter_weakref=stats.HashableWeakRef(self),
+        is_interleave=True,
+    )
+    # If the stats object has already been initialized, copy the queues from
+    # the original stats object to the new stats object.
+    output_spec = None
+    if "_stats" in self.__dict__:
+      config.stats_out_queue = self._stats._config.stats_out_queue  # pylint: disable=protected-access
+      config.stats_in_queues = self._stats._config.stats_in_queues  # pylint: disable=protected-access
+      # output spec is constructed while iterating through the dataset.
+      output_spec = self._stats.output_spec
+    self._stats = stats.make_stats(
+        config,
+        [],
+        execution_tracking_mode=execution_tracking_mode,
+    )
+    self._stats._self_output_spec = output_spec  # pylint: disable=protected-access
+    return self._stats
 
   def __str__(self) -> str:
     return (

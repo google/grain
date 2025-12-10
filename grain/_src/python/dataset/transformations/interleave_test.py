@@ -13,12 +13,14 @@
 # limitations under the License.
 
 from absl.testing import absltest
+from absl.testing import flagsaver
 from absl.testing import parameterized
 import multiprocessing as mp
 from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import interleave
+from grain._src.python.testing.experimental import assert_equal_output_after_checkpoint
 
 
 _INTERLEAVE_TEST_CASES = (
@@ -32,13 +34,13 @@ _INTERLEAVE_TEST_CASES = (
         testcase_name="cycle_length_2",
         to_mix=[[1], [2, 2], [3, 3, 3], [4, 4, 4, 4], [5, 5, 5, 5, 5]],
         cycle_length=2,
-        expected=[1, 2, 3, 2, 3, 4, 3, 4, 5, 4, 5, 4, 5, 5, 5],
+        expected=[1, 2, 2, 3, 3, 4, 3, 4, 4, 5, 4, 5, 5, 5, 5],
     ),
     dict(
         testcase_name="cycle_length_3",
         to_mix=[[1], [2, 2], [3, 3, 3], [4, 4, 4, 4], [5, 5, 5, 5, 5]],
         cycle_length=3,
-        expected=[1, 2, 3, 4, 2, 3, 4, 5, 3, 4, 5, 4, 5, 5, 5],
+        expected=[1, 2, 3, 2, 3, 4, 3, 4, 5, 4, 5, 4, 5, 5, 5],
     ),
     dict(
         testcase_name="same_lengths",
@@ -50,13 +52,19 @@ _INTERLEAVE_TEST_CASES = (
         testcase_name="unsorted_lengths",
         to_mix=[[1, 1, 1], [2], [3, 3, 3, 3], [4, 4]],
         cycle_length=3,
-        expected=[1, 2, 3, 1, 4, 3, 1, 4, 3, 3],
+        expected=[1, 2, 3, 1, 3, 1, 4, 3, 4, 3],
     ),
     dict(
         testcase_name="large_cycle_length",
         to_mix=[[1, 1, 1], [2], [3, 3, 3, 3], [4, 4]],
         cycle_length=10,
         expected=[1, 2, 3, 4, 1, 3, 4, 1, 3, 3],
+    ),
+    dict(
+        testcase_name="with_empty_datasets",
+        to_mix=[[1, 1, 1], [], [3, 3, 3, 3], [4, 4], []],
+        cycle_length=3,
+        expected=[1, 3, 1, 4, 3, 1, 4, 3, 3],
     ),
 )
 
@@ -131,7 +139,7 @@ class MixedIterDatasetTest(parameterized.TestCase):
     ds = interleave.InterleaveIterDataset(sources, cycle_length=2)
     self.assertEqual(
         list(ds),
-        ["1", "2", "1", "3", "6", "4", "7", "5", "8", "9", "9", "9", "9"],
+        ["1", "2", "1", "3", "4", "6", "5", "7", "8", "9", "9", "9", "9"],
     )
 
   def test_with_mp_prefetch(self):
@@ -151,6 +159,50 @@ class MixedIterDatasetTest(parameterized.TestCase):
     ds = dataset.WithOptionsIterDataset(ds, ds_options)
     with self.assertRaisesRegex(ValueError, r"skipped 100\.00 %"):
       list(ds)
+
+  def test_checkpointing_comprehensive(self):
+    ds = [
+        dataset.MapDataset.source([i]).repeat(i).to_iter_dataset()
+        for i in range(1, 6)
+    ]
+    ds = interleave.InterleaveIterDataset(ds, cycle_length=5)
+    assert_equal_output_after_checkpoint(ds)
+
+  @flagsaver.flagsaver(grain_py_debug_mode=True)
+  def test_interleave_stats(self):
+    ds = dataset.MapDataset.range(10000).map(lambda x: x + 1)
+    ds = ds.to_iter_dataset()
+    ds = interleave.InterleaveIterDataset([ds, ds], cycle_length=2)
+    it = ds.__iter__()
+    next(it)
+    next(it)
+    summary = dataset.get_execution_summary(it)
+    node_names = {node.name for node in summary.nodes.values()}
+    expected_nodes = [
+        "RangeMapDataset",
+        "MapMapDataset",
+        "PrefetchDatasetIterator",
+        "ThreadPrefetchDatasetIterator",
+        "InterleaveDatasetIterator",
+    ]
+    for expected_node in expected_nodes:
+      self.assertTrue(any(expected_node in name for name in node_names))
+    self.assertLen(node_names, len(expected_nodes))
+
+  @flagsaver.flagsaver(grain_py_debug_mode=True)
+  def test_interleave_stats_with_mismatched_dataset_structures(self):
+    ds1 = dataset.MapDataset.range(10000).map(lambda x: x + 1)
+    ds1 = ds1.to_iter_dataset()
+    ds2 = dataset.MapDataset.range(10000).map(lambda x: x + 1).map(lambda x: x)
+    ds2 = ds2.to_iter_dataset()
+    ds = interleave.InterleaveIterDataset([ds1, ds2], cycle_length=2)
+    it = ds.__iter__()
+    next(it)
+    next(it)
+    summary = dataset.get_execution_summary(it)
+    node_names = [node.name for node in summary.nodes.values()]
+    self.assertLen(node_names, 1)
+    self.assertIn("InterleaveDatasetIterator", node_names[0])
 
 
 if __name__ == "__main__":
