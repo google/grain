@@ -540,6 +540,8 @@ class StatsConfig:
   stats_out_queue: queues.Queue | None = None
   # Weak reference to the iterator that this stats object is associated with.
   iter_weakref: HashableWeakRef | None = None
+  # Whether this tranformation is an interleave transformaation.
+  is_interleave: bool = False
 
   def __getstate__(self):
     state = self.__dict__.copy()
@@ -1051,6 +1053,69 @@ class _MPPrefetchExecutionStats(_ExecutionStats):
     return execution_summary, node_id
 
 
+class _InterleaveExecutionStats(_ExecutionStats):
+  """Execution time statistics for interleave transformation.
+
+  This class is responsible for aggregating the execution summary from all
+  interleaved iterators and building the complete execution summary.
+  """
+
+  def __init__(self, config: StatsConfig, parents: Sequence[Stats]):
+    super().__init__(config, parents)
+    self._merged_summary = execution_summary_pb2.ExecutionSummary()
+
+  def _get_merged_summary(
+      self,
+  ) -> execution_summary_pb2.ExecutionSummary:
+    """Calculates the aggregated execution summary."""
+    aggregated_summary = execution_summary_pb2.ExecutionSummary()
+    num_nodes_in_parent = None
+    for parent_stats in self._parents:
+      assert isinstance(parent_stats, _ExecutionStats)
+      parent_summary = parent_stats._get_execution_summary()  # pylint: disable=protected-access
+      if num_nodes_in_parent is None:
+        num_nodes_in_parent = len(parent_summary.nodes)
+      elif len(parent_summary.nodes) != num_nodes_in_parent:
+        raise ValueError(
+            "All parent summaries must have the same number of nodes."
+        )
+      aggregated_summary = stats_utils.merge_execution_summaries(
+          aggregated_summary, parent_summary
+      )
+    self._merged_summary = aggregated_summary
+    return self._merged_summary
+
+  def _build_execution_summary(
+      self,
+      execution_summary: execution_summary_pb2.ExecutionSummary,
+      node_id: int,
+  ) -> tuple[execution_summary_pb2.ExecutionSummary, int]:
+    # By this point, all the nodes in the pipeline have been visited and
+    # `_output_spec` & `name` has been set.
+    self._summary.id = node_id
+    self._summary.name = self._config.name
+    self._summary.output_spec = str(self.output_spec)
+    self._summary.is_output = self._is_output
+    self._summary.is_prefetch = self._config.is_prefetch
+    execution_summary.nodes.get_or_create(node_id)
+    execution_summary.nodes[node_id].CopyFrom(self._summary)
+    current_node_id = node_id
+    combined_summary = execution_summary_pb2.ExecutionSummary()
+    try:
+      combined_summary.CopyFrom(self._get_merged_summary())
+    except ValueError:
+      logging.warning(
+          "Failed to get merged summary for interleave transformation due to"
+          " mismatched input dataset structures. Summary will omit nodes prior"
+          " to the interleave."
+      )
+      return execution_summary, node_id
+    execution_summary = stats_utils.get_complete_summary(
+        execution_summary, combined_summary, current_node_id + 1
+    )
+    return execution_summary, node_id
+
+
 def make_stats(
     config: StatsConfig,
     parents: Sequence[Stats],
@@ -1074,10 +1139,14 @@ def make_stats(
     config = dataclasses.replace(config, log_summary=True)
     if config.stats_in_queues:
       return _MPPrefetchExecutionStats(config, parents)
+    elif config.is_interleave:
+      return _InterleaveExecutionStats(config, parents)
     return _ExecutionStats(config, parents=parents)
   if execution_tracking_mode == base.ExecutionTrackingMode.STAGE_TIMING:
     if config.stats_in_queues:
       return _MPPrefetchExecutionStats(config, parents)
+    elif config.is_interleave:
+      return _InterleaveExecutionStats(config, parents)
     return _ExecutionStats(config, parents=parents)
   if vis_output_dir is not None:
     return _VisualizationStats(config, parents=parents)
