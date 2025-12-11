@@ -22,6 +22,7 @@ from grain._src.python.dataset.transformations import cache as cache_dataset
 from grain._src.python.dataset.transformations import limit as limit_dataset
 from grain._src.python.dataset.transformations import repeat as repeat_dataset
 from grain._src.python.testing.experimental import assert_equal_output_after_checkpoint
+import numpy as np
 
 
 class InMemoryCacheIterDatasetTest(parameterized.TestCase):
@@ -91,6 +92,13 @@ class InMemoryCacheIterDatasetTest(parameterized.TestCase):
     it.set_state(state)
     self.assertEqual(list(it), remaining)
     self.assertEqual(remaining, [2, 3, 4])
+
+  def test_element_spec(self):
+    ds = dataset.MapDataset.range(5).to_iter_dataset()
+    ds = cache_dataset.CacheIterDataset(ds)
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(spec.dtype, np.int64)
+    self.assertEqual(spec.shape, ())
 
 
 if __name__ == "__main__":

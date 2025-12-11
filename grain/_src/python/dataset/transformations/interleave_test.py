@@ -19,6 +19,7 @@ from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import interleave
+import numpy as np
 
 
 _INTERLEAVE_TEST_CASES = (
@@ -61,7 +62,7 @@ _INTERLEAVE_TEST_CASES = (
 )
 
 
-class MixedIterDatasetTest(parameterized.TestCase):
+class InterleaveIterDatasetTest(parameterized.TestCase):
 
   @parameterized.named_parameters(*_INTERLEAVE_TEST_CASES)
   def test_interleaved_mix(self, to_mix, cycle_length, expected):
@@ -151,6 +152,13 @@ class MixedIterDatasetTest(parameterized.TestCase):
     ds = dataset.WithOptionsIterDataset(ds, ds_options)
     with self.assertRaisesRegex(ValueError, r"skipped 100\.00 %"):
       list(ds)
+
+  def test_element_spec(self):
+    ds = dataset.MapDataset.range(3).to_iter_dataset()
+    ds = interleave.InterleaveIterDataset([ds, ds], cycle_length=2)
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(spec.dtype, np.int64)
+    self.assertEqual(spec.shape, ())
 
 
 if __name__ == "__main__":

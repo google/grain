@@ -199,6 +199,7 @@ py_test(
         "//grain/_src/python/dataset",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
+        "@pypi//numpy:pkg",
         "@pypi//typing_extensions:pkg",
     ],
 )
@@ -212,6 +213,7 @@ py_test(
         "//grain/_src/python/dataset",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
+        "@pypi//numpy:pkg",
     ],
 )
 
@@ -225,6 +227,7 @@ py_test(
         "//grain/_src/python/testing:experimental",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
+        "@pypi//numpy:pkg",
         "@pypi//typing_extensions:pkg",
     ],
 )
@@ -249,6 +252,7 @@ py_test(
         "//grain/_src/python/testing:experimental",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
+        "@pypi//numpy:pkg",
     ],
 )
 
@@ -262,6 +266,7 @@ py_test(
         "//grain/_src/python/dataset:base",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
+        "@pypi//numpy:pkg",
     ],
 )
 
@@ -285,6 +290,7 @@ py_test(
         "//grain/_src/python/testing:experimental",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
+        "@pypi//numpy:pkg",
     ],
 )
 

@@ -427,6 +427,14 @@ class MixedMapDatasetTest(parameterized.TestCase):
 
     self.assertEqual(ds._getitems(list(range(10))), expected_dataset)
 
+  def test_element_spec(self):
+    ds = mix.MixedMapDataset(
+        parents=[self.even_ds, self.odd_ds], proportions=[1, 1]
+    )
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(spec.dtype, np.int64)
+    self.assertEqual(spec.shape, ())
+
 
 class MixedIterDatasetTest(absltest.TestCase):
 
@@ -663,6 +671,15 @@ class MixedIterDatasetTest(absltest.TestCase):
     self.assertEqual(
         list(ds_iter), [13, 14, 30, 15, 31, 16, 17, 32, 18, 33, 19]
     )
+
+  def test_element_spec(self):
+    ds = mix.MixedIterDataset(
+        parents=[self.even_ds, self.odd_ds],
+        proportions=[1, 1],
+    )
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(spec.dtype, np.int64)
+    self.assertEqual(spec.shape, ())
 
 
 class ConcatenateLazyMapTest(absltest.TestCase):

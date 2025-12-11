@@ -19,6 +19,7 @@ from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.python.dataset import dataset
 import grain._src.python.dataset.transformations.slice as slice_ds
+import numpy as np
 from typing_extensions import override
 
 
@@ -163,6 +164,13 @@ class SliceMapDatasetTest(parameterized.TestCase):
     ds_unsliced = list(itertools.islice(ds_unsliced, num_to_compare))
 
     self.assertSequenceEqual(ds_sliced, ds_unsliced)
+
+  def test_element_spec(self):
+    ds = dataset.MapDataset.range(2)
+    ds = slice_ds.SliceMapDataset(ds, slice(0, 1))
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(spec.dtype, np.int64)
+    self.assertEqual(spec.shape, ())
 
 
 if __name__ == "__main__":

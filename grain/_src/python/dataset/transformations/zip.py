@@ -55,6 +55,10 @@ class ZipMapDataset(dataset.MapDataset[T]):
   def __str__(self) -> str:
     return f"ZipMapDataset(parents={self._parents}"
 
+  @property
+  def _element_spec(self) -> Any:
+    return tuple(dataset.get_element_spec(p) for p in self._parents)
+
 
 class ZipIterDataset(dataset.IterDataset[T]):
   """Combines IterDatasets of the same length to return a tuple of items."""
@@ -72,6 +76,10 @@ class ZipIterDataset(dataset.IterDataset[T]):
 
   def __str__(self) -> str:
     return f"ZipIterDataset(parents={self._parents}, strict={self._strict})"
+
+  @property
+  def _element_spec(self) -> Any:
+    return tuple(dataset.get_element_spec(p) for p in self._parents)
 
 
 def _strict_zip_error(i: int, why: str) -> str:

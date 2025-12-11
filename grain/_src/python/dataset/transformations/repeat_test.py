@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Tests for repeat transformation."""
+
 import sys
 
 from absl.testing import absltest
@@ -19,6 +20,7 @@ from absl.testing import parameterized
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import repeat
 from grain._src.python.testing import experimental as testing
+import numpy as np
 from typing_extensions import override
 
 
@@ -140,6 +142,13 @@ class RepeatMapDatasetTest(parameterized.TestCase):
     else:
       self.assertEqual(first_epoch, second_epoch)
 
+  def test_element_spec(self):
+    ds = dataset.MapDataset.range(2)
+    ds = repeat.RepeatMapDataset(ds, num_epochs=2)
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(spec.dtype, np.int64)
+    self.assertEqual(spec.shape, ())
+
 
 class RepeatIterDatasetTest(parameterized.TestCase):
 
@@ -178,6 +187,13 @@ class RepeatIterDatasetTest(parameterized.TestCase):
     ds = dataset.MapDataset.range(3).to_iter_dataset()
     ds = repeat.RepeatIterDataset(ds, num_epochs=num_epochs)
     testing.assert_equal_output_after_checkpoint(ds)
+
+  def test_element_spec(self):
+    ds = dataset.MapDataset.range(2).to_iter_dataset()
+    ds = repeat.RepeatIterDataset(ds, num_epochs=2)
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(spec.dtype, np.int64)
+    self.assertEqual(spec.shape, ())
 
 
 if __name__ == "__main__":

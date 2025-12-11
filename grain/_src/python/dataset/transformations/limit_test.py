@@ -18,6 +18,7 @@ from absl.testing import parameterized
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import limit
 import grain._src.python.testing.experimental as test_util
+import numpy as np
 
 
 class LimitIterDatasetTest(parameterized.TestCase):
@@ -75,6 +76,13 @@ class LimitIterDatasetTest(parameterized.TestCase):
     ds = dataset.MapDataset.range(0, 10).batch(3).to_iter_dataset()
     limited_ds = limit.LimitIterDataset(ds, count=2)
     test_util.assert_equal_output_after_checkpoint(limited_ds)
+
+  def test_element_spec(self):
+    ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
+    limited_ds = limit.LimitIterDataset(ds, count=2)
+    spec = dataset.get_element_spec(limited_ds)
+    self.assertEqual(spec.dtype, np.int64)
+    self.assertEqual(spec.shape, ())
 
 
 if __name__ == "__main__":

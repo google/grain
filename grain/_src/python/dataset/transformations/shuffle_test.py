@@ -17,6 +17,7 @@ from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import shuffle
+import numpy as np
 
 
 class ShuffleMapDatasetTest(parameterized.TestCase):
@@ -67,6 +68,12 @@ class ShuffleMapDatasetTest(parameterized.TestCase):
   def test_init_with_invalid_seed_returns_value_error(self, seed):
     with self.assertRaises(ValueError):
       shuffle.ShuffleMapDataset(dataset.MapDataset.range(400), seed=seed)
+
+  def test_element_spec(self):
+    ds = shuffle.ShuffleMapDataset(dataset.MapDataset.range(2), seed=42)
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(spec.dtype, np.int64)
+    self.assertEqual(spec.shape, ())
 
 
 class WindowShuffleMapDatasetTest(absltest.TestCase):
@@ -153,6 +160,14 @@ class WindowShuffleMapDatasetTest(absltest.TestCase):
     for i in range(0, 400, 10):
       self.assertBetween(elements[i], i, i + (window_size - 1))
 
+  def test_element_spec(self):
+    ds = shuffle.WindowShuffleMapDataset(
+        dataset.MapDataset.range(20), window_size=5, seed=42
+    )
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(spec.dtype, np.int64)
+    self.assertEqual(spec.shape, ())
+
 
 class WindowShuffleInterDatasetTest(absltest.TestCase):
   _DATASET_SIZE = 30
@@ -222,6 +237,14 @@ class WindowShuffleInterDatasetTest(absltest.TestCase):
     with self.assertRaises(StopIteration):
       for _ in range(self._DATASET_SIZE + 1):
         next(ds_iter)
+
+  def test_element_spec(self):
+    ds = shuffle.WindowShuffleIterDataset(
+        self.range_iter_ds, window_size=self._WINDOW_SIZE, seed=42
+    )
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(spec.dtype, np.int64)
+    self.assertEqual(spec.shape, ())
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Implements slice transformation."""
-from typing import Sequence, TypeVar
+from typing import Any, Sequence, TypeVar
 
 from grain._src.python.dataset import dataset
 
@@ -57,3 +57,7 @@ class SliceMapDataset(dataset.MapDataset[T]):
 
   def __str__(self) -> str:
     return f"SliceMapDataset[{self._start}:{self._stop}:{self._step}]"
+
+  @property
+  def _element_spec(self) -> Any:
+    return dataset.get_element_spec(self._parent)

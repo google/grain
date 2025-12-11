@@ -1604,6 +1604,10 @@ class _WithSeedMapDataset(MapDataset[T]):
   def __str__(self):
     return "WithOptionsMapDataset"
 
+  @property
+  def _element_spec(self) -> Any:
+    return get_element_spec(self._parent)
+
 
 class _WithSeedIterDataset(IterDataset[T]):
   """Holds seed used by downstream transformations."""
@@ -1617,6 +1621,10 @@ class _WithSeedIterDataset(IterDataset[T]):
 
   def __str__(self):
     return "WithOptionsIterDataset"
+
+  @property
+  def _element_spec(self) -> Any:
+    return get_element_spec(self._parent)
 
 
 class WithOptionsIterDataset(IterDataset[T]):
@@ -1664,6 +1672,10 @@ class WithOptionsIterDataset(IterDataset[T]):
 
   def __str__(self):
     return f"WithOptionsIterDataset(options={self.options})"
+
+  @property
+  def _element_spec(self) -> Any:
+    return get_element_spec(self._parent)
 
 
 def is_thread_prefetch_injection_enabled() -> bool:

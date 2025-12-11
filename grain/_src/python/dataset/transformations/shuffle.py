@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 import copy
-from typing import Sequence, TypeVar
+from typing import Any, Sequence, TypeVar
 
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
@@ -82,6 +82,10 @@ class ShuffleMapDataset(dataset.MapDataset[T]):
       shuffled_indices = [self._shuffled_index(index) for index in indices]
     return self._parent._getitems(shuffled_indices)  # pylint: disable=protected-access
 
+  @property
+  def _element_spec(self) -> Any:
+    return dataset.get_element_spec(self._parent)
+
 
 class WindowShuffleMapDataset(dataset.MapDataset[T]):
   """Shuffles the parent dataset within a given window.
@@ -130,6 +134,10 @@ class WindowShuffleMapDataset(dataset.MapDataset[T]):
         self._parent._getitems(shuffled_indices)  # pylint: disable=protected-access
     )
 
+  @property
+  def _element_spec(self) -> Any:
+    return dataset.get_element_spec(self._parent)
+
 
 class WindowShuffleIterDataset(dataset.IterDataset[T]):
   """Shuffles the parent dataset within a given window.
@@ -154,6 +162,10 @@ class WindowShuffleIterDataset(dataset.IterDataset[T]):
 
   def __str__(self) -> str:
     return "WindowShuffleIterDataset"
+
+  @property
+  def _element_spec(self) -> Any:
+    return dataset.get_element_spec(self._parent)
 
 
 class _WindowShuffleDatasetIterator(dataset.DatasetIterator[T]):

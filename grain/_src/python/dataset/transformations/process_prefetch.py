@@ -177,6 +177,10 @@ class ProcessPrefetchIterDataset(dataset.IterDataset[T]):
         self._worker_init_fn,
     )
 
+  @property
+  def _element_spec(self) -> Any:
+    return dataset.get_element_spec(self._parent)
+
 
 def _put_dataset_elements_in_buffer(
     pickled_parse_debug_flags_fn: bytes,

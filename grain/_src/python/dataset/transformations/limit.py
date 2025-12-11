@@ -84,3 +84,7 @@ class LimitIterDataset(dataset.IterDataset[T]):
 
   def __str__(self) -> str:
     return f"LimitIterDataset(count={self._count})"
+
+  @property
+  def _element_spec(self) -> Any:
+    return dataset.get_element_spec(self._parent)

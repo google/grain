@@ -20,6 +20,7 @@ from absl.testing import parameterized
 from grain._src.python.dataset import dataset
 import grain._src.python.dataset.transformations.zip as zip_ds
 import grain._src.python.testing.experimental as test_util
+import numpy as np
 
 
 class ZipMapDatasetTest(parameterized.TestCase):
@@ -67,6 +68,15 @@ class ZipMapDatasetTest(parameterized.TestCase):
     expected_elements = [ds[i] for i in indices]
     actual_elements = ds._getitems(indices)
     self.assertEqual(expected_elements, actual_elements)
+
+  def test_element_spec(self):
+    ds = zip_ds.ZipMapDataset(
+        parents=[dataset.MapDataset.range(2), dataset.MapDataset.range(2)]
+    )
+    specs = dataset.get_element_spec(ds)
+    for spec in specs:
+      self.assertEqual(spec.dtype, np.int64)
+      self.assertEqual(spec.shape, ())
 
 
 class ZipIterDatasetTest(parameterized.TestCase):
@@ -152,6 +162,18 @@ class ZipIterDatasetTest(parameterized.TestCase):
         parents=[p.to_iter_dataset() for p in self.ds_list]
     )
     test_util.assert_equal_output_after_checkpoint(ds)
+
+  def test_element_spec(self):
+    ds = zip_ds.ZipIterDataset(
+        parents=[
+            dataset.MapDataset.range(2).to_iter_dataset(),
+            dataset.MapDataset.range(2).to_iter_dataset(),
+        ]
+    )
+    specs = dataset.get_element_spec(ds)
+    for spec in specs:
+      self.assertEqual(spec.dtype, np.int64)
+      self.assertEqual(spec.shape, ())
 
 
 if __name__ == "__main__":

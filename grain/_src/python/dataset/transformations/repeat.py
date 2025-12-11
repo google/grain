@@ -13,7 +13,7 @@
 # limitations under the License.
 """Implements repeat transformation."""
 import sys
-from typing import Optional, Sequence, TypeVar
+from typing import Any, Optional, Sequence, TypeVar
 
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
@@ -74,6 +74,10 @@ class RepeatMapDataset(dataset.MapDataset[T]):
       # Use elements from the first epoch.
       index = index % self._parent_length
     return self._stats.record_output_spec(self._parent[index])
+
+  @property
+  def _element_spec(self) -> Any:
+    return dataset.get_element_spec(self._parent)
 
 
 class _RepeatDatasetIterator(dataset.DatasetIterator[T]):
@@ -143,3 +147,7 @@ class RepeatIterDataset(dataset.IterDataset[T]):
 
   def __str__(self) -> str:
     return f"RepeatIterDataset(num_epochs={self._num_epochs})"
+
+  @property
+  def _element_spec(self) -> Any:
+    return dataset.get_element_spec(self._parent)

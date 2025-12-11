@@ -968,6 +968,13 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
         ],
     )
 
+  def test_element_spec(self):
+    ds = dataset.MapDataset.range(2).to_iter_dataset()
+    ds = ds.mp_prefetch(options.MultiprocessingOptions(num_workers=2))
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(spec.dtype, np.int64)
+    self.assertEqual(spec.shape, ())
+
 
 class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
 
@@ -1235,6 +1242,13 @@ class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
       self.assertGreater(count, 0)
       time.sleep(1)
       self.assertGreater(count, 8)
+
+  def test_element_spec(self):
+    ds = dataset.MapDataset.range(2).to_iter_dataset()
+    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=1)
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(spec.dtype, np.int64)
+    self.assertEqual(spec.shape, ())
 
 
 class _MpContextCheckIterDataset(dataset.IterDataset[_T]):

@@ -15,7 +15,7 @@
 
 from collections.abc import Sequence
 import functools
-from typing import TypeVar
+from typing import Any, TypeVar
 import weakref
 
 from grain._src.python import options as grain_options
@@ -210,6 +210,8 @@ class InterleaveIterDataset(dataset.IterDataset[T]):
     ds = ds.mp_prefetch(ds, 2)
     for element in ds:
       ...
+
+  Element spec inference assumes that input datasets have the same element spec.
   """
 
   def __init__(
@@ -267,3 +269,8 @@ class InterleaveIterDataset(dataset.IterDataset[T]):
         f"InterleaveIterDataset([{len(self._datasets)} datasets],"
         f" cycle_length={self._cycle_length})"
     )
+
+  @property
+  def _element_spec(self) -> Any:
+    # Assumes that interleaved datasets have the same element spec.
+    return dataset.get_element_spec(self._datasets[0])

@@ -42,6 +42,10 @@ class CacheIterDataset(dataset.IterDataset[T]):
   def __str__(self) -> str:
     return f"CacheIterDataset(parent={self._parent})"
 
+  @property
+  def _element_spec(self) -> Any:
+    return self._parent._element_spec
+
 
 class _InMemoryCacheDatasetIterator(dataset.DatasetIterator[T]):
   """Iterator for CacheIterDataset with in-memory caching."""

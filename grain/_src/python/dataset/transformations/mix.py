@@ -165,6 +165,11 @@ class MixedMapDataset(dataset.MapDataset[T]):
 
     return self._stats.record_output_spec_for_batch(mixed_elements)
 
+  @property
+  def _element_spec(self) -> Any:
+    # Assumes that mixed datasets have the same element spec.
+    return dataset.get_element_spec(self._parents[0])
+
 
 class _MixedDatasetIterator(dataset.DatasetIterator[T]):
   """Iterator that mixes elements from iterators based on given proportions.
@@ -281,6 +286,11 @@ class MixedIterDataset(dataset.IterDataset[T]):
         f"MixedIterDataset([{len(self._parents)} parents],"
         f" proportions={self._proportions})"
     )
+
+  @property
+  def _element_spec(self) -> Any:
+    # Assumes that mixed datasets have the same element spec.
+    return dataset.get_element_spec(self._parents[0])
 
 
 def _float_to_int_proportions(

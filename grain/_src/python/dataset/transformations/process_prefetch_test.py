@@ -846,6 +846,16 @@ class MultiprocessingPrefetchTest(parameterized.TestCase):
         ],
     )
 
+  def test_element_spec(self):
+    ds = dataset.MapDataset.range(2).to_iter_dataset()
+    ds = process_prefetch.multiprocess_prefetch(
+        ds,
+        num_workers=2,
+    )
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(spec.dtype, np.int64)
+    self.assertEqual(spec.shape, ())
+
 
 if __name__ == '__main__':
   absltest.main()

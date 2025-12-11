@@ -389,6 +389,10 @@ class MultiprocessPrefetchIterDataset(dataset.IterDataset[T]):
         self._always_report_worker_state,
     )
 
+  @property
+  def _element_spec(self) -> Any:
+    return dataset.get_element_spec(self._parent)
+
 
 # Keys in `MultiprocessPrefetchDatasetIterator` checkpoints.
 _WORKERS_STATE = "workers_state"
@@ -834,6 +838,10 @@ class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
         parent_iter, self._prefetch_buffer_size
     )
 
+  @property
+  def _element_spec(self) -> Any:
+    return dataset.get_element_spec(self._parent)
+
 
 # Type for the iterator state.
 StateT = dict[str, Any]
@@ -1016,6 +1024,10 @@ class _MpContextIterDataset(dataset.IterDataset[T]):
 
   def __str__(self) -> str:
     return f"_MpContextIterDataset(mp_context={self._mp_context})"
+
+  @property
+  def _element_spec(self) -> Any:
+    return dataset.get_element_spec(self._parent)
 
 
 def multithread_prefetch(
