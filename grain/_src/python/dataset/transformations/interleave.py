@@ -58,6 +58,7 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
                 # _InterleaveDatasetIterator. This would prolong its lifetime
                 # leading to increased resource usage.
                 interleave_iterator=weakref.ref(self),
+                start_prefetch=True,
             )
         )
         .to_iter_dataset(
@@ -75,10 +76,15 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     self._iterators_in_use: list[dataset.DatasetIterator[T] | None] = [
         None
     ] * self._cycle_length
+    self._exhausted_iterator_state: list[dict[str, Any] | None] = [
+        None
+    ] * self._cycle_length
+    self._started = False
 
   @stats.record_next_duration_if_output
   def __next__(self) -> T:
     self._assert_not_closed()
+    self._started = True
     while True:
       if iterator_to_use := self._iterators_in_use[self._next_index_in_cycle]:
         try:
@@ -88,12 +94,19 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
           ) % self._cycle_length
           return result
         except StopIteration:
+          self._exhausted_iterator_state[self._next_index_in_cycle] = (
+              iterator_to_use.get_state()
+          )
           self._iterators_in_use[self._next_index_in_cycle] = None
+          self._next_index_in_cycle = (
+              self._next_index_in_cycle + 1
+          ) % self._cycle_length
           continue
       if self._next_index_in_datasets < len(self._datasets):
         self._iterators_in_use[self._next_index_in_cycle] = next(
             self._prefetch_ds_iter
         )
+        self._exhausted_iterator_state[self._next_index_in_cycle] = None
         self._iterators_in_use_indices[self._next_index_in_cycle] = (
             self._next_index_in_datasets
         )
@@ -106,33 +119,69 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
         ) % self._cycle_length
 
   def get_state(self):
+    iterators_in_use_states = [None] * self._cycle_length
+    for i in range(self._cycle_length):
+      it = self._iterators_in_use[i]
+      if it is not None:
+        iterators_in_use_states[i] = it.get_state()
+      elif self._exhausted_iterator_state[i] is not None:
+        iterators_in_use_states[i] = self._exhausted_iterator_state[i]
+      elif self._next_index_in_datasets >= len(self._datasets):
+        break
+      else:
+        if self._started:
+          it = next(self._prefetch_ds_iter)
+        else:
+          it = _add_prefetch_and_make_iterator(
+              self._datasets[self._next_index_in_datasets],
+              interleave_iterator=weakref.ref(self),
+              start_prefetch=self._started,
+          )
+        self._iterators_in_use[i] = it
+        iterators_in_use_states[i] = it.get_state()
+        self._iterators_in_use_indices[i] = self._next_index_in_datasets
+        self._next_index_in_datasets += 1
+    if not self._started:
+      self._prefetch_ds_iter.set_state(
+          {"next_index": self._next_index_in_datasets}
+      )
+    # Use int instead of bool as it is friendly for Pathways remote python.
+    exhausted = [
+        int(self._exhausted_iterator_state[i] is not None)
+        for i in range(self._cycle_length)
+    ]
     return {
-        "prefetch_ds_iter_states": self._prefetch_ds_iter.get_state(),
         "next_index_in_cycle": self._next_index_in_cycle,
         "next_index_in_datasets": self._next_index_in_datasets,
         "iterators_in_use_indices": self._iterators_in_use_indices.copy(),
-        "iterators_in_use_states": [
-            (None if it is None else it.get_state())
-            for it in self._iterators_in_use
-        ],
+        "iterators_in_use_states": iterators_in_use_states,
+        "exhausted": exhausted,
     }
 
   def set_state(self, state):
-    self._prefetch_ds_iter.set_state(state["prefetch_ds_iter_states"])
+    self._prefetch_ds_iter.set_state(
+        {"next_index": state["next_index_in_datasets"]}
+    )
     self._next_index_in_cycle = state["next_index_in_cycle"]
     self._next_index_in_datasets = state["next_index_in_datasets"]
-    if not self._next_index_in_datasets and not self._next_index_in_cycle:
-      return
     self._iterators_in_use_indices = state["iterators_in_use_indices"]
+    exhausted = state["exhausted"]
     for index_in_cycle, (index_in_datasets, it_state) in enumerate(
         zip(self._iterators_in_use_indices, state["iterators_in_use_states"])
     ):
       if it_state is None:
         self._iterators_in_use[index_in_cycle] = None
-      else:
-        iterator = self._datasets[index_in_datasets].__iter__()
+      elif exhausted[index_in_cycle] == 0:
+        iterator = _add_prefetch_and_make_iterator(
+            self._datasets[index_in_datasets],
+            interleave_iterator=weakref.ref(self),
+            start_prefetch=False,
+        )
         iterator.set_state(it_state)
         self._iterators_in_use[index_in_cycle] = iterator
+      else:
+        self._exhausted_iterator_state[index_in_cycle] = it_state
+        self._iterators_in_use[index_in_cycle] = None
 
   def close(self) -> None:
     """Closes the iterator and shuts down the iterator prefetching."""
@@ -154,6 +203,7 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
 def _add_prefetch_and_make_iterator(
     ds: dataset.IterDataset[T] | dataset.MapDataset[T],
     interleave_iterator: weakref.ref[_InterleaveDatasetIterator[T]],
+    start_prefetch: bool,
 ) -> dataset.DatasetIterator[T]:
   """Adds prefetching to an IterDataset and returns an iterator.
 
@@ -164,6 +214,7 @@ def _add_prefetch_and_make_iterator(
   Args:
     ds: The dataset to create an iterator from.
     interleave_iterator: The `InterleaveDatasetIterator` instance.
+    start_prefetch: Whether to start the prefetching on iterator creation.
 
   Returns:
     A `dataset.DatasetIterator` for the given dataset, with prefetching
@@ -184,7 +235,8 @@ def _add_prefetch_and_make_iterator(
   # Propagate options applied after InterleaveIterDataset to the iterators that
   # are being interleaved.
   iterator._ctx.dataset_options = interleave_iterator_obj._ctx.dataset_options.merge(iterator._ctx.dataset_options)  # pylint: disable=protected-access
-  iterator.start_prefetch()
+  if start_prefetch:
+    iterator.start_prefetch()
   return iterator
 
 

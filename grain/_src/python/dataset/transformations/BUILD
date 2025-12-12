@@ -264,6 +264,7 @@ py_test(
         "//grain/_src/python:options",
         "//grain/_src/python/dataset",
         "//grain/_src/python/dataset:base",
+        "//grain/_src/python/testing:experimental",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
         "@pypi//numpy:pkg",
