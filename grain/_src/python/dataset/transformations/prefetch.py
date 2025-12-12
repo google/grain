@@ -32,6 +32,7 @@ from typing import Any, Generic, Optional, Protocol, TypeVar
 
 import cloudpickle
 from concurrent import futures
+from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import tree_lib
 import multiprocessing as mp
 from grain._src.python import grain_pool
