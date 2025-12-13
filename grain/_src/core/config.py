@@ -124,6 +124,13 @@ _RELAY_SIGTERM_TO_MAIN = flags.DEFINE_bool(
     "If True, grain workers will relay SIGTERM to the main process.",
 )
 
+_TRACEBACK_FILTERING = flags.DEFINE_enum(
+    "grain_py_traceback_filtering",
+    "auto",
+    ["auto", "off", "tracebackhide", "quiet_remove_frames", "remove_frames"],
+    "How Grain filters internal stack frames from the traceback upon errors.",
+)
+
 _GRAIN_FLAGS = (
     _INTERLEAVED_SHUFFLE,
     _INTERLEAVED_SHUFFLE_BLOCK_SIZE,
@@ -136,6 +143,7 @@ _GRAIN_FLAGS = (
     _DEBUG_MODE,
     _DATASET_VISUALIZATION_OUTPUT_DIR,
     _RELAY_SIGTERM_TO_MAIN,
+    _TRACEBACK_FILTERING,
 )
 
 _grain_experiment_metric = monitoring.Metric(
