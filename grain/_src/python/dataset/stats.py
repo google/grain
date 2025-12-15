@@ -62,20 +62,6 @@ _self_time_ns_histogram = monitoring.EventMetric(
     bucketer=monitoring.Bucketer.PowersOf(2.0),
 )
 
-_next_duration_ns_histogram = monitoring.EventMetric(
-    "/grain/python/dataset/next_duration_ns",
-    metadata=monitoring.Metadata(
-        description=(
-            "Histogram of durations of every `__next__` call on the output"
-            " iterator. Each data point is the duration value of `__next__`"
-            " call."
-        ),
-        units=monitoring.Units.NANOSECONDS,
-    ),
-    root=grain_monitoring.get_monitoring_root(),
-    bucketer=monitoring.Bucketer.PowersOf(2.0),
-)
-
 T = TypeVar("T")
 # Time between two consecutive monitoring reports.
 _REPORTING_PERIOD_SEC = 5
@@ -318,16 +304,9 @@ def record_next_duration_if_output(next_fn):
           _ipl_stage_name=str(iterator),
           _ipl_stage_id=id(iterator),
       ):
-        start_time = time.perf_counter_ns()
-        result = next_fn(iterator)
+        return next_fn(iterator)
     else:
-      start_time = time.perf_counter_ns()
-      result = next_fn(iterator)
-
-    if iterator._stats._is_output:  # pylint:disable=protected-access
-      next_duration_ns = time.perf_counter_ns() - start_time
-      _next_duration_ns_histogram.Record(next_duration_ns)
-    return result
+      return next_fn(iterator)
 
   return wrapper
 

@@ -50,6 +50,7 @@ import builtins
 from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Sequence
 import functools
 import json
+import time
 from typing import Any, Generic, TypeVar, Union, cast, overload
 import warnings
 
@@ -73,6 +74,20 @@ _api_usage_counter = monitoring.Counter(
     ),
     root=grain_monitoring.get_monitoring_root(),
     fields=[("name", str)],
+)
+
+_next_duration_ns_histogram = monitoring.EventMetric(
+    "/grain/python/dataset/next_duration_ns",
+    metadata=monitoring.Metadata(
+        description=(
+            "Histogram of durations of every `__next__` call on the output"
+            " iterator. Each data point is the duration value of `__next__`"
+            " call."
+        ),
+        units=monitoring.Units.NANOSECONDS,
+    ),
+    root=grain_monitoring.get_monitoring_root(),
+    bucketer=monitoring.Bucketer.PowersOf(2.0),
 )
 
 T = TypeVar("T")
@@ -1683,6 +1698,19 @@ def is_thread_prefetch_injection_enabled() -> bool:
   return False
 
 
+def _record_next_duration(next_fn):
+  """Records the duration of the `__next__` call on the output iterator node."""
+
+  @functools.wraps(next_fn)
+  def wrapper():
+    start_time = time.perf_counter_ns()
+    result = next_fn()
+    _next_duration_ns_histogram.Record(time.perf_counter_ns() - start_time)
+    return result
+
+  return wrapper
+
+
 class _OutputIterDataset(IterDataset[T]):
   """Dataset that is injected at the end of every pipeline."""
 
@@ -1700,6 +1728,8 @@ class _OutputIterDataset(IterDataset[T]):
     ):
       if not prefetch.is_prefetch_iterator(iterator):
         iterator = prefetch.ThreadPrefetchDatasetIterator(iterator, 1)
+    # Wrap the __next__ function to record the duration of the call.
+    iterator.__next__ = _record_next_duration(iterator.__next__)
     return iterator
 
 
