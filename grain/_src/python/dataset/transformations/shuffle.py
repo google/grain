@@ -222,6 +222,7 @@ class _WindowShuffleDatasetIterator(dataset.DatasetIterator[T]):
     )
 
   @stats.record_next_duration_if_output
+  @stats.trace_input_pipeline_next(stage_category=stats.IPL_CAT_PREPROCESSING)
   def __next__(self):
     # Window is empty, fill up the next window.
     if not self._window:

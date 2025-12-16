@@ -306,6 +306,7 @@ class _MapDatasetIterator(dataset.DatasetIterator[T]):
     self._transform_name = transform_name
 
   @stats.record_next_duration_if_output
+  @stats.trace_input_pipeline_next(stage_category=stats.IPL_CAT_PREPROCESSING)
   def __next__(self):
     element = next(self._parent)
     with self._stats.record_self_time():
@@ -341,6 +342,7 @@ class _RandomMapDatasetIterator(dataset.DatasetIterator[T]):
     self._transform_name = transform_name
 
   @stats.record_next_duration_if_output
+  @stats.trace_input_pipeline_next(stage_category=stats.IPL_CAT_PREPROCESSING)
   def __next__(self):
     element = next(self._parent)
     with self._stats.record_self_time():
@@ -387,6 +389,7 @@ class _MapWithIndexDatasetIterator(dataset.DatasetIterator[T]):
     self._counter = 0
 
   @stats.record_next_duration_if_output
+  @stats.trace_input_pipeline_next(stage_category=stats.IPL_CAT_PREPROCESSING)
   def __next__(self):
     element = next(self._parent)
     with self._stats.record_self_time():

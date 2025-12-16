@@ -82,6 +82,7 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     self._started = False
 
   @stats.record_next_duration_if_output
+  @stats.trace_input_pipeline_next(stage_category=stats.IPL_CAT_PREPROCESSING)
   def __next__(self) -> T:
     self._assert_not_closed()
     self._started = True

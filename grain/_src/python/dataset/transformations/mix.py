@@ -198,6 +198,7 @@ class _MixedDatasetIterator(dataset.DatasetIterator[T]):
     self._stop = False
 
   @stats.record_next_duration_if_output
+  @stats.trace_input_pipeline_next(stage_category=stats.IPL_CAT_PREPROCESSING)
   def __next__(self):
     if self._stop:
       # Although there may be elements available in some parent datasets, do not

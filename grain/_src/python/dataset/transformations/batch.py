@@ -228,6 +228,7 @@ class _BatchDatasetIterator(dataset.DatasetIterator[T]):
     self._batch_fn = batch_fn
 
   @stats.record_next_duration_if_output
+  @stats.trace_input_pipeline_next(stage_category=stats.IPL_CAT_PREPROCESSING)
   def __next__(self) -> T:
     values = []
     for _ in range(self._batch_size):

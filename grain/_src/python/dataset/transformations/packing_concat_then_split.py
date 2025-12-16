@@ -400,6 +400,7 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
     return remainder
 
   @stats.record_next_duration_if_output
+  @stats.trace_input_pipeline_next(stage_category=stats.IPL_CAT_PREPROCESSING)
   def __next__(self):
     if self._packed_elements:
       self._state.elements_from_buffer_after_checkpoint += 1

@@ -191,6 +191,9 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     )
 
   @dataset_stats.record_next_duration_if_output
+  @dataset_stats.trace_input_pipeline_next(
+      stage_category=dataset_stats.IPL_CAT_PREFETCH
+  )
   def __next__(self) -> T:
     self._assert_not_closed()
     # The time recorded here is the time spent in prefetch node to return an
@@ -704,6 +707,9 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     return self
 
   @dataset_stats.record_next_duration_if_output
+  @dataset_stats.trace_input_pipeline_next(
+      stage_category=dataset_stats.IPL_CAT_PREFETCH
+  )
   def __next__(self) -> T:
     self._assert_not_closed()
     self._ensure_iterator_initialized()
@@ -951,6 +957,9 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._prefetch_thread.start()
 
   @dataset_stats.record_next_duration_if_output
+  @dataset_stats.trace_input_pipeline_next(
+      stage_category=dataset_stats.IPL_CAT_PREFETCH
+  )
   def __next__(self):
     timer = dataset_stats.Timer()
     with timer:

@@ -152,6 +152,9 @@ class _FilterDatasetIterator(dataset.DatasetIterator[T]):
     )
 
   @dataset_stats.record_next_duration_if_output
+  @dataset_stats.trace_input_pipeline_next(
+      stage_category=dataset_stats.IPL_CAT_PREPROCESSING
+  )
   def __next__(self):
     value = None
     passed_filter = False

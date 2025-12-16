@@ -35,6 +35,7 @@ class _LimitDatasetIterator(dataset.DatasetIterator[T]):
     self._count_elements_read = 0
 
   @stats.record_next_duration_if_output
+  @stats.trace_input_pipeline_next(stage_category=stats.IPL_CAT_PREPROCESSING)
   def __next__(self):
     if self._count_elements_read >= self._count:
       raise StopIteration

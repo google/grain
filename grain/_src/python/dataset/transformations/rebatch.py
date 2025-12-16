@@ -97,6 +97,7 @@ class _RebatchDatasetIterator(dataset.DatasetIterator):
     return tree_lib.flatten(pytree_element)
 
   @stats.record_next_duration_if_output
+  @stats.trace_input_pipeline_next(stage_category=stats.IPL_CAT_PREPROCESSING)
   def __next__(self):
     timer = stats.Timer()
 
