@@ -222,3 +222,12 @@ def _open_leaf_from_shm(leaf: Any) -> Any:
 def open_from_shm(struct: Any) -> Any:
   """Recovers leaf ndarrays of the structure from shared memory."""
   return tree_lib.map_structure(_open_leaf_from_shm, struct)
+
+
+def _unlink_shm_if_metadata(obj: Any):
+  if isinstance(obj, SharedMemoryArrayMetadata):
+    obj.close_and_unlink_shm()
+
+
+def unlink_shm(struct: Any):
+  tree_lib.map_structure(_unlink_shm_if_metadata, struct)
