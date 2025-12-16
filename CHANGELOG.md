@@ -6,6 +6,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features:
+  * Adds support for filtering Grain-internal stack frames from user-thrown
+    errors.
 
 * Breaking changes:
 

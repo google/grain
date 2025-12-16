@@ -220,3 +220,24 @@ py_library(
     ],
     srcs_version = "PY3",
 )
+
+py_library(
+    name = "traceback_util",
+    srcs = ["traceback_util.py"],
+    srcs_version = "PY3",
+    tags = ["ignore_for_dep=third_party.py.IPython"],
+    deps = [
+        ":config",
+    ],
+)
+
+py_test(
+    name = "traceback_util_test",
+    srcs = ["traceback_util_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":config",
+        ":traceback_util",
+        "@abseil-py//absl/testing:absltest",
+    ],
+)
