@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2020 The JAX Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,7 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Utility for filtering stack traces for readability."""
+"""Utility for filtering stack traces for readability.
+
+Copied and modified from jax-ml/jax/jax/_src/traceback_util.py
+"""
 
 from __future__ import annotations
 
