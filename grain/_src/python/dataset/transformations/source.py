@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import contextlib  # pylint: disable=unused-import
 import threading
 import time
 from typing import Any, Sequence, Union
@@ -81,14 +82,20 @@ class SourceMapDataset(dataset.MapDataset):
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
-    with self._stats.record_self_time():
-      start_time = time.perf_counter_ns()
-      result = self._stats.record_output_spec(self._source[index % len(self)])
-      stop_time = time.perf_counter_ns()
-      _maybe_record_source_read_time(
-          stop_time - start_time, self._source.__class__.__name__
-      )
-      return result
+    return self._instrumented_getitem(index)
+
+  def _instrumented_getitem(self, index):
+    """Instrumented __getitem__ private implementation."""
+    tagging_ctx = contextlib.nullcontext()
+    with tagging_ctx:
+      with self._stats.record_self_time():
+        start_time = time.perf_counter_ns()
+        result = self._stats.record_output_spec(self._source[index % len(self)])
+        stop_time = time.perf_counter_ns()
+        _maybe_record_source_read_time(
+            stop_time - start_time, self._source.__class__.__name__
+        )
+        return result
 
   def _getitems(self, indices: Sequence[int]):
     if not isinstance(
