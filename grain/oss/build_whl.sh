@@ -28,6 +28,9 @@ main() {
   write_to_bazelrc "build:macos --linkopt=-Wl,-undefined,dynamic_lookup"
   write_to_bazelrc "build:macos --host_linkopt=-Wl,-undefined,dynamic_lookup"
 
+  # Speed up the build.
+  write_to_bazelrc "build --jobs=4"
+
   write_to_bazelrc "build --@rules_python//python/config_settings:python_version=${PYTHON_VERSION}"
   # Set platform-wise file extension for extension modules.
   case "$(uname)" in
