@@ -59,13 +59,13 @@ jobs:
           which bazel
           bazel version
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install rsync for Windows
         if: runner.os == 'Windows'
         run: choco install --no-progress rsync
-      - uses: "actions/checkout@v3"
+      - uses: "actions/checkout@v6"
       - name: Create directory and set TEMP_DIR
         if: runner.os == 'Linux' || runner.os == 'macOS'
         run: |
@@ -93,7 +93,7 @@ jobs:
           build_and_test_grain
       - name: Upload Grain artifacts
         if: ${{ inputs.is_ci_tests == 'false' || inputs.is_ci_tests == false }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: built-grain-wheels-${{ matrix.os }}-${{ matrix.python-version }}
           path: "${{ env.WHL_DIR }}/all_dist/*.whl"
@@ -109,7 +109,7 @@ jobs:
       url: ${{ inputs.pypi_project_url }}
     steps:
       - name: Download Grain artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: built-grain-wheels-*
           path: dist/
