@@ -17,11 +17,14 @@ import functools
 import threading
 from typing import Any, Callable, Protocol, Sequence, TypeVar, runtime_checkable
 
+from grain._src.core import traceback_util
 from grain._src.core import transforms
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
 import numpy as np
 
+
+traceback_util.register_exclusion(__file__)
 
 T = TypeVar("T")  # pylint: disable=invalid-name
 

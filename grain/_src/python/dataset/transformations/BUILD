@@ -20,6 +20,7 @@ filegroup(
         "shuffle.py",
         "slice.py",
         "source.py",
+        "traceback_filter.py",
     ],
 )
 
@@ -380,5 +381,16 @@ py_test(
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
         "@pypi//numpy:pkg",
+    ],
+)
+
+py_test(
+    name = "traceback_filter_test",
+    srcs = ["traceback_filter_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        "//grain",
+        "//grain/_src/core:traceback_util",
+        "@abseil-py//absl/testing:absltest",
     ],
 )
