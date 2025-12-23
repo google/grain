@@ -59,7 +59,7 @@ def _initialize_prefetch_stats(
   config = dataset_stats.StatsConfig(
       name=str(iterator),
       transform_mutates_spec=iterator._MUTATES_ELEMENT_SPEC,  # pylint: disable=protected-access
-      is_prefetch=True,
+      node_type=dataset_stats.NodeType.PREFETCH,
       iter_weakref=dataset_stats.HashableWeakRef(iterator),
   )
   if stats_in_queues is not None:

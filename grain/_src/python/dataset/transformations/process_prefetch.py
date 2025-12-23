@@ -289,7 +289,7 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     stats_config = dataset_stats.StatsConfig(
         name=str(self),
         transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
-        is_prefetch=True,
+        node_type=dataset_stats.NodeType.PREFETCH,
         iter_weakref=dataset_stats.HashableWeakRef(self),
     )
     if self._stats_in_queue is not None:

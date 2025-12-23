@@ -266,6 +266,7 @@ py_test(
         "//grain/_src/python/dataset:base",
         "//grain/_src/python/testing:experimental",
         "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:flagsaver",
         "@abseil-py//absl/testing:parameterized",
         "@pypi//numpy:pkg",
     ],

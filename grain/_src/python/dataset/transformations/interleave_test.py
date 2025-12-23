@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from absl.testing import absltest
+from absl.testing import flagsaver
 from absl.testing import parameterized
 import multiprocessing as mp
 from grain._src.python import options
@@ -174,6 +175,43 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
     spec = dataset.get_element_spec(ds)
     self.assertEqual(spec.dtype, np.int64)
     self.assertEqual(spec.shape, ())
+
+  @flagsaver.flagsaver(grain_py_debug_mode=True)
+  def test_interleave_stats(self):
+    ds = dataset.MapDataset.range(10000).map(lambda x: x + 1)
+    ds = ds.to_iter_dataset()
+    ds = interleave.InterleaveIterDataset([ds, ds], cycle_length=2)
+    it = ds.__iter__()
+    next(it)
+    next(it)
+    summary = dataset.get_execution_summary(it)
+    node_names = {node.name for node in summary.nodes.values()}
+    expected_nodes = [
+        "RangeMapDataset",
+        "MapMapDataset",
+        "PrefetchDatasetIterator",
+        "ThreadPrefetchDatasetIterator",
+        "InterleaveDatasetIterator",
+    ]
+    for expected_node in expected_nodes:
+      self.assertTrue(any(expected_node in name for name in node_names))
+    self.assertLen(node_names, len(expected_nodes))
+    print(summary)
+
+  @flagsaver.flagsaver(grain_py_debug_mode=True)
+  def test_interleave_stats_with_mismatched_dataset_structures(self):
+    ds1 = dataset.MapDataset.range(10000).map(lambda x: x + 1)
+    ds1 = ds1.to_iter_dataset()
+    ds2 = dataset.MapDataset.range(10000).map(lambda x: x + 1).map(lambda x: x)
+    ds2 = ds2.to_iter_dataset()
+    ds = interleave.InterleaveIterDataset([ds1, ds2], cycle_length=2)
+    it = ds.__iter__()
+    next(it)
+    next(it)
+    summary = dataset.get_execution_summary(it)
+    node_names = [node.name for node in summary.nodes.values()]
+    self.assertLen(node_names, 1)
+    self.assertIn("InterleaveDatasetIterator", node_names[0])
 
 
 if __name__ == "__main__":
