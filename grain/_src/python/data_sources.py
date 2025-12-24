@@ -21,6 +21,7 @@ data sources based on storage backends allowing efficient random access
 pipelines.
 """
 
+import abc
 import collections
 from collections.abc import Sequence
 import inspect
