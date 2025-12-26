@@ -16,6 +16,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     use the graduated version instead: `grain.IterDataset.mp_prefetch`.
 
 * Bug fixes:
+  * Fix grouping of parsing transformation inserted by as_dataset
 
 ## Grain 0.2.15 (November 25, 2025)
 
