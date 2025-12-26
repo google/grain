@@ -14,6 +14,9 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 * Deprecations:
   * Deprecates `grain.python.experimental.MultiprocessPrefetchIterDataset`,
     use the graduated version instead: `grain.IterDataset.mp_prefetch`.
+  * Custom implementations of `RandomAccessDataSource` should accept `int`
+    index in `__getitem__`. Legacy paths that handle `SupportsIndex` will still
+    work, but are not necessary since Grain will only pass integer indices.
 
 * Bug fixes:
 
