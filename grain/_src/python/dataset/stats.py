@@ -36,12 +36,16 @@ from absl import logging
 from grain._src.core import config as grain_config
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import profiler
+from grain._src.core import traceback_util
 from grain._src.core import tree_lib
 from grain._src.python.dataset import base
 from grain._src.python.dataset import stats_utils
 from grain.proto import execution_summary_pb2
 
 from grain._src.core import monitoring
+
+
+traceback_util.register_exclusion(__file__)
 
 
 # Registry of weak references to output dataset iterators for collecting
@@ -339,6 +343,9 @@ IPL_CAT_ENQUEUE = "enqueue"
 IPL_CAT_UNKNOWN = "unknown"
 # This stage is for prefetch overheads on main thread.
 IPL_CAT_PREFETCH = "prefetch"
+# Stage used for meta-pipeline operations unrelated to the data processing
+# itself, e.g. traceback filtering.
+IPL_CAT_META = "meta"
 
 
 def trace_input_pipeline(stage_category: str = IPL_CAT_UNKNOWN, **trace_kwargs):

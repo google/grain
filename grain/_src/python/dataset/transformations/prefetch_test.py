@@ -24,6 +24,7 @@ from unittest import mock
 from absl import logging
 from absl.testing import absltest
 from absl.testing import parameterized
+from grain._src.core import config as grain_config
 from grain._src.core import transforms
 import multiprocessing as mp
 from grain._src.python import options
@@ -76,6 +77,7 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
+    grain_config.config.update('py_traceback_filtering', 'off')
     self.range_ds = dataset.MapDataset.range(20)
     self.filtered_range_ds = self.range_ds.filter(
         FilterKeepingOddElementsOnly()

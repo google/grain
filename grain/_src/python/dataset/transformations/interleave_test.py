@@ -192,13 +192,16 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
         "PrefetchDatasetIterator",
         "ThreadPrefetchDatasetIterator",
         "InterleaveDatasetIterator",
+        "TracebackFilterDatasetIterator",
     ]
     for expected_node in expected_nodes:
       self.assertTrue(any(expected_node in name for name in node_names))
     self.assertLen(node_names, len(expected_nodes))
     print(summary)
 
-  @flagsaver.flagsaver(grain_py_debug_mode=True)
+  @flagsaver.flagsaver(
+      grain_py_debug_mode=True, grain_py_traceback_filtering="off"
+  )
   def test_interleave_stats_with_mismatched_dataset_structures(self):
     ds1 = dataset.MapDataset.range(10000).map(lambda x: x + 1)
     ds1 = ds1.to_iter_dataset()

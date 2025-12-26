@@ -55,6 +55,7 @@ import warnings
 
 from etils import epath
 from grain._src.core import monitoring as grain_monitoring
+from grain._src.core import traceback_util
 from grain._src.core import transforms
 from grain._src.python import checkpointing
 from grain._src.python import options as grain_options
@@ -65,6 +66,7 @@ import numpy as np
 
 from grain._src.core import monitoring
 
+traceback_util.register_exclusion(__file__)
 
 _api_usage_counter = monitoring.Counter(
     "/grain/python/lazy_dataset/api",
@@ -1678,6 +1680,11 @@ class WithOptionsIterDataset(IterDataset[T]):
     return get_element_spec(self._parent)
 
 
+def traceback_filter_mode() -> str:
+  """Returns the traceback filter mode."""
+  return grain_config.config.py_traceback_filtering
+
+
 def is_thread_prefetch_injection_enabled() -> bool:
   """Returns whether thread prefetch injection experiment is enabled."""
   return False
@@ -1700,6 +1707,17 @@ class _OutputIterDataset(IterDataset[T]):
     ):
       if not prefetch.is_prefetch_iterator(iterator):
         iterator = prefetch.ThreadPrefetchDatasetIterator(iterator, 1)
+
+    filter_mode = traceback_filter_mode()
+    if filter_mode != "off":
+      # Loaded lazily due to a circular dependency
+      # (dataset <-> traceback_filter).
+      # pylint: disable=g-import-not-at-top
+      from grain._src.python.dataset.transformations import traceback_filter
+      # pylint: enable=g-import-not-at-top
+      iterator = traceback_filter.TracebackFilterDatasetIterator(
+          iterator, traceback_filter_mode=filter_mode
+      )
     return iterator
 
 

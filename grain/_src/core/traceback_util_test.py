@@ -56,8 +56,7 @@ def _assert_exception_with_short_traceback(
         f"Expected {expected_error_type} to be raised, but got"
         f" {type(e)} instead."
     )
-  print(f"traceback: {tb}")
-  self.assertLess(len(tb), 15)
+  self.assertLess(len(tb), 15, f"Traceback is too long: \n{tb}")
 
 
 @traceback_util.run_with_traceback_filter

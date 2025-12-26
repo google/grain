@@ -350,6 +350,7 @@ class MultiprocessingPrefetchTest(parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
+    config.config.update('py_traceback_filtering', 'off')
     ds = dataset.MapDataset.range(20)
     self.iter_ds = ds.to_iter_dataset().filter(FilterKeepingOddElementsOnly())
 
