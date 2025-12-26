@@ -25,6 +25,10 @@ RECORD_KEY = "_record_key"
 # Index of the dataset from which to take the record. Only present when mixing.
 # Starts with 0.
 DATASET_INDEX = "_dataset_index"
+# Index of the dataset group from which to take the dataset. A group is defined
+# by a set of datasets having identical transformations. Only present when
+# mixing. Starts with 0.
+DATASET_GROUP_INDEX = "_dataset_group_index"
 # Epoch for the record. When mixing datasets this is the epoch over the dataset,
 # not the mixture. Starts with 1.
 EPOCH = "_epoch"
@@ -35,5 +39,5 @@ SEED = "_seed"
 RECORD = "_record"
 
 META_FEATURES = frozenset(
-    [INDEX, RECORD_KEY, DATASET_INDEX, EPOCH, SEED, RECORD]
+    [INDEX, RECORD_KEY, DATASET_INDEX, DATASET_GROUP_INDEX, EPOCH, SEED, RECORD]
 )
