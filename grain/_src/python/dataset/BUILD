@@ -54,6 +54,7 @@ py_library(
         "//grain/_src/python:checkpointing",
         "//grain/_src/python:grain_logging",
         "//grain/_src/python:grain_pool",
+        "//grain/_src/python:multiprocessing_common",
         "//grain/_src/python:options",
         "//grain/_src/python:shared_memory_array",
         "//grain/proto:execution_summary_py_pb2",
