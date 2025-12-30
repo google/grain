@@ -248,6 +248,7 @@ class _WindowShuffleDatasetIterator(dataset.DatasetIterator[T]):
         window_index=self._window_index,
         pos_in_window=self._pos_in_window,
         parent_exhausted=self._parent_exhausted,
+        init=self._init,
     )
 
   def set_state(self, state):
@@ -256,6 +257,7 @@ class _WindowShuffleDatasetIterator(dataset.DatasetIterator[T]):
     self._window_index = state["window_index"]
     self._pos_in_window = state["pos_in_window"]
     self._parent_exhausted = state["parent_exhausted"]
+    self._init = state.get("init", False)
     self._fill_and_shuffle_window()
     # Removed previously processed elements from the window.
     for _ in range(min(self._pos_in_window, len(self._window))):
