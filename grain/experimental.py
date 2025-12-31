@@ -19,8 +19,10 @@
 # pylint: disable=g-multiple-import
 # pylint: disable=unused-import
 
-from grain._src.core.transforms import FlatMapTransform
-
+from grain._src.core.transforms import (
+    FlatMapTransform,
+    MapWithIndex as MapWithIndexTransform,
+)
 from grain._src.python.dataset.base import (
     DatasetOptions,
     ExecutionTrackingMode,
@@ -44,6 +46,8 @@ from grain._src.python.dataset.transformations.interleave import (
 )
 from grain._src.python.dataset.transformations.limit import LimitIterDataset
 from grain._src.python.dataset.transformations.map import RngPool
+
+from grain._src.python.dataset.transformations.mix import ConcatenateMapDataset
 from grain._src.python.dataset.transformations.packing import (
     FirstFitPackIterDataset,
     BestFitPackIterDataset,
