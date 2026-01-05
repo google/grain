@@ -8,12 +8,16 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 * New features:
   * Adds support for filtering Grain-internal stack frames from user-thrown
     errors.
+  * Adds experimental support for `get_next_index` and `set_next_index` to fetch
+    and advance a `grain.DatasetIterator` to the given produced element index.
 
 * Breaking changes:
 
 * Deprecations:
   * Deprecates `grain.python.experimental.MultiprocessPrefetchIterDataset`,
     use the graduated version instead: `grain.IterDataset.mp_prefetch`.
+  * Deprecates `grain.python.experimental.ConcatenateMapDataset`, use the
+    graduated version instead: `grain.MapDataset.concatenate`.
 
 * Bug fixes:
 
@@ -31,8 +35,6 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     specification inference.
   * Adds support for changing `IterDataset.mix` components and weights after a
     checkpoint.
-  * Adds experimental support for `get_next_index` and `set_next_index` to fetch
-    and advance a `grain.DatasetIterator` to the given produced element index.
 
 ## Grain 0.2.14 (October 30, 2025)
 
