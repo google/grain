@@ -21,7 +21,6 @@ data sources based on storage backends allowing efficient random access
 pipelines.
 """
 
-import collections
 from collections.abc import Sequence
 import inspect
 import math
@@ -75,10 +74,6 @@ T = TypeVar("T")
 ArrayRecordDataSourcePaths = Union[
     PathLikeOrFileInstruction, Sequence[PathLikeOrFileInstruction]
 ]
-
-_SparseArray = collections.namedtuple(
-    "SparseArray", ["indices", "values", "dense_shape"]
-)
 
 ArrayRecordReaderOptions = dict[str, str] | None
 
@@ -230,18 +225,3 @@ class SharedMemoryDataSource(shared_memory.ShareableList):
 
   def __del__(self):
     del self.shm
-
-
-# `tensor` can be a tf.Tensor, tf.SparseTensor or tf.RaggedTensor.
-def _as_numpy(tensor):
-  import tensorflow as tf  # pylint: disable=g-import-not-at-top # pytype: disable=import-error
-
-  if isinstance(tensor, (tf.Tensor, tf.RaggedTensor)):
-    return tensor.numpy()
-  if isinstance(tensor, tf.SparseTensor):
-    return _SparseArray(
-        tensor.indices.numpy(),
-        tensor.values.numpy(),
-        tensor.dense_shape.numpy(),
-    )
-  raise ValueError(f"Type {type(tensor)} is not supported in PyGrain.")
