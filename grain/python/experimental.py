@@ -43,6 +43,7 @@ from grain._src.python.dataset.transformations.limit import LimitIterDataset
 from grain._src.python.dataset.transformations.map import RngPool
 from grain._src.python.dataset.transformations.mix import ConcatenateMapDataset
 from grain._src.python.dataset.transformations.packing import FirstFitPackIterDataset
+from grain._src.python.dataset.transformations.packing import PackingDatasetIterator
 from grain._src.python.dataset.transformations.packing_concat_then_split import (
     BOSHandling,
     ConcatThenSplitIterDataset,
