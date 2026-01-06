@@ -52,7 +52,7 @@ class _TFRecordReader:
           f" {codecs.encode(buf, 'hex')}"
       )
     length, _ = struct.unpack("<QI", buf)
-    # TODO: Add CRC check for length mask mismatch.
+    # TODO: b/412697846 - Add CRC check for length mask mismatch.
 
     # Read the data and the data mask of the tf_record (the length read earlier
     # and uint32 respectively)
@@ -64,7 +64,7 @@ class _TFRecordReader:
           f" {codecs.encode(buf, 'hex')}"
       )
     data, _ = struct.unpack("<%dsI" % length, buf)
-    # TODO: Add CRC check for data mask mismatch.
+    # TODO: b/412697846 - Add CRC check for data mask mismatch.
     return data
 
   def seek(self, offset: int):

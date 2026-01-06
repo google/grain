@@ -19,7 +19,10 @@
 # pylint: disable=g-multiple-import
 # pylint: disable=unused-import
 
-from grain._src.core.transforms import FlatMapTransform
+from grain._src.core.transforms import (
+    FlatMapTransform,
+    MapWithIndex as MapWithIndexTransform,
+)
 
 from grain._src.python.dataset.base import (
     DatasetOptions,
