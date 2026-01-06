@@ -182,29 +182,37 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     }
 
   def set_state(self, state):
+    exhausted = state["exhausted"]
+    for index_in_cycle, (index_in_datasets, it_state) in enumerate(
+        zip(state["iterators_in_use_indices"], state["iterators_in_use_states"])
+    ):
+      if it_state is None:
+        self._iterators_in_use[index_in_cycle] = None
+      elif exhausted[index_in_cycle] == 0:
+        iterator = self._iterators_in_use[index_in_cycle]
+        if (
+            index_in_datasets != self._iterators_in_use_indices[index_in_cycle]
+            or iterator is None
+        ):
+          # The iterator currently in use is either exhausted or corresponds to
+          # a different dataset. We need to create a new iterator.
+          iterator = _add_prefetch_and_make_iterator(
+              self._datasets[index_in_datasets],
+              interleave_iterator=weakref.ref(self),
+              start_prefetch=False,
+          )
+        iterator.set_state(it_state)
+        self._iterators_in_use[index_in_cycle] = iterator
+      else:
+        self._exhausted_iterator_state[index_in_cycle] = it_state
+        self._iterators_in_use[index_in_cycle] = None
+
     self._prefetch_ds_iter.set_state(
         {"next_index": state["next_index_in_datasets"]}
     )
     self._next_index_in_cycle = state["next_index_in_cycle"]
     self._next_index_in_datasets = state["next_index_in_datasets"]
     self._iterators_in_use_indices = state["iterators_in_use_indices"]
-    exhausted = state["exhausted"]
-    for index_in_cycle, (index_in_datasets, it_state) in enumerate(
-        zip(self._iterators_in_use_indices, state["iterators_in_use_states"])
-    ):
-      if it_state is None:
-        self._iterators_in_use[index_in_cycle] = None
-      elif exhausted[index_in_cycle] == 0:
-        iterator = _add_prefetch_and_make_iterator(
-            self._datasets[index_in_datasets],
-            interleave_iterator=weakref.ref(self),
-            start_prefetch=False,
-        )
-        iterator.set_state(it_state)
-        self._iterators_in_use[index_in_cycle] = iterator
-      else:
-        self._exhausted_iterator_state[index_in_cycle] = it_state
-        self._iterators_in_use[index_in_cycle] = None
 
   def _get_next_index(self) -> int:
     if len(self._datasets) == 1:

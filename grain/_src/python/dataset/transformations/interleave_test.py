@@ -70,6 +70,26 @@ _INTERLEAVE_TEST_CASES = (
 )
 
 
+class _IteratorIdDatasetIterator(dataset.DatasetIterator):
+  """Iterator that returns its object id."""
+
+  def __next__(self):
+    return id(self)
+
+  def get_state(self):
+    return self._parent.get_state()
+
+  def set_state(self, state):
+    self._parent.set_state(state)
+
+
+class _IteratorIdIterDataset(dataset.IterDataset):
+  """Dataset that returns its iterator's object id."""
+
+  def __iter__(self) -> dataset.DatasetIterator:
+    return _IteratorIdDatasetIterator(self._parent.__iter__())
+
+
 class InterleaveIterDatasetTest(parameterized.TestCase):
 
   @parameterized.named_parameters(*_INTERLEAVE_TEST_CASES)
@@ -168,6 +188,25 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
     ]
     ds = interleave.InterleaveIterDataset(ds, cycle_length=5)
     assert_equal_output_after_checkpoint(ds)
+
+  def test_set_state_does_not_recreate_iterators_if_not_needed(self):
+    cycle_length = 5
+    ds = dataset.MapDataset.range(100).to_iter_dataset()
+    ds = _IteratorIdIterDataset(ds)
+    ds = interleave.InterleaveIterDataset(
+        [ds] * cycle_length, cycle_length=cycle_length
+    )
+    ds_iter = ds.__iter__()
+    iter_ids1 = []
+    for _ in range(cycle_length):
+      iter_ids1.append(next(ds_iter))
+    checkpoint = ds_iter.get_state()
+    next(ds_iter)
+    ds_iter.set_state(checkpoint)
+    iter_ids2 = []
+    for _ in range(cycle_length):
+      iter_ids2.append(next(ds_iter))
+    self.assertEqual(iter_ids1, iter_ids2)
 
   def test_element_spec(self):
     ds = dataset.MapDataset.range(3).to_iter_dataset()

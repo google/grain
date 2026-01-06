@@ -453,6 +453,27 @@ class MultiprocessingPrefetchTest(parameterized.TestCase):
         value = next(ds_iter)
         self.assertEqual(value, values_without_interruption[i])
 
+  def test_set_state_does_not_restart_process(self):
+    ds = dataset.MapDataset.range(20).to_iter_dataset()
+    ds = ds.map(lambda _: os.getpid())
+    ds = process_prefetch.multiprocess_prefetch(
+        ds,
+        num_workers=2,
+    )
+    ds_iter = ds.__iter__()
+    # Read 4 elements and check that we have 2 PIDs.
+    pids1 = [next(ds_iter) for _ in range(4)]
+    self.assertLen(set(pids1), 2)
+    self.assertNotIn(os.getpid(), set(pids1))
+    # Checkpoint, advance, and restore.
+    checkpoint = ds_iter.get_state()
+    next(ds_iter)  # Advance iterator.
+    ds_iter.set_state(checkpoint)
+    # Read 4 more elements and check that the set of PIDs is still the same.
+    pids2 = [next(ds_iter) for _ in range(4)]
+    self.assertLen(set(pids2), 2)
+    self.assertEqual(set(pids1), set(pids2))
+
   def test_works_with_iter_source_single_worker(self):
     # Even though a pure IterDataset cannot be sliced, we should still be able
     # to multiprocess-prefetch it with a single worker, since that doesn't
