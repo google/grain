@@ -90,4 +90,6 @@ from grain._src.python.dataset.transformations.prefetch_autotune import (
 
 from grain._src.python.dataset.dataset import (
     get_element_spec,
+    set_next_index,
+    get_next_index,
 )

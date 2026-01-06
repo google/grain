@@ -53,6 +53,13 @@ class _LimitDatasetIterator(dataset.DatasetIterator[T]):
     self._parent.set_state(state["parent"])
     self._count_elements_read = state["count_elements_read"]
 
+  def _get_next_index(self) -> int:
+    return self._count_elements_read
+
+  def _set_next_index(self, index):
+    dataset.set_next_index(self._parent, index)
+    self._count_elements_read = index
+
 
 class LimitIterDataset(dataset.IterDataset[T]):
   """Limits the number of elements in the dataset.

@@ -432,6 +432,18 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     self.assertEqual(spec.shape, ())
     self.assertEqual(spec.dtype, np.int64)
 
+  def test_get_next_index(self):
+    ds_iter = self.prefetch_lazy_iter_ds.__iter__()
+    for i in range(20):
+      self.assertEqual(dataset.get_next_index(ds_iter), i)
+      _ = next(ds_iter)
+
+  def test_set_next_index(self):
+    ds_iter = self.prefetch_lazy_iter_ds.__iter__()
+    for i in reversed(range(20)):
+      dataset.set_next_index(ds_iter, i)
+      self.assertEqual(next(ds_iter), i)
+
 
 class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
 

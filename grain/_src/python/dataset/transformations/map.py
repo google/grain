@@ -320,6 +320,12 @@ class _MapDatasetIterator(dataset.DatasetIterator[T]):
   def set_state(self, state):
     self._parent.set_state(state)
 
+  def _get_next_index(self) -> int:
+    return dataset.get_next_index(self._parent)
+
+  def _set_next_index(self, next_index: int):
+    dataset.set_next_index(self._parent, next_index)
+
   def __str__(self) -> str:
     return f"MapDatasetIterator(transform={self._transform_name})"
 
@@ -370,6 +376,13 @@ class _RandomMapDatasetIterator(dataset.DatasetIterator[T]):
     self._parent.set_state(state["parent"])
     self._index_for_rng = state["index_for_rng"]
 
+  def _get_next_index(self) -> int:
+    return self._index_for_rng
+
+  def _set_next_index(self, next_index: int):
+    dataset.set_next_index(self._parent, next_index)
+    self._index_for_rng = next_index
+
   def __str__(self) -> str:
     return f"RandomMapDatasetIterator(transform={self._transform_name})"
 
@@ -407,6 +420,13 @@ class _MapWithIndexDatasetIterator(dataset.DatasetIterator[T]):
   def set_state(self, state):
     self._parent.set_state(state["parent"])
     self._counter = state["counter"]
+
+  def _get_next_index(self) -> int:
+    return self._counter
+
+  def _set_next_index(self, next_index: int):
+    dataset.set_next_index(self._parent, next_index)
+    self._counter = next_index
 
   def __str__(self) -> str:
     return f"MapWithIndexDatasetIterator(transform={self._transform_name})"

@@ -84,6 +84,29 @@ class LimitIterDatasetTest(parameterized.TestCase):
     self.assertEqual(spec.dtype, np.int64)
     self.assertEqual(spec.shape, ())
 
+  def test_get_next_index(self):
+    ds = dataset.MapDataset.range(0, 20).batch(3).to_iter_dataset()
+    limited_ds = limit.LimitIterDataset(ds, count=2)
+    ds_iter = limited_ds.__iter__()
+    self.assertEqual(dataset.get_next_index(ds_iter), 0)
+    _ = next(ds_iter)
+    self.assertEqual(dataset.get_next_index(ds_iter), 1)
+    _ = next(ds_iter)
+    with self.assertRaises(StopIteration):
+      next(ds_iter)
+    self.assertEqual(dataset.get_next_index(ds_iter), 2)
+
+  def test_set_next_index(self):
+    ds = dataset.MapDataset.range(0, 20).batch(3).to_iter_dataset()
+    limited_ds = limit.LimitIterDataset(ds, count=2)
+    ds_iter = limited_ds.__iter__()
+    dataset.set_next_index(ds_iter, 1)
+    self.assertEqual(dataset.get_next_index(ds_iter), 1)
+    _ = next(ds_iter)
+    self.assertEqual(dataset.get_next_index(ds_iter), 2)
+    with self.assertRaises(StopIteration):
+      next(ds_iter)
+
 
 if __name__ == "__main__":
   absltest.main()

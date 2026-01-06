@@ -368,6 +368,22 @@ class MapIterDatasetTest(parameterized.TestCase):
     with self.assertRaisesRegex(ValueError, "does not implement `output_spec`"):
       _ = ds._element_spec
 
+  def test_get_next_index(self):
+    ds = dataset.MapDataset.range(0, 20).to_iter_dataset()
+    mapped_ds = map_ds.MapIterDataset(ds, MapWithNoTransform())
+    ds_iter = mapped_ds.__iter__()
+    for i in range(20):
+      self.assertEqual(dataset.get_next_index(ds_iter), i)
+      _ = next(ds_iter)
+
+  def test_set_next_index(self):
+    ds = dataset.MapDataset.range(0, 20).to_iter_dataset()
+    mapped_ds = map_ds.MapIterDataset(ds, MapWithNoTransform())
+    ds_iter = mapped_ds.__iter__()
+    for i in reversed(range(20)):
+      dataset.set_next_index(ds_iter, i)
+      self.assertEqual(next(ds_iter), i)
+
 
 class RandomMapIterDatasetTest(parameterized.TestCase):
 
@@ -449,6 +465,27 @@ class RandomMapIterDatasetTest(parameterized.TestCase):
     )
     with self.assertRaisesRegex(ValueError, "does not implement `output_spec`"):
       _ = ds._element_spec
+
+  def test_get_next_index(self):
+    ds = dataset.MapDataset.range(0, 20).to_iter_dataset()
+    mapped_ds = map_ds.RandomMapIterDataset(
+        ds, RandomMapWithTransform(), seed=0
+    )
+    ds_iter = mapped_ds.__iter__()
+    for i in range(20):
+      self.assertEqual(dataset.get_next_index(ds_iter), i)
+      _ = next(ds_iter)
+
+  def test_set_next_index(self):
+    ds = dataset.MapDataset.range(0, 20).to_iter_dataset()
+    mapped_ds = map_ds.RandomMapIterDataset(
+        ds, RandomMapWithTransform(), seed=0
+    )
+    expected = list(mapped_ds)
+    ds_iter = mapped_ds.__iter__()
+    for i in reversed(range(20)):
+      dataset.set_next_index(ds_iter, i)
+      self.assertEqual(next(ds_iter), expected[i])
 
 
 class MapWithIndexMapDatasetTest(parameterized.TestCase):
@@ -541,6 +578,22 @@ class MapWithIndexIterDatasetTest(absltest.TestCase):
     ds = map_ds.MapWithIndexIterDataset(self.range_iter_ds, AddIndexTransform())
     with self.assertRaisesRegex(ValueError, "does not implement `output_spec`"):
       _ = ds._element_spec
+
+  def test_get_next_index(self):
+    ds = dataset.MapDataset.range(0, 20).to_iter_dataset()
+    mapped_ds = map_ds.MapWithIndexIterDataset(ds, AddIndexTransform())
+    ds_iter = mapped_ds.__iter__()
+    for i in range(20):
+      self.assertEqual(dataset.get_next_index(ds_iter), i)
+      _ = next(ds_iter)
+
+  def test_set_next_index(self):
+    ds = dataset.MapDataset.range(0, 20).to_iter_dataset()
+    mapped_ds = map_ds.MapWithIndexIterDataset(ds, AddIndexTransform())
+    ds_iter = mapped_ds.__iter__()
+    for i in reversed(range(20)):
+      dataset.set_next_index(ds_iter, i)
+      self.assertEqual(next(ds_iter), (i, i))
 
 
 if __name__ == "__main__":

@@ -253,6 +253,12 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
           future = self._buffer.popleft()
           future.cancel()
 
+  def _get_next_index(self) -> int:
+    return self._next_returned_index
+
+  def _set_next_index(self, index: int) -> None:
+    self.set_state({"next_index": index})
+
   def __str__(self) -> str:
     return (
         f"PrefetchDatasetIterator(read_options={self._read_options},"
@@ -900,6 +906,7 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._prefetch_buffer_size = prefetch_buffer_size
     self._step_zero_state: StateT = parent.get_state()
     self._state: StateT | None = None
+    self._next_index: int | None = 0
 
     self._prefetch_thread: threading.Thread | None = None
     self._prefetch_should_stop: threading.Event = threading.Event()
@@ -970,6 +977,8 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       self._stop_prefetch()
       raise err
     self._state = state
+    if self._next_index is not None:
+      self._next_index += 1
     with self._stats.record_self_time(offset_ns=timer.value()):
       element = self._stats.record_bytes_produced(element)
       return self._stats.record_output_spec(element)
@@ -1007,6 +1016,25 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   def set_state(self, state: StateT):
     self._stop_prefetch()
     self._maybe_nonnative_parent.set_state(state)
+    self._state = self._maybe_nonnative_parent.get_state()
+    if isinstance(self._maybe_nonnative_parent, dataset.DatasetIterator):
+      try:
+        self._next_index = dataset.get_next_index(self._maybe_nonnative_parent)
+      except Exception:  # pylint: disable=broad-except
+        self._next_index = None
+    else:
+      self._next_index = None
+
+  def _get_next_index(self) -> int:
+    if self._next_index is not None:
+      return self._next_index
+    raise ValueError("Upstream iterator does not support get_next_index.")
+
+  def _set_next_index(self, next_index: int):
+    assert isinstance(self._maybe_nonnative_parent, dataset.DatasetIterator)
+    self._stop_prefetch()
+    dataset.set_next_index(self._maybe_nonnative_parent, next_index)
+    self._next_index = next_index
     self._state = self._maybe_nonnative_parent.get_state()
 
   def __str__(self) -> str:

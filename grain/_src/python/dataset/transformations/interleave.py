@@ -206,6 +206,30 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
         self._exhausted_iterator_state[index_in_cycle] = it_state
         self._iterators_in_use[index_in_cycle] = None
 
+  def _get_next_index(self) -> int:
+    if len(self._datasets) == 1:
+      it = self._iterators_in_use[0]
+      if it is None:
+        return 0
+      return dataset.get_next_index(it)
+    raise NotImplementedError(
+        "get_next_index is not supported for InterleaveDatasetIterator with"
+        " more than one dataset."
+    )
+
+  def _set_next_index(self, index: int) -> None:
+    if len(self._datasets) == 1:
+      # Ensure iterator is created by calling get_state.
+      _ = self.get_state()
+      it = self._iterators_in_use[0]
+      assert it is not None
+      dataset.set_next_index(it, index)
+    else:
+      raise NotImplementedError(
+          "set_next_index is not supported for InterleaveDatasetIterator with"
+          " more than one dataset."
+      )
+
   def close(self) -> None:
     """Closes the iterator and shuts down the iterator prefetching."""
     if self._closed:

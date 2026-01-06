@@ -249,6 +249,14 @@ class _BatchDatasetIterator(dataset.DatasetIterator[T]):
   def set_state(self, state):
     self._parent.set_state(state)
 
+  def _get_next_index(self) -> int:
+    return (
+        dataset.get_next_index(self._parent) + self._batch_size - 1
+    ) // self._batch_size
+
+  def _set_next_index(self, index: int) -> None:
+    dataset.set_next_index(self._parent, index * self._batch_size)
+
   def __str__(self) -> str:
     return (
         f"BatchDatasetIterator(batch_size={self._batch_size},"

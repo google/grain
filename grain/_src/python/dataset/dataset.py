@@ -1574,6 +1574,27 @@ class DatasetIterator(Iterator[T], abc.ABC):
         self._ctx.dataset_options.execution_tracking_mode
     )
 
+  def _set_next_index(self, index: int) -> None:
+    """Sets the next index for the dataset iterator.
+
+    Note: This index is the index of the element that will be produced next by
+    the iterator. Implementations of this method should not process any data. If
+    advancing to the index without processing is not possible (e.g. for filter
+    and packing), then the implementation should raise a ValueError.
+
+    Args:
+      index: The index of the next element to be produced.
+    """
+    raise NotImplementedError
+
+  def _get_next_index(self) -> int:
+    """Returns the next index for the dataset iterator.
+
+    Note: This index is the index of the element that will be produced next by
+    the iterator.
+    """
+    raise NotImplementedError
+
   # pytype: enable=attribute-error
   # pylint: enable=protected-access
 
@@ -1783,3 +1804,13 @@ def get_element_spec(
     ds: `MapDataset` or `IterDataset` to get the element spec from.
   """
   return ds._element_spec  # pylint: disable=protected-access
+
+
+def set_next_index(ds_iter: DatasetIterator, index: int) -> None:
+  """Sets the next index for the dataset iterator."""
+  return ds_iter._set_next_index(index)  # pylint: disable=protected-access
+
+
+def get_next_index(ds_iter: DatasetIterator) -> int:
+  """Returns the next index for the dataset iterator."""
+  return ds_iter._get_next_index()  # pylint: disable=protected-access

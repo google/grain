@@ -213,6 +213,45 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
     self.assertLen(node_names, 1)
     self.assertIn("InterleaveDatasetIterator", node_names[0])
 
+  def test_get_next_index(self):
+    ds = dataset.MapDataset.range(10).to_iter_dataset()
+    ds = interleave.InterleaveIterDataset([ds], cycle_length=1)
+    ds_iter = ds.__iter__()
+    self.assertEqual(dataset.get_next_index(ds_iter), 0)
+    for i in range(10):
+      next(ds_iter)
+      self.assertEqual(dataset.get_next_index(ds_iter), i + 1)
+
+  def test_set_next_index(self):
+    ds = dataset.MapDataset.range(10).to_iter_dataset()
+    ds = interleave.InterleaveIterDataset([ds], cycle_length=1)
+    ds_iter = ds.__iter__()
+    for i in reversed(range(10)):
+      dataset.set_next_index(ds_iter, i)
+      self.assertEqual(next(ds_iter), i)
+
+  def test_get_next_index_with_multiple_datasets(self):
+    ds = dataset.MapDataset.range(10).to_iter_dataset()
+    ds = interleave.InterleaveIterDataset([ds, ds], cycle_length=2)
+    ds_iter = ds.__iter__()
+    with self.assertRaisesRegex(
+        NotImplementedError,
+        "get_next_index is not supported for InterleaveDatasetIterator with"
+        " more than one dataset.",
+    ):
+      dataset.get_next_index(ds_iter)
+
+  def test_set_next_index_with_multiple_datasets(self):
+    ds = dataset.MapDataset.range(10).to_iter_dataset()
+    ds = interleave.InterleaveIterDataset([ds, ds], cycle_length=2)
+    ds_iter = ds.__iter__()
+    with self.assertRaisesRegex(
+        NotImplementedError,
+        "set_next_index is not supported for InterleaveDatasetIterator with"
+        " more than one dataset.",
+    ):
+      dataset.set_next_index(ds_iter, 0)
+
 
 if __name__ == "__main__":
   absltest.main()

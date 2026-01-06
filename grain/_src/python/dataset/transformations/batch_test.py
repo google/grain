@@ -797,6 +797,62 @@ class BatchIterDatasetTest(parameterized.TestCase):
         },
     )
 
+  @parameterized.parameters(
+      dict(
+          batch_size=2,
+          drop_remainder=False,
+          expected=[[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]],
+      ),
+      dict(
+          batch_size=3,
+          drop_remainder=False,
+          expected=[[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]],
+      ),
+      dict(
+          batch_size=3,
+          drop_remainder=True,
+          expected=[[0, 1, 2], [3, 4, 5], [6, 7, 8]],
+      ),
+  )
+  def test_get_next_index(self, batch_size, drop_remainder, expected):
+    del expected
+    ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
+    ds = batch.BatchIterDataset(
+        ds, batch_size=batch_size, drop_remainder=drop_remainder
+    )
+    ds_iter = ds.__iter__()
+    self.assertEqual(dataset.get_next_index(ds_iter), 0)
+    for i, _ in enumerate(ds_iter):
+      self.assertEqual(dataset.get_next_index(ds_iter), i + 1)
+
+  @parameterized.parameters(
+      dict(
+          batch_size=2,
+          drop_remainder=False,
+          expected=[[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]],
+      ),
+      dict(
+          batch_size=3,
+          drop_remainder=False,
+          expected=[[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]],
+      ),
+      dict(
+          batch_size=3,
+          drop_remainder=True,
+          expected=[[0, 1, 2], [3, 4, 5], [6, 7, 8]],
+      ),
+  )
+  def test_set_next_index(self, batch_size, drop_remainder, expected):
+    ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
+    ds = batch.BatchIterDataset(
+        ds, batch_size=batch_size, drop_remainder=drop_remainder
+    )
+    for i in reversed(range(len(expected))):
+      ds_iter = ds.__iter__()
+      dataset.set_next_index(ds_iter, i)
+      actual = next(ds_iter)
+      np.testing.assert_allclose(actual, expected[i])
+
 
 if __name__ == "__main__":
   absltest.main()
