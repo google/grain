@@ -28,7 +28,6 @@ import multiprocessing as mp
 from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
-from grain._src.python.dataset.transformations import prefetch
 from grain._src.python.dataset.transformations import process_prefetch
 import numpy as np
 
@@ -108,6 +107,20 @@ class ProcessPrefetchIterDatasetTest(parameterized.TestCase):
       for i in range(starting_step, max_steps):
         value = next(ds_iter)
         self.assertEqual(value, values_without_interruption[i])
+
+  def test_set_state_after_stop_iteration(self):
+    ds = process_prefetch.ProcessPrefetchIterDataset(
+        self.ds,
+        buffer_size=5,
+    )
+    ds_iter = ds.__iter__()
+    state = ds_iter.get_state()
+    ds_iter.start_prefetch()
+    lst1 = list(ds_iter)
+    self.assertEmpty(list(ds_iter))
+    ds_iter.set_state(state)
+    lst2 = list(ds_iter)
+    self.assertSequenceEqual(lst1, lst2)
 
   def test_set_state_does_not_restart_process(self):
     ds = process_prefetch.ProcessPrefetchIterDataset(
@@ -265,23 +278,6 @@ class ProcessPrefetchIterDatasetTest(parameterized.TestCase):
     ):
       list(ds)
 
-  def test_fails_with_nested_prefetch(self):
-    ds1 = process_prefetch.ProcessPrefetchIterDataset(self.ds, buffer_size=1)
-    with self.assertRaisesRegex(
-        ValueError,
-        'Nesting prefetching with processes is not allowed',
-    ):
-      process_prefetch.ProcessPrefetchIterDataset(ds1, buffer_size=1)
-
-    ds2 = prefetch.MultiprocessPrefetchIterDataset(
-        self.ds, options.MultiprocessingOptions(num_workers=1)
-    )
-    with self.assertRaisesRegex(
-        ValueError,
-        'Nesting prefetching with processes is not allowed',
-    ):
-      process_prefetch.ProcessPrefetchIterDataset(ds2, buffer_size=1)
-
   def test_reports_worker_crash(self):
     def failing_transform(element):
       del element
@@ -317,12 +313,41 @@ class ProcessPrefetchIterDatasetTest(parameterized.TestCase):
     with self.assertRaises(Exception):
       list(ds)
 
+  def test_doesnt_hang_on_process_kill(self):
+    def map_fn(x):
+      if x == 3:
+        while True:
+          pass
+      return x
+
+    ds = dataset.MapDataset.source([1, 2, 3])
+    ds = ds.map(map_fn)
+    ds = ds.to_iter_dataset()
+    ds = process_prefetch.ProcessPrefetchIterDataset(ds, buffer_size=1)
+    ds_iter = ds.__iter__()
+    self.assertEqual(next(ds_iter), 1)
+    self.assertEqual(next(ds_iter), 2)
+    ds_iter.close()
+
 
 @dataclasses.dataclass(frozen=True)
 class FilterAllElements(transforms.Filter):
 
   def filter(self, element: int):
     return False
+
+
+class RandomTripletSource:
+
+  def __len__(self) -> int:
+    return 100_000
+
+  def __getitem__(self, record_key: int):
+    return {
+        'data': (
+            np.random.uniform(size=(3, 224, 224, 3)).astype(dtype=np.float32)
+        )
+    }
 
 
 class RepeatedIntSourceIterDataset(dataset.IterDataset[int]):
@@ -490,10 +515,11 @@ class MultiprocessingPrefetchTest(parameterized.TestCase):
         ValueError,
         'Cannot slice `IterDataset` source.',
     ):
-      process_prefetch.multiprocess_prefetch(
+      ds = process_prefetch.multiprocess_prefetch(
           RepeatedIntSourceIterDataset().map(lambda x: x + 1),
           num_workers=2,
       )
+      list(ds)
 
   def test_propagates_transform_error(self):
     error_msg = 'I shall fail!'
