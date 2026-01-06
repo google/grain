@@ -319,13 +319,20 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     if self._closed:
       return
     self._closed = True
-    # Shutdown the thread pool executor if it exists.
     if hasattr(self, "_executor"):
+      # Submit close to each worker thread for thread-local resource cleanup.
+      cleanup_futures = [
+          self._executor.submit(self._map_parent.close)
+          for _ in range(self._num_threads)
+      ]
+      futures.wait(cleanup_futures, timeout=5.0)
       self._executor.shutdown(wait=False)
       # Cancel all pending futures in the buffer.
       while self._buffer:
         future = self._buffer.popleft()
         future.cancel()
+    # Also close from main thread for any main-thread resources.
+    self._map_parent.close()
 
 
 def _iterator_with_context(
@@ -590,21 +597,24 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
     for _ in range(self._state[_ITERATIONS_TO_SKIP][str(worker_index)]):
       _ = next(it)
     last_recorded_state_time = time.time()
-    for element in it:
-      now = time.time()
-      element = _copy_struct_to_shm(element, min_size=min_shm_size)
-      # If the node is prefetch, we already record the bytes produced in it's
-      # __next__ method.
-      if not it._stats._config.is_prefetch:
-        it._stats.record_bytes_produced(element)
-      if (
-          self._always_report_worker_state
-          or now - last_recorded_state_time >= _RECORD_STATE_INTERVAL_S
-      ):
-        last_recorded_state_time = now
-        yield (element, it.get_state())  # pytype: disable=attribute-error
-      else:
-        yield (element, None)
+    try:
+      for element in it:
+        now = time.time()
+        element = _copy_struct_to_shm(element, min_size=min_shm_size)
+        # If the node is prefetch, we already record the bytes produced in it's
+        # __next__ method.
+        if not it._stats._config.is_prefetch:
+          it._stats.record_bytes_produced(element)
+        if (
+            self._always_report_worker_state
+            or now - last_recorded_state_time >= _RECORD_STATE_INTERVAL_S
+        ):
+          last_recorded_state_time = now
+          yield (element, it.get_state())  # pytype: disable=attribute-error
+        else:
+          yield (element, None)
+    finally:
+      it.close()
 
   def serialize(self) -> bytes:
     """Overrides the default implementation to generate better error messages."""
