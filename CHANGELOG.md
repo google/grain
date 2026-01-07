@@ -20,6 +20,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     graduated version instead: `grain.MapDataset.concatenate`.
 
 * Bug fixes:
+  * Fix grouping of parsing transformation inserted by as_dataset
 
 ## Grain 0.2.15 (November 25, 2025)
 
