@@ -10,6 +10,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     errors.
   * Adds experimental support for `get_next_index` and `set_next_index` to fetch
     and advance a `grain.DatasetIterator` to the given produced element index.
+  * `grain.transforms.Map` can now be created from a callable with
+    `grain.transforms.Map.from_callable`.
 
 * Breaking changes:
 
