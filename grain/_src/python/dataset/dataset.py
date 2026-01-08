@@ -509,9 +509,7 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
     # pylint: enable=g-import-not-at-top
     return filter_dataset.FilterMapDataset(parent=self, transform=transform)
 
-  def map(
-      self, transform: transforms.MapTransform | Callable[[T], S]
-  ) -> MapDataset[S]:
+  def map(self, transform: transforms.Map | Callable[[T], S]) -> MapDataset[S]:
     """Returns a dataset containing the elements transformed by ``transform``.
 
     Example usage::
@@ -717,9 +715,7 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
 
   def random_map(
       self,
-      transform: (
-          transforms.RandomMapTransform | Callable[[T, np.random.Generator], S]
-      ),
+      transform: transforms.RandomMap | Callable[[T, np.random.Generator], S],
       *,
       seed: int | None = None,
   ) -> MapDataset[S]:
@@ -1181,9 +1177,7 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
     # pylint: enable=g-import-not-at-top
     return filter_dataset.FilterIterDataset(parent=self, transform=transform)
 
-  def map(
-      self, transform: transforms.MapTransform | Callable[[T], S]
-  ) -> IterDataset[S]:
+  def map(self, transform: transforms.Map | Callable[[T], S]) -> IterDataset[S]:
     """Returns a dataset containing the elements transformed by ``transform``.
 
     Example usage::
@@ -1210,9 +1204,7 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
 
   def random_map(
       self,
-      transform: (
-          transforms.RandomMapTransform | Callable[[T, np.random.Generator], S]
-      ),
+      transform: transforms.RandomMap | Callable[[T, np.random.Generator], S],
       *,
       seed: int | None = None,
   ) -> IterDataset[S]:
@@ -1754,13 +1746,13 @@ def apply_transformations(
             drop_remainder=transformation.drop_remainder,
             batch_fn=transformation.batch_fn,
         )
-      case transforms.MapTransform():
+      case transforms.Map():
         ds = ds.map(transformation)
-      case transforms.RandomMapTransform():
+      case transforms.RandomMap():
         ds = ds.random_map(transformation)
       case transforms.MapWithIndex():
         ds = ds.map_with_index(transformation)
-      case transforms.FlatMapTransform():
+      case transforms.FlatMap():
         # Loaded lazily due to a circular dependency (dataset <-> flatmap).
         # pylint: disable=g-import-not-at-top
         from grain._src.python.dataset.transformations import flatmap

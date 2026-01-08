@@ -73,26 +73,26 @@ class FilterEven(transforms.Filter):
     return x % 2 == 0
 
 
-class PlusOne(transforms.MapTransform):
+class PlusOne(transforms.Map):
 
   def map(self, x: int) -> int:
     return x + 1
 
 
-class PlusRandom(transforms.RandomMapTransform):
+class PlusRandom(transforms.RandomMap):
 
   def random_map(self, x: int, rng: np.random.Generator) -> int:
     return x + rng.integers(100_000)
 
 
-class FailingMap(transforms.MapTransform):
+class FailingMap(transforms.Map):
 
   def map(self, x):
     del x
     1 / 0  # pylint: disable=pointless-statement
 
 
-class NonPickableTransform(transforms.MapTransform):
+class NonPickableTransform(transforms.Map):
 
   def __getstate__(self):
     raise ValueError("I shall not be pickled")
@@ -101,13 +101,13 @@ class NonPickableTransform(transforms.MapTransform):
     return x
 
 
-class RaisingTransform(transforms.MapTransform):
+class RaisingTransform(transforms.Map):
 
   def map(self, x):
     raise AttributeError("I shall raise")
 
 
-class ExitingTransform(transforms.MapTransform):
+class ExitingTransform(transforms.Map):
 
   def map(self, x):
     raise sys.exit(123)
@@ -126,7 +126,7 @@ class RandomTripletSource:
     }
 
 
-class DuplicateElementFlatMap(transforms.FlatMapTransform):
+class DuplicateElementFlatMap(transforms.FlatMap):
   max_fan_out: int = 7
 
   def flat_map(self, element: Any) -> Any:

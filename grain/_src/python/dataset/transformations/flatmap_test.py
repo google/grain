@@ -26,7 +26,7 @@ from grain._src.python.dataset.transformations import source
 
 
 @dataclasses.dataclass(frozen=True)
-class FixedSizeSplitWithNoTransform(transforms.FlatMapTransform):
+class FixedSizeSplitWithNoTransform(transforms.FlatMap):
   max_fan_out: int
 
   def flat_map(self, element: int):
@@ -35,7 +35,7 @@ class FixedSizeSplitWithNoTransform(transforms.FlatMapTransform):
 
 
 @dataclasses.dataclass(frozen=True)
-class FixedSizeSplitWithTransform(transforms.FlatMapTransform):
+class FixedSizeSplitWithTransform(transforms.FlatMap):
   max_fan_out: int
 
   def flat_map(self, element: int):
@@ -44,7 +44,7 @@ class FixedSizeSplitWithTransform(transforms.FlatMapTransform):
 
 
 @dataclasses.dataclass(frozen=True)
-class VariableSizeCappedSplitWithNoTransform(transforms.FlatMapTransform):
+class VariableSizeCappedSplitWithNoTransform(transforms.FlatMap):
   max_fan_out: int
 
   def flat_map(self, element: int):
@@ -52,7 +52,7 @@ class VariableSizeCappedSplitWithNoTransform(transforms.FlatMapTransform):
 
 
 @dataclasses.dataclass(frozen=True)
-class VariableSizeUncappedSplitWithNoTransform(transforms.FlatMapTransform):
+class VariableSizeUncappedSplitWithNoTransform(transforms.FlatMap):
   max_fan_out: int
 
   def flat_map(self, element: int):
@@ -146,7 +146,7 @@ class FlatMapMapDatasetTest(absltest.TestCase):
     self.assertEqual(list(flatmap_ds), [1, 1, 3, 3, 5, 5, 7, 7, 9, 9])
 
 
-class Unbatch(transforms.FlatMapTransform):
+class Unbatch(transforms.FlatMap):
 
   def flat_map(self, elements: Any) -> Sequence[Any]:
     return [e for e in elements]

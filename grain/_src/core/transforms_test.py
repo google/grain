@@ -34,7 +34,7 @@ class _TestFilterWithStr(transforms.Filter):
     return "CustomStr"
 
 
-class _TestMapWithRepr(transforms.MapTransform):
+class _TestMapWithRepr(transforms.Map):
 
   def map(self, x):
     return x % 2 == 0

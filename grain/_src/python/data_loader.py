@@ -100,7 +100,7 @@ def use_context_if_available(obj):
 
 
 @dataclasses.dataclass
-class CopyNumPyArrayToSharedMemory(transforms.MapTransform):
+class CopyNumPyArrayToSharedMemory(transforms.Map):
   """If `element` contains NumPy array copy it to SharedMemoryArray."""
 
   def map(self, element: Any) -> Any:
@@ -412,7 +412,7 @@ class DataLoader:
         logging.info("Enabling SharedMemoryArray for BatchOperation.")
         operations[-1]._enable_shared_memory()
       else:
-        logging.info("Adding CopyNumPyArrayToSharedMemory MapTransform.")
+        logging.info("Adding CopyNumPyArrayToSharedMemory Map.")
         operations = list(operations) + [CopyNumPyArrayToSharedMemory()]
 
     self._data_source = data_source
@@ -443,7 +443,7 @@ class DataLoader:
         )
       # pylint: enable=protected-access
     self._use_native_dataset_checkpointing = any(
-        isinstance(op, transforms.FlatMapTransform) for op in self._operations
+        isinstance(op, transforms.FlatMap) for op in self._operations
     )
     self._dataset = self._create_dataset()
 
@@ -634,10 +634,10 @@ def _source_repr(source: RandomAccessDataSource) -> str:
   return repr(source)
 
 
-class _FlatMapAdapter(transforms.FlatMapTransform):
+class _FlatMapAdapter(transforms.FlatMap):
   """Data loader adapter to pass through correct metadata."""
 
-  def __init__(self, transform: transforms.FlatMapTransform):
+  def __init__(self, transform: transforms.FlatMap):
     self._transform = transform
     self.max_fan_out = transform.max_fan_out
 
@@ -660,25 +660,25 @@ def _apply_transform_to_dataset(
     ds: dataset.IterDataset,
 ) -> dataset.IterDataset:
   """Applies the `transform` to the dataset."""
-  if isinstance(transform, transforms.MapTransform):
+  if isinstance(transform, transforms.Map):
     return ds.map(
         lambda r: record.Record(metadata=r.metadata, data=transform.map(r.data))
     )
-  elif isinstance(transform, transforms.RandomMapTransform):
+  elif isinstance(transform, transforms.RandomMap):
     return ds.map(
         lambda r: record.Record(
             metadata=r.metadata,
             data=transform.random_map(r.data, r.metadata.rng),
         )
     )
-  elif isinstance(transform, transforms.TfRandomMapTransform):
+  elif isinstance(transform, transforms.TfRandomMap):
     return ds.map(
         lambda r: record.Record(
             metadata=r.metadata,
             data=transform.np_random_map(r.data, r.metadata.rng),
         )
     )
-  elif isinstance(transform, transforms.FlatMapTransform):
+  elif isinstance(transform, transforms.FlatMap):
     return flatmap.FlatMapIterDataset(ds, _FlatMapAdapter(transform))
   elif isinstance(transform, transforms.Filter):
     return ds.filter(lambda r: transform.filter(r.data))
