@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import functools
-import os
+import pathlib
 import traceback
 import types
 from typing import Any, TypeVar, cast
@@ -29,16 +29,6 @@ from grain._src.core.config import config  # pylint: disable=g-importing-member
 
 C = TypeVar("C", bound=Callable[..., Any])
 
-_exclude_paths: list[str] = []
-
-
-def register_exclusion(path: str):
-  _exclude_paths.append(path)
-
-
-register_exclusion(__file__)
-
-
 _grain_message_append = (
     "The stack trace below excludes Grain-internal frames.\n"
     "The preceding is the original exception that occurred, unmodified.\n"
@@ -46,41 +36,22 @@ _grain_message_append = (
 )
 
 
-def _path_starts_with(path: str, path_prefix: str) -> bool:
-  """Checks if a given path starts with a specified path prefix.
-
-  This function compares two paths after converting them to absolute paths. It
-  handles cases where paths might be on different drives or might not exist.
-
-  Args:
-    path: The path to check.
-    path_prefix: The prefix to check against.
-
-  Returns:
-    True if `path` starts with `path_prefix`, False otherwise.
-  """
-  path = os.path.abspath(path)
-  path_prefix = os.path.abspath(path_prefix)
-  try:
-    common = os.path.commonpath([path, path_prefix])
-  except ValueError:
-    # path and path_prefix are both absolute, the only case will raise a
-    # ValueError is different drives.
-    # https://docs.python.org/3/library/os.path.html#os.path.commonpath
-    return False
-  try:
-    return common == path_prefix or os.path.samefile(common, path_prefix)
-  except OSError:
-    # One of the paths may not exist.
-    return False
-
-
 def include_frame(f: types.FrameType) -> bool:
   return include_filename(f.f_code.co_filename)
 
 
 def include_filename(filename: str) -> bool:
-  return not any(_path_starts_with(filename, path) for path in _exclude_paths)
+  # We want to exclude all files in `grain/_src` and its subdirectories.
+  # Pathlib ensures path separator differences are accounted for on
+  # different platforms.
+  try:
+    parts = pathlib.Path(filename).parts
+  except Exception:  # pylint: disable=broad-except
+    return True
+  for i in range(len(parts) - 1):
+    if parts[i] == "grain" and parts[i + 1] == "_src":
+      return False
+  return True
 
 
 def _add_tracebackhide_to_hidden_frames(tb: types.TracebackType):
@@ -184,8 +155,8 @@ def _ipython_supports_tracebackhide() -> bool:
 
 
 def _filtering_mode() -> str:
-  mode = config.py_traceback_filtering
-  if mode is None or mode == "auto":
+  mode = config.get_or_default("py_traceback_filtering")
+  if mode == "auto":
     if (_running_under_ipython() and _ipython_supports_tracebackhide()):
       mode = "tracebackhide"
     else:
@@ -234,6 +205,11 @@ def run_with_traceback_filter(fun: C) -> C:
     A wrapped version of `fun` that filters tracebacks.
   """
 
+  # Short circuit if the function is already filtered to avoid wrapping
+  # the same function multiple times.
+  if getattr(fun, "is_traceback_filtered", False):
+    return fun
+
   @functools.wraps(fun)
   def reraise_with_filtered_traceback(*args, **kwargs):
     __tracebackhide__ = True  # pylint: disable=invalid-name,unused-variable
@@ -271,4 +247,5 @@ def run_with_traceback_filter(fun: C) -> C:
         raise
       finally:
         del mode, tb
+  reraise_with_filtered_traceback.is_traceback_filtered = True
   return cast(C, reraise_with_filtered_traceback)

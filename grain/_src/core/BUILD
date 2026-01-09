@@ -238,6 +238,7 @@ py_test(
     deps = [
         ":config",
         ":traceback_util",
+        "//grain",
         "@abseil-py//absl/testing:absltest",
     ],
 )

@@ -13,16 +13,15 @@
 # limitations under the License.
 """Tests for traceback filtering utilities."""
 
+import pathlib
 import traceback
 from typing import Callable
-
-from grain._src.core import traceback_util
-from grain._src.core.config import config  # pylint: disable=g-importing-member
+from unittest import mock
 
 from absl.testing import absltest
-
-
-traceback_util.register_exclusion(__file__)
+import grain
+from grain._src.core import traceback_util
+from grain._src.core.config import config  # pylint: disable=g-importing-member
 
 
 def _assert_exception_with_short_traceback(
@@ -56,8 +55,7 @@ def _assert_exception_with_short_traceback(
         f"Expected {expected_error_type} to be raised, but got"
         f" {type(e)} instead."
     )
-  print(f"traceback: {tb}")
-  self.assertLess(len(tb), 15)
+  self.assertLess(len(tb), 15, f"Traceback is too long: \n{tb}")
 
 
 @traceback_util.run_with_traceback_filter
@@ -121,6 +119,67 @@ class TracebackUtilTest(absltest.TestCase):
         self.assertTrue(local_vars["__tracebackhide__"])
     # Verify the frames are not actually removed.
     self.assertGreater(frame_count, 150)
+
+  def test_wrapper_is_not_applied_twice(self):
+    def f():
+      pass
+
+    f_wrapped = traceback_util.run_with_traceback_filter(f)
+    f_wrapped_again = traceback_util.run_with_traceback_filter(f_wrapped)
+    self.assertIs(f_wrapped, f_wrapped_again)
+
+  def test_include_filename(self):
+    self.assertFalse(
+        traceback_util.include_filename("path/to/grain/_src/foo.py")
+    )
+
+    # Verify Windows path handling (simulated on non-Windows if needed)
+    with mock.patch.object(pathlib, "Path", pathlib.PureWindowsPath):
+      self.assertFalse(
+          traceback_util.include_filename(r"C:\path\to\grain\_src\foo.py")
+      )
+
+    # Check that "grain" and "_src" must be adjacent
+    self.assertTrue(
+        traceback_util.include_filename("path/to/grain/something/_src/foo.py")
+    )
+
+
+class AddOneTransform(grain.transforms.Map):
+
+  def map(self, x: int) -> int:
+    return x + 1
+
+
+class RaiseErrorTransform(grain.transforms.Map):
+
+  def map(self, x: int) -> int:
+    raise ValueError("Boom!")
+
+
+class TracebackFilterTest(absltest.TestCase):
+
+  def test_datasource_multiple_transforms_filters_traceback(self):
+    range_ds = grain.sources.RangeDataSource(0, 10, 1)
+    sampler = grain.samplers.IndexSampler(num_records=10, seed=42)
+    ops = [RaiseErrorTransform()]
+    for _ in range(100):
+      ops.append(AddOneTransform())
+    data_loader = grain.DataLoader(
+        data_source=range_ds, sampler=sampler, operations=ops
+    )
+    _assert_exception_with_short_traceback(
+        self, lambda: next(iter(data_loader)), ValueError
+    )
+
+  def test_dataset_multiple_transforms_filters_traceback(self):
+    range_ds = grain.MapDataset.range(0, 10)
+    range_ds = range_ds.map(RaiseErrorTransform())
+    for _ in range(100):
+      range_ds = range_ds.map(AddOneTransform())
+    _assert_exception_with_short_traceback(
+        self, lambda: next(iter(range_ds)), ValueError
+    )
 
 
 if __name__ == "__main__":

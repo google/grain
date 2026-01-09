@@ -49,6 +49,7 @@ py_library(
         "//grain/_src/core:exceptions",
         "//grain/_src/core:monitoring",
         "//grain/_src/core:sharding",
+        "//grain/_src/core:traceback_util",
         "//grain/_src/core:transforms",
         "//grain/_src/core:tree_lib",
         "//grain/_src/python:checkpointing",
