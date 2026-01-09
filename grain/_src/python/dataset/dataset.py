@@ -1582,9 +1582,14 @@ class DatasetIterator(Iterator[T], abc.ABC):
     advancing to the index without processing is not possible (e.g. for filter
     and packing), then the implementation should raise a ValueError.
 
+    It is not recommended to use `_set_next_index()` alongside `set_state()`
+    and `get_state()`. Doing so may lead to inefficiencies such as clearing
+    buffers or recreating iterators.
+
     Args:
       index: The index of the next element to be produced.
     """
+
     raise NotImplementedError
 
   def _get_next_index(self) -> int:
@@ -1592,6 +1597,10 @@ class DatasetIterator(Iterator[T], abc.ABC):
 
     Note: This index is the index of the element that will be produced next by
     the iterator.
+
+    It is not recommended to use `_get_next_index()` alongside `set_state()`
+    and `get_state()`. Doing so may lead to inefficiencies such as clearing
+    buffers or recreating iterators.
     """
     raise NotImplementedError
 
