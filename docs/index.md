@@ -46,7 +46,6 @@ not depend on TensorFlow.
 :caption: Get started
 installation
 api_choice
-data_sources
 behind_the_scenes
 ```
 
