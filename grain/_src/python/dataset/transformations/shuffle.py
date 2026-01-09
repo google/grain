@@ -154,7 +154,7 @@ class WindowShuffleIterDataset(dataset.IterDataset[T]):
     self._window_size = window_size
     self._seed = seed
 
-  def __iter__(self) -> _WindowShuffleDatasetIterator[T]:
+  def __iter__(self) -> dataset.DatasetIterator[T]:
     parent_iter = self._parent.__iter__()
     return _WindowShuffleDatasetIterator(
         parent_iter, window_size=self._window_size, seed=self._seed
@@ -166,6 +166,17 @@ class WindowShuffleIterDataset(dataset.IterDataset[T]):
   @property
   def _element_spec(self) -> Any:
     return dataset.get_element_spec(self._parent)
+
+
+def _reshuffle_window(window: list[T], seed: int) -> list[T]:
+  window_len = len(window)
+  shuffled = []
+  for pos in range(window_len):
+    shuffled_index = index_shuffle.index_shuffle(
+        pos, max_index=window_len - 1, seed=seed, rounds=4
+    )
+    shuffled.append(window[shuffled_index])
+  return shuffled
 
 
 class _WindowShuffleDatasetIterator(dataset.DatasetIterator[T]):
@@ -187,26 +198,7 @@ class _WindowShuffleDatasetIterator(dataset.DatasetIterator[T]):
     self._pos_in_window = 0
     self._window: list[T] = []
     self._parent_window_start_iter_state = self._parent.get_state()
-    self._init = True
     self._parent_exhausted = False
-
-  def _maybe_update_window_index(self):
-    # Ugly workaround to allow for the initialization upon calling next and not
-    # creating the new iterator.
-    if self._init:
-      self._init = False
-    else:
-      self._window_index += 1
-
-  def _reshuffle_list(self, seed: int, window: list[T]):
-    window_len = len(window)
-    shuffled = []
-    for pos in range(window_len):
-      shuffled_index = index_shuffle.index_shuffle(
-          pos, max_index=window_len - 1, seed=seed, rounds=4
-      )
-      shuffled.append(window[shuffled_index])
-    return shuffled
 
   def _fill_and_shuffle_window(self):
     # Window should be empty at this point.
@@ -217,8 +209,8 @@ class _WindowShuffleDatasetIterator(dataset.DatasetIterator[T]):
     except StopIteration:
       # End of the parent iterator, nothing else to process.
       self._parent_exhausted = True
-    self._window = self._reshuffle_list(
-        seed=self._global_seed + self._window_index, window=self._window
+    self._window = _reshuffle_window(
+        window=self._window, seed=self._global_seed + self._window_index
     )
 
   @stats.record_next_duration_if_output
@@ -231,14 +223,16 @@ class _WindowShuffleDatasetIterator(dataset.DatasetIterator[T]):
       # Checkpoints require reshuffling the window regardless the progress
       # within it. Store the parent window start.
       self._parent_window_start_iter_state = self._parent.get_state()
-      self._maybe_update_window_index()
       self._fill_and_shuffle_window()
       self._pos_in_window = 0
     # If the window is empty after reshuffling means no elements are left.
     if not self._window:
       raise StopIteration
     self._pos_in_window += 1
-    return self._window.pop()
+    result = self._window.pop()
+    if not self._window:
+      self._window_index += 1
+    return result
 
   def get_state(self):
     return dict(
@@ -247,15 +241,16 @@ class _WindowShuffleDatasetIterator(dataset.DatasetIterator[T]):
         ),
         window_index=self._window_index,
         pos_in_window=self._pos_in_window,
-        parent_exhausted=self._parent_exhausted,
     )
 
   def set_state(self, state):
-    self._parent_window_start_iter_state = state["parent_window_start_state"]
+    self._parent_window_start_iter_state = copy.deepcopy(
+        state["parent_window_start_state"]
+    )
     self._parent.set_state(self._parent_window_start_iter_state)
     self._window_index = state["window_index"]
     self._pos_in_window = state["pos_in_window"]
-    self._parent_exhausted = state["parent_exhausted"]
+    self._parent_exhausted = False
     self._fill_and_shuffle_window()
     # Removed previously processed elements from the window.
     for _ in range(min(self._pos_in_window, len(self._window))):

@@ -229,6 +229,75 @@ class WindowShuffleInterDatasetTest(absltest.TestCase):
           msg=f"Checkpoint values failed from checkpoint {i}.",
       )
 
+  def test_checkpoint_restore_on_fresh_iterator(self):
+    window_size = 10
+    num_elements = 1000
+    seed = 42
+    num_full_windows_before_checkpoint = 5
+    num_elements_to_verify = 20
+
+    # Checkpoint position: halfway through a window to trigger the bug
+    # (need to be partway through a window so next() triggers window refill)
+    checkpoint_position = (
+        num_full_windows_before_checkpoint * window_size + window_size // 2
+    )
+
+    # Create dataset with enough elements to span multiple windows
+    ds = dataset.MapDataset.range(num_elements).to_iter_dataset()
+    ds = shuffle.WindowShuffleIterDataset(
+        ds, window_size=window_size, seed=seed
+    )
+
+    # Original continuous run: consume to checkpoint position
+    it1 = ds.__iter__()
+    for _ in range(checkpoint_position):
+      next(it1)
+    checkpoint_state = it1.get_state()
+
+    # Continue and record data for verification
+    elements_after_checkpoint_original = [
+        next(it1) for _ in range(num_elements_to_verify)
+    ]
+    state_after_verification_original = it1.get_state()
+
+    # Now simulate checkpoint restore from a fresh iterator
+    ds2 = dataset.MapDataset.range(num_elements).to_iter_dataset()
+    ds2 = shuffle.WindowShuffleIterDataset(
+        ds2, window_size=window_size, seed=seed
+    )
+    it2 = ds2.__iter__()
+
+    # Restore state at checkpoint position
+    it2.set_state(checkpoint_state)
+
+    # Continue from checkpoint and verify data matches
+    elements_after_checkpoint_restored = [
+        next(it2) for _ in range(num_elements_to_verify)
+    ]
+    state_after_verification_restored = it2.get_state()
+
+    # Verify data matches
+    self.assertEqual(
+        elements_after_checkpoint_original,
+        elements_after_checkpoint_restored,
+        msg=(
+            "Data mismatch after checkpoint restore! This indicates the"
+            " window_index bug."
+        ),
+    )
+
+    # Verify window_index matches
+    self.assertEqual(
+        state_after_verification_original["window_index"],
+        state_after_verification_restored["window_index"],
+        msg=(
+            "window_index mismatch: "
+            f"original={state_after_verification_original['window_index']}, "
+            f"restored={state_after_verification_restored['window_index']}. "
+            "This indicates the checkpoint was not set properly."
+        ),
+    )
+
   def test_shuffled_raises_stop_iteration(self):
     ds = shuffle.WindowShuffleIterDataset(
         self.range_iter_ds, window_size=self._WINDOW_SIZE, seed=42
