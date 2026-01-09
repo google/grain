@@ -153,7 +153,7 @@ def _identity(x):
   return x
 
 
-class _AddOne(transforms.MapTransform):
+class _AddOne(transforms.Map):
 
   def map(self, x):
     return x + 1

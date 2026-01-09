@@ -40,20 +40,20 @@ class RngPoolTest(absltest.TestCase):
 
 
 @dataclasses.dataclass(frozen=True)
-class MapWithNoTransform(transforms.MapTransform):
+class MapWithNoTransform(transforms.Map):
 
   def map(self, element: int):
     return element
 
 
 @dataclasses.dataclass(frozen=True)
-class MapWithTransform(transforms.MapTransform):
+class MapWithTransform(transforms.Map):
 
   def map(self, element: int):
     return element + 1
 
 
-class MapWithElementSpecInference(transforms.MapTransform):
+class MapWithElementSpecInference(transforms.Map):
 
   def map(self, element: int):
     return {
@@ -72,7 +72,7 @@ class MapWithElementSpecInference(transforms.MapTransform):
 
 
 @dataclasses.dataclass(frozen=True)
-class RandomMapWithTransform(transforms.RandomMapTransform):
+class RandomMapWithTransform(transforms.RandomMap):
 
   def random_map(self, element: int, rng: np.random.Generator):
     delta = 0.1
@@ -80,13 +80,13 @@ class RandomMapWithTransform(transforms.RandomMapTransform):
 
 
 @dataclasses.dataclass(frozen=True)
-class RandomMapWithDeterminismTransform(transforms.RandomMapTransform):
+class RandomMapWithDeterminismTransform(transforms.RandomMap):
 
   def random_map(self, element: int, rng: np.random.Generator):
     return element + rng.integers(0, 10)
 
 
-class RandomMapWithElementSpecInference(transforms.RandomMapTransform):
+class RandomMapWithElementSpecInference(transforms.RandomMap):
 
   def random_map(self, element: int, rng: np.random.Generator):
     return {

@@ -21,10 +21,10 @@
 from grain._src.core.transforms import (
     Batch,
     Filter,
-    MapTransform as Map,
+    Map,
     MapWithIndex,
-    RandomMapTransform as RandomMap,
-    TfRandomMapTransform as TfRandomMap,
+    RandomMap,
+    TfRandomMap,
     Transformation,
     Transformations,
 )

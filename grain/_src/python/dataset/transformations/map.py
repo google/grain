@@ -141,10 +141,10 @@ class MapMapDataset(_ElementSpecFromTransformMapDatasetMixin[T]):
   def __init__(
       self,
       parent: dataset.MapDataset,
-      transform: transforms.MapTransform | Callable[[Any], T],
+      transform: transforms.Map | Callable[[Any], T],
   ):
     super().__init__(parent, transform)
-    if isinstance(transform, transforms.MapTransform):
+    if isinstance(transform, transforms.Map):
       self._map_fn = transform.map
     else:
       self._map_fn = transform
@@ -185,14 +185,11 @@ class RandomMapMapDataset(_ElementSpecFromTransformMapDatasetMixin[T]):
   def __init__(
       self,
       parent: dataset.MapDataset,
-      transform: (
-          transforms.RandomMapTransform
-          | Callable[[Any, np.random.Generator], T]
-      ),
+      transform: transforms.RandomMap | Callable[[Any, np.random.Generator], T],
       seed: int | None = None,
   ):
     super().__init__(parent, transform)
-    if isinstance(transform, transforms.RandomMapTransform):
+    if isinstance(transform, transforms.RandomMap):
       self._map_fn = transform.random_map
     else:
       self._map_fn = transform
@@ -438,14 +435,11 @@ class RandomMapIterDataset(_ElementSpecFromTransformIterDatasetMixin[T]):
   def __init__(
       self,
       parent: dataset.IterDataset,
-      transform: (
-          transforms.RandomMapTransform
-          | Callable[[Any, np.random.Generator], T]
-      ),
+      transform: transforms.RandomMap | Callable[[Any, np.random.Generator], T],
       seed: int | None = None,
   ):
     super().__init__(parent, transform)
-    if isinstance(transform, transforms.RandomMapTransform):
+    if isinstance(transform, transforms.RandomMap):
       self._map_fn = transform.random_map
     else:
       self._map_fn = transform
@@ -475,10 +469,10 @@ class MapIterDataset(_ElementSpecFromTransformIterDatasetMixin[T]):
   def __init__(
       self,
       parent: dataset.IterDataset,
-      transform: transforms.MapTransform | Callable[[Any], T],
+      transform: transforms.Map | Callable[[Any], T],
   ):
     super().__init__(parent, transform)
-    if isinstance(transform, transforms.MapTransform):
+    if isinstance(transform, transforms.Map):
       self._map_fn = transform.map
     else:
       self._map_fn = transform
