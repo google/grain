@@ -52,6 +52,9 @@ class TreeImpl(Protocol):
   def spec_like(self, structure):
     ...
 
+  def estimate_byte_size(self, structure):
+    ...
+
 
 # Static check that the module implements the necessary functions.
 tree_lib: TreeImpl = tree_lib
@@ -192,6 +195,49 @@ class TreeTest(parameterized.TestCase):
             "MyAttrs\n{'d': 'int[]', 'e': 'str[]'}[]",
         ],
     )
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name="bytes",
+          structure=b"serialized_data",
+          expected_output=15,
+      ),
+      dict(
+          testcase_name="ndarray",
+          structure=np.asarray([1, 2, 3], dtype=np.int32),
+          expected_output=3 * 4,
+      ),
+      dict(
+          testcase_name="int",
+          structure=1,
+          expected_output=0,
+      ),
+      dict(
+          testcase_name="class",
+          structure=MyClass(1),
+          expected_output=0,
+      ),
+      dict(
+          testcase_name="simple",
+          structure={
+              "A": "v2",
+              "B": 1232.4,
+              "C": np.asarray([1, 2, 3], dtype=np.float32),
+          },
+          expected_output=2 + 3 * 4,
+      ),
+      dict(
+          testcase_name="nested",
+          structure={
+              "A": "v2",
+              "B": {"C": np.asarray([1, 2], dtype=np.float32)},
+              "c": MyClass(b"asdsad"),
+          },
+          expected_output=2 + 2 * 4,
+      ),
+  )
+  def test_estimate_byte_size(self, structure, expected_output):
+    self.assertEqual(tree_lib.estimate_byte_size(structure), expected_output)
 
 
 if __name__ == "__main__":

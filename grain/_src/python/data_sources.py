@@ -59,16 +59,6 @@ _api_usage_counter = monitoring.Counter(
     root=grain_monitoring.get_monitoring_root(),
     fields=[("name", str)],
 )
-_bytes_read_counter = monitoring.Counter(
-    "/grain/python/data_sources/bytes_read",
-    monitoring.Metadata(
-        description=(
-            "Number of bytes produced by a data source via random access."
-        ),
-    ),
-    root=grain_monitoring.get_monitoring_root(),
-    fields=[("source", str)],
-)
 
 T = TypeVar("T")
 ArrayRecordDataSourcePaths = Union[
@@ -112,9 +102,7 @@ class ArrayRecordDataSource(ARDataSource):
 
   @dataset_stats.trace_input_pipeline(stage_category=dataset_stats.IPL_CAT_READ)
   def __getitem__(self, record_key: SupportsIndex) -> bytes:
-    data = super().__getitem__(record_key)
-    _bytes_read_counter.IncrementBy(len(data), "ArrayRecordDataSource")
-    return data
+    return super().__getitem__(record_key)
 
   @property
   def paths(self) -> ArrayRecordDataSourcePaths:

@@ -314,3 +314,24 @@ def spec_like(structure):
       structure,
       is_leaf=_is_leaf,
   )
+
+
+def estimate_byte_size(structure) -> int:
+  """Returns estimated total byte size of the given tree."""
+  # Fast path for serialized data.
+  if isinstance(structure, (bytes, str)):
+    return len(structure)
+
+  result = 0
+
+  # This is intentionally very light and only handles the the most common types
+  # that have a non-trivial byte size to avoid overheads.
+  def add_byte_size(x):
+    nonlocal result
+    if isinstance(x, (bytes, str)):
+      result += len(x)
+    elif isinstance(x, np.ndarray):
+      result += x.nbytes
+
+  map_structure(add_byte_size, structure)
+  return result

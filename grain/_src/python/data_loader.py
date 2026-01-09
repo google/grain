@@ -128,10 +128,9 @@ class _SamplerMapDataset(dataset.MapDataset[record.Record]):
       sampler: Sampler,
       shard_options: sharding.ShardOptions,
   ):
-    super().__init__()
+    super().__init__(dataset.MapDataset.source(data_source))
     self._sampler = sampler
     self._shard_options = shard_options
-    self._data_source = data_source
     self.length = self._sampler_size() // self._shard_options.shard_count
 
   def _sampler_size(self) -> int:
@@ -163,8 +162,9 @@ class _SamplerMapDataset(dataset.MapDataset[record.Record]):
     )
     with self._stats.record_self_time():
       metadata = self._sampler[index]
-      data = self._data_source[metadata.record_key]
-      return record.Record(metadata=metadata, data=data)
+      return record.Record(
+          metadata=metadata, data=self._parent[metadata.record_key]
+      )
 
 
 class _OperationIterDataset(dataset.IterDataset[_T]):
