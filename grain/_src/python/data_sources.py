@@ -46,6 +46,12 @@ if platform.system() == "Windows":
   class ARDataSource:
     def __init__(self, *args, **kwargs):
       raise RuntimeError("array_record isn't supported on Windows")
+
+    def __len__(self) -> int:
+      raise RuntimeError("array_record isn't supported on Windows")
+
+    def __getitem__(self, index: int) -> bytes:
+      raise RuntimeError("array_record isn't supported on Windows")
 else:
   from array_record.python.array_record_data_source import (
       ArrayRecordDataSource as ARDataSource,
@@ -111,8 +117,8 @@ class ArrayRecordDataSource(ARDataSource):
     _api_usage_counter.Increment("ArrayRecordDataSource")
 
   @dataset_stats.trace_input_pipeline(stage_category=dataset_stats.IPL_CAT_READ)
-  def __getitem__(self, record_key: SupportsIndex) -> bytes:
-    data = super().__getitem__(record_key)
+  def __getitem__(self, index: int) -> bytes:
+    data = super().__getitem__(index)
     _bytes_read_counter.IncrementBy(len(data), "ArrayRecordDataSource")
     return data
 
