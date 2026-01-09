@@ -132,6 +132,11 @@ class SourceMapDataset(dataset.MapDataset):
     else:
       return []
 
+  def close(self) -> None:
+    """Closes the underlying data source if it has a close method."""
+    if hasattr(self._source, "close"):
+      self._source.close()
+
 
 def log_lineage_for_sources(
     root: Union[dataset.MapDataset, dataset.IterDataset],
