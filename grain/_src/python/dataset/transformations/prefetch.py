@@ -570,6 +570,7 @@ class GetElementProducerFn(grain_pool.GetElementProducerFn, Generic[T]):
       worker_count: int,
       start_profiling_event: synchronize.Event | None = None,
       stop_profiling_event: synchronize.Event | None = None,
+      profiling_timeout: Any | None = None,
       stats_out_queue: queues.Queue | None = None,
   ) -> Iterator[tuple[T, Optional[dict[str, Any]]]]:
     if worker_count > 1:
@@ -683,6 +684,7 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     )
     self._start_profiling_event = mp.get_context("spawn").Event()
     self._stop_profiling_event = mp.get_context("spawn").Event()
+    self._profiling_timeout = mp.get_context("spawn").Value("i", -1)
 
     self._state: dict[str, dict[str, Any] | int] = {
         _WORKERS_STATE: workers_state,
@@ -794,6 +796,7 @@ class _MultiprocessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         self._worker_init_fn,
         self._start_profiling_event,
         self._stop_profiling_event,
+        self._profiling_timeout,
         self._stats_in_queues,
     )
 
