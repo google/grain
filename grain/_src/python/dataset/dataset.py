@@ -50,11 +50,13 @@ import builtins
 from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Sequence
 import functools
 import json
-from typing import Any, Generic, TypeVar, Union, cast, overload
+from typing import Any, Generic, Protocol, TypeVar, Union, cast, overload, runtime_checkable
 import warnings
 
 from etils import epath
+from grain._src.core import config as grain_config  # pylint: disable=g-importing-member.
 from grain._src.core import monitoring as grain_monitoring
+from grain._src.core import traceback_util
 from grain._src.core import transforms
 from grain._src.python import checkpointing
 from grain._src.python import options as grain_options
@@ -77,6 +79,11 @@ _api_usage_counter = monitoring.Counter(
 
 T = TypeVar("T")
 S = TypeVar("S")
+
+
+@runtime_checkable
+class ParentDataset(Protocol):
+  has_child: bool
 
 
 class _Dataset:
@@ -358,6 +365,10 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
     super().__init__(parents)
     self._parents = cast(Sequence[MapDataset], self._parents)
     _api_usage_counter.Increment("MapDataset")
+    self.has_child = False
+    for parent in self._parents:
+      if isinstance(parent, ParentDataset):
+        parent.has_child = True
 
   @property
   def parents(self) -> Sequence[MapDataset]:
@@ -854,6 +865,10 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
   def __iter__(self) -> DatasetIterator[T]:
     return self.to_iter_dataset().__iter__()
 
+  def __init_subclass__(cls, **kwargs):
+    super().__init_subclass__(**kwargs)
+    cls.__getitem__ = map_dataset_injector(cls.__getitem__)
+
   # pytype: disable=attribute-error
   # pylint: disable=protected-access
 
@@ -911,6 +926,26 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
   # pylint: enable=protected-access
 
 
+def map_dataset_injector(delegate_func: Callable[..., Any]):
+  """Injects arbitrary logic to the passed-in delegate function at the end of the pipeline."""
+
+  @functools.wraps(delegate_func)
+  def wrapper(self, index):
+    # Filter traceback if the dataset is a leaf node in the pipeline and
+    # traceback filtering is enabled.
+    if (
+        isinstance(self, ParentDataset)
+        and not self.has_child
+        and traceback_filter_mode() != "off"
+    ):
+      return traceback_util.run_with_traceback_filter(delegate_func)(
+          self, index
+      )
+    return delegate_func(self, index)
+
+  return wrapper
+
+
 def output_dataset_injector(create_iter_func: Callable[..., DatasetIterator]):
   """Injects an _OutputIterDataset to the end of the dataset pipeline.
 
@@ -924,12 +959,12 @@ def output_dataset_injector(create_iter_func: Callable[..., DatasetIterator]):
   @functools.wraps(create_iter_func)
   def wrapper(self, *args, **kwargs):
     if (
-        isinstance(self, _OutputIterDataset)
-        or not hasattr(self, "has_child")
-        or self.has_child
+        not isinstance(self, _OutputIterDataset)
+        and isinstance(self, ParentDataset)
+        and not self.has_child
     ):
-      return create_iter_func(self, *args, **kwargs)
-    return _OutputIterDataset(self).__iter__(*args, **kwargs)
+      return _OutputIterDataset(self).__iter__(*args, **kwargs)
+    return create_iter_func(self, *args, **kwargs)
 
   return wrapper
 
@@ -1001,7 +1036,7 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
 
     self.has_child = False
     for parent in self._parents:
-      if isinstance(parent, IterDataset) and hasattr(parent, "has_child"):
+      if isinstance(parent, ParentDataset):
         parent.has_child = True
     if not isinstance(self, _OutputIterDataset):
       _api_usage_counter.Increment("IterDataset")
@@ -1699,6 +1734,11 @@ class WithOptionsIterDataset(IterDataset[T]):
     return get_element_spec(self._parent)
 
 
+def traceback_filter_mode() -> str:
+  """Returns the traceback filter mode."""
+  return grain_config.config.get_or_default("py_traceback_filtering")
+
+
 def is_thread_prefetch_injection_enabled() -> bool:
   """Returns whether thread prefetch injection experiment is enabled."""
   return False
@@ -1721,6 +1761,16 @@ class _OutputIterDataset(IterDataset[T]):
     ):
       if not prefetch.is_prefetch_iterator(iterator):
         iterator = prefetch.ThreadPrefetchDatasetIterator(iterator, 1)
+
+    filter_mode = traceback_filter_mode()
+    if filter_mode != "off":
+      # pytype's ParameterizedClass (i.e. the type of
+      # DatasetIterator[T]) currently doesn't properly support setting
+      # attributes, so we cast to a non-parameterized type as a workaround.
+      cast(DatasetIterator, iterator).__class__.__next__ = (
+          traceback_util.run_with_traceback_filter(iterator.__class__.__next__)
+      )
+
     return iterator
 
 
