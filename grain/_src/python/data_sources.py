@@ -28,8 +28,7 @@ from multiprocessing import shared_memory
 import os
 import threading
 import time
-import typing
-from typing import Any, Generic, Optional, Protocol, SupportsIndex, TypeVar, Union
+from typing import Any, Generic, Optional, SupportsIndex, TypeVar, Union
 
 from absl import logging
 from etils import epath
@@ -107,35 +106,6 @@ class ArrayRecordDataSource(ARDataSource):
   @property
   def paths(self) -> ArrayRecordDataSourcePaths:
     return self._paths
-
-
-@typing.runtime_checkable
-class RandomAccessDataSource(Protocol, Generic[T]):
-  """Interface for datasources where storage supports efficient random access.
-
-  Note that `__repr__` has to be additionally implemented to make checkpointing
-  work with this source.
-  """
-
-  def __len__(self) -> int:
-    """Returns the total number of records in the data source."""
-
-  def __getitem__(self, record_key: SupportsIndex) -> T:
-    """Returns the value for the given record_key.
-
-    This method must be threadsafe. It's also expected to be deterministic.
-    When using multiprocessing (worker_count>0) PyGrain will pickle the data
-    source, which invokes __getstate__(), and send a copy to each worker
-    process, where __setstate__() is called. After that each worker process
-    has its own independent data source object.
-
-    Arguments:
-      record_key: This will be an integer in [0, len(self)-1].
-
-    Returns:
-      The corresponding record. File data sources often return the raw bytes but
-      records can be any Python object.
-    """
 
 
 class RangeDataSource:

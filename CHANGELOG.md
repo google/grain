@@ -18,6 +18,9 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     use the graduated version instead: `grain.IterDataset.mp_prefetch`.
   * Deprecates `grain.python.experimental.ConcatenateMapDataset`, use the
     graduated version instead: `grain.MapDataset.concatenate`.
+  * Custom implementations of `RandomAccessDataSource` should accept `int`
+    index in `__getitem__`. Legacy paths that handle `SupportsIndex` will still
+    work, but are not necessary since Grain will only pass integer indices.
 
 * Bug fixes:
   * Fixes bug in `WindowShuffleIterDataset` checkpointing.

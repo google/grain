@@ -24,7 +24,7 @@ from collections.abc import Sequence
 import dataclasses
 import enum
 import typing
-from typing import Generic, Protocol, TypeVar
+from typing import Generic, Protocol, SupportsIndex, TypeVar
 
 import numpy as np
 
@@ -55,13 +55,34 @@ class ShapeDtypeStruct(ShapeDtypeStructProtocol):
 
 @typing.runtime_checkable
 class RandomAccessDataSource(Protocol[T]):
-  """Interface for datasets where storage supports efficient random access."""
+  """Interface for datasets where storage supports efficient random access.
+
+  If using with `DataLoader`, `__repr__` has to be additionally implemented to
+  make checkpointing work with this source.
+
+  If used with multiprocessing, must be picklable.
+  """
 
   def __len__(self) -> int:
-    ...
+    """Returns the total number of records in the data source."""
 
-  def __getitem__(self, index: int) -> T:
-    ...
+  def __getitem__(self, record_key: SupportsIndex)-> T:
+    """Returns the value for the given index.
+
+    This method must be thread-safe and deterministic.
+
+    We annotate `record_key` as `SupportsIndex` to continue supporting
+    legacy user source implementations. In the past we required `SupportsIndex`
+    type that adds indirection to convert to `int`, but in practice always used
+    `int` indices. New source implementations only need to support `int`.
+
+    Arguments:
+      record_key: This will be an integer in [0, len(self)-1].
+
+    Returns:
+      The corresponding record. File data sources often return the raw bytes but
+      records can be any Python object.
+    """
 
 
 class SupportsBatchedReadRandomAccessDataSource(
