@@ -32,7 +32,16 @@ from typing import Any, Union
 import numpy as np
 
 
-class MapTransform(abc.ABC):
+# We use a metaclass to avoid having `from_callable` on a `MapTransform`
+# instance and instead only have it on the class.
+class _MapMeta(abc.ABCMeta):
+
+  def from_callable(cls, fn: Callable[..., Any]) -> MapTransform:
+    """Returns a MapTransform that applies the given callable."""
+    return _MapFromCallable(fn)
+
+
+class MapTransform(metaclass=_MapMeta):
   """Abstract base class for all 1:1 transformations of elements.
 
   Implementations should be threadsafe since they are often executed in
@@ -42,6 +51,19 @@ class MapTransform(abc.ABC):
   @abc.abstractmethod
   def map(self, element):
     """Maps a single element."""
+
+
+class _MapFromCallable(MapTransform):
+  """A MapTransform that applies the given callable."""
+
+  def __init__(self, fn: Callable[..., Any]):
+    self._fn = fn
+
+  def map(self, element):
+    return self._fn(element)
+
+  def __repr__(self):
+    return f"MapFromCallable<{get_pretty_transform_name(self._fn)}>"
 
 
 class RandomMapTransform(abc.ABC):

@@ -43,6 +43,10 @@ class _TestMapWithRepr(transforms.MapTransform):
     return "CustomRepr"
 
 
+def add_one(x):
+  return x + 1
+
+
 @absltest.skipIf(
     platform.system() == "Windows", "Skipped due to windows paths."
 )
@@ -70,14 +74,33 @@ class GetPrettyTransformNameTest(parameterized.TestCase):
           expected_substring="CustomStr",
       ),
       dict(
-          transform=_TestMapWithRepr(),
-          expected_substring="CustomRepr",
+          transform=transforms.MapTransform.from_callable(add_one),
+          expected_substring=(
+              "MapFromCallable<add_one @ .../_src/core/transforms_test.py:"
+          ),
+      ),
+      dict(
+          transform=transforms.MapTransform.from_callable(lambda x: x + 1),
+          expected_substring=(
+              "MapFromCallable<<lambda> @ .../_src/core/transforms_test.py:"
+          ),
       ),
   )
   def test_get_pretty_transform_name(self, transform, expected_substring):
     self.assertIn(
         expected_substring, transforms.get_pretty_transform_name(transform)
     )
+
+
+class MapFromCallableTest(parameterized.TestCase):
+
+  def test_local_function(self):
+    map_transform = transforms.MapTransform.from_callable(add_one)
+    self.assertEqual(map_transform.map(1), 2)
+
+  def test_lambda(self):
+    map_transform = transforms.MapTransform.from_callable(lambda x: x + 1)
+    self.assertEqual(map_transform.map(1), 2)
 
 
 if __name__ == "__main__":
