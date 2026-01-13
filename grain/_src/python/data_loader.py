@@ -31,10 +31,10 @@ from grain._src.core import sharding
 from grain._src.core import transforms
 from grain._src.core import tree_lib
 import multiprocessing as mp
-from grain._src.python import checkpointing
 from grain._src.python import operations as ops
 from grain._src.python import options
 from grain._src.python import record
+from grain._src.python.checkpoint import base as checkpoint_base
 from grain._src.python.data_sources import RandomAccessDataSource
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import batch as batch_ds
@@ -583,7 +583,7 @@ class DataLoaderIterator(collections.abc.Iterator[_T]):
   # See https://orbax.readthedocs.io/en/latest/ for usage examples.
 
   async def save(
-      self, directory: checkpointing.PathAwaitingCreation
+      self, directory: checkpoint_base.PathAwaitingCreation
   ) -> Awaitable[None]:
     """Saves the iterator state to a directory.
 
@@ -599,7 +599,7 @@ class DataLoaderIterator(collections.abc.Iterator[_T]):
       background thread to perform I/O without blocking the main thread.
     """
     state = self.get_state().decode()
-    return checkpointing.background_save(directory, state)
+    return checkpoint_base.background_save(directory, state)
 
   async def load(self, directory: epath.Path) -> Awaitable[None]:
     """Loads the iterator state from a directory.
@@ -618,7 +618,7 @@ class DataLoaderIterator(collections.abc.Iterator[_T]):
     def set_state_fn(state: str):
       self.set_state(state.encode())
 
-    return checkpointing.background_load(directory, set_state_fn)
+    return checkpoint_base.background_load(directory, set_state_fn)
 
   ### END Orbax checkpointing API.
 

@@ -56,8 +56,8 @@ import warnings
 from etils import epath
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import transforms
-from grain._src.python import checkpointing
 from grain._src.python import options as grain_options
+from grain._src.python.checkpoint import base as checkpoint_base
 from grain._src.python.dataset import base
 from grain._src.python.dataset import stats as dataset_stats
 from grain.proto import execution_summary_pb2
@@ -1444,7 +1444,7 @@ class DatasetIterator(Iterator[T], abc.ABC):
   # See https://orbax.readthedocs.io/en/latest/ for usage examples.
 
   async def save(
-      self, directory: checkpointing.PathAwaitingCreation
+      self, directory: checkpoint_base.PathAwaitingCreation
   ) -> Awaitable[None]:
     """Saves the iterator state to a directory.
 
@@ -1460,7 +1460,7 @@ class DatasetIterator(Iterator[T], abc.ABC):
       background thread to perform I/O without blocking the main thread.
     """
     state = json.dumps(self.get_state(), indent=4)
-    return checkpointing.background_save(directory, state)
+    return checkpoint_base.background_save(directory, state)
 
   async def load(self, directory: epath.Path) -> Awaitable[None]:
     """Loads the iterator state from a directory.
@@ -1479,7 +1479,7 @@ class DatasetIterator(Iterator[T], abc.ABC):
     def set_state_fn(state: str):
       self.set_state(json.loads(state))
 
-    return checkpointing.background_load(directory, set_state_fn)
+    return checkpoint_base.background_load(directory, set_state_fn)
 
   ### END Orbax checkpointing API.
 

@@ -19,13 +19,13 @@
 # pylint: disable=unused-import
 # pylint: disable=g-multiple-import
 
-from grain._src.python.checkpoint_handlers import (
+from grain._src.python.checkpoint.handler import (
     CheckpointHandler,
 )
 
 # These are imported only if Orbax is present.
 try:
-  from grain._src.python.checkpoint_handlers import (
+  from grain._src.python.checkpoint.handler import (
       CheckpointSave,
       CheckpointRestore,
   )

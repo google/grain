@@ -46,7 +46,7 @@ py_library(
         "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
         "//grain/_src/core:version",
-        "//grain/_src/python:checkpoint_handlers",
+        "//grain/_src/python/checkpoint:handler",
         "//grain/_src/python:data_loader",
         "//grain/_src/python:data_sources",
         "//grain/_src/python:load",
@@ -70,6 +70,5 @@ py_library(
         "//grain/_src/python/experimental/device_put",
         "//grain/_src/python/experimental/example_packing:packing",
         "//grain/_src/python/testing:experimental",
-        "//grain/proto:execution_summary_py_pb2",
     ],
 )
