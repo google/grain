@@ -32,7 +32,7 @@ class FlatMapMapDataset(dataset.MapDataset[T]):
   def __init__(
       self,
       parent: dataset.MapDataset,
-      transform: transforms.FlatMapTransform,
+      transform: transforms.FlatMap,
   ):
     super().__init__(parent)
     self._transform = transform
@@ -147,7 +147,7 @@ class FlatMapIterDataset(dataset.IterDataset[T]):
   def __init__(
       self,
       parent: dataset.IterDataset,
-      transform: transforms.FlatMapTransform,
+      transform: transforms.FlatMap,
   ):
     super().__init__(parent)
     self._transform = transform

@@ -677,12 +677,12 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
 
     local_unpicklable_obj = UnpicklableObject()
 
-    class LeftTransform(transforms.MapTransform):
+    class LeftTransform(transforms.Map):
 
       def map(self, x):
         return x if local_unpicklable_obj else x
 
-    class RightTransform(transforms.MapTransform):
+    class RightTransform(transforms.Map):
 
       def map(self, x):
         return x if local_unpicklable_obj else x
@@ -718,14 +718,14 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
       def __getstate__(self):
         raise ValueError('UnpicklableObject is not picklable')
 
-    class PickleableTransform(transforms.MapTransform):
+    class PickleableTransform(transforms.Map):
 
       def map(self, x):
         return x
 
     local_unpicklable_obj = UnpicklableObject()
 
-    class RightTransform(transforms.MapTransform):
+    class RightTransform(transforms.Map):
 
       def map(self, x):
         return x if local_unpicklable_obj else x
@@ -765,7 +765,8 @@ class MultiprocessPrefetchIterDatasetTest(parameterized.TestCase):
       num_workers: int,
       per_worker_buffer_size: int,
   ):
-    class _SleepTransform(transforms.MapTransform):
+
+    class _SleepTransform(transforms.Map):
 
       def map(self, features):
         time.sleep(1)

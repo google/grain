@@ -49,21 +49,21 @@ class FilterKeepingOddElementsOnly(transforms.Filter):
 
 
 @dataclasses.dataclass(frozen=True)
-class RandomMapAddingRandomInt(transforms.RandomMapTransform):
+class RandomMapAddingRandomInt(transforms.RandomMap):
 
   def random_map(self, element: int, rng: np.random.Generator) -> int:
     return element + rng.integers(0, 100)
 
 
 @dataclasses.dataclass(frozen=True)
-class RandomMapAlwaysAddingOne(transforms.RandomMapTransform):
+class RandomMapAlwaysAddingOne(transforms.RandomMap):
 
   def random_map(self, element: int, rng: np.random.Generator) -> int:
     return element + 1
 
 
 @dataclasses.dataclass(frozen=True)
-class MapTransformAddingOne(transforms.MapTransform):
+class MapAddingOne(transforms.Map):
 
   def map(self, element: int) -> int:
     return element + 1
@@ -97,7 +97,7 @@ class InverseUniformSelectionMap(base.DatasetSelectionMap):
     return (index + 1) % 2, index // 2
 
 
-class AddRandomInteger(transforms.RandomMapTransform):
+class AddRandomInteger(transforms.RandomMap):
 
   def random_map(self, element, rng):
     return element + rng.integers(low=0, high=100)
@@ -1044,7 +1044,7 @@ class DatasetTest(parameterized.TestCase):
           dataset.MapDataset.range(15),
           dataset.MapDataset.range(15).to_iter_dataset(),
       ],
-      transform=[MapTransformAddingOne(), lambda x: x + 1],
+      transform=[MapAddingOne(), lambda x: x + 1],
   )
   def test_map_produces_correct_elements(self, initial_ds, transform):
     ds = initial_ds.map(transform)
@@ -1173,7 +1173,7 @@ class DatasetTest(parameterized.TestCase):
       (dataset.MapDataset.range(5).to_iter_dataset(),),
   )
   def test_apply(self, ds):
-    ds = ds.apply([MapTransformAddingOne(), transforms.Batch(2)])
+    ds = ds.apply([MapAddingOne(), transforms.Batch(2)])
     np.testing.assert_equal(
         list(ds),
         [
@@ -1184,7 +1184,7 @@ class DatasetTest(parameterized.TestCase):
     )
 
 
-class TfRandomMapAlwaysAddingOne(transforms.TfRandomMapTransform):
+class TfRandomMapAlwaysAddingOne(transforms.TfRandomMap):
 
   def np_random_map(self, x, rng):
     return x + 1
@@ -1196,7 +1196,7 @@ class FilterArraysWithLargeSum(transforms.Filter):
     return np.sum(x) < 20
 
 
-class FlatMapAddingOne(transforms.FlatMapTransform):
+class FlatMapAddingOne(transforms.FlatMap):
 
   max_fan_out = 2
 
@@ -1211,7 +1211,7 @@ class ApplyTransformationsTest(parameterized.TestCase):
       (dataset.MapDataset.range(15).to_iter_dataset(),),
   )
   def test_single_transform(self, ds):
-    ds = dataset.apply_transformations(ds, MapTransformAddingOne())
+    ds = dataset.apply_transformations(ds, MapAddingOne())
     self.assertSequenceEqual(list(ds), list(range(1, 16)))
 
   @parameterized.parameters(
@@ -1223,7 +1223,7 @@ class ApplyTransformationsTest(parameterized.TestCase):
     ds = dataset.apply_transformations(
         ds,
         [
-            MapTransformAddingOne(),
+            MapAddingOne(),
             RandomMapAlwaysAddingOne(),
             transforms.Batch(batch_size=2, drop_remainder=True),
             FilterArraysWithLargeSum(),
@@ -1359,7 +1359,7 @@ class GetExecutionSummaryTest(parameterized.TestCase):
   def test_execution_summary_with_logging(self):
     with self.assertLogs(level="INFO") as logs:
       ds = dataset.MapDataset.range(10).shuffle(42)
-      ds = ds.map(MapTransformAddingOne())
+      ds = ds.map(MapAddingOne())
       ds = ds.to_iter_dataset()
       it = ds.__iter__()
       # Get execution summary after iterating through the dataset.
@@ -1377,7 +1377,7 @@ class GetExecutionSummaryTest(parameterized.TestCase):
   def test_execution_summary_with_no_logging(self):
     with self.assertLogs(level="INFO") as logs:
       ds = dataset.MapDataset.range(10).shuffle(42)
-      ds = ds.map(MapTransformAddingOne())
+      ds = ds.map(MapAddingOne())
       ds = ds.to_iter_dataset()
       ds = dataset.WithOptionsIterDataset(
           ds,
@@ -1400,7 +1400,7 @@ class GetExecutionSummaryTest(parameterized.TestCase):
       del worker_index, worker_count
       dataset_stats._REPORTING_PERIOD_SEC = 0.05
 
-    ds = dataset.MapDataset.range(10000).map(MapTransformAddingOne())
+    ds = dataset.MapDataset.range(10000).map(MapAddingOne())
     ds = ds.to_iter_dataset()
     ds = ds.mp_prefetch(
         options.MultiprocessingOptions(num_workers=1),

@@ -36,9 +36,9 @@ from grain._src.core.sharding import NoSharding, ShardByJaxProcess, ShardOptions
 from grain._src.core.transforms import (
     Batch,
     Filter as FilterTransform,
-    MapTransform,
+    Map as MapTransform,
     MapWithIndex as MapWithIndexTransform,
-    RandomMapTransform,
+    RandomMap as RandomMapTransform,
     Transformation,
     Transformations,
 )

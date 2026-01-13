@@ -20,7 +20,7 @@
 # pylint: disable=unused-import
 
 from grain._src.core.transforms import (
-    FlatMapTransform,
+    FlatMap as FlatMapTransform,
     MapWithIndex as MapWithIndexTransform,
 )
 

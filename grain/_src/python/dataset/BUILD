@@ -175,6 +175,7 @@ py_test(
     }),
     shard_count = 10,
     srcs_version = "PY3",
+    # TODO: Re-enable once the test is fixed.
     deps = [
         ":dataset",
         ":elastic_iterator",

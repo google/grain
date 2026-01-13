@@ -33,7 +33,7 @@ from grain._src.python.dataset.transformations import source
 import numpy as np
 
 
-class MapWithElementSpecInference(transforms.MapTransform):
+class MapWithElementSpecInference(transforms.Map):
 
   def map(self, element: int):
     return {
@@ -495,7 +495,7 @@ class BatchMapDatasetTest(parameterized.TestCase):
 
   def test_batch_after_flatmap_raises_error(self):
     @dataclasses.dataclass(frozen=True)
-    class TestFlatMapTransform(transforms.FlatMapTransform):
+    class TestFlatMap(transforms.FlatMap):
       max_fan_out: int
 
       def flat_map(self, element: int):
@@ -503,7 +503,7 @@ class BatchMapDatasetTest(parameterized.TestCase):
           yield i
 
     ds = dataset.MapDataset.range(0, 10)
-    ds = flatmap.FlatMapMapDataset(ds, TestFlatMapTransform(max_fan_out=5))
+    ds = flatmap.FlatMapMapDataset(ds, TestFlatMap(max_fan_out=5))
     with self.assertRaisesRegex(
         ValueError,
         "`MapDataset.batch` can not follow `FlatMapMapDataset`",

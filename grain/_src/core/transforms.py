@@ -32,7 +32,7 @@ from typing import Any, Union
 import numpy as np
 
 
-class MapTransform(abc.ABC):
+class Map(abc.ABC):
   """Abstract base class for all 1:1 transformations of elements.
 
   Implementations should be threadsafe since they are often executed in
@@ -44,7 +44,7 @@ class MapTransform(abc.ABC):
     """Maps a single element."""
 
 
-class RandomMapTransform(abc.ABC):
+class RandomMap(abc.ABC):
   """Abstract base class for all random 1:1 transformations of elements.
 
   Implementations should be threadsafe since they are often executed in
@@ -68,7 +68,7 @@ class MapWithIndex(abc.ABC):
     """Maps a single element with its index."""
 
 
-class TfRandomMapTransform(abc.ABC):
+class TfRandomMap(abc.ABC):
   """Abstract base class for all random 1:1 transformations of elements."""
 
   @abc.abstractmethod
@@ -91,7 +91,7 @@ class Filter(abc.ABC):
     """Filters a single element; returns True if the element should be kept."""
 
 
-class FlatMapTransform(abc.ABC):
+class FlatMap(abc.ABC):
   """Abstract base class for splitting operations of individual elements.
 
   Implementations should be threadsafe since they are often executed in
@@ -124,11 +124,11 @@ class Batch:
 
 Transformation = Union[
     Batch,
-    MapTransform,
-    RandomMapTransform,
-    TfRandomMapTransform,
+    Map,
+    RandomMap,
+    TfRandomMap,
     Filter,
-    FlatMapTransform,
+    FlatMap,
     MapWithIndex,
 ]
 Transformations = Sequence[Transformation]
@@ -150,11 +150,11 @@ def get_pretty_transform_name(
       transform,
       (
           Batch,
-          MapTransform,
-          RandomMapTransform,
-          TfRandomMapTransform,
+          Map,
+          RandomMap,
+          TfRandomMap,
           Filter,
-          FlatMapTransform,
+          FlatMap,
       ),
   ):
     # Check if transform class defines `__str__` and `__repr__` and use them if

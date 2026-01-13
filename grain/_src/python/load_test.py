@@ -32,7 +32,7 @@ class FilterEven(transforms.Filter):
     return x % 2 == 0
 
 
-class PlusOne(transforms.MapTransform):
+class PlusOne(transforms.Map):
 
   def map(self, x: int) -> int:
     return x + 1
