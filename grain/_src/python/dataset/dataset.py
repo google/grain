@@ -54,7 +54,9 @@ from typing import Any, Generic, TypeVar, Union, cast, overload
 import warnings
 
 from etils import epath
+from grain._src.core import config as grain_config  # pylint: disable=g-importing-member.
 from grain._src.core import monitoring as grain_monitoring
+from grain._src.core import traceback_util
 from grain._src.core import transforms
 from grain._src.python import options as grain_options
 from grain._src.python.checkpoint import base as checkpoint_base
@@ -1691,6 +1693,11 @@ class WithOptionsIterDataset(IterDataset[T]):
     return get_element_spec(self._parent)
 
 
+def traceback_filter_mode() -> str:
+  """Returns the traceback filter mode."""
+  return grain_config.config.get_or_default("py_traceback_filtering")
+
+
 def is_thread_prefetch_injection_enabled() -> bool:
   """Returns whether thread prefetch injection experiment is enabled."""
   return False
@@ -1713,6 +1720,16 @@ class _OutputIterDataset(IterDataset[T]):
     ):
       if not prefetch.is_prefetch_iterator(iterator):
         iterator = prefetch.ThreadPrefetchDatasetIterator(iterator, 1)
+
+    filter_mode = traceback_filter_mode()
+    if filter_mode != "off":
+      # pytype's ParameterizedClass (i.e. the type of
+      # DatasetIterator[T]) currently doesn't properly support setting
+      # attributes, so we cast to a non-parameterized type as a workaround.
+      cast(DatasetIterator, iterator).__class__.__next__ = (
+          traceback_util.run_with_traceback_filter(iterator.__class__.__next__)
+      )
+
     return iterator
 
 
