@@ -46,8 +46,21 @@ not depend on TensorFlow.
 :caption: Get started
 installation
 api_choice
-data_sources
 behind_the_scenes
+```
+
+``` {toctree}
+:maxdepth: 1
+:hidden:
+:caption: Data Sources
+data_sources/protocol
+tutorials/data_sources/bagz_data_source_tutorial
+tutorials/data_sources/arrayrecord_data_source_tutorial
+tutorials/data_sources/huggingface_dataset_tutorial
+tutorials/data_sources/pytorch_dataset_tutorial
+tutorials/data_sources/parquet_dataset_tutorial
+tutorials/data_sources/load_from_s3_tutorial
+tutorials/data_sources/load_from_gcs_tutorial
 ```
 
 ``` {toctree}
@@ -66,8 +79,6 @@ tutorials/data_loader_tutorial
 tutorials/dataset_basic_tutorial
 tutorials/dataset_advanced_tutorial
 tutorials/dataset_debugging_tutorial
-tutorials/dataset_load_from_s3_tutorial
-tutorials/data_sources/index
 ```
 
 ``` {toctree}
