@@ -12,6 +12,12 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     and advance a `grain.DatasetIterator` to the given produced element index.
 
 * Breaking changes:
+  * Custom implementations of `RandomAccessDataSource` should accept `int`
+    index in `__getitem__`. Legacy paths that handle `SupportsIndex` will still
+    work at runtime, but depending on the type checker in use, if you're
+    directly inheriting from `grain.RandomAccessDataSource` and call
+    `super().__getitem__` with `Supportsindex` you may see a type checking
+    error. Switch to `int` to fix it.
 
 * Deprecations:
   * Deprecates `grain.python.experimental.MultiprocessPrefetchIterDataset`,

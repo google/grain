@@ -6,10 +6,14 @@
 List of Members
 ---------------
 
-.. autosummary::
-  :toctree: _autosummary
+.. autoclass:: RandomAccessDataSource
+   :special-members: __len__, __getitem__,
 
-    ArrayRecordDataSource
-    SharedMemoryDataSource
-    RandomAccessDataSource
-    RangeDataSource
+.. autoclass:: ArrayRecordDataSource
+   :special-members: __init__, __len__, __getitem__
+
+.. autoclass:: SharedMemoryDataSource
+   :special-members: __init__, __len__, __getitem__
+
+.. autoclass:: RangeDataSource
+   :special-members: __init__, __len__, __getitem__

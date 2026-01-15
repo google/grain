@@ -26,6 +26,6 @@
 from grain._src.python.data_sources import (
     ArrayRecordDataSource,
     SharedMemoryDataSource,
-    RandomAccessDataSource,
     RangeDataSource,
 )
+from grain._src.python.dataset.base import RandomAccessDataSource

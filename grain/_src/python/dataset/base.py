@@ -55,13 +55,34 @@ class ShapeDtypeStruct(ShapeDtypeStructProtocol):
 
 @typing.runtime_checkable
 class RandomAccessDataSource(Protocol[T]):
-  """Interface for datasets where storage supports efficient random access."""
+  """Interface for datasets where storage supports efficient random access.
+
+  If used with `DataLoader`, `__repr__` has to be additionally implemented to
+  support checkpointing.
+
+  If used with multiprocessing, must be picklable.
+  """
 
   def __len__(self) -> int:
-    ...
+    """Returns the total number of records in the data source."""
 
   def __getitem__(self, index: int) -> T:
-    ...
+    """Returns the value for the given index.
+
+    This method must be thread-safe and deterministic.
+
+    Note that a number of sources take `SupportsIndex` instead of `int` for
+    `index`. Such sources will still support `int` index and pass the
+    `isinstance` check with this protocol, but all new source implementations
+    should use `int` directly.
+
+    Arguments:
+      index: An integer in `[0, len(self)-1]`.
+
+    Returns:
+      The corresponding record. File data sources often return the raw bytes but
+      records can be any Python object.
+    """
 
 
 class SupportsBatchedReadRandomAccessDataSource(

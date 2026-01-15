@@ -5,14 +5,31 @@ could be in a file/storage system or generated on the fly. Data sources need to
 implement the following protocol:
 
 ```python
-class RandomAccessDataSource(Protocol, Generic[T]):
-  """Interface for datasources where storage supports efficient random access."""
+@typing.runtime_checkable
+class RandomAccessDataSource(Protocol[T]):
+  """Interface for datasets where storage supports efficient random access.
+
+  If used with `DataLoader`, `__repr__` has to be additionally implemented to
+  support checkpointing.
+
+  If used with multiprocessing, must be picklable.
+  """
 
   def __len__(self) -> int:
-    """Number of records in the dataset."""
+    """Returns the total number of records in the data source."""
 
-  def __getitem__(self, record_key: SupportsIndex) -> T:
-    """Retrieves record for the given record_key."""
+  def __getitem__(self, index: int) -> T:
+    """Returns the value for the given index.
+
+    This method must be thread-safe and deterministic.
+
+    Arguments:
+      index: An integer in `[0, len(self)-1]`.
+
+    Returns:
+      The corresponding record. File data sources often return the raw bytes but
+      records can be any Python object.
+    """
 ```
 
 ## File Format

@@ -36,6 +36,7 @@ py_test(
     }),
     deps = [
         ":data_sources",
+        "//grain/_src/python/dataset:base",
         "@abseil-py//absl/flags",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
@@ -154,7 +155,6 @@ py_library(
     ],
     srcs_version = "PY3",
     deps = [
-        ":data_sources",
         ":operations",
         ":options",
         ":record",
@@ -166,6 +166,7 @@ py_library(
         "//grain/_src/core:tree_lib",
         "//grain/_src/python/checkpoint:base",
         "//grain/_src/python/dataset",
+        "//grain/_src/python/dataset:base",
         "@abseil-py//absl/logging",
         "@pypi//etils:pkg",
         "@pypi//numpy:pkg",
@@ -257,12 +258,12 @@ py_library(
     srcs_version = "PY3",
     deps = [
         ":data_loader",
-        ":data_sources",
         ":options",
         ":samplers",
         "//grain/_src/core:monitoring",
         "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
+        "//grain/_src/python/dataset:base",
     ],
 )
 

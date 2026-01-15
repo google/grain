@@ -6,9 +6,9 @@ from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import sharding
 from grain._src.core import transforms
 from grain._src.python import data_loader
-from grain._src.python import data_sources
 from grain._src.python import options
 from grain._src.python import samplers
+from grain._src.python.dataset import base as dataset_base
 
 from grain._src.core import monitoring
 
@@ -22,7 +22,7 @@ _api_usage_counter = monitoring.Counter(
 
 
 def load(
-    source: data_sources.RandomAccessDataSource,
+    source: dataset_base.RandomAccessDataSource,
     *,
     num_epochs: Optional[int] = None,
     shuffle: bool = False,

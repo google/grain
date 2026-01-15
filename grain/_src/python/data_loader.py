@@ -35,7 +35,7 @@ from grain._src.python import operations as ops
 from grain._src.python import options
 from grain._src.python import record
 from grain._src.python.checkpoint import base as checkpoint_base
-from grain._src.python.data_sources import RandomAccessDataSource
+from grain._src.python.dataset import base as dataset_base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import batch as batch_ds
 from grain._src.python.dataset.transformations import flatmap
@@ -124,7 +124,7 @@ class _SamplerMapDataset(dataset.MapDataset[record.Record]):
 
   def __init__(
       self,
-      data_source: RandomAccessDataSource,
+      data_source: dataset_base.RandomAccessDataSource,
       sampler: Sampler,
       shard_options: sharding.ShardOptions,
   ):
@@ -217,7 +217,7 @@ class _DataLoaderStateIterDataset(dataset.IterDataset[_T]):
       shard_options: sharding.ShardOptions,
       worker_count: int,
       sampler: Sampler,
-      data_source: RandomAccessDataSource,
+      data_source: dataset_base.RandomAccessDataSource,
   ):
     super().__init__(parent)
     self._shard_options = shard_options
@@ -244,7 +244,7 @@ class _DataLoaderStateDatasetIterator(dataset.DatasetIterator[_T]):
       shard_options: sharding.ShardOptions | None,
       worker_count: int,
       sampler: Sampler,
-      data_source: RandomAccessDataSource,
+      data_source: dataset_base.RandomAccessDataSource,
   ):
     super().__init__(parent)
     self._shard_options = shard_options
@@ -349,7 +349,7 @@ class DataLoader:
   def __init__(
       self,
       *,
-      data_source: RandomAccessDataSource,
+      data_source: dataset_base.RandomAccessDataSource,
       sampler: Sampler,
       operations: Sequence[transforms.Transformation | Operation] = (),
       worker_count: Optional[int] = 0,
@@ -626,7 +626,7 @@ class DataLoaderIterator(collections.abc.Iterator[_T]):
     return f"PyGrainDatasetIterator(state={self.get_state().decode()})"
 
 
-def _source_repr(source: RandomAccessDataSource) -> str:
+def _source_repr(source: dataset_base.RandomAccessDataSource) -> str:
   """Returns a string representation of the source."""
   # If the source has data in memory avoid printing the data itself.
   if isinstance(source, (list, tuple, np.ndarray)):

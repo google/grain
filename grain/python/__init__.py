@@ -53,10 +53,12 @@ from grain._src.python.data_loader import (
 from grain._src.python.data_sources import (
     ArrayRecordDataSource,
     SharedMemoryDataSource as InMemoryDataSource,
-    RandomAccessDataSource,
     RangeDataSource,
 )
-from grain._src.python.dataset.base import DatasetSelectionMap
+from grain._src.python.dataset.base import (
+    DatasetSelectionMap,
+    RandomAccessDataSource,
+)
 from grain._src.python.dataset.dataset import (
     MapDataset,
     IterDataset,

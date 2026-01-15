@@ -28,6 +28,7 @@ from absl.testing import parameterized
 from etils import epath
 import multiprocessing as grain_multiprocessing
 from grain._src.python import data_sources
+from grain._src.python.dataset import base as dataset_base
 
 FLAGS = flags.FLAGS
 
@@ -143,7 +144,7 @@ class ArrayRecordDataSourceTest(DataSourceTest):
 
   def test_array_record_data_implements_random_access(self):
     assert issubclass(
-        data_sources.ArrayRecordDataSource, data_sources.RandomAccessDataSource
+        data_sources.ArrayRecordDataSource, dataset_base.RandomAccessDataSource
     )
 
   def test_array_record_source_empty_sequence(self):
