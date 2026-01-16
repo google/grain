@@ -6,9 +6,11 @@
 List of Members
 ---------------
 
-.. autosummary::
-  :toctree: _autosummary
+.. autoclass:: IndexSampler
+   :special-members: __init__, __len__, __getitem__
 
-    IndexSampler
-    Sampler
-    SequentialSampler
+.. autoclass:: Sampler
+   :special-members: __init__, __len__, __getitem__
+
+.. autoclass:: SequentialSampler
+   :special-members: __init__, __len__, __getitem__

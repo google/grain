@@ -533,6 +533,7 @@ class DataLoaderIterator(collections.abc.Iterator[_T]):
   produced records among worker processes in a round robin fashion. Generally,
   some workers can process more elements than others at a given training step.
   Checkpointing logic goes as follows:
+
   1) With each output batch produced, GrainPool emits the worker_index of The
      worker that processed the batch.
   2) DataLoaderIterator keeps track of the last_seen_index at each worker.

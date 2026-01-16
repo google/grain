@@ -6,14 +6,18 @@
 List of Members
 ---------------
 
-.. autosummary::
-  :toctree: _autosummary
+.. autoclass:: Batch
 
-    Batch
-    Filter
-    Map
-    MapWithIndex
-    RandomMap
-    Transformation
-    Transformations
-    DatasetSelectionMap
+.. autoclass:: Filter
+
+.. autoclass:: Map
+
+.. autoclass:: MapWithIndex
+
+.. autoclass:: RandomMap
+
+.. autoclass:: Transformation
+
+.. autoclass:: Transformations
+
+.. autoclass:: DatasetSelectionMap

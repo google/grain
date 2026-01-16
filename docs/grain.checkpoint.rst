@@ -3,13 +3,16 @@
 ===========================
 
 .. automodule:: grain.checkpoint
+.. currentmodule:: grain.checkpoint
 
 List of Members
 ---------------
 
-.. autosummary::
-  :toctree: _autosummary
+.. autoclass:: CheckpointHandler
+   :members:
 
-    CheckpointHandler
-    CheckpointSave
-    CheckpointRestore
+.. autoclass:: CheckpointSave
+   :members:
+
+.. autoclass:: CheckpointRestore
+   :members:

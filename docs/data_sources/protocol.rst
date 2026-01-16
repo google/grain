@@ -113,5 +113,5 @@ File systems
 Grain supports the formats mentioned above in combination with the following
 file systems (in addition to the local file system):
 
-*  :doc:`S3 <../tutorials/data_sources/load_from_s3_tutorial>`
 *  :doc:`GCS <../tutorials/data_sources/load_from_gcs_tutorial>`
+*  :doc:`Amazon S3 <../tutorials/data_sources/load_from_s3_tutorial>`

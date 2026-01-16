@@ -2,17 +2,21 @@
 ==========================
 
 .. automodule:: grain.constants
+   :noindex:
 
 List of Constants
 -----------------
 
-.. autosummary::
-  :toctree: _autosummary
+.. autodata:: grain.constants.DATASET_INDEX
 
-    DATASET_INDEX
-    EPOCH
-    INDEX
-    META_FEATURES
-    RECORD
-    RECORD_KEY
-    SEED
+.. autodata:: grain.constants.EPOCH
+
+.. autodata:: grain.constants.INDEX
+
+.. autodata:: grain.constants.META_FEATURES
+
+.. autodata:: grain.constants.RECORD
+
+.. autodata:: grain.constants.RECORD_KEY
+
+.. autodata:: grain.constants.SEED

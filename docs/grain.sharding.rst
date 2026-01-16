@@ -6,9 +6,9 @@
 List of Members
 ---------------
 
-.. autosummary::
-  :toctree: _autosummary
+.. autoclass:: ShardOptions
 
-    NoSharding
-    ShardByJaxProcess
-    ShardOptions
+.. autoclass:: NoSharding
+
+.. autoclass:: ShardByJaxProcess
+

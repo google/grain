@@ -33,3 +33,5 @@ List of Members
    :show-inheritance:
    :inherited-members:
    :undoc-members:
+
+.. autoclass:: ReadOptions

@@ -1,7 +1,14 @@
 .. currentmodule:: grain
 
-Public API: ``grain`` package
+``grain`` package
 =============================
+
+.. toctree::
+   :hidden:
+   :caption: Core APIs
+
+   Dataset APIs <grain.dataset>
+   DataLoader APIs <grain.data_loader>
 
 Subpackages
 -----------
@@ -35,7 +42,6 @@ Simple high-level pipelines
 
 
 .. autosummary::
-   :toctree: _autosummary
 
    load
    DataLoader

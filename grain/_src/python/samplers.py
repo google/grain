@@ -117,6 +117,15 @@ class IndexSampler:
   This index sampler supports the following operations:
   - Sharding of the dataset.
   - Global shuffle of the dataset.
+  - Repeat the dataset for a fixed number of epochs or infinitely.
+
+  Attributes:
+    num_records: Number of records in the data source.
+    shard_options: Sharding options for the dataset.
+    shuffle: Whether to globally shuffle the dataset.
+    num_epochs: Number of epochs to repeat the dataset. If None, the dataset
+      will be repeated infinitely.
+    seed: Seed for shuffling the dataset.
   """
 
   def __init__(

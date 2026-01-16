@@ -6,8 +6,8 @@
 List of Members
 ---------------
 
-.. autosummary::
-  :toctree: _autosummary
+.. autoclass:: MultiprocessingOptions
 
-    MultiprocessingOptions
-    SharedMemoryArray
+.. autoclass:: SharedMemoryArray
+   :members:
+

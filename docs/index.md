@@ -46,39 +46,41 @@ not depend on TensorFlow.
 :caption: Get started
 installation
 api_choice
-behind_the_scenes
 ```
 
 ``` {toctree}
 :maxdepth: 1
 :hidden:
-:caption: Data Sources
+:caption: Data sources
 data_sources/protocol
-tutorials/data_sources/bagz_data_source_tutorial
-tutorials/data_sources/arrayrecord_data_source_tutorial
-tutorials/data_sources/huggingface_dataset_tutorial
-tutorials/data_sources/pytorch_dataset_tutorial
-tutorials/data_sources/parquet_dataset_tutorial
-tutorials/data_sources/load_from_s3_tutorial
-tutorials/data_sources/load_from_gcs_tutorial
+Bagz <tutorials/data_sources/bagz_data_source_tutorial>
+ArrayRecord <tutorials/data_sources/arrayrecord_data_source_tutorial>
+Parquet <tutorials/data_sources/parquet_dataset_tutorial>
+TfRecord <https://google-grain.readthedocs.io/en/latest/_autosummary/grain.experimental.TFRecordIterDataset.html#grain.experimental.TFRecordIterDataset>
+TFDS <tutorials/dataset_advanced_tutorial>
+HuggingFace <tutorials/data_sources/huggingface_dataset_tutorial>
+PyTorch <tutorials/data_sources/pytorch_dataset_tutorial>
+GCS <tutorials/data_sources/load_from_gcs_tutorial>
+Amazon S3 <tutorials/data_sources/load_from_s3_tutorial>
 ```
 
 ``` {toctree}
 :maxdepth: 1
 :hidden:
-:caption: Data Loader
+:caption: Dataset
+Basics <tutorials/dataset_basic_tutorial>
+Advanced usage <tutorials/dataset_advanced_tutorial>
+Transformations <https://google-grain.readthedocs.io/en/latest/grain.dataset.html>
+Performance debugging <tutorials/dataset_debugging_tutorial>
+```
+
+``` {toctree}
+:maxdepth: 1
+:hidden:
+:caption: DataLoader
 data_loader/samplers
 data_loader/transformations
-```
-
-```{toctree}
-:maxdepth: 3
-:hidden:
-:caption: Tutorials
-tutorials/data_loader_tutorial
-tutorials/dataset_basic_tutorial
-tutorials/dataset_advanced_tutorial
-tutorials/dataset_debugging_tutorial
+Tutorial <tutorials/data_loader_tutorial>
 ```
 
 ``` {toctree}
@@ -92,6 +94,7 @@ changelog
 ``` {toctree}
 :maxdepth: 1
 :hidden:
-:caption: Contributor guides
+:caption: For contributors
+behind_the_scenes
 CONTRIBUTING
 ```

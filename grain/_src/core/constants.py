@@ -17,20 +17,26 @@
 # on top of it). These features are generated on the fly and help to track
 # progress over the dataset. Users can read these but shouldn't alter them. They
 # start with "_" to indicate that they are "private".
+
 # Index into the stream of all records (globally unique). Starts with 0.
 INDEX = "_index"
+
 # Key of the record. If DATASET_INDEX is present it's the key in the dataset.
 # Starts with 0.
 RECORD_KEY = "_record_key"
+
 # Index of the dataset from which to take the record. Only present when mixing.
 # Starts with 0.
 DATASET_INDEX = "_dataset_index"
+
 # Epoch for the record. When mixing datasets this is the epoch over the dataset,
 # not the mixture. Starts with 1.
 EPOCH = "_epoch"
+
 # Random seed for stateless random operations. This is unique per record
 # and changes every epoch.
 SEED = "_seed"
+
 # Serialized record.
 RECORD = "_record"
 
