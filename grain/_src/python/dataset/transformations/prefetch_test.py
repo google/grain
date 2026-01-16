@@ -1263,6 +1263,47 @@ class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
     self.assertEqual(spec.dtype, np.int64)
     self.assertEqual(spec.shape, ())
 
+  def test_get_next_index(self):
+    ds = dataset.MapDataset.range(20).to_iter_dataset()
+    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=10)
+    ds_iter = ds.__iter__()
+    for i in range(20):
+      self.assertEqual(dataset.get_next_index(ds_iter), i)
+      _ = next(ds_iter)
+
+  def test_set_next_index(self):
+    ds = dataset.MapDataset.range(20).to_iter_dataset()
+    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=10)
+    ds_iter = ds.__iter__()
+    for i in reversed(range(20)):
+      dataset.set_next_index(ds_iter, i)
+      self.assertEqual(next(ds_iter), i)
+
+  def test_set_next_index_get_state(self):
+    # If `get_state` is called after `set_next_index` and before the next
+    # `__next__` call, the iterator should call `get_state` on the parent
+    # iterator in its `get_state` implementation, not in the `set_next_index`
+    # implementation.
+    ds = dataset.MapDataset.range(20).to_iter_dataset()
+    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=10)
+    get_state_counter = mock.Mock()
+    get_state = prefetch.PrefetchDatasetIterator.get_state
+
+    def new_get_state(self):
+      get_state_counter()
+      get_state(self)
+
+    with mock.patch.object(
+        prefetch.PrefetchDatasetIterator, 'get_state', new_get_state
+    ):
+      ds_iter = ds.__iter__()
+      next(ds_iter)
+      get_state_count = get_state_counter.call_count
+      dataset.set_next_index(ds_iter, 5)
+      self.assertEqual(get_state_counter.call_count - get_state_count, 0)
+      ds_iter.get_state()
+      self.assertEqual(get_state_counter.call_count - get_state_count, 1)
+
 
 class _MpContextCheckIterDataset(dataset.IterDataset[_T]):
 

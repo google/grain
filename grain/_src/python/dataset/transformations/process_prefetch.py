@@ -18,8 +18,10 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 import functools
 from multiprocessing import queues
+from multiprocessing import sharedctypes
 from multiprocessing import synchronize
 import queue
+import time
 from typing import Any, TypeVar
 
 from absl import flags
@@ -176,10 +178,12 @@ def _put_dataset_elements_in_buffer(
     pickled_parse_debug_flags_fn: bytes,
     pickled_worker_init_fn: bytes,
     pickled_ds: bytes,
-    buffer: queues.Queue[tuple[Any, StateT | None, Exception | None]],
+    buffer: queues.Queue[
+        tuple[Any, StateT | None, int | None, Exception | None]
+    ],
     should_stop: synchronize.Event,
-    set_state_event: synchronize.Event,
-    set_state_queue: queues.Queue[tuple[StateT, int]],
+    set_state_request_count: sharedctypes.Synchronized[int],
+    set_state_queue: queues.Queue[StateT | int],
     stats_out_queue: queues.Queue[Any] | None,
     start_profiling_event: synchronize.Event | None,
     stop_profiling_event: synchronize.Event | None,
@@ -200,27 +204,36 @@ def _put_dataset_elements_in_buffer(
     # Set the stats queue in worker process to send stats to the main process.
     it._stats._config.stats_out_queue = stats_out_queue  # pylint: disable=protected-access
     parent_exhausted = False
+    next_index: int | None = 0
     while not should_stop.is_set():
-      if set_state_event.is_set():
-        set_state_event.clear()
-        parent_exhausted = False
-        new_state = set_state_queue.get()
-        if new_state is not None:
-          it.set_state(new_state)
-        if not multiprocessing_common.add_element_to_queue(  # pytype: disable=wrong-arg-types
-            (_SetStateIsDone(), None, None), buffer, should_stop.is_set
-        ):
-          continue
+      if set_state_request_count.value > 0:
+        with set_state_request_count.get_lock():
+          if set_state_request_count.value > 0:
+            set_state_request_count.value -= 1
+            parent_exhausted = False
+            if not multiprocessing_common.add_element_to_queue(  # pytype: disable=wrong-arg-types
+                (_SetStateIsDone(), None, None, None),
+                buffer,
+                should_stop.is_set,
+            ):
+              continue
+            new_state_or_index = set_state_queue.get()
+            if isinstance(new_state_or_index, int):
+              dataset.set_next_index(it, new_state_or_index)
+              next_index = new_state_or_index
+            else:
+              it.set_state(new_state_or_index)
+              next_index = None
       if parent_exhausted:
         # Avoid busy-waiting when parent iterator is exhausted due to an
         # error. Wait until set_state_event or should_stop is set.
-        set_state_event.wait(_PARENT_EXHAUSTED_WAIT_S)
+        time.sleep(_PARENT_EXHAUSTED_WAIT_S)
         continue
       try:
         element = it.__next__()
       except Exception as e:  # pylint: disable=broad-except
         multiprocessing_common.add_element_to_queue(  # pytype: disable=wrong-arg-types
-            (None, None, e), buffer, should_stop.is_set
+            (None, None, None, e), buffer, should_stop.is_set
         )
         parent_exhausted = True
         continue
@@ -230,17 +243,21 @@ def _put_dataset_elements_in_buffer(
       if not it._stats._config.is_prefetch:  # pylint: disable=protected-access
         it._stats.record_bytes_produced(element)  # pylint: disable=protected-access
       if not multiprocessing_common.add_element_to_queue(  # pytype: disable=wrong-arg-types
-          (element, it.get_state(), None), buffer, should_stop.is_set
+          (element, it.get_state(), next_index, None),
+          buffer,
+          should_stop.is_set,
       ):
         # We failed to put the element into the output queue because the
         # should_stop event was set. The element may contain a shared memory
         # block reference that has to be cleaned up.
         shared_memory_array.unlink_shm(element)
+      if next_index is not None:
+        next_index += 1
   except Exception as e:  # pylint: disable=broad-except
     _clear_queue_and_maybe_unlink_shm(buffer)
     _clear_queue_and_maybe_unlink_shm(set_state_queue)
     multiprocessing_common.add_element_to_queue(  # pytype: disable=wrong-arg-types
-        (None, None, e), buffer, should_stop.is_set
+        (None, None, None, e), buffer, should_stop.is_set
     )
     return
   _clear_queue_and_maybe_unlink_shm(buffer)
@@ -273,19 +290,22 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._state: StateT | None = None
     self._prefetch_process: Any | None = None
     self._prefetch_should_stop: synchronize.Event = self._process_ctx.Event()
-    self._set_state_event: synchronize.Event = self._process_ctx.Event()
-    self._set_state_queue: queues.Queue[tuple[StateT, int]] = (
-        self._process_ctx.Queue(1)
+    self._set_state_request_count: sharedctypes.Synchronized[int] = (
+        self._process_ctx.Value("i", 0)
     )
-    self._buffer: queues.Queue[tuple[T, StateT | None, Exception | None]] = (
-        self._process_ctx.Queue(maxsize=self._buffer_size)
+    self._set_state_queue: queues.Queue[StateT | int] = self._process_ctx.Queue(
+        5
     )
+    self._buffer: queues.Queue[
+        tuple[T, StateT | None, int | None, Exception | None]
+    ] = self._process_ctx.Queue(maxsize=self._buffer_size)
     self._stats_in_queue = self._process_ctx.Queue(maxsize=5)
     self._start_profiling_event = self._process_ctx.Event()
     self._stop_profiling_event = self._process_ctx.Event()
     self._set_state_count = 0
     self._exhausted = False
     self._prefetch_ds_iter = None
+    self._next_index: int | None = 0
 
   # pytype: disable=attribute-error
   # pylint: disable=protected-access
@@ -347,7 +367,7 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
             pickled_ds=_serialize_dataset(ds),
             buffer=self._buffer,
             should_stop=self._prefetch_should_stop,
-            set_state_event=self._set_state_event,
+            set_state_request_count=self._set_state_request_count,
             set_state_queue=self._set_state_queue,
             stats_out_queue=self._stats_in_queue,
             start_profiling_event=self._start_profiling_event,
@@ -381,11 +401,13 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       # Loop until we get a non-stale element.
       while True:
         try:
-          element, state, err = self._buffer.get(timeout=_QUEUE_WAIT_TIMEOUT_S)
+          element, state, next_index, err = self._buffer.get(
+              timeout=_QUEUE_WAIT_TIMEOUT_S
+          )
         except queue.Empty:
           assert self._prefetch_process is not None
           if self._process_failed():
-            element, state = None, None
+            element, state, next_index = None, None, None
             err = RuntimeError(
                 "Worker process was terminated unexpectedly with exit code "
                 f"{self._prefetch_process.exitcode}. Search the logs above for "
@@ -405,6 +427,7 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         self._exhausted = True
         raise err
       self._state = state
+      self._next_index = next_index
     with self._stats.record_self_time(offset_ns=timer.value()):
       element = self._stats.record_bytes_produced(element)
       return shared_memory_array.open_from_shm(element)
@@ -415,8 +438,10 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._stop_prefetch()
 
   def _clear_set_state_queue(self):
-    if _clear_queue_and_maybe_unlink_shm(self._set_state_queue):
-      self._set_state_count -= 1
+    with self._set_state_request_count.get_lock():
+      num_removed = _clear_queue_and_maybe_unlink_shm(self._set_state_queue)
+      self._set_state_count -= num_removed
+      self._set_state_request_count.value -= num_removed
 
   def _stop_prefetch(self):
     """Stops the prefetching process if it's currently running."""
@@ -439,9 +464,19 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._set_state_count = 0
 
   def get_state(self) -> StateT:
-    if self._state is None:
-      return self._iter_parent.__iter__().get_state()
-    return self._state
+    if self._state is not None:
+      return self._state
+    elif self._next_index == 0:
+      self._state = self._iter_parent.__iter__().get_state()
+      return self._state
+    else:
+      # This point is only reached if `get_state` is called after
+      # `set_next_index` and before the next `__next__` call. Get the state
+      # corresponding to the new `next_index`.
+      ds_iter = self._iter_parent.__iter__()
+      dataset.set_next_index(ds_iter, self._next_index)
+      self._state = ds_iter.get_state()
+      return self._state
 
   def set_state(self, state: StateT):
     self._state = state
@@ -449,11 +484,40 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._clear_set_state_queue()
     self._set_state_queue.put(self._state)
     # Signal the prefetch process to start processing set_state calls.
-    self._set_state_event.set()
+    with self._set_state_request_count.get_lock():
+      self._set_state_request_count.value += 1
     # Increment the number of _SetStateIsDone that need to be skipped to
     # avoid stale elements in the buffer.
     self._set_state_count += 1
     self._exhausted = False
+    self._next_index = None
+
+  def _get_next_index(self) -> int:
+    if self._next_index is not None:
+      return self._next_index
+    else:
+      # Need to create iterator in main process to get the correct index if
+      # `_get_next_index` is called after calling `set_state`.
+      ds_iter = self._iter_parent.__iter__()
+      ds_iter.set_state(self._state)
+      self._next_index = dataset.get_next_index(ds_iter)
+      return self._next_index
+
+  def _set_next_index(self, next_index: int):
+    # If `_set_next_index` is not supported for a parent iterator, the error
+    # will not show up until the next `__next__` call.
+    self._next_index = next_index
+    # Remove any pending set_state calls.
+    self._clear_set_state_queue()
+    self._set_state_queue.put(self._next_index)
+    # Signal the prefetch process to start processing set_state calls.
+    with self._set_state_request_count.get_lock():
+      self._set_state_request_count.value += 1
+    # Increment the number of _SetStateIsDone that need to be skipped to
+    # avoid stale elements in the buffer.
+    self._set_state_count += 1
+    self._exhausted = False
+    self._state = None
 
   def __str__(self) -> str:
     return f"ProcessPrefetchDatasetIterator(buffer_size={self._buffer_size})"

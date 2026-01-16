@@ -1579,6 +1579,7 @@ class DatasetIterator(Iterator[T], abc.ABC):
     Args:
       index: The index of the next element to be produced.
     """
+
     raise NotImplementedError
 
   def _get_next_index(self) -> int:
@@ -1586,7 +1587,11 @@ class DatasetIterator(Iterator[T], abc.ABC):
 
     Note: This index is the index of the element that will be produced next by
     the iterator.
+
+    Returns:
+      The index of the next element to be produced.
     """
+
     raise NotImplementedError
 
   # pytype: enable=attribute-error

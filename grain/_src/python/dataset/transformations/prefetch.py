@@ -905,7 +905,7 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     assert prefetch_buffer_size > 0, prefetch_buffer_size
     self._prefetch_buffer_size = prefetch_buffer_size
     self._step_zero_state: StateT = parent.get_state()
-    self._state: StateT | None = None
+    self._state: StateT | None = self._step_zero_state
     self._next_index: int | None = 0
 
     self._prefetch_thread: threading.Thread | None = None
@@ -1011,31 +1011,47 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._clear_buffer()
 
   def get_state(self) -> StateT:
-    return self._step_zero_state if self._state is None else self._state
+    if self._state is not None:
+      return self._state
+    else:
+      # This point is only reached if `get_state` is called after
+      # `set_next_index` and before the next `__next__` call. The prefetch
+      # thread is not running at this point, so it is safe to call `get_state`
+      # on the parent iterator.
+      self._state = self._maybe_nonnative_parent.get_state()
+      return self._state
 
   def set_state(self, state: StateT):
     self._stop_prefetch()
     self._maybe_nonnative_parent.set_state(state)
     self._state = self._maybe_nonnative_parent.get_state()
-    if isinstance(self._maybe_nonnative_parent, dataset.DatasetIterator):
-      try:
-        self._next_index = dataset.get_next_index(self._maybe_nonnative_parent)
-      except Exception:  # pylint: disable=broad-except
-        self._next_index = None
-    else:
-      self._next_index = None
+    self._next_index = None
 
   def _get_next_index(self) -> int:
     if self._next_index is not None:
       return self._next_index
-    raise ValueError("Upstream iterator does not support get_next_index.")
+    if not isinstance(self._maybe_nonnative_parent, dataset.DatasetIterator):
+      raise ValueError(
+          "`_get_next_index` only supported for native dataset iterators."
+      )
+    # This point is only reached if `set_state` and `get_next_index are called
+    # on the same iterator. We need to get the index from the parent iterator
+    # after setting the state to the point before all current buffer elements
+    # were produced from the parent iterator.
+    state = self.get_state()
+    self._maybe_nonnative_parent.set_state(state)
+    self._next_index = dataset.get_next_index(self._maybe_nonnative_parent)
+    return self._next_index
 
   def _set_next_index(self, next_index: int):
-    assert isinstance(self._maybe_nonnative_parent, dataset.DatasetIterator)
+    if not isinstance(self._maybe_nonnative_parent, dataset.DatasetIterator):
+      raise ValueError(
+          "`set_next_index` only supported for native dataset iterators."
+      )
     self._stop_prefetch()
     dataset.set_next_index(self._maybe_nonnative_parent, next_index)
     self._next_index = next_index
-    self._state = self._maybe_nonnative_parent.get_state()
+    self._state = None
 
   def __str__(self) -> str:
     return (
