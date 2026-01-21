@@ -210,49 +210,6 @@ py_test(
 )
 
 py_library(
-    name = "grain_pool",
-    srcs = ["grain_pool.py"],
-    srcs_version = "PY3",
-    target_compatible_with = select({
-        "@platforms//os:windows": ["@platforms//:incompatible"],
-        "//conditions:default": [],
-    }),
-    deps = [
-        ":grain_logging",
-        ":multiprocessing_common",
-        ":options",
-        ":record",
-        ":shared_memory_array",
-        "//grain/_src/core:config",
-        "//grain/_src/core:monitoring",
-        "//grain/_src/core:parallel",
-        "//grain/_src/core:tree_lib",
-        "@abseil-py//absl/flags",
-        "@abseil-py//absl/logging",
-        "@pypi//cloudpickle:pkg",
-    ],
-)
-
-py_test(
-    name = "grain_pool_test",
-    srcs = ["grain_pool_test.py"],
-    shard_count = 20,
-    srcs_version = "PY3",
-    tags = ["not_run:arm"],
-    deps = [
-        ":data_sources",
-        ":grain_pool",
-        ":options",
-        ":record",
-        "//grain/_src/core:config",
-        "//grain/_src/core:monitoring",
-        "@abseil-py//absl/flags",
-        "@abseil-py//absl/testing:absltest",
-        "@abseil-py//absl/testing:parameterized",
-    ],
-)
-
-py_library(
     name = "load",
     srcs = ["load.py"],
     srcs_version = "PY3",

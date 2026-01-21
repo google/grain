@@ -28,7 +28,7 @@ from grain._src.python.dataset.transformations import prefetch
 T = TypeVar("T")
 
 
-class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
+class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
   """Iterates over the interleaved datasets."""
 
   def __init__(
@@ -282,7 +282,7 @@ class _InterleaveDatasetIterator(dataset.DatasetIterator[T]):
 
 def _add_prefetch_and_make_iterator(
     ds: dataset.IterDataset[T] | dataset.MapDataset[T],
-    interleave_iterator: weakref.ref[_InterleaveDatasetIterator[T]],
+    interleave_iterator: weakref.ref[InterleaveDatasetIterator[T]],
     start_prefetch: bool,
 ) -> dataset.DatasetIterator[T]:
   """Adds prefetching to an IterDataset and returns an iterator.
@@ -383,8 +383,8 @@ class InterleaveIterDataset(dataset.IterDataset[T]):
     self._make_iter_buffer_size = make_iter_buffer_size
     self._iter_buffer_size = iter_buffer_size
 
-  def __iter__(self) -> _InterleaveDatasetIterator[T]:
-    return _InterleaveDatasetIterator(
+  def __iter__(self) -> dataset.DatasetIterator[T]:
+    return InterleaveDatasetIterator(
         self._datasets,
         cycle_length=self._cycle_length,
         num_make_iter_threads=self._num_make_iter_threads,

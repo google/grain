@@ -1347,13 +1347,14 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
       A dataset prefetching input elements in separate processes.
     """
     options = options or grain_options.MultiprocessingOptions(num_workers=10)
-    # Loaded lazily due to a circular dependency (dataset <-> prefetch).
+    # Loaded lazily due to a circular dependency (dataset <-> process_prefetch).
     # pylint: disable=g-import-not-at-top
-    from grain._src.python.dataset.transformations import prefetch
+    from grain._src.python.dataset.transformations import process_prefetch
     # pylint: enable=g-import-not-at-top
-    return prefetch.MultiprocessPrefetchIterDataset(
+    return process_prefetch.multiprocess_prefetch(
         self,
-        multiprocessing_options=options,
+        num_workers=options.num_workers,
+        buffer_size=options.per_worker_buffer_size,
         worker_init_fn=worker_init_fn,
         sequential_slice=sequential_slice,
     )
