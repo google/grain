@@ -17,6 +17,7 @@ import logging as std_logging
 import os
 import sys
 import time
+import types
 from typing import TypeVar
 from unittest import mock
 

@@ -449,6 +449,8 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       return
 
     self._prefetch_should_stop.set()
+    _clear_queue_and_maybe_unlink_shm(self._buffer)
+    self._clear_set_state_queue()
 
     # Not joining here will cause the children to be zombie after they finish.
     # Need to join or call active_children.
@@ -458,9 +460,9 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     # kill the child processes.
     if self._prefetch_process.is_alive():
       self._prefetch_process.kill()
+    else:
+      _clear_queue_and_maybe_unlink_shm(self._buffer)
     self._prefetch_process = None
-    _clear_queue_and_maybe_unlink_shm(self._buffer)
-    self._clear_set_state_queue()
     self._set_state_count = 0
 
   def get_state(self) -> StateT:
