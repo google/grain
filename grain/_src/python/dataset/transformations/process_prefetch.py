@@ -126,7 +126,7 @@ def _clear_queue_and_maybe_unlink_shm(q: queues.Queue[Any]) -> int:
     try:
       shared_memory_array.unlink_shm(q.get_nowait())
       count += 1
-    except queue.Empty:
+    except Exception:  # pylint: disable=broad-except
       return count
 
 
@@ -261,7 +261,11 @@ def _put_dataset_elements_in_buffer(
     )
     return
   _clear_queue_and_maybe_unlink_shm(buffer)
+  buffer.cancel_join_thread()
+  buffer.close()
   _clear_queue_and_maybe_unlink_shm(set_state_queue)
+  set_state_queue.cancel_join_thread()
+  set_state_queue.close()
 
 
 class _SetStateIsDone:
