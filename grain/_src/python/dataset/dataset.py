@@ -1329,6 +1329,11 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
     prefetch workers, consider moving many-to-one and stateful transformations
     to after ``mp_prefetch`` or outside of the Grain pipeline.
 
+    NOTE: It is recommended to manually close an iterator for a pipeline that
+    has ``mp_prefetch`` after use with ``it.close()`` to clean up
+    multiprocessing resources. We will by default run the cleanup on garbage
+    collection, but GC and its sequence is not guaranteed in CPython.
+
     Args:
       options: options for the prefetching processes. ``options.num_workers``
         must be greater than or equal to 0. If ``options.num_workers`` is 0,
@@ -1346,6 +1351,7 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
     Returns:
       A dataset prefetching input elements in separate processes.
     """
+
     options = options or grain_options.MultiprocessingOptions(num_workers=10)
     # Loaded lazily due to a circular dependency (dataset <-> process_prefetch).
     # pylint: disable=g-import-not-at-top
