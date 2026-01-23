@@ -1353,14 +1353,13 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
     """
 
     options = options or grain_options.MultiprocessingOptions(num_workers=10)
-    # Loaded lazily due to a circular dependency (dataset <-> process_prefetch).
+    # Loaded lazily due to a circular dependency (dataset <-> prefetch).
     # pylint: disable=g-import-not-at-top
-    from grain._src.python.dataset.transformations import process_prefetch
+    from grain._src.python.dataset.transformations import prefetch
     # pylint: enable=g-import-not-at-top
-    return process_prefetch.multiprocess_prefetch(
+    return prefetch.MultiprocessPrefetchIterDataset(
         self,
-        num_workers=options.num_workers,
-        buffer_size=options.per_worker_buffer_size,
+        multiprocessing_options=options,
         worker_init_fn=worker_init_fn,
         sequential_slice=sequential_slice,
     )

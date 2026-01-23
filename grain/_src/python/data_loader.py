@@ -24,11 +24,13 @@ import os
 import sys
 from typing import Any, Awaitable, Optional, Sequence, TypeVar
 
+from absl import logging
 from etils import epath
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import sharding
 from grain._src.core import transforms
 from grain._src.core import tree_lib
+import multiprocessing as mp
 from grain._src.python import operations as ops
 from grain._src.python import options
 from grain._src.python import record
@@ -37,6 +39,8 @@ from grain._src.python.dataset import base as dataset_base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import batch as batch_ds
 from grain._src.python.dataset.transformations import flatmap
+from grain._src.python.dataset.transformations import prefetch
+from grain._src.python.operations import BatchOperation
 from grain._src.python.operations import Operation
 from grain._src.python.samplers import Sampler
 from grain._src.python.shared_memory_array import SharedMemoryArray
@@ -256,15 +260,14 @@ class _DataLoaderStateDatasetIterator(dataset.DatasetIterator[_T]):
     # structure and switch to native dataset checkpointing. This class can be
     # removed afterwards.
     dataset_state = self._parent.get_state()
-    if "iterators_in_use_states" not in dataset_state:
-      next_index_in_cycle = 0
-      workers_state = [dataset_state]
-    else:
-      next_index_in_cycle = dataset_state["next_index_in_cycle"]
-      workers_state = dataset_state["iterators_in_use_states"]
-
-    last_worker_index = next_index_in_cycle - 1
-    worker_count = len(workers_state)
+    if "workers_state" not in dataset_state:
+      dataset_state = {
+          "workers_state": {"0": dataset_state},
+          "last_worker_index": -1,
+      }
+    workers_state = dataset_state["workers_state"]
+    last_worker_index = dataset_state["last_worker_index"]
+    worker_count = len(dataset_state["workers_state"])
 
     shard_index = self._shard_options.shard_index if self._shard_options else 0
     shard_count = self._shard_options.shard_count if self._shard_options else 1
@@ -275,7 +278,7 @@ class _DataLoaderStateDatasetIterator(dataset.DatasetIterator[_T]):
         str(i): (
             local_offset
             + i * shard_count
-            + workers_state[i]["next_index"] * global_worker_count
+            + workers_state[str(i)]["next_index"] * global_worker_count
         )
         for i in range(worker_count)
     }
@@ -308,28 +311,25 @@ class _DataLoaderStateDatasetIterator(dataset.DatasetIterator[_T]):
       self._parent.set_state(dataset_state)
       return
 
-    iterators_in_use_indices = list(range(worker_count))
-    iterators_in_use_states = [
-        {
+    iterations_to_skip = {str(i): 0 for i in range(worker_count)}
+    workers_state = {
+        str(i): {
             "next_index": (
                 (
-                    last_seen_indices[str(worker_index)]
+                    last_seen_indices[str(i)]
                     + global_worker_count
                     - shard_index
-                    - worker_index * shard_count
+                    - i * shard_count
                 )
                 // global_worker_count
             )
         }
-        for worker_index in range(worker_count)
-    ]
-
+        for i in range(worker_count)
+    }
     dataset_state = {
-        "next_index_in_cycle": last_worker_index + 1 % worker_count,
-        "next_index_in_datasets": worker_count,
-        "iterators_in_use_indices": iterators_in_use_indices,
-        "iterators_in_use_states": iterators_in_use_states,
-        "exhausted": [False] * worker_count,
+        "workers_state": workers_state,
+        "iterations_to_skip": iterations_to_skip,
+        "last_worker_index": last_worker_index,
     }
     self._parent.set_state(dataset_state)
 
@@ -389,17 +389,31 @@ class DataLoader:
           f"Current worker_buffer_size is {worker_buffer_size}."
       )
 
-    operations = list(operations)
-    for i in range(len(operations)):
-      op = operations[i]
-      if type(op) is ops.BatchOperation:  # pylint: disable=unidiomatic-typecheck
-        operations[i] = transforms.Batch(
-            batch_size=op.batch_size,
-            drop_remainder=op.drop_remainder,
-            batch_fn=op.batch_fn,
-        )
-
     worker_count = _determine_worker_count(worker_count)
+    if worker_count > 0:
+
+      # Shared memory should be enabled iff worker_count > 0.
+      # This replaces Batch Transform with a BatchOperation in operations list
+      # if shared memory is enabled.
+      if operations and isinstance(
+          (last_op := operations[-1]), transforms.Batch
+      ):
+        logging.info("Creating BatchOperation to enable SharedMemoryArray.")
+        batch_operation = BatchOperation(
+            batch_size=last_op.batch_size,
+            drop_remainder=last_op.drop_remainder,
+            batch_fn=last_op.batch_fn,
+        )
+        batch_operation.disable_deprecation_message()
+        operations = list(operations)
+        operations[-1] = batch_operation
+
+      if operations and isinstance(operations[-1], BatchOperation):
+        logging.info("Enabling SharedMemoryArray for BatchOperation.")
+        operations[-1]._enable_shared_memory()
+      else:
+        logging.info("Adding CopyNumPyArrayToSharedMemory Map.")
+        operations = list(operations) + [CopyNumPyArrayToSharedMemory()]
 
     self._data_source = data_source
     self._sampler = sampler
@@ -457,7 +471,11 @@ class DataLoader:
       ds = _apply_transform_to_dataset(operation, ds)
     ds = ds.map(lambda r: r.data)
     if self.multiprocessing_options.num_workers > 0:
-      ds = ds.mp_prefetch(self.multiprocessing_options)
+      ds = prefetch.MultiprocessPrefetchIterDataset(
+          ds,
+          self.multiprocessing_options,
+          always_report_worker_state=True,
+      )
     if not self._use_native_dataset_checkpointing:
       ds = _DataLoaderStateIterDataset(
           ds,

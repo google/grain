@@ -53,6 +53,7 @@ py_library(
         "//grain/_src/core:transforms",
         "//grain/_src/core:tree_lib",
         "//grain/_src/python:grain_logging",
+        "//grain/_src/python:grain_pool",
         "//grain/_src/python:multiprocessing_common",
         "//grain/_src/python:options",
         "//grain/_src/python:shared_memory_array",

@@ -1393,6 +1393,40 @@ class GetExecutionSummaryTest(parameterized.TestCase):
     log_value = "Grain Dataset Execution Summary"
     self.assertNotIn(log_value, "".join(logs.output))
 
+  @flagsaver.flagsaver(grain_py_debug_mode=True)
+  @mock.patch.object(dataset_stats, "_REPORTING_PERIOD_SEC", 0.05)
+  def test_execution_summary_with_mp_prefetch(self):
+    def worker_init_fn_wrapper(worker_index, worker_count):
+      del worker_index, worker_count
+      dataset_stats._REPORTING_PERIOD_SEC = 0.05
+
+    ds = dataset.MapDataset.range(10000).map(MapAddingOne())
+    ds = ds.to_iter_dataset()
+    ds = ds.mp_prefetch(
+        options.MultiprocessingOptions(num_workers=1),
+        worker_init_fn=worker_init_fn_wrapper,
+    )
+    it = ds.__iter__()
+    _ = list(it)
+    all_nodes_present = False
+    while not all_nodes_present:
+      time.sleep(1)
+      all_nodes_present = True
+      summary = dataset.get_execution_summary(it)
+      node_names = {node.name for node in summary.nodes.values()}
+      all_nodes_present = all_nodes_present and any(
+          "RangeMapDataset" in name for name in node_names
+      )
+      all_nodes_present = all_nodes_present and any(
+          "MapMapDataset" in name for name in node_names
+      )
+      all_nodes_present = all_nodes_present and any(
+          "PrefetchDatasetIterator" in name for name in node_names
+      )
+      all_nodes_present = all_nodes_present and any(
+          "MultiprocessPrefetchDatasetIterator" in name for name in node_names
+      )
+
 
 class GetElementSpecTest(parameterized.TestCase):
 
