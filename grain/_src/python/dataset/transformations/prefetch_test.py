@@ -1289,8 +1289,12 @@ class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
     get_state_counter = mock.Mock()
     get_state = prefetch.PrefetchDatasetIterator.get_state
 
+    main_thread_id = threading.get_ident()
+
     def new_get_state(self):
-      get_state_counter()
+      if threading.get_ident() == main_thread_id:
+        # Only count `get_state` calls from the main thread.
+        get_state_counter()
       get_state(self)
 
     with mock.patch.object(
