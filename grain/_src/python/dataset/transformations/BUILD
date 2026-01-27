@@ -28,12 +28,17 @@ py_test(
     srcs = ["batch_test.py"],
     srcs_version = "PY3",
     deps = [
+        "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
         "//grain/_src/core:tree_lib",
+        "//grain/_src/python:data_loader",
+        "//grain/_src/python:samplers",
         "//grain/_src/python/dataset",
         "//grain/_src/python/dataset:base",
+        "//grain/_src/python/ipc:shared_memory_array",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
+        "@pypi//cloudpickle:pkg",
         "@pypi//jax:pkg",  # buildcleaner: keep
         "@pypi//numpy:pkg",
     ],

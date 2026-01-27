@@ -22,7 +22,7 @@ import functools
 import json
 import os
 import sys
-from typing import Any, Awaitable, Optional, Sequence, TypeVar
+from typing import Any, Awaitable, Callable, Optional, Sequence, TypeVar
 
 from etils import epath
 from grain._src.core import monitoring as grain_monitoring
@@ -456,6 +456,10 @@ class DataLoader:
     ds = ds.to_iter_dataset(self._read_options)
     for operation in self._operations:
       ds = _apply_transform_to_dataset(operation, ds)
+    if self.multiprocessing_options.num_workers > 0 and isinstance(
+        ds, dataset_base.SupportsSharedMemoryOutput
+    ):
+      ds.enable_shared_memory_output()
     ds = ds.map(lambda r: r.data)
     if self.multiprocessing_options.num_workers > 0:
       ds = ds.mp_prefetch(self.multiprocessing_options)
@@ -683,18 +687,39 @@ def _apply_transform_to_dataset(
   elif isinstance(transform, transforms.Batch):
     values_batch_fn = transform.batch_fn or batch_ds.make_batch
 
-    def batch_fn(
-        records: Sequence[record.Record[_T]],
-    ) -> record.Record[_T]:
-      values = []
-      last_metadata = records[0].metadata
-      for r in records:
-        last_metadata = r.metadata
-        values.append(r.data)
-      batch = values_batch_fn(values)
-      return record.Record(
-          metadata=last_metadata.remove_record_key(), data=batch
-      )
+    class _RecordBatchFn:
+      """A callable class to batch `record.Record` objects.
+
+      This class wraps a user-provided or default batching function to apply it
+      to the `data` field of `record.Record` instances, while preserving
+      metadata.
+      """
+
+      def __init__(self, values_batch_fn: Callable[[Sequence[Any]], Any]):
+        self.values_batch_fn = values_batch_fn
+
+      def __call__(
+          self, records: Sequence[record.Record[_T]]
+      ) -> record.Record[_T]:
+        values = []
+        last_metadata = records[0].metadata
+        for r in records:
+          last_metadata = r.metadata
+          values.append(r.data)
+        batch = self.values_batch_fn(values)
+        return record.Record(
+            metadata=last_metadata.remove_record_key(), data=batch
+        )
+
+      def enable_shared_memory_output(self):
+        if self.values_batch_fn is batch_ds.make_batch:
+          self.values_batch_fn = functools.partial(
+              batch_ds.make_batch, output_to_shared_memory=True
+          )
+        elif hasattr(self.values_batch_fn, "enable_shared_memory_output"):
+          self.values_batch_fn.enable_shared_memory_output()
+
+    batch_fn = _RecordBatchFn(values_batch_fn)
 
     return ds.batch(
         batch_size=transform.batch_size,

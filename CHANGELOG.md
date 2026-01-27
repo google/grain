@@ -6,6 +6,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features:
+  * Adds automated batching into shared memory when multiprocess prefetch is
+    used to save one data copy.
 
 * Breaking changes:
 
