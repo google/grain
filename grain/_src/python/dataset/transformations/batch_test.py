@@ -19,9 +19,10 @@ import importlib
 import sys
 from typing import Any
 from unittest import mock
-
 from absl.testing import absltest
 from absl.testing import parameterized
+import cloudpickle
+import multiprocessing
 from grain._src.core import transforms
 from grain._src.core import tree_lib
 from grain._src.python.dataset import base
@@ -852,6 +853,113 @@ class BatchIterDatasetTest(parameterized.TestCase):
       dataset.set_next_index(ds_iter, i)
       actual = next(ds_iter)
       np.testing.assert_allclose(actual, expected[i])
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name="source_ds_jax",
+          use_jax=True,
+          initial_ds=source.SourceMapDataset([
+              np.asarray([1, 2, 3]),
+              np.asarray([4, 5, 6]),
+              np.asarray([7, 8, 9]),
+              np.asarray([10, 11, 12]),
+          ]),
+          expected=[
+              [np.asarray([1, 2, 3]), np.asarray([4, 5, 6])],
+              [np.asarray([7, 8, 9]), np.asarray([10, 11, 12])],
+          ],
+      ),
+      dict(
+          testcase_name="source_ds_no_jax",
+          use_jax=False,
+          initial_ds=source.SourceMapDataset([
+              np.asarray([1, 2, 3]),
+              np.asarray([4, 5, 6]),
+              np.asarray([7, 8, 9]),
+              np.asarray([10, 11, 12]),
+          ]),
+          expected=[
+              [np.asarray([1, 2, 3]), np.asarray([4, 5, 6])],
+              [np.asarray([7, 8, 9]), np.asarray([10, 11, 12])],
+          ],
+      ),
+  )
+  def test_batch_shared_memory(self, use_jax: bool, initial_ds, expected):
+    def test_impl():
+      ds = initial_ds.to_iter_dataset()
+      ds = batch.BatchIterDataset(ds, batch_size=2)
+      ds.enable_shared_memory_output()
+      self.assertIsInstance(ds._batch_fn, functools.partial)
+      self.assertIs(ds._batch_fn.func, batch.make_batch)
+      self.assertTrue(ds._batch_fn.keywords.get("output_to_shared_memory"))
+
+      ds_iter = iter(ds)
+      for i in range(len(expected)):
+        actual = next(ds_iter)
+        self.assertIsInstance(
+            actual, batch.shared_memory_array.SharedMemoryArray
+        )
+        shm_array = batch.shared_memory_array.SharedMemoryArray.from_metadata(
+            actual.metadata
+        )
+        np.testing.assert_allclose(shm_array, expected[i])
+        actual.metadata.close_and_unlink_shm()
+
+    with mock.patch.dict(
+        sys.modules, {"jax": sys.modules["jax"] if use_jax else None}
+    ):
+      importlib.reload(batch.tree_lib)
+      test_impl()
+
+  def test_parallel_batch_shared_memory(self):
+    # Enable the parallel batch experiment.
+    with experiment_mock_utils.mocked_experiment_context("EXP_parallel_batch"):
+      ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
+      # Use a batch size larger than _PARALLEL_BATCHING_MIN_BATCH_SIZE (4)
+      ds = batch.BatchIterDataset(ds, batch_size=5, drop_remainder=False)
+      ds.enable_shared_memory_output()
+
+      # Verify that we are using _MakeBatchParallel and SHM is enabled.
+      self.assertIsInstance(ds._batch_fn, batch._MakeBatchParallel)
+      self.assertTrue(ds._batch_fn._output_to_shared_memory)
+
+      ds_iter = iter(ds)
+      batch_val = next(ds_iter)
+
+      # Verify the output is SharedMemoryArray.
+      self.assertIsInstance(
+          batch_val, batch.shared_memory_array.SharedMemoryArray
+      )
+
+      # Verify data content.
+      shm_array = batch.shared_memory_array.SharedMemoryArray.from_metadata(
+          batch_val.metadata
+      )
+      np.testing.assert_array_equal(shm_array, np.arange(5))
+
+      batch_val.metadata.close_and_unlink_shm()
+
+      # Verify next batch
+      batch_val = next(ds_iter)
+      shm_array = batch.shared_memory_array.SharedMemoryArray.from_metadata(
+          batch_val.metadata
+      )
+      np.testing.assert_array_equal(shm_array, np.arange(5, 10))
+      batch_val.metadata.close_and_unlink_shm()
+
+
+class MakeBatchParallelPickleTest(absltest.TestCase):
+
+  def test_pickle_parallel_batch_preserves_flag(self):
+    make_batch_parallel = batch._MakeBatchParallel()
+    make_batch_parallel.enable_shared_memory_output()
+    self.assertTrue(make_batch_parallel._output_to_shared_memory)
+
+    pickled = cloudpickle.dumps(make_batch_parallel)
+    unpickled = cloudpickle.loads(pickled)
+
+    self.assertTrue(unpickled._output_to_shared_memory)
+    self.assertIsNotNone(unpickled._parallel_batch_executor)
 
 
 if __name__ == "__main__":

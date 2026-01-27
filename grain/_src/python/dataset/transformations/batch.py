@@ -24,6 +24,7 @@ import sys
 from typing import Any, Callable, TypeVar, cast
 
 from grain._src.core import tree_lib
+from grain._src.python import shared_memory_array
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
@@ -81,6 +82,23 @@ class _MakeBatchParallel:
 
   def __init__(self):
     self._parallel_batch_executor = concurrent.futures.ThreadPoolExecutor()
+    self._output_to_shared_memory = False
+
+  def enable_shared_memory_output(self):
+    self._output_to_shared_memory = True
+
+  def _stack(self, xs: Sequence[Any]) -> Any:
+    if not self._output_to_shared_memory:
+      return np.stack(xs)
+
+    first_arg = np.asanyarray(xs[0])
+    shape, dtype = (len(xs),) + first_arg.shape, first_arg.dtype
+    if dtype.hasobject:
+      return np.stack(xs)
+
+    return np.stack(
+        xs, out=shared_memory_array.SharedMemoryArray(shape, dtype=dtype)
+    )
 
   def __call__(self, values: Sequence[T]) -> T:
     def _batch_fn(*xs: Sequence[T]) -> T:
@@ -89,14 +107,20 @@ class _MakeBatchParallel:
       if (self._parallel_batch_executor is None) or not isinstance(
           xs[0], np.ndarray
       ):
-        return np.stack(xs)
+        return self._stack(xs)
       xs = cast(Sequence[np.ndarray], xs)
+      first_arg = xs[0]
+      shape, dtype = (len(xs),) + first_arg.shape, first_arg.dtype
       # Fall back to the standard serial `np.stack` operation if the size of
-      # of the entire batchis smaller (measured in bytes) than the threshold.
+      # of the entire batch is smaller (measured in bytes) than the threshold.
       if sum(x.nbytes for x in xs) < _PARALLEL_BATCHING_MIN_TOTAL_BYTES:
-        return np.stack(xs)
+        return self._stack(xs)
 
-      out = np.empty([len(xs), *xs[0].shape], dtype=xs[0].dtype)
+      if not self._output_to_shared_memory or dtype.hasobject:
+        out = np.empty(shape, dtype=dtype)
+      else:
+        out = shared_memory_array.SharedMemoryArray(shape, dtype=dtype)
+
       # For each input array, submit a parallel task to the thread pool to copy
       # the data into the corresponding slice of the output array.
       fs = []
@@ -123,7 +147,11 @@ class _MakeBatchParallel:
       ) from e
 
   def __reduce__(self):
-    return (self.__class__, ())
+    state = self.__dict__.copy()
+    # ThreadPoolExecutor is not picklable.
+    # We rely on __init__ to recreate it during unpickling.
+    state.pop("_parallel_batch_executor", None)
+    return (self.__class__, (), state)
 
   def __del__(self):
     if self._parallel_batch_executor:
@@ -131,7 +159,9 @@ class _MakeBatchParallel:
       self._parallel_batch_executor = None
 
 
-def make_batch(values: Sequence[T]) -> T:
+def make_batch(
+    values: Sequence[T], *, output_to_shared_memory: bool = False
+) -> T:
   """Returns a batch of values with a new batch dimension at the front."""
   if not values:
     raise ValueError("Cannot batch 0 values. Please file a bug.")
@@ -142,9 +172,22 @@ def make_batch(values: Sequence[T]) -> T:
         lambda x: np.expand_dims(x, axis=0),
         values[0],
     )
+  stacking_function = lambda *xs: np.stack(xs)
+  if output_to_shared_memory:
+
+    def shm_stacking_function(*args):
+      first_arg = np.asanyarray(args[0])
+      shape, dtype = (len(args),) + first_arg.shape, first_arg.dtype
+      if dtype.hasobject:
+        return np.stack(args)
+      return np.stack(
+          args, out=shared_memory_array.SharedMemoryArray(shape, dtype=dtype)
+      )
+
+    stacking_function = shm_stacking_function
 
   try:
-    return tree_lib.map_structure(lambda *xs: np.stack(xs), *values)
+    return tree_lib.map_structure(stacking_function, *values)
 
   except ValueError as e:
     # NumPy error message doesn't include actual shapes and dtypes. Provide a
@@ -385,6 +428,12 @@ class BatchMapDataset(dataset.MapDataset[T]):
         f" drop_remainder={self._drop_remainder})"
     )
 
+  def enable_shared_memory_output(self) -> None:
+    if self._batch_fn is make_batch:
+      self._batch_fn = functools.partial(
+          make_batch, output_to_shared_memory=True
+      )
+
 
 class BatchIterDataset(dataset.IterDataset[T]):
   """Batch transformation for IterDatasets."""
@@ -443,3 +492,11 @@ class BatchIterDataset(dataset.IterDataset[T]):
         f"BatchIterDataset(batch_size={self._batch_size},"
         f" drop_remainder={self._drop_remainder})"
     )
+
+  def enable_shared_memory_output(self) -> None:
+    if isinstance(self._batch_fn, _MakeBatchParallel):
+      self._batch_fn.enable_shared_memory_output()
+    elif self._batch_fn is make_batch:
+      self._batch_fn = functools.partial(
+          make_batch, output_to_shared_memory=True
+      )

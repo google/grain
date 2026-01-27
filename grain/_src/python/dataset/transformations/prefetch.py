@@ -381,6 +381,8 @@ class MultiprocessPrefetchIterDataset(dataset.IterDataset[T]):
     self._sequential_slice = sequential_slice
     _validate_no_double_prefetch(self._parent)
     self._always_report_worker_state = always_report_worker_state
+    if isinstance(self._parent, base.SupportsSharedMemoryOutput):
+      self._parent.enable_shared_memory_output()
 
   def __str__(self) -> str:
     return (
