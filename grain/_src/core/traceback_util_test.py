@@ -68,6 +68,7 @@ def raise_after_recursion(curr_count: int, max_count: int) -> None:
 class TracebackUtilTest(absltest.TestCase):
 
   def test_traceback_mode_auto_decorator_filters_traceback(self):
+    config.update("py_traceback_filtering", "auto")
     _assert_exception_with_short_traceback(
         self, lambda: raise_after_recursion(0, 150), ValueError
     )
@@ -160,6 +161,7 @@ class RaiseErrorTransform(grain.transforms.Map):
 class TracebackFilterTest(absltest.TestCase):
 
   def test_datasource_multiple_transforms_filters_traceback(self):
+    config.update("py_traceback_filtering", "auto")
     range_ds = grain.sources.RangeDataSource(0, 10, 1)
     sampler = grain.samplers.IndexSampler(num_records=10, seed=42)
     ops = [RaiseErrorTransform()]
@@ -173,6 +175,7 @@ class TracebackFilterTest(absltest.TestCase):
     )
 
   def test_dataset_multiple_transforms_filters_traceback(self):
+    config.update("py_traceback_filtering", "auto")
     range_ds = grain.MapDataset.range(0, 10)
     range_ds = range_ds.map(RaiseErrorTransform())
     for _ in range(100):
