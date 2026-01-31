@@ -6,6 +6,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features:
+  * Adds support for shared memory output in Batch datasets when using
+    multiprocessing prefetch.
   * Adds support for filtering Grain-internal stack frames from user-thrown
     errors.
   * Adds experimental support for `get_next_index` and `set_next_index` to fetch
