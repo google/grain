@@ -905,6 +905,14 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
     """Returns the Stats object for recording statistics about this dataset."""
     return self._initialize_stats(base.ExecutionTrackingMode.DISABLED)
 
+  def close(self) -> None:
+    """Closes the dataset and releases any resources by recursively closing all
+    parent datasets in the pipeline. This method is safe to call multiple
+    times.
+    """
+    for parent in self._parents:
+      parent.close()
+
   # pytype: enable=attribute-error
   # pylint: enable=protected-access
 

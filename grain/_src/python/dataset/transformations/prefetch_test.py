@@ -1484,5 +1484,94 @@ class MultithreadPrefetchIterDatasetTest(parameterized.TestCase):
       self.assertEqual(context.process_count, num_workers)
 
 
+class _CloseTrackingDataSource:
+  """A data source that tracks close() calls and which threads called it."""
+
+  def __init__(self, data):
+    self._data = data
+    self.close_threads = []
+    self._lock = threading.Lock()
+
+  def __len__(self):
+    return len(self._data)
+
+  def __getitem__(self, index):
+    return self._data[index]
+
+  def close(self):
+    with self._lock:
+      self.close_threads.append(threading.current_thread().ident)
+
+
+class DataSourceCloseTest(parameterized.TestCase):
+  """Tests for data source close() propagation."""
+
+  def test_close_propagates_to_data_source(self):
+    source = _CloseTrackingDataSource([1, 2, 3, 4, 5])
+    ds = dataset.MapDataset.source(source)
+    num_threads = 2
+    read_options = options.ReadOptions(
+        num_threads=num_threads, prefetch_buffer_size=2
+    )
+    iter_ds = ds.to_iter_dataset(read_options=read_options)
+    it = iter(iter_ds)
+
+    _ = [next(it) for _ in range(3)]
+    self.assertEmpty(source.close_threads)
+
+    it.close()
+    # Called from each worker thread + main thread.
+    self.assertLen(source.close_threads, num_threads + 1)
+
+  def test_close_called_from_each_worker_thread(self):
+    source = _CloseTrackingDataSource([1, 2, 3, 4, 5])
+    ds = dataset.MapDataset.source(source)
+    num_threads = 4
+    read_options = options.ReadOptions(
+        num_threads=num_threads, prefetch_buffer_size=4
+    )
+    iter_ds = ds.to_iter_dataset(read_options=read_options)
+    it = iter(iter_ds)
+
+    _ = next(it)
+    it.close()
+
+    # Called from each worker thread + main thread.
+    self.assertLen(source.close_threads, num_threads + 1)
+
+  def test_close_without_prefetch(self):
+    source = _CloseTrackingDataSource([1, 2, 3])
+    ds = dataset.MapDataset.source(source)
+    read_options = options.ReadOptions(prefetch_buffer_size=0)
+    iter_ds = ds.to_iter_dataset(read_options=read_options)
+    it = iter(iter_ds)
+
+    _ = next(it)
+    it.close()
+    # No executor, so close called once from main thread.
+    self.assertLen(source.close_threads, 1)
+
+  def test_iterator_close_is_idempotent(self):
+    source = _CloseTrackingDataSource([1, 2, 3])
+    ds = dataset.MapDataset.source(source)
+    read_options = options.ReadOptions(prefetch_buffer_size=0)
+    iter_ds = ds.to_iter_dataset(read_options=read_options)
+    it = iter(iter_ds)
+
+    _ = next(it)
+    it.close()
+    it.close()
+    # Iterator close is idempotent.
+    self.assertLen(source.close_threads, 1)
+
+  def test_map_dataset_close_propagates(self):
+    source = _CloseTrackingDataSource([1, 2, 3, 4, 5])
+    ds = dataset.MapDataset.source(source).map(lambda x: x * 2).batch(2)
+
+    self.assertEmpty(source.close_threads)
+    ds.close()
+    self.assertLen(source.close_threads, 1)
+
+
 if __name__ == '__main__':
   absltest.main()
