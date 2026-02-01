@@ -66,6 +66,7 @@ class CheckpointHandler:
     else:
       state = state.encode()
     item.set_state(state)
+    item.start_prefetch()
     return item
 
   # Required by interface but not supported by PyGrain checkpoints.
