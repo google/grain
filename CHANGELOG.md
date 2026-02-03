@@ -12,6 +12,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     and advance a `grain.DatasetIterator` to the given produced element index.
   * Switches to multithreading instead of multiprocessing in
     `IterDataset.mp_prefetch` when free-threaded Python is detected.
+  * Add `ElasticIterDatasetIterator` for scaling up and down the number of shards between checkpoints.
 
 * Breaking changes:
   * Custom implementations of `RandomAccessDataSource` should accept `int`
