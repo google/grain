@@ -20,9 +20,11 @@ import functools
 from multiprocessing import queues
 from multiprocessing import sharedctypes
 from multiprocessing import synchronize
+from multiprocessing import util
 import queue
 import time
 from typing import Any, TypeVar
+import weakref
 
 from absl import flags
 import cloudpickle
@@ -45,7 +47,7 @@ T = TypeVar("T")
 StateT = dict[str, Any]
 
 # Timeout for killing worker processes on iterator close.
-_PROCESS_KILL_TIMEOUT_S = 10
+_PROCESS_KILL_TIMEOUT_S = 25
 # Interval to wait in the worker process when the parent iterator is exhausted
 # to avoid busy-waiting.
 _PARENT_EXHAUSTED_WAIT_S = 0.5
@@ -268,6 +270,23 @@ class _SetStateIsDone:
   """Placeholder to indicate set_state has completed in worker process."""
 
 
+def _close_if_alive(
+    iterator_ref: weakref.ReferenceType[dataset.DatasetIterator],
+):
+  """Closes the iterator via weak reference if it's still alive.
+
+  This function is used as a finalizer callback to ensure the iterator is
+  closed and resources are released before the multiprocessing module attempts
+  to terminate the worker process.
+
+  Args:
+    iterator_ref: A weak reference to a DatasetIterator instance.
+  """
+  iterator = iterator_ref()
+  if iterator is not None:
+    iterator.close()
+
+
 class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   """Iterator that performs prefetching using a background process."""
 
@@ -306,6 +325,15 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._exhausted = False
     self._prefetch_ds_iter = None
     self._next_index: int | None = 0
+    # Ensure that the iterator is closed before the multiprocessing module
+    # attempts to terminate the worker processes to prevent process hanging
+    # issues.
+    util.Finalize(
+        self,
+        _close_if_alive,
+        args=(weakref.ref(self),),
+        exitpriority=1,
+    )
 
   # pytype: disable=attribute-error
   # pylint: disable=protected-access
@@ -449,6 +477,8 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       return
 
     self._prefetch_should_stop.set()
+    _clear_queue_and_maybe_unlink_shm(self._buffer)
+    self._clear_set_state_queue()
 
     # Not joining here will cause the children to be zombie after they finish.
     # Need to join or call active_children.
@@ -458,9 +488,9 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     # kill the child processes.
     if self._prefetch_process.is_alive():
       self._prefetch_process.kill()
+    else:
+      _clear_queue_and_maybe_unlink_shm(self._buffer)
     self._prefetch_process = None
-    _clear_queue_and_maybe_unlink_shm(self._buffer)
-    self._clear_set_state_queue()
     self._set_state_count = 0
 
   def get_state(self) -> StateT:

@@ -371,6 +371,10 @@ py_test(
     srcs = ["process_prefetch_test.py"],
     shard_count = 50,
     srcs_version = "PY3",
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
     deps = [
         "//grain/_src/core:transforms",
         "//grain/_src/python:options",
