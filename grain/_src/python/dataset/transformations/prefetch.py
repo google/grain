@@ -692,12 +692,17 @@ def multithread_prefetch(
   if num_threads == 0:
     return ds
 
+  dataset_options = _get_dataset_options(ds)
+
   shards = []
   for i in range(num_threads):
-    worker_ds = copy.deepcopy(ds)
-    _set_slice_iter_dataset(
-        worker_ds, slice(i, None, num_threads), sequential_slice
-    )
+    if num_threads == 1:
+      worker_ds = ds
+    else:
+      worker_ds = copy.deepcopy(ds)
+      _set_slice_iter_dataset(
+          worker_ds, slice(i, None, num_threads), sequential_slice
+      )
     shards.append(
         _MpContextIterDataset(
             worker_ds,
@@ -708,9 +713,13 @@ def multithread_prefetch(
         )
     )
 
-  return interleave.InterleaveIterDataset(
+  ds = interleave.InterleaveIterDataset(
       shards, cycle_length=num_threads, iter_buffer_size=buffer_size
   )
+  # Apply options from parent dataset because interleave dataset does not
+  # propagate options.
+  ds = dataset.WithOptionsIterDataset(ds, dataset_options)
+  return ds
 
 
 def is_prefetch_iterator(it: dataset.DatasetIterator) -> bool:
