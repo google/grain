@@ -223,6 +223,7 @@ py_test(
     shard_count = 5,
     srcs_version = "PY3",
     deps = [
+        "//grain/_src/python:options",
         "//grain/_src/python/dataset",
         "//grain/_src/python/testing:experimental",
         "@abseil-py//absl/testing:absltest",
