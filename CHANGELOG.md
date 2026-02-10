@@ -10,6 +10,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     errors.
   * Adds experimental support for `get_next_index` and `set_next_index` to fetch
     and advance a `grain.DatasetIterator` to the given produced element index.
+  * Immediately starts processing elements in the background after restoring
+    from a checkpoint with Orbax.
 
 * Breaking changes:
   * Custom implementations of `RandomAccessDataSource` should accept `int`

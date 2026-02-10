@@ -561,6 +561,20 @@ class DataLoaderIterator(collections.abc.Iterator[_T]):
       self._data_loader._validate_state(state)  # pylint: disable=protected-access
     self._iterator.set_state(state)
 
+  def start_prefetch(self):
+    """Starts processing elements asynchronously in the background.
+
+    Useful when the iterator can be created in advance but the elements are not
+    needed immediately. For instance, when recovering iterator and model from a
+    checkpoint, recover the iterator first, call ``start_prefech`` and then
+    recover the model. This way the time to get the first batch from the
+    iterator will be partially or fully hidden behind the time it takes to
+    recover the model.
+
+    This method is idempotent and safe to call multiple times.
+    """
+    self._iterator.start_prefetch()
+
   ### BEGIN Orbax checkpointing API.
   # See orbax.checkpoint.v1.handlers.StatefulCheckpointable for more details.
   # See https://orbax.readthedocs.io/en/latest/ for usage examples.
