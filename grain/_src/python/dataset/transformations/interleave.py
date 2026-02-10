@@ -82,6 +82,10 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     ] * self._cycle_length
     self._started = False
     self._parent_stats: list[stats.Stats | None] = [None] * self._cycle_length
+    self._keep_iterators_after_stop_iteration = False
+    self._exhausted_iterators: list[
+        tuple[int, dataset.DatasetIterator[T]] | None
+    ] = [None] * self._cycle_length
 
   @stats.record_next_duration_if_output
   @stats.trace_input_pipeline_next(stage_category=stats.IPL_CAT_PREPROCESSING)
@@ -119,6 +123,11 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
             self._exhausted_iterator_state[self._next_index_in_cycle] = (
                 iterator_to_use.get_state()
             )
+            if self._keep_iterators_after_stop_iteration:
+              self._exhausted_iterators[self._next_index_in_cycle] = (
+                  self._iterators_in_use_indices[self._next_index_in_cycle],
+                  iterator_to_use,
+              )
             self._iterators_in_use[self._next_index_in_cycle] = None
             self._next_index_in_cycle = (
                 self._next_index_in_cycle + 1
@@ -195,12 +204,22 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
             or iterator is None
         ):
           # The iterator currently in use is either exhausted or corresponds to
-          # a different dataset. We need to create a new iterator.
-          iterator = _add_prefetch_and_make_iterator(
-              self._datasets[index_in_datasets],
-              interleave_iterator=weakref.ref(self),
-              start_prefetch=False,
-          )
+          # a different dataset. We need to create a new iterator or check the
+          # exhausted iterators list.
+          if (
+              self._keep_iterators_after_stop_iteration
+              and self._exhausted_iterators[index_in_cycle] is not None
+              and self._exhausted_iterators[index_in_cycle][0]
+              == index_in_datasets
+          ):
+            _, iterator = self._exhausted_iterators[index_in_cycle]
+            self._exhausted_iterators[index_in_cycle] = None
+          else:
+            iterator = _add_prefetch_and_make_iterator(
+                self._datasets[index_in_datasets],
+                interleave_iterator=weakref.ref(self),
+                start_prefetch=False,
+            )
         iterator.set_state(it_state)
         self._iterators_in_use[index_in_cycle] = iterator
       else:
@@ -237,6 +256,15 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
           "set_next_index is not supported for InterleaveDatasetIterator with"
           " more than one dataset."
       )
+
+  def set_keep_iterators_after_stop_iteration(
+      self, keep_iterators: bool
+  ) -> None:
+    # Determines whether the iterators should be kept alive after
+    # StopIteration is raised by `__next__`. This is used by
+    # `RepeatDatasetIterator` to allow for resetting the iterator state and
+    # continuing iteration without recreating the iterators.
+    self._keep_iterators_after_stop_iteration = keep_iterators
 
   def close(self) -> None:
     """Closes the iterator and shuts down the iterator prefetching."""
