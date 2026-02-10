@@ -10,6 +10,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     errors.
   * Adds experimental support for `get_next_index` and `set_next_index` to fetch
     and advance a `grain.DatasetIterator` to the given produced element index.
+  * Switches to multithreading instead of multiprocessing in
+    `IterDataset.mp_prefetch` when free-threaded Python is detected.
 
 * Breaking changes:
   * Custom implementations of `RandomAccessDataSource` should accept `int`

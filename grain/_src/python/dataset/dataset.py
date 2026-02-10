@@ -50,6 +50,7 @@ import builtins
 from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Sequence
 import functools
 import json
+import sys
 from typing import Any, Generic, TypeVar, Union, cast, overload
 import warnings
 
@@ -1334,6 +1335,9 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
     multiprocessing resources. We will by default run the cleanup on garbage
     collection, but GC and its sequence is not guaranteed in CPython.
 
+    NOTE: In free-threaded Python builds, this implementation switches to
+    multithreading, ignoring ``worker_init_fn``.
+
     Args:
       options: options for the prefetching processes. ``options.num_workers``
         must be greater than or equal to 0. If ``options.num_workers`` is 0,
@@ -1353,10 +1357,24 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
     """
 
     options = options or grain_options.MultiprocessingOptions(num_workers=10)
-    # Loaded lazily due to a circular dependency (dataset <-> process_prefetch).
+    # Loaded lazily due to a circular dependency (dataset <-> process_prefetch)
+    # and (dataset <-> prefetch).
     # pylint: disable=g-import-not-at-top
+    from grain._src.python.dataset.transformations import prefetch
     from grain._src.python.dataset.transformations import process_prefetch
     # pylint: enable=g-import-not-at-top
+    if is_in_free_threaded_python():
+      if worker_init_fn is not None:
+        warnings.warn(
+            "Free-threaded Python is used: `mp_prefetch` falls back to"
+            " thread-based implementation and `worker_init_fn` is ignored."
+        )
+      return prefetch.multithread_prefetch(
+          self,
+          num_threads=options.num_workers,
+          buffer_size=options.per_worker_buffer_size,
+          sequential_slice=sequential_slice,
+      )
     return process_prefetch.multiprocess_prefetch(
         self,
         num_workers=options.num_workers,
@@ -1835,3 +1853,8 @@ def set_next_index(ds_iter: DatasetIterator, index: int) -> None:
 def get_next_index(ds_iter: DatasetIterator) -> int:
   """Returns the next index for the dataset iterator."""
   return ds_iter._get_next_index()  # pylint: disable=protected-access
+
+
+def is_in_free_threaded_python() -> bool:
+  """Returns whether Python is running in free-threaded mode."""
+  return hasattr(sys, "_is_gil_enabled") and not sys._is_gil_enabled()  # pylint: disable=protected-access

@@ -32,6 +32,7 @@ from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
 from grain._src.python.dataset.transformations import prefetch
+from grain._src.python.dataset.transformations import process_prefetch
 import grain._src.python.testing.experimental as test_util
 from grain.proto import execution_summary_pb2
 import numpy as np
@@ -1182,6 +1183,23 @@ class DatasetTest(parameterized.TestCase):
             np.array([5]),
         ],
     )
+
+  @mock.patch.object(process_prefetch, "multiprocess_prefetch", autospec=True)
+  @mock.patch.object(prefetch, "multithread_prefetch", autospec=True)
+  def test_mp_prefetch_switches_to_threads_for_free_threaded_python(
+      self, mock_multithread_prefetch, mock_multiprocess_prefetch
+  ):
+    ds = dataset.MapDataset.range(15).to_iter_dataset()
+    ds.mp_prefetch()
+    is_free_threaded = (
+        hasattr(sys, "_is_gil_enabled") and not sys._is_gil_enabled()
+    )
+    if is_free_threaded:
+      mock_multithread_prefetch.assert_called_once()
+      mock_multiprocess_prefetch.assert_not_called()
+    else:
+      mock_multiprocess_prefetch.assert_called_once()
+      mock_multithread_prefetch.assert_not_called()
 
 
 class TfRandomMapAlwaysAddingOne(transforms.TfRandomMap):
