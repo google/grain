@@ -10,6 +10,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     errors.
   * Adds experimental support for `get_next_index` and `set_next_index` to fetch
     and advance a `grain.DatasetIterator` to the given produced element index.
+  * `grain.DataLoaderIterator` can now asynchronously start processing elements
+    in background with `start_prefetch` call.
 
 * Breaking changes:
   * Custom implementations of `RandomAccessDataSource` should accept `int`
