@@ -619,6 +619,7 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     # after setting the state to the point before all current buffer elements
     # were produced from the parent iterator.
     state = self.get_state()
+    self._stop_prefetch()
     self._maybe_nonnative_parent.set_state(state)
     self._next_index = dataset.get_next_index(self._maybe_nonnative_parent)
     return self._next_index

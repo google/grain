@@ -330,6 +330,75 @@ class ProcessPrefetchIterDatasetTest(parameterized.TestCase):
     self.assertEqual(next(ds_iter), 2)
     ds_iter.close()
 
+  def test_get_next_index(self):
+    ds = process_prefetch.ProcessPrefetchIterDataset(
+        dataset.MapDataset.range(10).to_iter_dataset(),
+        buffer_size=1,
+    )
+    ds_iter = ds.__iter__()
+    for i in range(10):
+      self.assertEqual(dataset.get_next_index(ds_iter), i)
+      next(ds_iter)
+
+  def test_set_next_index(self):
+    ds = process_prefetch.ProcessPrefetchIterDataset(
+        dataset.MapDataset.range(10).to_iter_dataset(),
+        buffer_size=1,
+    )
+    ds_iter = ds.__iter__()
+    for i in reversed(range(10)):
+      dataset.set_next_index(ds_iter, i)
+      self.assertEqual(next(ds_iter), i)
+
+  def test_alternate_set_state_and_get_next_index(self):
+    ds = process_prefetch.ProcessPrefetchIterDataset(
+        dataset.MapDataset.range(20).to_iter_dataset(),
+        buffer_size=1,
+    )
+    ds_iter = ds.__iter__()
+    next(ds_iter)
+    state1 = ds_iter.get_state()
+    index1 = dataset.get_next_index(ds_iter)
+    next(ds_iter)
+    next(ds_iter)
+    index2 = dataset.get_next_index(ds_iter)
+    next(ds_iter)
+
+    self.assertEqual(index1, 1)
+    self.assertEqual(index2, 3)
+
+    ds_iter.set_state(state1)
+    self.assertEqual(dataset.get_next_index(ds_iter), 1)
+    next(ds_iter)
+    ds_iter.set_state(state1)
+    next(ds_iter)
+    next(ds_iter)
+    self.assertEqual(dataset.get_next_index(ds_iter), 3)
+
+  def test_alternate_set_next_index_and_get_state(self):
+    ds = process_prefetch.ProcessPrefetchIterDataset(
+        dataset.MapDataset.range(20).to_iter_dataset(),
+        buffer_size=1,
+    )
+    ds_iter = ds.__iter__()
+    next(ds_iter)
+    state1 = ds_iter.get_state()
+    index1 = dataset.get_next_index(ds_iter)
+    next(ds_iter)
+    next(ds_iter)
+    state2 = ds_iter.get_state()
+    next(ds_iter)
+
+    self.assertEqual(index1, 1)
+
+    dataset.set_next_index(ds_iter, index1)
+    self.assertEqual(ds_iter.get_state(), state1)
+    next(ds_iter)
+    dataset.set_next_index(ds_iter, index1)
+    next(ds_iter)
+    next(ds_iter)
+    self.assertEqual(ds_iter.get_state(), state2)
+
 
 @dataclasses.dataclass(frozen=True)
 class FilterAllElements(transforms.Filter):
