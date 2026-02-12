@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """This module provides a PyGrain CheckpointHandler for integration with Orbax."""
+
 import dataclasses
 import json
 from typing import Any, Optional, TypeVar
@@ -19,7 +20,9 @@ from typing import Any, Optional, TypeVar
 from etils import epath
 from grain._src.core import sharding
 from grain._src.python import data_loader
+from grain._src.python.checkpoint import elastic_checkpoint
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset import elastic_iterator
 
 IteratorType = TypeVar(
     "IteratorType", data_loader.DataLoaderIterator, dataset.DatasetIterator
@@ -41,6 +44,9 @@ class CheckpointHandler:
     """Saves the given iterator to the checkpoint in `directory`."""
     item = item or args.item  # pytype:disable=attribute-error
     if isinstance(item, dataset.DatasetIterator):
+      if isinstance(item, elastic_iterator.ElasticIterDatasetIterator):
+        elastic_checkpoint.save_elastic_iterator(directory, item)
+        return
       state = json.dumps(item.get_state(), indent=4)
     else:
       state = item.get_state().decode()
@@ -56,6 +62,9 @@ class CheckpointHandler:
   ) -> IteratorType:
     """Restores the given iterator from the checkpoint in `directory`."""
     item = item or args.item  # pytype:disable=attribute-error
+    if isinstance(item, elastic_iterator.ElasticIterDatasetIterator):
+      elastic_checkpoint.restore_elastic_iterator(directory, item)
+      return item
     process_index, process_count = sharding.get_process_index_and_count()
     filename = directory / f"process_{process_index}-of-{process_count}.json"
     if not filename.exists():
@@ -104,7 +113,6 @@ try:
   @dataclasses.dataclass
   class CheckpointRestore(ocp.args.CheckpointArgs):
     item: Any
-
 
 except (ImportError, TypeError, AttributeError):
   pass

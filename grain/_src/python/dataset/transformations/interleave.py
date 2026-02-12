@@ -33,7 +33,10 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
 
   def __init__(
       self,
-      datasets: Sequence[dataset.IterDataset[T] | dataset.MapDataset[T]],
+      datasets: (
+          Sequence[dataset.IterDataset[T] | dataset.MapDataset[T]]
+          | Sequence[dataset.DatasetIterator[T]]
+      ),
       cycle_length: int,
       num_make_iter_threads: int = 1,
       make_iter_buffer_size: int = 1,
@@ -46,30 +49,44 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     self._num_make_iter_threads = num_make_iter_threads
     self._make_iter_buffer_size = make_iter_buffer_size
     self._iter_buffer_size = iter_buffer_size
-    self._prefetch_ds_iter = (
-        dataset.MapDataset.source(datasets)
-        .map(
-            functools.partial(
-                _add_prefetch_and_make_iterator,
-                # We use weakref to avoid a circular reference. The
-                # _InterleaveDatasetIterator holds a reference to the
-                # prefetch iterator in `self._prefetch_ds_iter`.
-                # The call to `_add_prefetch_and_make_iterator` (and the
-                # partial object) would hold a reference to the
-                # _InterleaveDatasetIterator. This would prolong its lifetime
-                # leading to increased resource usage.
-                interleave_iterator=weakref.ref(self),
-                start_prefetch=True,
-            )
-        )
-        .to_iter_dataset(
-            grain_options.ReadOptions(
-                num_threads=self._num_make_iter_threads,
-                prefetch_buffer_size=self._make_iter_buffer_size,
-            )
-        )
-        .__iter__()
-    )
+    if datasets and isinstance(datasets[0], dataset.DatasetIterator):
+      # If the input is a sequence of iterators, create a prefetch iterator
+      # directly from the iterators.
+      self._prefetch_ds_iter = (
+          dataset.MapDataset.source(datasets)
+          .to_iter_dataset(
+              grain_options.ReadOptions(
+                  num_threads=self._num_make_iter_threads,
+                  prefetch_buffer_size=self._make_iter_buffer_size,
+              )
+          )
+          .__iter__()
+      )
+    else:
+      self._prefetch_ds_iter = (
+          dataset.MapDataset.source(datasets)
+          .map(
+              functools.partial(
+                  _add_prefetch_and_make_iterator,
+                  # We use weakref to avoid a circular reference. The
+                  # InterleaveDatasetIterator holds a reference to the
+                  # prefetch iterator in `self._prefetch_ds_iter`.
+                  # The call to `_add_prefetch_and_make_iterator` (and the
+                  # partial object) would hold a reference to the
+                  # InterleaveDatasetIterator. This would prolong its lifetime
+                  # leading to increased resource usage.
+                  interleave_iterator=weakref.ref(self),
+                  start_prefetch=True,
+              )
+          )
+          .to_iter_dataset(
+              grain_options.ReadOptions(
+                  num_threads=self._num_make_iter_threads,
+                  prefetch_buffer_size=self._make_iter_buffer_size,
+              )
+          )
+          .__iter__()
+      )
     self._cycle_length: int = min(cycle_length, len(datasets))
     self._next_index_in_cycle: int = 0
     self._next_index_in_datasets: int = 0

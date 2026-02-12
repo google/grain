@@ -11,13 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import platform
 from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.core import sharding
 import multiprocessing as mp
 from grain._src.python import options
+from grain._src.python.checkpoint import elastic_checkpoint
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import elastic_iterator
 import grain._src.python.testing.experimental as test_util
@@ -25,7 +25,7 @@ import numpy as np
 
 
 @absltest.skipIf(platform.system() == "Windows", "Skipped under bazel.")
-class ElasticIteratorTest(parameterized.TestCase):
+class ElasticMapDataset(parameterized.TestCase):
 
   @parameterized.parameters(
       dict(
@@ -252,6 +252,91 @@ class ElasticIteratorTest(parameterized.TestCase):
         "ElasticIterator does not support `filter` transformation.",
     ):
       elastic_iterator.ElasticIterator(ds, 5, sharding.NoSharding())
+
+
+class ElasticIterDatasetIteratorTest(parameterized.TestCase):
+
+  @parameterized.parameters(
+      dict(
+          shard_options=sharding.NoSharding(),
+          global_batch_size=1,
+          expected=list(range(15)),
+      ),
+      dict(
+          shard_options=sharding.ShardOptions(shard_index=0, shard_count=1),
+          global_batch_size=1,
+          expected=list(range(15)),
+      ),
+      dict(
+          shard_options=sharding.NoSharding(),
+          global_batch_size=3,
+          # Data is interleaved with cycle length 3.
+          expected=[[0, 1, 2], [5, 6, 7], [10, 11, 12]],
+      ),
+  )
+  def test_no_sharding_produces_correct_elements(
+      self, shard_options, global_batch_size, expected
+  ):
+    ds = [
+        # 3 shards, each with 5 elements.
+        dataset.MapDataset.range(i * 5, (i + 1) * 5).to_iter_dataset()
+        for i in range(3)
+    ]
+    it = elastic_iterator.ElasticIterDatasetIterator(
+        ds, shard_options, global_batch_size=global_batch_size
+    )
+    actual = list(it)
+    self.assertLen(actual, len(expected))
+    for actual_batch, expected_batch in zip(actual, expected):
+      np.testing.assert_equal(actual_batch, expected_batch)
+
+  @parameterized.parameters(
+      dict(
+          shard_options=sharding.ShardOptions(shard_index=0, shard_count=2),
+          global_batch_size=1,
+          expected=[0, 2, 4, 6, 8],
+      ),
+      dict(
+          shard_options=sharding.ShardOptions(shard_index=1, shard_count=2),
+          global_batch_size=1,
+          expected=[1, 3, 5, 7, 9],
+      ),
+      dict(
+          shard_options=sharding.ShardOptions(shard_index=0, shard_count=2),
+          global_batch_size=2,
+          expected=[[0, 4], [2, 6]],
+      ),
+  )
+  def test_sharding_produces_correct_elements(
+      self, shard_options, global_batch_size, expected
+  ):
+    ds = [
+        # 4 shards, 0: [0, 4, 8], 1: [1, 5, 9], 2: [2, 6], 3: [3, 7]
+        dataset.MapDataset.range(i, 10, 4).to_iter_dataset()
+        for i in range(4)
+    ]
+    it = elastic_iterator.ElasticIterDatasetIterator(
+        ds,
+        shard_options,
+        global_batch_size=global_batch_size,
+        cycle_length=2,
+    )
+    actual = list(it)
+    self.assertLen(actual, len(expected))
+    for actual_batch, expected_batch in zip(actual, expected):
+      np.testing.assert_equal(actual_batch, expected_batch)
+
+  def test_checkpointing_no_change(self):
+    ds = [
+        dataset.MapDataset.range(i, 100, 25).to_iter_dataset()
+        for i in range(25)
+    ]
+    it = elastic_iterator.ElasticIterDatasetIterator(
+        ds,
+        shard_options=sharding.ShardOptions(shard_index=2, shard_count=4),
+        global_batch_size=3,
+    )
+    test_util.assert_equal_output_after_checkpoint(it)
 
 
 if __name__ == "__main__":
