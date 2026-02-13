@@ -58,6 +58,7 @@ from grain._src.python.data_sources import (
 from grain._src.python.dataset.base import (
     DatasetSelectionMap,
     RandomAccessDataSource,
+    SupportsBatchedReadRandomAccessDataSource,
 )
 from grain._src.python.dataset.dataset import (
     MapDataset,
