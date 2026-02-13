@@ -34,6 +34,7 @@ from grain._src.python.dataset import stats as dataset_stats
 from grain._src.python.dataset.transformations import filter as filter_dataset
 from grain._src.python.dataset.transformations import interleave
 from grain._src.python.dataset.transformations import source
+from grain._src.python.experimental.autotune.python import autotune_bindings
 
 T = TypeVar("T")
 
@@ -143,10 +144,38 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._next_buffered_index = 0
     self._buffer = collections.deque()
     self._lock = threading.Lock()
-    self._prefetch_buffer_size = (
-        read_options.prefetch_buffer_size if read_options.num_threads > 0 else 0
-    )
-    self._num_threads = read_options.num_threads
+    num_threads_opt = read_options.num_threads
+    buffer_size_opt = read_options.prefetch_buffer_size
+
+    if isinstance(num_threads_opt, grain_options.AUTOTUNE):
+      self._num_threads = num_threads_opt.initial_value
+    else:
+      self._num_threads = num_threads_opt
+
+    if isinstance(buffer_size_opt, grain_options.AUTOTUNE):
+      self._prefetch_buffer_size = buffer_size_opt.initial_value
+    else:
+      self._prefetch_buffer_size = (
+          buffer_size_opt if self._num_threads > 0 else 0
+      )
+
+    self.buffer_size_param = None
+    if isinstance(buffer_size_opt, grain_options.AUTOTUNE):
+      self.buffer_size_param = autotune_bindings.AutotuneParameter(
+          "buffer_size",
+          initial_value=buffer_size_opt.initial_value,
+          min_value=buffer_size_opt.min_value,
+          max_value=buffer_size_opt.max_value,
+      )
+
+    self.concurrency_param = None
+    if isinstance(num_threads_opt, grain_options.AUTOTUNE):
+      self.concurrency_param = autotune_bindings.AutotuneParameter(
+          "concurrency",
+          initial_value=num_threads_opt.initial_value,
+          min_value=num_threads_opt.min_value,
+          max_value=num_threads_opt.max_value,
+      )
     self._allow_nones = allow_nones
     if self._prefetch_buffer_size > 0:
       self._executor = futures.ThreadPoolExecutor(
@@ -185,6 +214,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
   )
   def __next__(self) -> T:
     self._assert_not_closed()
+    self._check_autotune_updates()
     # The time recorded here is the time spent in prefetch node to return an
     # element, including the time spent in parent node.
     timer = dataset_stats.Timer()
@@ -254,7 +284,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
         f" allow_nones={self._allow_nones})"
     )
 
-  def set_prefetch_buffer_size(self, buffer_size: int):
+  def _set_prefetch_buffer_size(self, buffer_size: int):
     self._prefetch_buffer_size = buffer_size
     # The executor is created in the constructor only if the prefetch buffer
     # size is greater than 0. If the user changes the prefetch buffer size, we
@@ -272,7 +302,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
       self._executor.shutdown()
       delattr(self, "_executor")
 
-  def set_num_threads(self, num_threads: int) -> None:
+  def _set_num_threads(self, num_threads: int) -> None:
     self._num_threads = num_threads
     old_executor = None
     # Accounts for the case where the executor does not exit. This can
@@ -289,6 +319,17 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
       # Allows the old executor to finish running the tasks it was already
       # assigned asynchronously.
       old_executor.shutdown(wait=False)
+
+  def _check_autotune_updates(self):
+    if self.buffer_size_param is not None:
+      new_buffer_size = int(round(self.buffer_size_param.get_value()))
+      if new_buffer_size != self._prefetch_buffer_size:
+        self._set_prefetch_buffer_size(new_buffer_size)
+
+    if self.concurrency_param is not None:
+      new_num_threads = int(round(self.concurrency_param.get_value()))
+      if new_num_threads != self._num_threads:
+        self._set_num_threads(new_num_threads)
 
   def _fill_buffer(self):
     while (

@@ -13,8 +13,27 @@
 # limitations under the License.
 """Dataclasses for holdings options."""
 import dataclasses
-
+import sys
 from absl import logging
+
+
+@dataclasses.dataclass(slots=True)
+class AUTOTUNE:
+  """Autotuning configuration."""
+
+  min_value: float = 1
+  max_value: float = sys.float_info.max
+  initial_value: float = min_value
+
+  def __post_init__(self):
+    if self.min_value < 0:
+      raise ValueError('min_value must be >= 0')
+    if self.max_value < self.min_value:
+      raise ValueError('max_value must be >= min_value')
+    if self.initial_value < self.min_value:
+      raise ValueError('initial_value must be >= min_value')
+    if self.initial_value > self.max_value:
+      raise ValueError('initial_value must be <= max_value')
 
 
 @dataclasses.dataclass(slots=True)
@@ -41,23 +60,27 @@ class ReadOptions:
   # benchmarks reading from remote hard drives.
   # These values should work well for datasets with elements between 1 and
   # 10 KiB on disk.
-  num_threads: int = 16
-  prefetch_buffer_size: int = 500
+  num_threads: int | AUTOTUNE = 16
+  prefetch_buffer_size: int | AUTOTUNE = 500
 
   def __post_init__(self):
-    if self.num_threads < 0:
-      raise ValueError(
-          f'num_threads must be non-negative, got {self.num_threads}'
-      )
-    if self.prefetch_buffer_size < 0:
-      raise ValueError(
-          'prefetch_buffer_size must be non-negative, got'
-          f' {self.prefetch_buffer_size}'
-      )
+    if not isinstance(self.num_threads, AUTOTUNE):
+      if self.num_threads < 0:
+        raise ValueError(
+            f'num_threads must be non-negative, got {self.num_threads}'
+        )
+    if not isinstance(self.prefetch_buffer_size, AUTOTUNE):
+      if self.prefetch_buffer_size < 0:
+        raise ValueError(
+            'prefetch_buffer_size must be non-negative, got'
+            f' {self.prefetch_buffer_size}'
+        )
     # Avoid warning when setting prefetch_buffer_size=0, since this is commonly
     # used to disable prefetching.
     if (
-        self.prefetch_buffer_size < self.num_threads
+        not isinstance(self.prefetch_buffer_size, AUTOTUNE)
+        and not isinstance(self.num_threads, AUTOTUNE)
+        and self.prefetch_buffer_size < self.num_threads
         and self.prefetch_buffer_size != 0
     ):
       logging.warning(
