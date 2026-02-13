@@ -57,6 +57,7 @@ py_library(
         "//grain/_src/python:options",
         "//grain/_src/python:shared_memory_array",
         "//grain/_src/python/checkpoint:base",
+        "//grain/_src/python/experimental/autotune/python:autotune_bindings",
         "//grain/proto:execution_summary_py_pb2",
         "@abseil-py//absl/flags",
         "@abseil-py//absl/logging",
