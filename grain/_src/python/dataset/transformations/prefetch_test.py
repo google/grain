@@ -162,7 +162,7 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     self.assertEqual(next(ds_iter), 0)
 
     # Setting prefetch_buffer_size to 2.
-    ds_iter.set_prefetch_buffer_size(2)
+    ds_iter._set_prefetch_buffer_size(2)
     self.assertEqual(ds_iter._prefetch_buffer_size, 2)
     self.assertEqual(next(ds_iter), 1)
     self.assertTrue(hasattr(ds_iter, '_executor'))
@@ -183,7 +183,7 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     self.assertLen(ds_iter._buffer, 2)
 
     # Setting prefetch_buffer_size to 0.
-    ds_iter.set_prefetch_buffer_size(0)
+    ds_iter._set_prefetch_buffer_size(0)
     self.assertEqual(ds_iter._prefetch_buffer_size, 0)
     # Should consume buffer first.
     self.assertEqual(next(ds_iter), 1)
@@ -207,7 +207,7 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     self.assertLen(ds_iter._buffer, 1)
 
     # Setting prefetch_buffer_size to 2.
-    ds_iter.set_prefetch_buffer_size(2)
+    ds_iter._set_prefetch_buffer_size(2)
     self.assertEqual(ds_iter._prefetch_buffer_size, 2)
     self.assertEqual(next(ds_iter), 1)
     self.assertLen(ds_iter._buffer, 2)
@@ -227,7 +227,7 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     self.assertLen(ds_iter._buffer, 2)
 
     # Setting prefetch_buffer_size to 1.
-    ds_iter.set_prefetch_buffer_size(1)
+    ds_iter._set_prefetch_buffer_size(1)
     self.assertEqual(ds_iter._prefetch_buffer_size, 1)
     self.assertEqual(next(ds_iter), 1)
     self.assertLen(ds_iter._buffer, 1)
@@ -328,7 +328,7 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     self.assertEqual([next(ds_iter) for _ in range(5)], list(range(5)))
 
     # Decrease threads
-    ds_iter.set_num_threads(5)
+    ds_iter._set_num_threads(5)
     self.assertEqual(ds_iter._num_threads, 5)
     self.assertEqual(ds_iter._executor._max_workers, 5)
     self.assertEqual([next(ds_iter) for _ in range(15)], list(range(5, 20)))
@@ -345,7 +345,7 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     self.assertEqual([next(ds_iter) for _ in range(5)], list(range(5)))
 
     # Increase threads
-    ds_iter.set_num_threads(10)
+    ds_iter._set_num_threads(10)
     self.assertEqual(ds_iter._num_threads, 10)
     self.assertEqual(ds_iter._executor._max_workers, 10)
     self.assertEqual([next(ds_iter) for _ in range(15)], list(range(5, 20)))
@@ -360,7 +360,7 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     )
     self.assertEqual([next(ds_iter) for _ in range(5)], list(range(5)))
     # Decrease threads to 0
-    ds_iter.set_num_threads(0)
+    ds_iter._set_num_threads(0)
     self.assertEqual(ds_iter._num_threads, 0)
     self.assertFalse(hasattr(ds_iter, '_executor'))
     self.assertEqual([next(ds_iter) for _ in range(15)], list(range(5, 20)))
@@ -370,13 +370,13 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     self.assertIsInstance(ds_iter, prefetch.PrefetchDatasetIterator)
     ds_iter = cast(prefetch.PrefetchDatasetIterator, ds_iter)
     self.assertEqual([next(ds_iter) for _ in range(5)], list(range(5)))
-    ds_iter.set_num_threads(0)
+    ds_iter._set_num_threads(0)
     self.assertEqual(ds_iter._num_threads, 0)
     self.assertFalse(hasattr(ds_iter, '_executor'))
     self.assertEqual([next(ds_iter) for _ in range(5)], list(range(5, 10)))
 
     # Increase threads from 0
-    ds_iter.set_num_threads(5)
+    ds_iter._set_num_threads(5)
     self.assertEqual(ds_iter._num_threads, 5)
     self.assertEqual(ds_iter._executor._max_workers, 5)
     self.assertEqual([next(ds_iter) for _ in range(10)], list(range(10, 20)))
