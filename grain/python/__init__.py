@@ -64,6 +64,8 @@ from grain._src.python.dataset.dataset import (
     IterDataset,
     DatasetIterator,
 )
+from grain._src.python.dataset.transformations.map import MapMapDataset
+from grain._src.python.dataset.transformations.source import SourceMapDataset
 
 from grain._src.python.load import load
 from grain._src.python.operations import (
