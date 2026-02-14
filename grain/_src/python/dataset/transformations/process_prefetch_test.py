@@ -48,6 +48,16 @@ class FilterKeepingOddElementsOnly(transforms.Filter):
     return bool(element % 2)
 
 
+@dataclasses.dataclass(frozen=True)
+class WriteMarker(transforms.Map):
+  path: str
+
+  def map(self, element: int) -> int:
+    with open(self.path, 'w') as f:
+      f.write(str(element))
+    return element
+
+
 class ProcessPrefetchIterDatasetTest(parameterized.TestCase):
 
   def setUp(self):
@@ -782,10 +792,22 @@ class MultiprocessingPrefetchTest(parameterized.TestCase):
     if not start_prefetch_calls:
       self.assertGreater(time_to_fetch, 1)
 
+  def test_start_prefetch_prefetches_without_next_call(self):
+    marker_file = os.path.join(self.create_tempdir().full_path, 'marker')
+    ds = dataset.MapDataset.range(10)
+    ds = ds.map(WriteMarker(marker_file))
+    ds = ds.to_iter_dataset()
+    ds = process_prefetch.multiprocess_prefetch(ds, num_workers=1)
+    it = ds.__iter__()
+    it.start_prefetch()
+
+    # Wait for prefetch to happen.
+    while not os.path.exists(marker_file):
+      time.sleep(0.5)
+
   @parameterized.parameters(0, 0.5, 30)
   def test_prefetch_but_no_read(self, sleep_s):
     ds = dataset.MapDataset.source([1, 2, 3]).repeat()
-    ds = ds.filter(lambda x: x > 3)
     ds = ds.to_iter_dataset()
     ds = process_prefetch.multiprocess_prefetch(ds, num_workers=1)
     it = ds.__iter__()

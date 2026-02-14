@@ -199,7 +199,7 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
           iterator = _add_prefetch_and_make_iterator(
               self._datasets[index_in_datasets],
               interleave_iterator=weakref.ref(self),
-              start_prefetch=False,
+              start_prefetch=self._started,
           )
         iterator.set_state(it_state)
         self._iterators_in_use[index_in_cycle] = iterator
@@ -237,6 +237,13 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
           "set_next_index is not supported for InterleaveDatasetIterator with"
           " more than one dataset."
       )
+
+  def start_prefetch(self) -> None:
+    self._prefetch_ds_iter.start_prefetch()
+    for iterator in self._iterators_in_use:
+      if iterator is not None:
+        iterator.start_prefetch()
+    self._started = True
 
   def close(self) -> None:
     """Closes the iterator and shuts down the iterator prefetching."""
