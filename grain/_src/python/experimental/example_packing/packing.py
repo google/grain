@@ -232,7 +232,10 @@ class PackAndBatchOperation(Generic[_T]):
       if not element_added_to_batch:
         yield self._cur_batch.get_packed_batch()  # Main yield
         self._cur_batch = _PackedBatch(
-            element.data, self.batch_size, self.length_struct
+            element.data,
+            self.batch_size,
+            self.length_struct,
+            self.max_sequences_per_bin,
         )
         self._cur_batch.try_add_to_batch(element)
 
