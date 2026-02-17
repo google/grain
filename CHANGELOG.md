@@ -14,6 +14,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     `IterDataset.mp_prefetch` when free-threaded Python is detected.
   * `grain.DataLoaderIterator` can now asynchronously start processing elements
     in background with `start_prefetch` call.
+  * Immediately starts processing elements in the background after restoring
+    from a checkpoint with Orbax.
 
 * Breaking changes:
   * Custom implementations of `RandomAccessDataSource` should accept `int`
