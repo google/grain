@@ -772,6 +772,27 @@ class DataLoaderTest(absl_parameterized.TestCase):
     )
     assert_equal_output_after_checkpoint(data_loader)
 
+  @absl_parameterized.product(
+      worker_count=[0, 4], num_start_prefetch_calls=[1, 5]
+  )
+  def test_start_prefetch(
+      self, worker_count: int, num_start_prefetch_calls: int
+  ):
+    range_data_source = RangeDataSource(start=0, stop=16, step=1)
+    sampler = samplers.SequentialSampler(
+        num_records=len(range_data_source), shard_options=sharding.NoSharding()
+    )
+    data_loader = data_loader_lib.DataLoader(
+        data_source=range_data_source,
+        sampler=sampler,
+        read_options=self.read_options,
+        worker_count=worker_count,
+    )
+    data_loader_iterator = data_loader.__iter__()
+    for _ in range(num_start_prefetch_calls):
+      data_loader_iterator.start_prefetch()
+    self.assertEqual(list(data_loader_iterator), list(range(16)))
+
 
 class PyGrainDatasetIteratorTest(absltest.TestCase):
 

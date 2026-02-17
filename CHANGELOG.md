@@ -12,6 +12,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     and advance a `grain.DatasetIterator` to the given produced element index.
   * Switches to multithreading instead of multiprocessing in
     `IterDataset.mp_prefetch` when free-threaded Python is detected.
+  * `grain.DataLoaderIterator` can now asynchronously start processing elements
+    in background with `start_prefetch` call.
 
 * Breaking changes:
   * Custom implementations of `RandomAccessDataSource` should accept `int`
