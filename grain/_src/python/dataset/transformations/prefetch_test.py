@@ -148,7 +148,7 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     _ = [next(ds_iter) for _ in range(5)]
     self.assertEmpty(ds_iter._buffer)  # iterated through all elements
 
-  def test_set_prefetch_buffer_size_0_to_positive(self):
+  def test_set_target_buffer_size_0_to_positive(self):
     prefetch_lazy_iter_ds = prefetch.PrefetchIterDataset(
         self.range_ds, read_options=options.ReadOptions(prefetch_buffer_size=0)
     )
@@ -158,19 +158,19 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
 
     # With prefetch_buffer_size=0, executor is not created.
     self.assertFalse(hasattr(ds_iter, '_executor'))
-    self.assertEqual(ds_iter._prefetch_buffer_size, 0)
+    self.assertEqual(ds_iter._target_buffer_size, 0)
     self.assertEqual(next(ds_iter), 0)
 
     # Setting prefetch_buffer_size to 2.
-    ds_iter.set_prefetch_buffer_size(2)
-    self.assertEqual(ds_iter._prefetch_buffer_size, 2)
+    ds_iter.set_target_buffer_size(2)
+    self.assertEqual(ds_iter._target_buffer_size, 2)
     self.assertEqual(next(ds_iter), 1)
     self.assertTrue(hasattr(ds_iter, '_executor'))
     self.assertLen(ds_iter._buffer, 2)
     self.assertEqual(next(ds_iter), 2)
     self.assertLen(ds_iter._buffer, 2)
 
-  def test_set_prefetch_buffer_size_positive_to_0(self):
+  def test_set_target_buffer_size_positive_to_0(self):
     prefetch_lazy_iter_ds = prefetch.PrefetchIterDataset(
         self.range_ds, read_options=options.ReadOptions(prefetch_buffer_size=2)
     )
@@ -178,13 +178,13 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     self.assertIsInstance(ds_iter, prefetch.PrefetchDatasetIterator)
     ds_iter = cast(prefetch.PrefetchDatasetIterator, ds_iter)
 
-    self.assertEqual(ds_iter._prefetch_buffer_size, 2)
+    self.assertEqual(ds_iter._target_buffer_size, 2)
     self.assertEqual(next(ds_iter), 0)
     self.assertLen(ds_iter._buffer, 2)
 
     # Setting prefetch_buffer_size to 0.
-    ds_iter.set_prefetch_buffer_size(0)
-    self.assertEqual(ds_iter._prefetch_buffer_size, 0)
+    ds_iter.set_target_buffer_size(0)
+    self.assertEqual(ds_iter._target_buffer_size, 0)
     # Should consume buffer first.
     self.assertEqual(next(ds_iter), 1)
     self.assertLen(ds_iter._buffer, 1)
@@ -194,7 +194,7 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     self.assertEqual(next(ds_iter), 3)
     self.assertEmpty(ds_iter._buffer)
 
-  def test_set_prefetch_buffer_size_increase(self):
+  def test_set_target_buffer_size_increase(self):
     prefetch_lazy_iter_ds = prefetch.PrefetchIterDataset(
         self.range_ds, read_options=options.ReadOptions(prefetch_buffer_size=1)
     )
@@ -202,19 +202,19 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     self.assertIsInstance(ds_iter, prefetch.PrefetchDatasetIterator)
     ds_iter = cast(prefetch.PrefetchDatasetIterator, ds_iter)
 
-    self.assertEqual(ds_iter._prefetch_buffer_size, 1)
+    self.assertEqual(ds_iter._target_buffer_size, 1)
     self.assertEqual(next(ds_iter), 0)
     self.assertLen(ds_iter._buffer, 1)
 
     # Setting prefetch_buffer_size to 2.
-    ds_iter.set_prefetch_buffer_size(2)
-    self.assertEqual(ds_iter._prefetch_buffer_size, 2)
+    ds_iter.set_target_buffer_size(2)
+    self.assertEqual(ds_iter._target_buffer_size, 2)
     self.assertEqual(next(ds_iter), 1)
     self.assertLen(ds_iter._buffer, 2)
     self.assertEqual(next(ds_iter), 2)
     self.assertLen(ds_iter._buffer, 2)
 
-  def test_set_prefetch_buffer_size_decrease(self):
+  def test_set_target_buffer_size_decrease(self):
     prefetch_lazy_iter_ds = prefetch.PrefetchIterDataset(
         self.range_ds, read_options=options.ReadOptions(prefetch_buffer_size=2)
     )
@@ -222,13 +222,13 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     self.assertIsInstance(ds_iter, prefetch.PrefetchDatasetIterator)
     ds_iter = cast(prefetch.PrefetchDatasetIterator, ds_iter)
 
-    self.assertEqual(ds_iter._prefetch_buffer_size, 2)
+    self.assertEqual(ds_iter._target_buffer_size, 2)
     self.assertEqual(next(ds_iter), 0)
     self.assertLen(ds_iter._buffer, 2)
 
     # Setting prefetch_buffer_size to 1.
-    ds_iter.set_prefetch_buffer_size(1)
-    self.assertEqual(ds_iter._prefetch_buffer_size, 1)
+    ds_iter.set_target_buffer_size(1)
+    self.assertEqual(ds_iter._target_buffer_size, 1)
     self.assertEqual(next(ds_iter), 1)
     self.assertLen(ds_iter._buffer, 1)
     self.assertEqual(next(ds_iter), 2)
