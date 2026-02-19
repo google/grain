@@ -521,7 +521,7 @@ class Timer:
 
   The value is accumulated across multiple usages as a context manager. Expected
   to be used as show below. Note that `Timer` is not thread-safe and is intended
-  to be used as a local variable.
+  to be used as a local variable. 
   ```
     timer = Timer()
     with timer:
