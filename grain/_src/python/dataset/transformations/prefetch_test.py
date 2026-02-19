@@ -1164,5 +1164,58 @@ class MultithreadPrefetchTest(parameterized.TestCase):
       self.assertEqual(context.process_count, num_threads)
 
 
+class ThreadPrefetchTest(parameterized.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    self.ds = (
+        dataset.MapDataset.range(20)
+        .to_iter_dataset()
+        .filter(FilterKeepingOddElementsOnly())
+    )
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='no_prefetch',
+          prefetch_buffer_size=0,
+          warm_start=False,
+      ),
+      dict(
+          testcase_name='no_prefetch_with_warm_start',
+          prefetch_buffer_size=0,
+          warm_start=True,
+      ),
+      dict(
+          testcase_name='thread',
+          prefetch_buffer_size=1,
+          warm_start=True,
+      ),
+      dict(
+          testcase_name='thread_large_buffer',
+          prefetch_buffer_size=20,
+          warm_start=False,
+      ),
+      dict(
+          testcase_name='thread_huge_buffer',
+          prefetch_buffer_size=200,
+          warm_start=True,
+      ),
+  )
+  def test_prefetch_data(self, prefetch_buffer_size: int, warm_start: bool):
+    ds = self.ds.thread_prefetch(prefetch_buffer_size=prefetch_buffer_size)
+    it = ds.__iter__()
+    if warm_start:
+      it.start_prefetch()
+    actual = list(it)
+    expected = list(range(1, 20, 2))
+    self.assertSequenceEqual(actual, expected)
+
+  def test_fails_with_negative_prefetch_buffer_size(self):
+    with self.assertRaisesRegex(
+        ValueError, '`prefetch_buffer_size` must be greater than or equal to 0'
+    ):
+      self.ds.thread_prefetch(prefetch_buffer_size=-1)
+
+
 if __name__ == '__main__':
   absltest.main()
