@@ -69,26 +69,6 @@ py_test(
 )
 
 py_library(
-    name = "multiprocessing_common",
-    srcs = [
-        "multiprocessing_common.py",
-    ],
-    srcs_version = "PY3",
-)
-
-py_test(
-    name = "multiprocessing_common_test",
-    srcs = [
-        "multiprocessing_common_test.py",
-    ],
-    srcs_version = "PY3",
-    deps = [
-        ":multiprocessing_common",
-        "@abseil-py//absl/testing:absltest",
-    ],
-)
-
-py_library(
     name = "operations",
     srcs = [
         "operations.py",
@@ -96,8 +76,8 @@ py_library(
     srcs_version = "PY3",
     deps = [
         ":record",
-        ":shared_memory_array",
         "//grain/_src/core:tree_lib",
+        "//grain/_src/python/ipc:shared_memory_array",
         "@abseil-py//absl/logging",
         "@pypi//numpy:pkg",
     ],
@@ -159,7 +139,6 @@ py_library(
         ":options",
         ":record",
         ":samplers",
-        ":shared_memory_array",
         "//grain/_src/core:monitoring",
         "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
@@ -167,7 +146,7 @@ py_library(
         "//grain/_src/python/checkpoint:base",
         "//grain/_src/python/dataset",
         "//grain/_src/python/dataset:base",
-        "@abseil-py//absl/logging",
+        "//grain/_src/python/ipc:shared_memory_array",
         "@pypi//etils:pkg",
         "@pypi//numpy:pkg",
     ],
@@ -196,10 +175,10 @@ py_test(
         ":operations",
         ":options",
         ":samplers",
-        ":shared_memory_array",
         "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
         "//grain/_src/python/dataset",
+        "//grain/_src/python/ipc:shared_memory_array",
         "//grain/_src/python/testing:experimental",
         "@abseil-py//absl/flags",
         "@abseil-py//absl/testing:absltest",
@@ -272,51 +251,6 @@ py_test(
         ":grain_logging",
         "//grain/_src/core:pytest",
         "@abseil-py//absl/logging",
-        "@abseil-py//absl/testing:absltest",
-    ],
-)
-
-py_library(
-    name = "shared_memory_array",
-    srcs = ["shared_memory_array.py"],
-    srcs_version = "PY3",
-    deps = [
-        "//grain/_src/core:tree_lib",
-        "@pypi//numpy:pkg",
-    ],
-)
-
-py_test(
-    name = "shared_memory_array_test",
-    srcs = ["shared_memory_array_test.py"],
-    srcs_version = "PY3",
-    # Skip bazel test due to JAX installation issue. This is tested with pytest instead.
-    target_compatible_with = select({
-        "//conditions:default": ["@platforms//:incompatible"],
-    }),
-    deps = [
-        ":operations",
-        ":record",
-        ":shared_memory_array",
-        "@abseil-py//absl/testing:absltest",
-        "@abseil-py//absl/testing:parameterized",
-        "@pypi//jax:pkg",
-        "@pypi//numpy:pkg",
-    ],
-)
-
-py_library(
-    name = "variable_size_queue",
-    srcs = ["variable_size_queue.py"],
-    srcs_version = "PY3",
-)
-
-py_test(
-    name = "variable_size_queue_test",
-    srcs = ["variable_size_queue_test.py"],
-    srcs_version = "PY3",
-    deps = [
-        ":variable_size_queue",
         "@abseil-py//absl/testing:absltest",
     ],
 )

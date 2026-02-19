@@ -17,7 +17,7 @@ import dataclasses
 import multiprocessing
 from multiprocessing import pool
 import queue
-from typing import TypeVar, Union, Callable
+from typing import Callable, TypeVar, Union
 
 T = TypeVar('T')
 

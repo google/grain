@@ -18,7 +18,7 @@ from multiprocessing import pool
 import queue
 
 from absl.testing import absltest
-from grain._src.python import multiprocessing_common
+from grain._src.python.ipc import queue as multiprocessing_common
 
 
 class MultiProcessingCommonTest(absltest.TestCase):

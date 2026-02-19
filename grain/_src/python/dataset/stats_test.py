@@ -28,9 +28,9 @@ import cloudpickle
 from grain._src.core import pytest
 from grain._src.core import transforms
 from grain._src.python import options
-from grain._src.python import shared_memory_array
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
+from grain._src.python.ipc import shared_memory_array
 from grain.proto import execution_summary_pb2
 import numpy as np
 

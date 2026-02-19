@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from grain._src.python import shared_memory_array
 from grain._src.python.dataset import stats_utils
+from grain._src.python.ipc import shared_memory_array
 from grain.proto import execution_summary_pb2
 import numpy as np
 

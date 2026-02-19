@@ -30,12 +30,12 @@ import multiprocessing as mp
 from grain._src.python import data_loader as data_loader_lib
 from grain._src.python import options
 from grain._src.python import samplers
-from grain._src.python import shared_memory_array
 # pylint: disable=g-importing-member
 from grain._src.python.data_sources import ArrayRecordDataSource
 from grain._src.python.data_sources import RangeDataSource
 from grain._src.python.data_sources import SharedMemoryDataSource
 from grain._src.python.dataset.transformations import batch
+from grain._src.python.ipc import shared_memory_array
 from grain._src.python.operations import BatchOperation
 from grain._src.python.operations import FilterOperation
 from grain._src.python.operations import MapOperation

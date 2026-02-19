@@ -22,15 +22,18 @@ from unittest import mock
 from absl.testing import absltest
 from absl.testing import parameterized
 import multiprocessing
+from grain._src.python import operations
 from grain._src.python import record
-from grain._src.python.operations import BatchOperation
-from grain._src.python.shared_memory_array import copy_to_shm
-from grain._src.python.shared_memory_array import open_from_shm
-from grain._src.python.shared_memory_array import SharedMemoryArray
-from grain._src.python.shared_memory_array import SharedMemoryArrayMetadata
-from grain._src.python.shared_memory_array import unlink_shm
+from grain._src.python.ipc import shared_memory_array
 import jax
 import numpy as np
+
+SharedMemoryArray = shared_memory_array.SharedMemoryArray
+SharedMemoryArrayMetadata = shared_memory_array.SharedMemoryArrayMetadata
+copy_to_shm = shared_memory_array.copy_to_shm
+open_from_shm = shared_memory_array.open_from_shm
+unlink_shm = shared_memory_array.unlink_shm
+BatchOperation = operations.BatchOperation
 
 
 def _create_and_delete_shm() -> SharedMemoryArrayMetadata:
@@ -64,15 +67,13 @@ class SharedMemoryArrayTest(parameterized.TestCase):
     else:
       data = list(map(jax.numpy.array, data))
 
-    input_data = iter(
-        [
-            record.Record(
-                record.RecordMetadata(index=idx, record_key=idx + 1),
-                {"a": item},
-            )
-            for idx, item in enumerate(data)
-        ]
-    )
+    input_data = iter([
+        record.Record(
+            record.RecordMetadata(index=idx, record_key=idx + 1),
+            {"a": item},
+        )
+        for idx, item in enumerate(data)
+    ])
 
     batch_operation = BatchOperation(batch_size=2)
     batch_operation._enable_shared_memory()

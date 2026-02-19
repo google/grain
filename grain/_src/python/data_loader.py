@@ -32,14 +32,13 @@ from grain._src.core import tree_lib
 from grain._src.python import operations as ops
 from grain._src.python import options
 from grain._src.python import record
+from grain._src.python import samplers
 from grain._src.python.checkpoint import base as checkpoint_base
 from grain._src.python.dataset import base as dataset_base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import batch as batch_ds
 from grain._src.python.dataset.transformations import flatmap
-from grain._src.python.operations import Operation
-from grain._src.python.samplers import Sampler
-from grain._src.python.shared_memory_array import SharedMemoryArray
+from grain._src.python.ipc import shared_memory_array
 import numpy as np
 
 from grain._src.core import monitoring
@@ -108,7 +107,9 @@ class CopyNumPyArrayToSharedMemory(transforms.Map):
       ):
         return element
 
-      shared_memory_arr = SharedMemoryArray(element.shape, element.dtype)
+      shared_memory_arr = shared_memory_array.SharedMemoryArray(
+          element.shape, element.dtype
+      )
       np.copyto(shared_memory_arr, element, casting="no")
       return shared_memory_arr.metadata
 
@@ -121,7 +122,7 @@ class _SamplerMapDataset(dataset.MapDataset[record.Record]):
   def __init__(
       self,
       data_source: dataset_base.RandomAccessDataSource,
-      sampler: Sampler,
+      sampler: samplers.Sampler,
       shard_options: sharding.ShardOptions,
   ):
     super().__init__(dataset.MapDataset.source(data_source))
@@ -212,7 +213,7 @@ class _DataLoaderStateIterDataset(dataset.IterDataset[_T]):
       parent: dataset.IterDataset[_T],
       shard_options: sharding.ShardOptions,
       worker_count: int,
-      sampler: Sampler,
+      sampler: samplers.Sampler,
       data_source: dataset_base.RandomAccessDataSource,
   ):
     super().__init__(parent)
@@ -239,7 +240,7 @@ class _DataLoaderStateDatasetIterator(dataset.DatasetIterator[_T]):
       parent: dataset.DatasetIterator[_T],
       shard_options: sharding.ShardOptions | None,
       worker_count: int,
-      sampler: Sampler,
+      sampler: samplers.Sampler,
       data_source: dataset_base.RandomAccessDataSource,
   ):
     super().__init__(parent)
@@ -350,8 +351,8 @@ class DataLoader:
       self,
       *,
       data_source: dataset_base.RandomAccessDataSource,
-      sampler: Sampler,
-      operations: Sequence[transforms.Transformation | Operation] = (),
+      sampler: samplers.Sampler,
+      operations: Sequence[transforms.Transformation | ops.Operation] = (),
       worker_count: Optional[int] = 0,
       worker_buffer_size: int = 1,
       shard_options: sharding.ShardOptions | None = None,
@@ -653,7 +654,7 @@ class _FlatMapAdapter(transforms.FlatMap):
 
 
 def _apply_transform_to_dataset(
-    transform: transforms.Transformation | Operation,
+    transform: transforms.Transformation | ops.Operation,
     ds: dataset.IterDataset,
 ) -> dataset.IterDataset:
   """Applies the `transform` to the dataset."""

@@ -54,7 +54,7 @@ py_library(
         "//grain/_src/python:options",
         "//grain/_src/python:record",
         "//grain/_src/python:samplers",
-        "//grain/_src/python:shared_memory_array",
+        "//grain/_src/python/ipc:shared_memory_array",
         "//grain/_src/python/dataset",
         "//grain/_src/python/dataset:base",
         "//grain/_src/python/dataset:elastic_iterator",

@@ -20,7 +20,7 @@ import time
 
 from absl.testing import absltest
 import multiprocessing as mp
-from grain._src.python import variable_size_queue
+from grain._src.python.ipc import variable_size_queue
 
 
 def _consumer_function_for_test(q, result):

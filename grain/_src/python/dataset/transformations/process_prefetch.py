@@ -32,13 +32,13 @@ from grain._src.core import monitoring as grain_monitoring
 from grain._src.core.config import config
 import multiprocessing as mp
 from grain._src.python import grain_logging
-from grain._src.python import multiprocessing_common
-from grain._src.python import shared_memory_array
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
 from grain._src.python.dataset.transformations import interleave
 from grain._src.python.dataset.transformations import prefetch
+from grain._src.python.ipc import queue as grain_queue
+from grain._src.python.ipc import shared_memory_array
 
 
 T = TypeVar("T")
@@ -213,7 +213,7 @@ def _put_dataset_elements_in_buffer(
           if set_state_request_count.value > 0:
             set_state_request_count.value -= 1
             parent_exhausted = False
-            if not multiprocessing_common.add_element_to_queue(  # pytype: disable=wrong-arg-types
+            if not grain_queue.add_element_to_queue(  # pytype: disable=wrong-arg-types
                 (_SetStateIsDone(), None, None, None),
                 buffer,
                 should_stop.is_set,
@@ -234,7 +234,7 @@ def _put_dataset_elements_in_buffer(
       try:
         element = it.__next__()
       except Exception as e:  # pylint: disable=broad-except
-        multiprocessing_common.add_element_to_queue(  # pytype: disable=wrong-arg-types
+        grain_queue.add_element_to_queue(  # pytype: disable=wrong-arg-types
             (None, None, None, e), buffer, should_stop.is_set
         )
         parent_exhausted = True
@@ -244,7 +244,7 @@ def _put_dataset_elements_in_buffer(
       # __next__ method.
       if not it._stats._config.is_prefetch:  # pylint: disable=protected-access
         it._stats.record_bytes_produced(element)  # pylint: disable=protected-access
-      if not multiprocessing_common.add_element_to_queue(  # pytype: disable=wrong-arg-types
+      if not grain_queue.add_element_to_queue(  # pytype: disable=wrong-arg-types
           (element, it.get_state(), next_index, None),
           buffer,
           should_stop.is_set,
@@ -258,7 +258,7 @@ def _put_dataset_elements_in_buffer(
   except Exception as e:  # pylint: disable=broad-except
     _clear_queue_and_maybe_unlink_shm(buffer)
     _clear_queue_and_maybe_unlink_shm(set_state_queue)
-    multiprocessing_common.add_element_to_queue(  # pytype: disable=wrong-arg-types
+    grain_queue.add_element_to_queue(  # pytype: disable=wrong-arg-types
         (None, None, None, e), buffer, should_stop.is_set
     )
     return

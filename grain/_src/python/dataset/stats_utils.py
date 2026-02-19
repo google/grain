@@ -19,7 +19,7 @@ from typing import Any
 
 from absl import logging
 from grain._src.core import tree_lib
-from grain._src.python import shared_memory_array
+from grain._src.python.ipc import shared_memory_array
 from grain.proto import execution_summary_pb2
 import numpy as np
 

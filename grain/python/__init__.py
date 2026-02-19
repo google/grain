@@ -64,7 +64,7 @@ from grain._src.python.dataset.dataset import (
     IterDataset,
     DatasetIterator,
 )
-
+from grain._src.python.ipc.shared_memory_array import SharedMemoryArray
 from grain._src.python.load import load
 from grain._src.python.operations import (
     BatchOperation,
@@ -80,7 +80,6 @@ from grain._src.python.samplers import (
     Sampler,
     SequentialSampler,
 )
-from grain._src.python.shared_memory_array import SharedMemoryArray
 from grain.python import experimental
 
 # These are imported only if Orbax is present.

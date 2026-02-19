@@ -23,7 +23,7 @@ from typing import Any, Callable, Generic, Iterator, Protocol, Sequence, TypeVar
 from absl import logging
 from grain._src.core import tree_lib
 from grain._src.python import record
-from grain._src.python.shared_memory_array import SharedMemoryArray
+from grain._src.python.ipc import shared_memory_array
 import numpy as np
 
 _IN = TypeVar("_IN")
@@ -202,7 +202,9 @@ class BatchOperation(Generic[_IN, _OUT]):
       shape, dtype = (len(args),) + first_arg.shape, first_arg.dtype
       if not self._use_shared_memory or dtype.hasobject:
         return np.stack(args)
-      return np.stack(args, out=SharedMemoryArray(shape, dtype=dtype)).metadata
+      return np.stack(
+          args, out=shared_memory_array.SharedMemoryArray(shape, dtype=dtype)
+      ).metadata
 
     return tree_lib.map_structure(
         stacking_function, input_records[0], *input_records[1:]
