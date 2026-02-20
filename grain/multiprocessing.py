@@ -15,7 +15,11 @@
 
 
 # pylint: disable=g-importing-member
+# pylint: disable=g-multiple-import
 # pylint: disable=unused-import
 
-from grain._src.python.ipc.shared_memory_array import SharedMemoryArray
+from grain._src.python.ipc.shared_memory_array import (
+    SharedMemoryArray,
+    SharedMemoryArrayMetadata,
+)
 from grain._src.python.options import MultiprocessingOptions

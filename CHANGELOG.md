@@ -16,6 +16,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     in background with `start_prefetch` call.
   * Immediately starts processing elements in the background after restoring
     from a checkpoint with Orbax.
+  * Exposes `SharedMemoryArrayMetadata` in a public API as a metadata descriptor for `SharedMemoryArray`.
 
 * Breaking changes:
   * Custom implementations of `RandomAccessDataSource` should accept `int`

@@ -11,3 +11,6 @@ List of Members
 .. autoclass:: SharedMemoryArray
    :members:
 
+.. autoclass:: SharedMemoryArrayMetadata
+   :members:
+
