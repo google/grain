@@ -86,9 +86,8 @@ class _MakeBatchParallel:
     def _batch_fn(*xs: Sequence[T]) -> T:
       # If the thread pool is not available or the elements are not NumPy
       # arrays, fall back to the standard serial `np.stack` operation.
-      if (self._parallel_batch_executor is None) or not isinstance(
-          xs[0], np.ndarray
-      ):
+      all_ndarray = all(isinstance(x, np.ndarray) for x in xs)
+      if (self._parallel_batch_executor is None) or not all_ndarray:
         return np.stack(xs)
       xs = cast(Sequence[np.ndarray], xs)
       # Fall back to the standard serial `np.stack` operation if the size of

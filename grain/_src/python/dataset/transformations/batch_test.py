@@ -69,6 +69,13 @@ class MakeBatchTest(absltest.TestCase):
     batched_values = make_batch_parallel(values)
     self.assertEqual(batched_values.shape, (1, 3))
 
+  def test_batch_non_numpy_values(self):
+    values = [np.asarray([1, 2, 3]), [4, 5, 6]]
+    make_batch_parallel = batch._MakeBatchParallel()
+    batched_values = make_batch_parallel(values)
+    self.assertIsInstance(batched_values, np.ndarray)
+    self.assertEqual(batched_values.shape, (2, 3))
+
   def test_batch_two_values_success(self):
     values = [np.asarray([1, 2, 3]), np.asarray([4, 5, 6])]
     batched_values = batch.make_batch(values)
