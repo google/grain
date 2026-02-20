@@ -14,7 +14,7 @@
 """Filter transformation for LazyDataset."""
 
 import functools
-from typing import Any, Callable, TypeVar, Union
+from typing import Any, Callable, Sequence, TypeVar, Union
 
 from absl import logging
 from grain._src.core import transforms
@@ -53,14 +53,22 @@ class FilterMapDataset(dataset.MapDataset[T]):
   def __len__(self) -> int:
     return len(self._parent)
 
+  def _filter_element(self, element: T | None) -> T | None:
+    if element is not None and self._filter_fn(element):
+      return element
+    return None
+
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
     element = self._parent[index]
     with self._stats.record_self_time():
-      if element is not None and self._filter_fn(element):
-        return element
-      return None
+      return self._filter_element(element)
+
+  def _getitems(self, indices: Sequence[int]) -> Sequence[T | None]:
+    elements = self._parent._getitems(indices)  # pylint: disable=protected-access
+    with self._stats.record_self_time(num_elements=len(indices)):
+      return [self._filter_element(element) for element in elements]
 
   @property
   def _element_spec(self) -> Any:

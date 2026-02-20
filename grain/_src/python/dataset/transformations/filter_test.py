@@ -95,6 +95,23 @@ class FilterMapDatasetTest(absltest.TestCase):
     ]
     self.assertEqual(expected_data, actual_data)
 
+  def test_filter_data_with_get_items(self):
+    filter_even_elts_ds = filter_dataset.FilterMapDataset(
+        self.range_ds, FilterEvenElementsOnly()
+    )
+    indices = [0, 1, 4, 5, 8, 9]
+    # Expected results for indices [0, 1, 4, 5, 8, 9] with
+    # FilterEvenElementsOnly:
+    # 0 -> 0%2=0 -> False -> None
+    # 1 -> 1%2=1 -> True -> 1
+    # 4 -> 4%2=0 -> False -> None
+    # 5 -> 5%2=1 -> True -> 5
+    # 8 -> 8%2=0 -> False -> None
+    # 9 -> 9%2=1 -> True -> 9
+    expected_data = [None, 1, None, 5, None, 9]
+    actual_data = filter_even_elts_ds._getitems(indices)
+    self.assertEqual(expected_data, actual_data)
+
   def test_element_spec(self):
     ds = filter_dataset.FilterMapDataset(
         self.range_ds, FilterEvenElementsOnly()
