@@ -209,23 +209,25 @@ def _put_dataset_elements_in_buffer(
     next_index: int | None = 0
     while not should_stop.is_set():
       if set_state_request_count.value > 0:
+        new_state_or_index = None
         with set_state_request_count.get_lock():
           if set_state_request_count.value > 0:
             set_state_request_count.value -= 1
-            parent_exhausted = False
-            if not grain_queue.add_element_to_queue(  # pytype: disable=wrong-arg-types
-                (_SetStateIsDone(), None, None, None),
-                buffer,
-                should_stop.is_set,
-            ):
-              continue
             new_state_or_index = set_state_queue.get()
-            if isinstance(new_state_or_index, int):
-              dataset.set_next_index(it, new_state_or_index)
-              next_index = new_state_or_index
-            else:
-              it.set_state(new_state_or_index)
-              next_index = None
+            parent_exhausted = False
+        if new_state_or_index is not None:
+          if not grain_queue.add_element_to_queue(  # pytype: disable=wrong-arg-types
+              (_SetStateIsDone(), None, None, None),
+              buffer,
+              should_stop.is_set,
+          ):
+            continue
+          if isinstance(new_state_or_index, int):
+            dataset.set_next_index(it, new_state_or_index)
+            next_index = new_state_or_index
+          else:
+            it.set_state(new_state_or_index)
+            next_index = None
       if parent_exhausted:
         # Avoid busy-waiting when parent iterator is exhausted due to an
         # error. Wait until set_state_event or should_stop is set.
@@ -244,6 +246,8 @@ def _put_dataset_elements_in_buffer(
       # __next__ method.
       if not it._stats._config.is_prefetch:  # pylint: disable=protected-access
         it._stats.record_bytes_produced(element)  # pylint: disable=protected-access
+      if next_index is not None:
+        next_index += 1
       if not grain_queue.add_element_to_queue(  # pytype: disable=wrong-arg-types
           (element, it.get_state(), next_index, None),
           buffer,
@@ -253,8 +257,6 @@ def _put_dataset_elements_in_buffer(
         # should_stop event was set. The element may contain a shared memory
         # block reference that has to be cleaned up.
         shared_memory_array.unlink_shm(element)
-      if next_index is not None:
-        next_index += 1
   except Exception as e:  # pylint: disable=broad-except
     _clear_queue_and_maybe_unlink_shm(buffer)
     _clear_queue_and_maybe_unlink_shm(set_state_queue)
