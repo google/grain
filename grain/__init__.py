@@ -18,6 +18,7 @@
 # pylint: disable=unused-import
 # pylint: disable=g-multiple-import
 # pylint: disable=g-import-not-at-top
+# pylint: disable=g-bad-import-order
 
 # We import all public modules here to enable the use of `grain.foo.Bar`
 # instead of forcing users to write `from grain import foo as grain_foo`.
@@ -31,6 +32,11 @@ from grain import (
     sources,
     transforms,
 )
+from grain._src.python.dataset.dataset import (
+    DatasetIterator,
+    IterDataset,
+    MapDataset,
+)
 
 from grain._src.core.config import config
 from grain._src.core.version import __version__, __version_info__
@@ -38,11 +44,7 @@ from grain._src.python.data_loader import (
     DataLoader,
     DataLoaderIterator,
 )
-from grain._src.python.dataset.dataset import (
-    DatasetIterator,
-    IterDataset,
-    MapDataset,
-)
+
 from grain._src.python.load import load
 from grain._src.python.options import ReadOptions, MultiprocessingOptions
 from grain._src.python.record import Record, RecordMetadata
