@@ -143,10 +143,15 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._next_buffered_index = 0
     self._buffer = collections.deque()
     self._lock = threading.Lock()
-    self._prefetch_buffer_size = (
-        read_options.prefetch_buffer_size if read_options.num_threads > 0 else 0
-    )
+
+    assert isinstance(read_options.num_threads, int)
+    assert isinstance(read_options.prefetch_buffer_size, int)
     self._num_threads = read_options.num_threads
+    self._prefetch_buffer_size = read_options.prefetch_buffer_size
+
+    if self._num_threads == 0:
+      self._prefetch_buffer_size = 0
+
     self._allow_nones = allow_nones
     if self._prefetch_buffer_size > 0:
       self._executor = futures.ThreadPoolExecutor(
@@ -254,7 +259,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
         f" allow_nones={self._allow_nones})"
     )
 
-  def set_prefetch_buffer_size(self, buffer_size: int):
+  def _set_prefetch_buffer_size(self, buffer_size: int):
     self._prefetch_buffer_size = buffer_size
     # The executor is created in the constructor only if the prefetch buffer
     # size is greater than 0. If the user changes the prefetch buffer size, we
@@ -272,7 +277,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
       self._executor.shutdown()
       delattr(self, "_executor")
 
-  def set_num_threads(self, num_threads: int) -> None:
+  def _set_num_threads(self, num_threads: int) -> None:
     self._num_threads = num_threads
     old_executor = None
     # Accounts for the case where the executor does not exit. This can
