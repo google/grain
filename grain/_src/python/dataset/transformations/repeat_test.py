@@ -13,11 +13,15 @@
 # limitations under the License.
 """Tests for repeat transformation."""
 
+import os
 import sys
 
 from absl.testing import absltest
 from absl.testing import parameterized
+import multiprocessing as mp
+from grain._src.python import options as grain_options
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset.transformations import process_prefetch
 from grain._src.python.dataset.transformations import repeat
 from grain._src.python.testing import experimental as testing
 import numpy as np
@@ -194,6 +198,29 @@ class RepeatIterDatasetTest(parameterized.TestCase):
     spec = dataset.get_element_spec(ds)
     self.assertEqual(spec.dtype, np.int64)
     self.assertEqual(spec.shape, ())
+
+  def test_repeat_after_mp_prefetch(self):
+    ds = dataset.MapDataset.range(20).to_iter_dataset()
+    ds = ds.mp_prefetch(
+        grain_options.MultiprocessingOptions(
+            num_workers=3,
+            per_worker_buffer_size=2,
+        )
+    )
+    ds = repeat.RepeatIterDataset(ds, num_epochs=3)
+    self.assertEqual(list(ds), list(range(20)) * 3)
+
+  def test_repeat_after_mp_prefetch_does_not_restart_workers(self):
+    ds = dataset.MapDataset.range(20).to_iter_dataset()
+    ds = ds.map(lambda x: os.getpid())
+    ds = process_prefetch.multiprocess_prefetch(
+        ds,
+        num_workers=3,
+    )
+    ds = repeat.RepeatIterDataset(ds, num_epochs=3)
+    results = list(ds)
+    self.assertLen(results, 60)
+    self.assertLen(set(results), 3)
 
 
 if __name__ == "__main__":
