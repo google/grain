@@ -17,6 +17,8 @@ from typing import Any, Optional, Sequence, TypeVar
 
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
+from grain._src.python.dataset.transformations import interleave
+from grain._src.python.dataset.transformations import process_prefetch
 
 T = TypeVar("T")
 
@@ -94,6 +96,18 @@ class _RepeatDatasetIterator(dataset.DatasetIterator[T]):
     self._num_epochs = num_epochs
     self._epoch = 0
     self._parent_starting_state = self._parent.get_state()
+    # Check for ProcessPrefetchDatasetIterator and InterleaveDatasetIterator and
+    # ensure processes/iterators are not reset on StopIteration. This is needed
+    # to avoid recreating the worker processes on each epoch.
+    to_visit = [self]
+    while to_visit:
+      node = to_visit.pop(0)
+      if isinstance(node, process_prefetch._ProcessPrefetchDatasetIterator):  # pylint: disable=protected-access
+        node.set_keep_workers_after_stop_iteration(True)
+      if isinstance(node, interleave.InterleaveDatasetIterator):
+        node.set_keep_iterators_after_stop_iteration(True)
+        to_visit.extend(n for n in node._iterators_in_use if n is not None)  # pylint: disable=protected-access
+      to_visit.extend(n for n in node._parents)
 
   @stats.record_next_duration_if_output
   def __next__(self):

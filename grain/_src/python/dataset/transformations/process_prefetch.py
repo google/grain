@@ -302,6 +302,7 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._iter_parent = parent
     self._buffer_size = buffer_size
     self._worker_init_fn = worker_init_fn
+    self._keep_workers_after_stop_iteration = False
     # Since the parent iterator is going to be created in each subprocess, and
     # the options are propagated during iterator creation, we need to manually
     # propagate them.
@@ -453,7 +454,11 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
           # Unlink shared memory for the discarded element.
           shared_memory_array.unlink_shm(element)
       if err is not None:
-        self._stop_prefetch()
+        if (
+            not isinstance(err, StopIteration)
+            or not self._keep_workers_after_stop_iteration
+        ):
+          self._stop_prefetch()
         self._exhausted = True
         raise err
       self._state = state
@@ -550,6 +555,13 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._set_state_count += 1
     self._exhausted = False
     self._state = None
+
+  def set_keep_workers_after_stop_iteration(self, keep_workers: bool):
+    # Determines whether the worker processes should be kept alive after
+    # StopIteration is raised by `__next__`. This is used by
+    # `RepeatDatasetIterator` to allow for resetting the iterator state and
+    # continuing iteration without recreating the worker processes.
+    self._keep_workers_after_stop_iteration = keep_workers
 
   def __str__(self) -> str:
     return f"ProcessPrefetchDatasetIterator(buffer_size={self._buffer_size})"
