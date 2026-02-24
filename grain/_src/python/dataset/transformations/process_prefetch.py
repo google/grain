@@ -194,6 +194,8 @@ def _put_dataset_elements_in_buffer(
     start_profiling_event: synchronize.Event | None,
     stop_profiling_event: synchronize.Event | None,
     debug_flags: dict[str, Any],
+    autotuning_model_config_args: (
+        dict[str, Any] | None
 ):
   """Prefetches elements in a separate process."""
   global _is_in_worker_process
