@@ -21,6 +21,7 @@ import copy
 import functools
 from multiprocessing import queues
 import queue
+import sys
 import threading
 import typing
 from typing import Any, Optional, Protocol, TypeVar
@@ -584,7 +585,12 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     # Remove entries from the buffer to unblock the producer, so that it checks
     # producer_running.is_set() and exits.
     self._clear_buffer()
-    self._prefetch_thread.join()
+    if not sys.is_finalizing():
+      # Joining the worker thread is not necessary when the Python interpreter
+      # is shutting down. Attempting to join can lead to hanging in Python
+      # 3.13 as daemon threads can hang during interpreter shutdown. See
+      # https://github.com/python/cpython/issues/123940#issuecomment-2976446309
+      self._prefetch_thread.join()
     self._prefetch_thread = None
     # Clear the buffer again in case the prefetch loop added more elements on
     # exit.
