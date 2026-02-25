@@ -6,6 +6,16 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features:
+
+* Breaking changes:
+
+* Deprecations:
+
+* Bug fixes:
+
+## Grain 0.2.16 (February 25, 2025)
+
+* New features:
   * Adds support for filtering Grain-internal stack frames from user-thrown
     errors.
   * Adds experimental support for `get_next_index` and `set_next_index` to fetch
@@ -16,7 +26,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     in background with `start_prefetch` call.
   * Immediately starts processing elements in the background after restoring
     from a checkpoint with Orbax.
-  * Exposes `SharedMemoryArrayMetadata` in a public API as a metadata descriptor for `SharedMemoryArray`.
+  * Exposes `SharedMemoryArrayMetadata` in a public API as a metadata descriptor
+    for `SharedMemoryArray`.
 
 * Breaking changes:
   * Custom implementations of `RandomAccessDataSource` should accept `int`
