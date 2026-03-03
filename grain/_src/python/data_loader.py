@@ -273,7 +273,7 @@ class _DataLoaderStateDatasetIterator(dataset.DatasetIterator[_T]):
 
     local_offset = shard_index - global_worker_count
     last_seen_indices = {
-        str(i): (
+        str(i): int(
             local_offset
             + i * shard_count
             + workers_state[i]["next_index"] * global_worker_count
