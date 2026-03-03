@@ -12,9 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Dataclasses for holdings options."""
+from __future__ import annotations
+
 import dataclasses
 
 from absl import logging
+class AutotuneParameter:
+
+  def __init__(self, *args, **kwargs):
+    raise NotImplementedError
 
 
 @dataclasses.dataclass(slots=True)
@@ -41,25 +47,29 @@ class ReadOptions:
   # benchmarks reading from remote hard drives.
   # These values should work well for datasets with elements between 1 and
   # 10 KiB on disk.
-  num_threads: int = 16
-  prefetch_buffer_size: int = 500
+  num_threads: int | AutotuneParameter = 16
+  prefetch_buffer_size: int | AutotuneParameter = 500
 
   def __post_init__(self):
-    if self.num_threads < 0:
+    if isinstance(self.num_threads, int) and self.num_threads < 0:
       raise ValueError(
           f'num_threads must be non-negative, got {self.num_threads}'
       )
-    if self.prefetch_buffer_size < 0:
+
+    if (
+        isinstance(self.prefetch_buffer_size, int)
+        and self.prefetch_buffer_size < 0
+    ):
       raise ValueError(
           'prefetch_buffer_size must be non-negative, got'
           f' {self.prefetch_buffer_size}'
       )
+
     # Avoid warning when setting prefetch_buffer_size=0, since this is commonly
     # used to disable prefetching.
-    if (
-        self.prefetch_buffer_size < self.num_threads
-        and self.prefetch_buffer_size != 0
-    ):
+    buffer_size = int(self.prefetch_buffer_size)
+    num_threads = int(self.num_threads)
+    if buffer_size < num_threads and buffer_size != 0:
       logging.warning(
           'prefetch_buffer_size=%s is smaller than num_threads=%s. This will'
           ' limit the number of threads that can actually be used in parallel'

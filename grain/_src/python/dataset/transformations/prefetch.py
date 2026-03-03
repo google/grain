@@ -26,6 +26,7 @@ import threading
 import typing
 from typing import Any, Optional, Protocol, TypeVar
 
+from absl import logging
 from concurrent import futures
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.python import options as grain_options
@@ -144,14 +145,16 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._next_buffered_index = 0
     self._buffer = collections.deque()
     self._lock = threading.Lock()
-    self._prefetch_buffer_size = (
-        read_options.prefetch_buffer_size if read_options.num_threads > 0 else 0
-    )
-    self._num_threads = read_options.num_threads
+
+    assert isinstance(read_options.num_threads, int)
+    assert isinstance(read_options.prefetch_buffer_size, int)
+    self._target_num_threads = read_options.num_threads
+    self._target_prefetch_buffer_size = read_options.prefetch_buffer_size
+
     self._allow_nones = allow_nones
-    if self._prefetch_buffer_size > 0:
+    if self._target_prefetch_buffer_size > 0 and self._target_num_threads > 0:
       self._executor = futures.ThreadPoolExecutor(
-          self._num_threads, thread_name_prefix="grain-prefetch"
+          self._target_num_threads, thread_name_prefix="grain-prefetch"
       )
 
   def _initialize_stats(
@@ -195,7 +198,10 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
       if self._next_returned_index == self._dataset_length:
         break
       with self._lock, timer:
-        if self._prefetch_buffer_size > 0:
+        if (
+            self._target_prefetch_buffer_size > 0
+            and self._target_num_threads > 0
+        ):
           if not self._buffer:
             # Fill the buffer on the first iteration.
             self._fill_buffer()
@@ -237,11 +243,11 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
             f"Checkpoint `next_index` {self._next_returned_index} is out of"
             f" range for dataset of length {self._dataset_length}."
         )
-      if self._prefetch_buffer_size > 0:
-        # Cancel all pending futures in the buffer.
-        while self._buffer:
-          future = self._buffer.popleft()
-          future.cancel()
+
+      # Cancel all pending futures in the buffer.
+      while self._buffer:
+        future = self._buffer.popleft()
+        future.cancel()
 
   def _get_next_index(self) -> int:
     return self._next_returned_index
@@ -255,34 +261,33 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
         f" allow_nones={self._allow_nones})"
     )
 
-  def set_prefetch_buffer_size(self, buffer_size: int):
-    self._prefetch_buffer_size = buffer_size
+  def _set_prefetch_buffer_size(self, buffer_size: int):
+    self._target_prefetch_buffer_size = buffer_size
     # The executor is created in the constructor only if the prefetch buffer
     # size is greater than 0. If the user changes the prefetch buffer size, we
     # need to create or destroy the executor accordingly.
-    if self._prefetch_buffer_size > 0 and not hasattr(self, "_executor"):
-      if self._num_threads == 0:
-        raise ValueError(
-            "num_threads must be greater than 0 when prefetch buffer size is"
-            " greater than 0."
-        )
+    if (
+        self._target_prefetch_buffer_size > 0
+        and self._target_num_threads > 0
+        and not hasattr(self, "_executor")
+    ):
       self._executor = futures.ThreadPoolExecutor(
-          self._num_threads, thread_name_prefix="grain-prefetch"
+          self._target_num_threads, thread_name_prefix="grain-prefetch"
       )
-    elif self._prefetch_buffer_size == 0 and hasattr(self, "_executor"):
+    elif self._target_prefetch_buffer_size == 0 and hasattr(self, "_executor"):
       self._executor.shutdown()
       delattr(self, "_executor")
 
-  def set_num_threads(self, num_threads: int) -> None:
-    self._num_threads = num_threads
+  def _set_num_threads(self, num_threads: int) -> None:
+    self._target_num_threads = num_threads
     old_executor = None
     # Accounts for the case where the executor does not exit. This can
     # happen if the prefetch buffer size is set to 0.
     if hasattr(self, "_executor"):
       old_executor = self._executor
-    if self._num_threads > 0:
+    if self._target_num_threads > 0 and self._target_prefetch_buffer_size > 0:
       self._executor = futures.ThreadPoolExecutor(
-          self._num_threads, thread_name_prefix="grain-prefetch"
+          self._target_num_threads, thread_name_prefix="grain-prefetch"
       )
     else:
       delattr(self, "_executor")
@@ -293,7 +298,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   def _fill_buffer(self):
     while (
-        len(self._buffer) < self._prefetch_buffer_size
+        len(self._buffer) < self._target_prefetch_buffer_size
         and self._next_buffered_index < self._dataset_length
     ):
       # Note that we trigger creation of `_stats` in this (single) thread, it is
@@ -307,7 +312,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
       self._next_buffered_index += 1
 
   def start_prefetch(self):
-    if self._prefetch_buffer_size > 0:
+    if self._target_prefetch_buffer_size > 0 and self._target_num_threads > 0:
       self._fill_buffer()
 
   def close(self) -> None:
