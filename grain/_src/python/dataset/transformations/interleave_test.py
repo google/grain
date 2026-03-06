@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import time
+
 from absl.testing import absltest
 from absl.testing import flagsaver
 from absl.testing import parameterized
@@ -290,6 +292,22 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
         " more than one dataset.",
     ):
       dataset.set_next_index(ds_iter, 0)
+
+  def test_start_prefetch(self):
+    count = 0
+
+    def map_fn(x):
+      nonlocal count
+      count += 1
+      return x
+
+    ds = dataset.MapDataset.range(10).to_iter_dataset()
+    ds = ds.map(map_fn)
+    ds = interleave.InterleaveIterDataset([ds], cycle_length=1)
+    ds_iter = ds.__iter__()
+    ds_iter.start_prefetch()
+    while count == 0:
+      time.sleep(0.1)
 
 
 if __name__ == "__main__":
