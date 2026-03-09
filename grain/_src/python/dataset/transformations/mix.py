@@ -90,7 +90,7 @@ class MixedMapDataset(dataset.MapDataset[T]):
       parents: Component datasets to draw from.
       proportions: Proportions from which to draw from each parent dataset.
         Defaults to uniform weight if selection_map is not given.
-      selection_map: Mapping from global index to paraent dataset and index
+      selection_map: Mapping from global index to parent dataset and index
         within parent dataset.
     """
     super().__init__(parents)
