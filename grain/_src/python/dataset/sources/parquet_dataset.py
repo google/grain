@@ -13,7 +13,7 @@
 # limitations under the License.
 """Provides an `IterDataset` for Parquet file format."""
 
-from typing import TypeVar
+from typing import IO, Sequence, TypeVar, Union
 
 from etils import epy
 from grain._src.python.dataset import dataset
@@ -26,24 +26,35 @@ with epy.lazy_imports():
 
 T = TypeVar("T")
 
+ParquetDataSourcePath = Union[str, IO[bytes]]
+ParquetDataSource = Union[
+    ParquetDataSourcePath, Sequence[ParquetDataSourcePath]
+]
+
 
 class _ParquetDatasetIterator(dataset.DatasetIterator[T]):
   """A DatasetIterator for Parquet file format."""
 
   def __init__(
       self,
-      path: str,
+      sources: Sequence[ParquetDataSourcePath],
       row_group: int = 0,
       index_within_row_group: int = 0,
+      source_index: int = 0,
       **read_kwargs,
   ):
     super().__init__()
+    self._sources = sources
+    self._source_index = source_index
     self._row_group = row_group
     self._index_within_row_group = index_within_row_group
-    self._pq_path = path
-    self._pq_file = pq.ParquetFile(self._pq_path, **read_kwargs)
-    self._np_table = {}
-    self._row_group_len = 0
+    self._read_kwargs = read_kwargs
+    self._open_current_source()
+
+  def _open_current_source(self):
+    self._pq_file = pq.ParquetFile(
+        self._sources[self._source_index], **self._read_kwargs
+    )
     self._read_row_group_to_np_table()
 
   def _read_row_group_to_np_table(self):
@@ -60,6 +71,12 @@ class _ParquetDatasetIterator(dataset.DatasetIterator[T]):
         self._index_within_row_group = 0
         self._read_row_group_to_np_table()
         return self.__next__()
+      elif self._source_index < len(self._sources) - 1:
+        self._source_index += 1
+        self._row_group = 0
+        self._index_within_row_group = 0
+        self._open_current_source()
+        return self.__next__()
       else:
         raise StopIteration()
     else:
@@ -71,29 +88,38 @@ class _ParquetDatasetIterator(dataset.DatasetIterator[T]):
 
   def get_state(self):
     return {
+        "source_index": self._source_index,
         "row_group": self._row_group,
         "index_within_row_group": self._index_within_row_group,
     }
 
   def set_state(self, state):
+    self._source_index = state["source_index"]
     self._row_group = state["row_group"]
     self._index_within_row_group = state["index_within_row_group"]
-    self._read_row_group_to_np_table()
+    self._open_current_source()
 
 
 class ParquetIterDataset(dataset.IterDataset[T]):
   """An IterDataset for a parquet format file."""
 
-  def __init__(self, path: str, **read_kwargs):
+  def __init__(self, path: ParquetDataSource, **read_kwargs):
     """Initializes ParquetIterDataset.
 
     Args:
-      path: A path to a parquet format file.
+      path: A path or sequence of paths to parquet format files.
       **read_kwargs: Keyword arguments to pass to pyarrow.parquet.ParquetFile.
     """
     super().__init__()
-    self._path = path
+    if isinstance(path, (str, bytes)) or not isinstance(path, Sequence):
+      self._paths = [path]
+    else:
+      self._paths = path
     self._read_kwargs = read_kwargs
 
   def __iter__(self) -> _ParquetDatasetIterator[T]:
-    return _ParquetDatasetIterator(self._path, **self._read_kwargs)
+    return _ParquetDatasetIterator(self._paths, **self._read_kwargs)
+
+  def set_slice(self, sl: slice, sequential_slice: bool = False):
+    del sequential_slice
+    self._paths = self._paths[sl]
