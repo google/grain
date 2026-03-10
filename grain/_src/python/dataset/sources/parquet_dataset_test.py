@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import io
 import platform
 
 from absl import flags
@@ -82,9 +83,50 @@ class ParquetIterDatasetTest(absltest.TestCase):
     records = list(dataset)
     self.assertSequenceEqual(records, [{"text": x} for x in SOME_TEXT[0]])
 
+  def test_read_from_io(self):
+    with open(self.filenames[0], "rb") as f:
+      dataset = parquet_dataset.ParquetIterDataset(io.BytesIO(f.read()))
+    records = list(dataset)
+    self.assertSequenceEqual(records, [{"text": x} for x in SOME_TEXT[0]])
+
+  def test_read_multiple_files(self):
+    dataset = parquet_dataset.ParquetIterDataset(self.filenames)
+    records = list(dataset)
+    expected = []
+    for text_list in SOME_TEXT:
+      expected.extend([{"text": x} for x in text_list])
+    self.assertSequenceEqual(records, expected)
+
+  def test_read_mixed_sources(self):
+    with open(self.filenames[1], "rb") as f:
+      sources = [self.filenames[0], io.BytesIO(f.read())]
+    dataset = parquet_dataset.ParquetIterDataset(sources)
+    records = list(dataset)
+    expected = []
+    for text_list in SOME_TEXT:
+      expected.extend([{"text": x} for x in text_list])
+    self.assertSequenceEqual(records, expected)
+
+  def test_checkpointing_multi_file(self):
+    dataset = parquet_dataset.ParquetIterDataset(self.filenames)
+    grain.experimental.assert_equal_output_after_checkpoint(dataset)
+
   def test_checkpointing(self):
     dataset = parquet_dataset.ParquetIterDataset(self.filenames[0])
     grain.experimental.assert_equal_output_after_checkpoint(dataset)
+
+  def test_set_slice(self):
+    # Test slice first file
+    dataset = parquet_dataset.ParquetIterDataset(self.filenames)
+    dataset.set_slice(slice(0, 1))
+    records = list(dataset)
+    self.assertSequenceEqual(records, [{"text": x} for x in SOME_TEXT[0]])
+
+    # Test slice second file
+    dataset = parquet_dataset.ParquetIterDataset(self.filenames)
+    dataset.set_slice(slice(1, 2))
+    records = list(dataset)
+    self.assertSequenceEqual(records, [{"text": x} for x in SOME_TEXT[1]])
 
   def test_sharded_files_and_interleaved_dataset(self):
     dataset = grain.MapDataset.source(self.filenames)
