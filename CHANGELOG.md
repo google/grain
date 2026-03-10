@@ -28,6 +28,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     from a checkpoint with Orbax.
   * Exposes `SharedMemoryArrayMetadata` in a public API as a metadata descriptor
     for `SharedMemoryArray`.
+  * Add `ElasticIterDatasetIterator` for scaling up and down the number of shards between checkpoints.
 
 * Breaking changes:
   * Custom implementations of `RandomAccessDataSource` should accept `int`

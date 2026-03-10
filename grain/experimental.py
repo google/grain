@@ -32,7 +32,10 @@ from grain._src.python.dataset.dataset import (
     apply_transformations,
     WithOptionsIterDataset,
 )
-from grain._src.python.dataset.elastic_iterator import ElasticIterator
+from grain._src.python.dataset.elastic_iterator import (
+    ElasticIterDatasetIterator,
+    ElasticIterDataset,
+)
 from grain._src.python.dataset.sources.parquet_dataset import ParquetIterDataset
 from grain._src.python.dataset.sources.tfrecord_dataset import TFRecordIterDataset
 
