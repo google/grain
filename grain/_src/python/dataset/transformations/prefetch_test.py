@@ -984,7 +984,6 @@ class MultithreadPrefetchTest(parameterized.TestCase):
   @parameterized.parameters(0, 0.5, 30)
   def test_prefetch_but_no_read(self, sleep_s):
     ds = dataset.MapDataset.source([1, 2, 3]).repeat()
-    ds = ds.filter(lambda x: x > 3)
     ds = ds.to_iter_dataset()
     ds = prefetch.multithread_prefetch(ds, num_threads=1, buffer_size=1)
     it = ds.__iter__()
