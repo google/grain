@@ -139,6 +139,20 @@ class ExecutionTrackingMode(enum.Flag):
   STAGE_TIMING = enum.auto()
 
 
+@typing.runtime_checkable
+class SupportsSharedMemoryOutput(Protocol):
+  """Protocol for datasets that support shared memory output.
+
+  Currently, only Batch transform supports it. The primary use-case for this is
+  to support directly passing NumPy arrays between processes without needing to
+  perform an additional copy.
+  """
+
+  def enable_shared_memory_output(self) -> None:
+    """Enables shared memory output for the dataset."""
+    ...
+
+
 @dataclasses.dataclass(slots=True, frozen=True)
 class _Default(Generic[T]):
   """Default options value holder."""

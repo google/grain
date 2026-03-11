@@ -201,6 +201,8 @@ def _put_dataset_elements_in_buffer(
     if worker_init_fn is not None:
       worker_init_fn()
     ds = cloudpickle.loads(pickled_ds)
+    if isinstance(ds, base.SupportsSharedMemoryOutput):
+      ds.enable_shared_memory_output()
     it = ds.__iter__()
     min_shm_size = it._ctx.dataset_options.min_shm_size  # pylint: disable=protected-access
     # Set the stats queue in worker process to send stats to the main process.
@@ -630,6 +632,10 @@ def multiprocess_prefetch(
     if num_workers == 1:
       worker_ds = ds
     else:
+      # Enable SharedMemoryArray outputs if the transform supports it.
+      if isinstance(ds, base.SupportsSharedMemoryOutput):
+        ds.enable_shared_memory_output()
+
       worker_ds = _LazyWorkerSliceIterDataset(
           ds,
           slice(i, None, num_workers),
