@@ -56,7 +56,7 @@ data_sources/protocol
 Bagz <tutorials/data_sources/bagz_data_source_tutorial>
 ArrayRecord <tutorials/data_sources/arrayrecord_data_source_tutorial>
 Parquet <tutorials/data_sources/parquet_dataset_tutorial>
-TfRecord <https://google-grain.readthedocs.io/en/latest/_autosummary/grain.experimental.TFRecordIterDataset.html#grain.experimental.TFRecordIterDataset>
+TfRecord <https://google-grain.readthedocs.io/en/latest/grain.experimental.html#grain.experimental.TFRecordIterDataset>
 TFDS <tutorials/dataset_advanced_tutorial>
 HuggingFace <tutorials/data_sources/huggingface_dataset_tutorial>
 PyTorch <tutorials/data_sources/pytorch_dataset_tutorial>

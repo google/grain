@@ -292,7 +292,7 @@ order to minimize the chances of the model picking up data order dependency.
 Grain provides the ability to apply two different shuffling methods: **global**
 shuffle and **hierarchical** shuffle. The recommended shuffling approach relies
 heavily on whether or not your
-[data source](https://google-grain.readthedocs.io/en/latest/data_sources.html#file-format)
+[data source](https://google-grain.readthedocs.io/en/latest/data_sources/protocol.html#supported-ra-formats)
 support efficient random access.
 
 | Feature               | **Global Shuffle**       | **Hierarchical** Shuffle  |

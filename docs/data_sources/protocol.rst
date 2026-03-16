@@ -86,7 +86,7 @@ Supported SA formats
 We provide sources for the following sequential data formats:
 
 *  :doc:`Parquet <../tutorials/data_sources/parquet_dataset_tutorial>`
-*  `TfRecord <https://google-grain.readthedocs.io/en/latest/_autosummary/grain.experimental.TFRecordIterDataset.html#grain.experimental.TFRecordIterDataset>`__
+*  `TfRecord </grain.experimental.html#grain.experimental.TFRecordIterDataset>`
 
 
 Implement your own source

@@ -194,7 +194,7 @@ pprint(np.asarray(tokenizer(review)["input_ids"]))
 Plugging the selected transformer is as easy as before. We implement the
 `process_transformer` function and pass it to the `map` method.
 
-Note that the tokenized reviews have different lengths, and accelerators such as GPUs and TPUs typically require static rectangular batch shapes. For simplicity in this tutorial we will pad them to the same length before batching. For advanced use cases please take a look at our example packing imlementations: [first-fit](https://google-grain.readthedocs.io/en/latest/_autosummary/grain.experimental.FirstFitPackIterDataset.html#grain.experimental.FirstFitPackIterDataset) and [concat-and-split](https://google-grain.readthedocs.io/en/latest/_autosummary/grain.experimental.ConcatThenSplitIterDataset.html) that allow to minimize padding or avoid it altogether.
+Note that the tokenized reviews have different lengths, and accelerators such as GPUs and TPUs typically require static rectangular batch shapes. For simplicity in this tutorial we will pad them to the same length before batching. For advanced use cases please take a look at our example packing imlementations: [first-fit](https://google-grain.readthedocs.io/en/latest/grain.experimental.html#grain.experimental.FirstFitPackIterDataset) and [concat-and-split](https://google-grain.readthedocs.io/en/latest/grain.experimental.html#grain.experimental.ConcatThenSplitIterDataset) that allow to minimize padding or avoid it altogether.
 
 ```{code-cell} ipython3
 target_length = 70
