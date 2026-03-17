@@ -20,7 +20,7 @@ Grain offers two different ways of defining data processing pipelines:
 `DataLoader` is a high-level API that uses the following abstractions to define
 data processing:
 
-*   [`RandomAccessDataSource`](https://github.com/google/grain/tree/main/grain/_src/python/data_sources.py)
+*   [`RandomAccessDataSource`](https://github.com/google/grain/tree/main/grain/_src/python/dataset/base.py)
     that reads raw input data.
 *   A
     [`Sampler`](https://github.com/google/grain/tree/main/grain/_src/python/samplers.py)
