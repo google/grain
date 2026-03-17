@@ -70,7 +70,7 @@ Amazon S3 <tutorials/data_sources/load_from_s3_tutorial>
 :caption: Dataset
 Basics <tutorials/dataset_basic_tutorial>
 Advanced usage <tutorials/dataset_advanced_tutorial>
-Transformations <https://google-grain.readthedocs.io/en/latest/grain.dataset.html>
+Transformations <./grain.dataset>
 Performance debugging <tutorials/dataset_debugging_tutorial>
 ```
 
