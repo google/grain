@@ -1414,6 +1414,12 @@ class GetExecutionSummaryTest(parameterized.TestCase):
 
 class GetElementSpecTest(parameterized.TestCase):
 
+  def test_get_element_spec_from_source(self):
+    ds = dataset.MapDataset.source(range(10))
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(spec.shape, ())
+    self.assertEqual(spec.dtype, np.int64)
+
   def test_get_element_spec_from_map_dataset(self):
     ds = dataset.MapDataset.range(10)
     spec = dataset.get_element_spec(ds)

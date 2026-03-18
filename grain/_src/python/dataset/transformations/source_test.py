@@ -18,6 +18,7 @@ from typing import Any, Sequence
 from unittest import mock
 
 from absl.testing import absltest
+from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import source
 import numpy as np
@@ -160,6 +161,55 @@ class SourceMapDatasetTest(absltest.TestCase):
         slice(worker_index, None, workers_count), sequential_slice=True
     )
     self.assertEqual(list(ds), [14, 15, 16, 17, 18, 19, 20])
+
+  def test_element_spec_list(self):
+    ds = source.SourceMapDataset([1, 2, 3])
+    element_spec = dataset.get_element_spec(ds)
+    self.assertEqual(element_spec.shape, ())
+    self.assertEqual(element_spec.dtype, np.int64)
+
+  def test_element_spec_2d_list(self):
+    ds = source.SourceMapDataset(
+        [[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]
+    )
+    element_spec = dataset.get_element_spec(ds)
+    self.assertEqual(element_spec.shape, (2, 3))
+    self.assertEqual(element_spec.dtype, np.int64)
+
+  def test_element_spec_np_array(self):
+    ds = source.SourceMapDataset(
+        np.array([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]])
+    )
+    element_spec = dataset.get_element_spec(ds)
+    self.assertEqual(element_spec.shape, (2, 3))
+    self.assertEqual(element_spec.dtype, np.int64)
+
+  def test_element_spec_batch(self):
+    ds = source.SourceMapDataset(range(10))
+    ds = ds.batch(3, drop_remainder=True)
+    element_spec = dataset.get_element_spec(ds)
+    self.assertEqual(element_spec.shape, (3,))
+    self.assertEqual(element_spec.dtype, np.int64)
+
+  def test_element_spec_dict(self):
+    ds = source.SourceMapDataset(
+        [{"a": 1, "b": "Hello, world!", "c": [[1, 2], [3, 4]]}]
+    )
+    element_spec = dataset.get_element_spec(ds)
+    self.assertEqual(
+        element_spec,
+        {
+            "a": base.ShapeDtypeStruct((), np.int64),
+            "b": base.ShapeDtypeStruct((), np.dtype("<U13")),
+            "c": base.ShapeDtypeStruct((2, 2), np.int64),
+        },
+    )
+
+  def test_element_spec_empty(self):
+    ds = source.SourceMapDataset([])
+    element_spec = dataset.get_element_spec(ds)
+    self.assertEqual(element_spec.shape, ())
+    self.assertEqual(element_spec.dtype, np.float32)
 
 
 class RangeMapDatasetTest(absltest.TestCase):

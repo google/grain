@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 import contextlib  # pylint: disable=unused-import
 import functools
 import time
@@ -131,6 +132,23 @@ class SourceMapDataset(dataset.MapDataset):
       return self._source.paths
     else:
       return []
+
+  @functools.cached_property
+  def _element_spec(self) -> Any:
+    if self._source is None or len(self._source) == 0:
+      return base.ShapeDtypeStruct(shape=(), dtype=np.float32)
+    first_element = self._source[0]
+
+    def _spec(x) -> base.ShapeDtypeStruct:
+      try:
+        arr = np.asarray(x)
+        return base.ShapeDtypeStruct(arr.shape, arr.dtype)
+      except Exception as e:
+        raise TypeError(f"Cannot infer element spec for leaf {x}.") from e
+
+    return tree_lib.map_structure(
+        _spec, first_element, is_leaf=lambda x: not isinstance(x, Mapping)
+    )
 
 
 def log_lineage_for_sources(

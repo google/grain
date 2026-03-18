@@ -82,6 +82,7 @@ py_test(
     srcs_version = "PY3",
     deps = [
         "//grain/_src/python/dataset",
+        "//grain/_src/python/dataset:base",
         "@abseil-py//absl/testing:absltest",
         "@pypi//numpy:pkg",
     ],
