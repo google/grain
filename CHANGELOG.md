@@ -10,6 +10,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     used to save one data copy.
 
 * Breaking changes:
+  * Depends on `protobuf>=5.28.3,<7`.
 
 * Deprecations:
 

@@ -16,6 +16,6 @@ jobs:
       id-token: write
     with:
       pypi_project_url: ''
-      run_tests_with_bazel: true
+      run_tests_with_bazel: false
       is_nightly: false
       is_ci_tests: true
