@@ -291,6 +291,14 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
     ):
       dataset.set_next_index(ds_iter, 0)
 
+  def test_on_par_with_cpp_backend(self):
+    ds1 = dataset.MapDataset.range(1).to_iter_dataset()
+    ds2 = dataset.MapDataset.range(10, 12).to_iter_dataset()
+    ds3 = dataset.MapDataset.range(20, 21).to_iter_dataset()
+
+    ds = interleave.InterleaveIterDataset([ds1, ds2, ds3], cycle_length=2)
+    self.assertEqual(list(ds), [0, 10, 11, 20])
+
 
 if __name__ == "__main__":
   absltest.main()
