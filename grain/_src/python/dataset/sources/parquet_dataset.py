@@ -13,10 +13,11 @@
 # limitations under the License.
 """Provides an `IterDataset` for Parquet file format."""
 
-from typing import TypeVar
+from typing import Sequence, TypeVar
 
 from etils import epy
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset.transformations import interleave
 
 
 # lazy import for pyarrow
@@ -25,6 +26,9 @@ with epy.lazy_imports():
 
 
 T = TypeVar("T")
+
+ParquetDataSourcePath = str | Sequence[str]
+_CYCLE_LENGTH = 16
 
 
 class _ParquetDatasetIterator(dataset.DatasetIterator[T]):
@@ -84,16 +88,36 @@ class _ParquetDatasetIterator(dataset.DatasetIterator[T]):
 class ParquetIterDataset(dataset.IterDataset[T]):
   """An IterDataset for a parquet format file."""
 
-  def __init__(self, path: str, **read_kwargs):
+  def __init__(
+      self,
+      path: ParquetDataSourcePath,
+      **read_kwargs,
+  ):
     """Initializes ParquetIterDataset.
 
     Args:
-      path: A path to a parquet format file.
+      path: A path or sequence of paths to parquet format files. If multiple
+        paths are provided, they are interleaved with at most 16 files read in
+        parallel.
       **read_kwargs: Keyword arguments to pass to pyarrow.parquet.ParquetFile.
     """
     super().__init__()
-    self._path = path
+    if isinstance(path, (str, bytes)):
+      self._paths = [path]
+    else:
+      self._paths = list(path)
     self._read_kwargs = read_kwargs
 
-  def __iter__(self) -> _ParquetDatasetIterator[T]:
-    return _ParquetDatasetIterator(self._path, **self._read_kwargs)
+  def __iter__(self) -> dataset.DatasetIterator[T]:
+    if len(self._paths) == 1:
+      return _ParquetDatasetIterator(self._paths[0], **self._read_kwargs)
+
+    datasets = [ParquetIterDataset(p, **self._read_kwargs) for p in self._paths]
+    delegate = interleave.InterleaveIterDataset(
+        datasets, cycle_length=_CYCLE_LENGTH
+    )
+    return delegate.__iter__()
+
+  def set_slice(self, sl: slice, sequential_slice: bool = False):
+    del sequential_slice
+    self._paths = self._paths[sl]

@@ -30,6 +30,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     from a checkpoint with Orbax.
   * Exposes `SharedMemoryArrayMetadata` in a public API as a metadata descriptor
     for `SharedMemoryArray`.
+  * `ParquetIterDataset` can read from multiple string paths interleaving reads.
 
 * Breaking changes:
   * Custom implementations of `RandomAccessDataSource` should accept `int`
