@@ -73,9 +73,12 @@ from grain._src.python.dataset.transformations.zip import (
 from grain._src.python.experimental.example_packing.packing import (
     PackAndBatchOperation,
 )
-from grain._src.python.experimental.index_shuffle.python.index_shuffle_module import (
-    index_shuffle,
-)
+try:
+    from grain._src.python.experimental.index_shuffle.python.index_shuffle_module import (
+        index_shuffle,
+    )
+except ImportError:
+    index_shuffle = None
 
 # This should eventually live under grain.testing.
 from grain._src.python.testing.experimental import (

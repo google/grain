@@ -22,6 +22,8 @@ from multiprocessing import sharedctypes
 from multiprocessing import synchronize
 from multiprocessing import util
 import queue
+import sys
+import threading
 import time
 from typing import Any, TypeVar
 import weakref
@@ -39,6 +41,7 @@ from grain._src.python.dataset.transformations import interleave
 from grain._src.python.dataset.transformations import prefetch
 from grain._src.python.ipc import queue as grain_queue
 from grain._src.python.ipc import shared_memory_array
+from grain._src.python import execution_backend
 
 
 T = TypeVar("T")
@@ -54,7 +57,12 @@ _PARENT_EXHAUSTED_WAIT_S = 0.5
 # Timeout for getting an element from the worker process.
 _QUEUE_WAIT_TIMEOUT_S = 1
 
-_is_in_worker_process = False
+_worker_state = threading.local()
+_worker_state.is_in_worker_process = False
+
+def _get_is_in_worker_process() -> bool:
+  return getattr(_worker_state, "is_in_worker_process", False)
+
 
 
 def _run_all(fns: Sequence[Callable[[], None]]):
@@ -192,16 +200,17 @@ def _put_dataset_elements_in_buffer(
     debug_flags: dict[str, Any],
 ):
   """Prefetches elements in a separate process."""
-  global _is_in_worker_process
-  _is_in_worker_process = True
+  _worker_state.is_in_worker_process = True
   try:
-    parse_debug_flags_fn = cloudpickle.loads(pickled_parse_debug_flags_fn)
+    parse_debug_flags_fn = cloudpickle.loads(pickled_parse_debug_flags_fn) if isinstance(pickled_parse_debug_flags_fn, bytes) else pickled_parse_debug_flags_fn
     parse_debug_flags_fn(debug_flags)
-    worker_init_fn = cloudpickle.loads(pickled_worker_init_fn)
+    worker_init_fn = cloudpickle.loads(pickled_worker_init_fn) if isinstance(pickled_worker_init_fn, bytes) else pickled_worker_init_fn
     if worker_init_fn is not None:
       worker_init_fn()
-    ds = cloudpickle.loads(pickled_ds)
-    if isinstance(ds, base.SupportsSharedMemoryOutput):
+    ds = cloudpickle.loads(pickled_ds) if isinstance(pickled_ds, bytes) else pickled_ds
+
+    backend = execution_backend.get_execution_backend()
+    if backend.is_multiprocess() and isinstance(ds, base.SupportsSharedMemoryOutput):
       ds.enable_shared_memory_output()
     it = ds.__iter__()
     min_shm_size = it._ctx.dataset_options.min_shm_size  # pylint: disable=protected-access
@@ -215,7 +224,14 @@ def _put_dataset_elements_in_buffer(
         with set_state_request_count.get_lock():
           if set_state_request_count.value > 0:
             set_state_request_count.value -= 1
-            new_state_or_index = set_state_queue.get()
+            while not should_stop.is_set():
+              try:
+                new_state_or_index = set_state_queue.get(timeout=_QUEUE_WAIT_TIMEOUT_S)
+                break
+              except queue.Empty:
+                pass
+            if new_state_or_index is None:
+              continue
             parent_exhausted = False
         if new_state_or_index is not None:
           if not grain_queue.add_element_to_queue(  # pytype: disable=wrong-arg-types
@@ -243,8 +259,10 @@ def _put_dataset_elements_in_buffer(
         )
         parent_exhausted = True
         continue
-      element = shared_memory_array.copy_to_shm(element, min_size=min_shm_size)
+      if backend.is_multiprocess():
+        element = shared_memory_array.copy_to_shm(element, min_size=min_shm_size)
       # If the node is prefetch, we already record the bytes produced in it's
+
       # __next__ method.
       if not it._stats._config.is_prefetch:  # pylint: disable=protected-access
         it._stats.record_bytes_produced(element)  # pylint: disable=protected-access
@@ -310,22 +328,18 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     # propagate them.
     self._ctx.dataset_options = _get_dataset_options(parent)
 
-    self._process_ctx = mp.get_context("spawn")
+    self._backend = execution_backend.get_execution_backend()
     self._state: StateT | None = None
     self._prefetch_process: Any | None = None
-    self._prefetch_should_stop: synchronize.Event = self._process_ctx.Event()
-    self._set_state_request_count: sharedctypes.Synchronized[int] = (
-        self._process_ctx.Value("i", 0)
-    )
-    self._set_state_queue: queues.Queue[StateT | int] = self._process_ctx.Queue(
-        5
-    )
+    self._prefetch_should_stop: synchronize.Event | threading.Event = self._backend.Event()
+    self._set_state_request_count = self._backend.SynchronizedInt(0)
+    self._set_state_queue: queues.Queue[StateT | int] | queue.Queue = self._backend.Queue(5)
     self._buffer: queues.Queue[
         tuple[T, StateT | None, int | None, Exception | None]
-    ] = self._process_ctx.Queue(maxsize=self._buffer_size)
-    self._stats_in_queue = self._process_ctx.Queue(maxsize=5)
-    self._start_profiling_event = self._process_ctx.Event()
-    self._stop_profiling_event = self._process_ctx.Event()
+    ] | queue.Queue = self._backend.Queue(maxsize=self._buffer_size)
+    self._stats_in_queue = self._backend.Queue(maxsize=5)
+    self._start_profiling_event = self._backend.Event()
+    self._stop_profiling_event = self._backend.Event()
     self._set_state_count = 0
     self._exhausted = False
     self._prefetch_ds_iter = None
@@ -392,12 +406,23 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         self._iter_parent,
         options=self._ctx.dataset_options,
     )
-    self._prefetch_process = self._process_ctx.Process(
+    import os
+    if self._backend.is_multiprocess() or os.environ.get("GRAIN_STRICT_PICKLING", "0") == "1":
+      pickled_ds = _serialize_dataset(ds)
+      pickled_parse = cloudpickle.dumps(_parse_debug_flags)
+      pickled_init = cloudpickle.dumps(self._worker_init_fn) if self._worker_init_fn is not None else None
+    else:
+      pickled_parse = _parse_debug_flags
+      pickled_init = self._worker_init_fn
+      pickled_ds = ds
+
+    self._prefetch_process = self._backend.Process(
         target=_put_dataset_elements_in_buffer,
         kwargs=dict(
-            pickled_parse_debug_flags_fn=cloudpickle.dumps(_parse_debug_flags),
-            pickled_worker_init_fn=cloudpickle.dumps(self._worker_init_fn),
-            pickled_ds=_serialize_dataset(ds),
+            pickled_parse_debug_flags_fn=pickled_parse,
+            pickled_worker_init_fn=pickled_init,
+            pickled_ds=pickled_ds,
+
             buffer=self._buffer,
             should_stop=self._prefetch_should_stop,
             set_state_request_count=self._set_state_request_count,
@@ -412,7 +437,7 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
                 ),
             ),
         ),
-        daemon=True,
+        daemon=True if self._backend.is_multiprocess() else False,
         name=f"grain-process-prefetch-{str(self)}",
     )
     self._prefetch_process.start()
@@ -421,7 +446,11 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   def _process_failed(self) -> bool:
     if self._prefetch_process is None:
       return False
-    exit_code = self._prefetch_process.exitcode
+    # threading.Thread doesn't have an exitcode attribute generally, but we added it to our wrapper.
+    if hasattr(self._prefetch_process, 'exitcode'):
+      exit_code = self._prefetch_process.exitcode
+    else:
+      exit_code = getattr(self._prefetch_process, 'exitcode', 0)
     return exit_code is not None and exit_code != 0
 
   @dataset_stats.record_next_duration_if_output
@@ -467,7 +496,9 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       self._next_index = next_index
     with self._stats.record_self_time(offset_ns=timer.value()):
       element = self._stats.record_bytes_produced(element)
-      return shared_memory_array.open_from_shm(element)
+      if self._backend.is_multiprocess():
+        return shared_memory_array.open_from_shm(element)
+      return element
 
   def close(self):
     """Stops the iterator. No further calls to the iterator are expected."""
@@ -495,8 +526,15 @@ class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
     # In case all our attempts to terminate the system fails, we forcefully
     # kill the child processes.
-    if self._prefetch_process.is_alive():
-      self._prefetch_process.kill()
+    if getattr(self._prefetch_process, "is_alive", lambda: False)():
+      if hasattr(self._prefetch_process, "kill"):
+        self._prefetch_process.kill()
+      else:
+        import warnings
+        warnings.warn(
+            "Background thread failed to exit gracefully within timeout during shutdown. "
+            "This likely means a dataset transform is hanging indefinitely."
+        )
     else:
       _clear_queue_and_maybe_unlink_shm(self._buffer)
     self._prefetch_process = None
@@ -583,7 +621,7 @@ class _LazyWorkerSliceIterDataset(dataset.IterDataset[T]):
     self._sequential_slice = sequential_slice
 
   def __iter__(self) -> dataset.DatasetIterator[T]:
-    if not _is_in_worker_process:
+    if not _get_is_in_worker_process():
       return self._parent.__iter__()
     prefetch._set_slice_iter_dataset(
         self._parent, self._slice, self._sequential_slice
