@@ -1708,6 +1708,12 @@ class WithOptionsIterDataset(IterDataset[T]):
     self.options = options
 
   def __iter__(self) -> DatasetIterator[T]:
+    """Returns an iterator for the dataset.
+
+    Propagates the options through the pipeline ensuring there's a single merged
+    options object. Depending on the options, may apply iterator
+    transformations.
+    """
     result = self._parent.__iter__()
     # The parent iterator options are merged from the entire subtree. Merge
     # them with the latest options and update the subtree options.
@@ -1737,7 +1743,7 @@ class _OutputIterDataset(IterDataset[T]):
   """Dataset that is injected at the end of every pipeline."""
 
   def __iter__(self) -> DatasetIterator[T]:
-    """Performs any injection that needs to happen at the end of the pipeline."""
+    """Performs injections that need to happen at the end of the pipeline."""
 
     # Loaded lazily due to a circular dependency (dataset <-> prefetch).
     # pylint: disable=g-import-not-at-top
