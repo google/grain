@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Tests for map transformation."""
+
 import dataclasses
 import operator
 from typing import Any
@@ -315,6 +316,18 @@ class RandomMapMapDatasetTest(parameterized.TestCase):
     )
     with self.assertRaisesRegex(ValueError, "does not implement `output_spec`"):
       _ = ds._element_spec
+
+  def test_cross_version_determinism(self):
+    # This test validates random map determinism across different versions of
+    # Grain given a fixed seed. Note that we technically do not guarantee
+    # cross-version determinism because numpy does not. Any changes to the numpy
+    # RNGs or how we use them could break this. Multiple users nevertheless rely
+    # on it because it holds in practice. Only update the values if you know
+    # what you're doing.
+    ds = dataset.MapDataset.range(10).seed(41)
+    ds = map_ds.RandomMapMapDataset(ds, RandomMapWithDeterminismTransform())
+    ds = ds.map(lambda x: x.item())
+    self.assertEqual(list(ds), [0, 6, 9, 5, 10, 14, 14, 13, 15, 13])
 
 
 class MapIterDatasetTest(parameterized.TestCase):

@@ -75,6 +75,16 @@ class ShuffleMapDatasetTest(parameterized.TestCase):
     self.assertEqual(spec.dtype, np.int64)
     self.assertEqual(spec.shape, ())
 
+  def test_cross_version_determinism(self):
+    # This test validates shuffle determinism across different versions of
+    # Grain given a fixed seed. Note that we technically do not guarantee
+    # cross-version determinism, but multiple users nevertheless rely on it
+    # because it holds in practice. Any updates to the shuffle code could break
+    # it. Only update the values if you know what you're doing.
+    ds = dataset.MapDataset.range(10).seed(42)
+    ds = shuffle.ShuffleMapDataset(ds)
+    self.assertEqual(list(ds), [1, 7, 6, 9, 0, 8, 4, 5, 3, 2])
+
 
 class WindowShuffleMapDatasetTest(absltest.TestCase):
 
