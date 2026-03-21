@@ -29,10 +29,6 @@ py_library(
     name = "tfrecord_dataset",
     srcs = ["tfrecord_dataset.py"],
     srcs_version = "PY3",
-    visibility = [
-        "//third_party/py/grain:internal",
-        "//third_party/py/maxtext:__pkg__",
-    ],
     deps = ["//grain/_src/python/dataset"],
 )
 

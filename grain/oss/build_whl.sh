@@ -21,7 +21,6 @@ main() {
   # Enable host OS specific configs. For instance, "build:linux" will be used
   # automatically when building on Linux.
   write_to_bazelrc "build --enable_platform_specific_config"
-  write_to_bazelrc "build --verbose_failures"
   # Bazel 7.0.0 no longer supports dynamic symbol lookup on macOS. To resolve
   # undefined symbol errors in macOS arm64 builds, explicitly add the necessary
   # linker flags until dependencies are well defined. See
