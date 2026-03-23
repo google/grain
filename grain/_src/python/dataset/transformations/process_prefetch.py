@@ -57,6 +57,11 @@ _QUEUE_WAIT_TIMEOUT_S = 1
 _is_in_worker_process = False
 
 
+def is_in_worker_process() -> bool:
+  """Returns whether the current process is a worker process."""
+  return _is_in_worker_process
+
+
 def _run_all(fns: Sequence[Callable[[], None]]):
   for fn in fns:
     fn()
@@ -165,7 +170,7 @@ class ProcessPrefetchIterDataset(dataset.IterDataset[T]):
     return f"ProcessPrefetchIterDataset(buffer_size={self._buffer_size})"
 
   def __iter__(self) -> dataset.DatasetIterator[T]:
-    return _ProcessPrefetchDatasetIterator(
+    return ProcessPrefetchDatasetIterator(
         self._parent,
         self._buffer_size,
         self._worker_init_fn,
@@ -291,7 +296,7 @@ def _close_if_alive(
     iterator.close()
 
 
-class _ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
+class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   """Iterator that performs prefetching using a background process."""
 
   def __init__(

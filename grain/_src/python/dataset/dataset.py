@@ -1745,17 +1745,24 @@ class _OutputIterDataset(IterDataset[T]):
   def __iter__(self) -> DatasetIterator[T]:
     """Performs injections that need to happen at the end of the pipeline."""
 
-    # Loaded lazily due to a circular dependency (dataset <-> prefetch).
+    # Loaded lazily due to a circular dependency (dataset <-> prefetch and
+    # dataset <-> process_prefetch).
     # pylint: disable=g-import-not-at-top
     from grain._src.python.dataset.transformations import prefetch
+    from grain._src.python.dataset.transformations import process_prefetch
     # pylint: enable=g-import-not-at-top
     iterator = self._parent.__iter__()
     if (
         is_thread_prefetch_injection_enabled()
         and not iterator._ctx.is_dataloader_pipeline  # pylint: disable=protected-access
+        and not process_prefetch.is_in_worker_process()
     ):
       if not prefetch.is_prefetch_iterator(iterator):
-        iterator = prefetch.ThreadPrefetchDatasetIterator(iterator, 1)
+        try:
+          iterator = prefetch.ThreadPrefetchDatasetIterator(iterator, 1)
+        except AttributeError:
+          # Some legacy iterators do not implement the `get_state` method.
+          pass
 
     filter_mode = traceback_filter_mode()
     if filter_mode != "off":

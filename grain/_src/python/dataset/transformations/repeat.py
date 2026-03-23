@@ -102,7 +102,7 @@ class _RepeatDatasetIterator(dataset.DatasetIterator[T]):
     to_visit = [self]
     while to_visit:
       node = to_visit.pop(0)
-      if isinstance(node, process_prefetch._ProcessPrefetchDatasetIterator):  # pylint: disable=protected-access
+      if isinstance(node, process_prefetch.ProcessPrefetchDatasetIterator):
         node.set_keep_workers_after_stop_iteration(True)
       if isinstance(node, interleave.InterleaveDatasetIterator):
         node.set_keep_iterators_after_stop_iteration(True)

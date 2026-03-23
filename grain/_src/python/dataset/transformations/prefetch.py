@@ -454,7 +454,7 @@ def _put_iterator_elements_in_buffer(
   try:
     while not should_stop.is_set():
       element = stats.record_bytes_consumed(iterator.__next__())
-      state = iterator.get_state()
+      state = copy.deepcopy(iterator.get_state())
       buffer.put((element, state, None))
   except Exception as e:  # pylint: disable=broad-except
     buffer.put((None, None, e))
@@ -736,11 +736,17 @@ def multithread_prefetch(
 
 def is_prefetch_iterator(it: dataset.DatasetIterator) -> bool:
   """Returns whether the iterator is a prefetch iterator."""
+  # Loaded lazily due to a circular dependency (prefetch <-> process_prefetch).
+  # pylint: disable=g-import-not-at-top
+  from grain._src.python.dataset.transformations import process_prefetch
+  # pylint: enable=g-import-not-at-top
+
   return isinstance(
       it,
       (
           PrefetchDatasetIterator,
           ThreadPrefetchDatasetIterator,
           interleave.InterleaveDatasetIterator,
+          process_prefetch.ProcessPrefetchDatasetIterator,
       ),
   )
