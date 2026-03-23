@@ -23,6 +23,7 @@ from multiprocessing import synchronize
 from multiprocessing import util
 import queue
 import time
+import traceback
 from typing import Any, TypeVar
 import weakref
 
@@ -238,6 +239,7 @@ def _put_dataset_elements_in_buffer(
       try:
         element = it.__next__()
       except Exception as e:  # pylint: disable=broad-except
+        e.add_note("\n".join(traceback.format_exception(e)))
         grain_queue.add_element_to_queue(  # pytype: disable=wrong-arg-types
             (None, None, None, e), buffer, should_stop.is_set
         )
@@ -262,6 +264,8 @@ def _put_dataset_elements_in_buffer(
   except Exception as e:  # pylint: disable=broad-except
     _clear_queue_and_maybe_unlink_shm(buffer)
     _clear_queue_and_maybe_unlink_shm(set_state_queue)
+    e.add_note("\n".join(traceback.format_exception(e)))
+
     grain_queue.add_element_to_queue(  # pytype: disable=wrong-arg-types
         (None, None, None, e), buffer, should_stop.is_set
     )
