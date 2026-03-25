@@ -8,6 +8,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 * New features:
   * Adds automated batching into shared memory when multiprocess prefetch is
     used to save one data copy.
+  * Adds fast bag lookup to `TfBagDataSource` to improve read performance via batching.
 
 * Breaking changes:
 
