@@ -392,3 +392,29 @@ py_test(
         "@pypi//numpy:pkg",
     ],
 )
+
+py_strict_test(
+    name = "imagenet_tmp_test",
+    srcs = ["imagenet_tmp_test.py"],
+    deps = [
+        "//grain",
+        "//grain:tensorflow",
+        "//grain/_src/python:options",
+        "//grain/_src/python/dataset",
+        "//grain/_src/python/experimental/autotune/python:bindings",
+        "@abseil-py//absl/testing:absltest",
+        "@pypi//tensorflow:pkg",
+    ],
+)
+
+py_strict_test(
+    name = "usl_sandbox_test",
+    srcs = ["usl_sandbox_test.py"],
+    deps = [
+        "//grain",
+        "//grain/_src/python:options",
+        "//grain/_src/python/dataset",
+        "//grain/_src/python/experimental/autotune/python:bindings",
+        "@abseil-py//absl/testing:absltest",
+    ],
+)
