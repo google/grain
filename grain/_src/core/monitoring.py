@@ -11,6 +11,7 @@ class Units(enum.Enum):
   MILLISECONDS = enum.auto()
 
 
+# pylint: disable=invalid-name
 class NoOpMetric:
   """Grain metric no-op implementation."""
 
@@ -40,6 +41,7 @@ class Metadata:
     del args, kwargs
 
 
+# pylint: disable=invalid-name
 class Bucketer:
   """Grain metric no-op bucketer."""
 
