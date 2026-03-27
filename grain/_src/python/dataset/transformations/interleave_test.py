@@ -20,7 +20,7 @@ from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import interleave
-from grain._src.python.testing.experimental import assert_equal_output_after_checkpoint
+from grain._src.python.testing import experimental
 import numpy as np
 
 
@@ -187,7 +187,7 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
         for i in range(1, 6)
     ]
     ds = interleave.InterleaveIterDataset(ds, cycle_length=5)
-    assert_equal_output_after_checkpoint(ds)
+    experimental.assert_equal_output_after_checkpoint(ds)
 
   def test_set_state_does_not_recreate_iterators_if_not_needed(self):
     cycle_length = 5
@@ -290,6 +290,41 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
         " more than one dataset.",
     ):
       dataset.set_next_index(ds_iter, 0)
+
+  def test_non_deterministic_interleave(self):
+    ds1 = dataset.MapDataset.range(10).to_iter_dataset()
+    ds2 = dataset.MapDataset.range(10, 20).to_iter_dataset()
+    ds = interleave.InterleaveIterDataset(
+        [ds1, ds2],
+        cycle_length=2,
+        iter_buffer_size=2,
+        deterministic=False,
+    )
+    it = ds.__iter__()
+    first_element = next(it)
+    self.assertIn(first_element, [0, 10])
+
+    # We should produce all 20 elements.
+    elements = list(it)
+    elements += [first_element]
+    self.assertLen(elements, 20)
+    self.assertEqual(sorted(elements), list(range(0, 20)))
+
+  def test_non_deterministic_interleave_unsupported_checkpointing(self):
+    ds1 = dataset.MapDataset.range(10).to_iter_dataset()
+    ds2 = dataset.MapDataset.range(10, 20).to_iter_dataset()
+    ds = interleave.InterleaveIterDataset(
+        [ds1, ds2],
+        cycle_length=2,
+        deterministic=False,
+    )
+    it = ds.__iter__()
+
+    with self.assertRaisesRegex(
+        NotImplementedError,
+        "set_state is not supported for non-deterministic interleaving.",
+    ):
+      it.set_state({})
 
 
 if __name__ == "__main__":
