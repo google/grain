@@ -52,11 +52,11 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
             functools.partial(
                 _add_prefetch_and_make_iterator,
                 # We use weakref to avoid a circular reference. The
-                # _InterleaveDatasetIterator holds a reference to the
+                # InterleaveDatasetIterator holds a reference to the
                 # prefetch iterator in `self._prefetch_ds_iter`.
                 # The call to `_add_prefetch_and_make_iterator` (and the
                 # partial object) would hold a reference to the
-                # _InterleaveDatasetIterator. This would prolong its lifetime
+                # InterleaveDatasetIterator. This would prolong its lifetime
                 # leading to increased resource usage.
                 interleave_iterator=weakref.ref(self),
                 start_prefetch=True,
@@ -86,6 +86,8 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     self._exhausted_iterators: list[
         tuple[int, dataset.DatasetIterator[T]] | None
     ] = [None] * self._cycle_length
+    # Future states used for elastic iterators
+    self._future_states: dict[int, Any] = {}
 
   @stats.record_next_duration_if_output
   @stats.trace_input_pipeline_next(stage_category=stats.IPL_CAT_PREPROCESSING)
@@ -142,6 +144,16 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
           self._iterators_in_use_indices[self._next_index_in_cycle] = (
               self._next_index_in_datasets
           )
+          # For elastic iterators, we might have a future state saved for this
+          # dataset iterator from which to resume from.
+          if (
+              self._next_index_in_datasets in self._future_states
+              and self._iterators_in_use[self._next_index_in_cycle]
+          ):
+            future_state = self._future_states.pop(self._next_index_in_datasets)
+            self._iterators_in_use[self._next_index_in_cycle].set_state(
+                future_state
+            )
           self._next_index_in_datasets += 1
         elif not any(self._iterators_in_use):
           raise StopIteration
@@ -182,13 +194,15 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
         int(self._exhausted_iterator_state[i] is not None)
         for i in range(self._cycle_length)
     ]
-    return {
+    state = {
         "next_index_in_cycle": self._next_index_in_cycle,
         "next_index_in_datasets": self._next_index_in_datasets,
         "iterators_in_use_indices": self._iterators_in_use_indices.copy(),
         "iterators_in_use_states": iterators_in_use_states,
         "exhausted": exhausted,
+        "future_states": self._future_states,
     }
+    return state
 
   def set_state(self, state):
     exhausted = state["exhausted"]
@@ -220,7 +234,9 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
                 interleave_iterator=weakref.ref(self),
                 start_prefetch=False,
             )
-        iterator.set_state(it_state)
+        # Only update the iterator state if it is given
+        if it_state:
+          iterator.set_state(it_state)
         self._iterators_in_use[index_in_cycle] = iterator
       else:
         self._exhausted_iterator_state[index_in_cycle] = it_state
@@ -232,6 +248,7 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     self._next_index_in_cycle = state["next_index_in_cycle"]
     self._next_index_in_datasets = state["next_index_in_datasets"]
     self._iterators_in_use_indices = state["iterators_in_use_indices"]
+    self._future_states = state.get("future_states", {})
 
   def _get_next_index(self) -> int:
     if len(self._datasets) == 1:
@@ -306,6 +323,16 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
         f"InterleaveDatasetIterator([{len(self._datasets)} datasets],"
         f" cycle_length={self._cycle_length})"
     )
+
+  def _get_iterator_start_state(self, index: int) -> dict[str, Any]:
+    it = _add_prefetch_and_make_iterator(
+        self._datasets[index],
+        weakref.ref(self),
+        start_prefetch=False,
+    )
+    state = it.get_state()
+    del it
+    return state
 
 
 def _add_prefetch_and_make_iterator(

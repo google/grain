@@ -291,6 +291,37 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
     ):
       dataset.set_next_index(ds_iter, 0)
 
+  def test_future_states(self):
+    datasets = [
+        dataset.MapDataset.source([1, 2]).to_iter_dataset(),
+        dataset.MapDataset.source([3, 4]).to_iter_dataset(),
+    ]
+    ds = interleave.InterleaveIterDataset(datasets, cycle_length=1)
+    ds_iter = ds.__iter__()
+
+    # Initialize the first iterator and get state.
+    state = ds_iter.get_state()
+
+    # Get state for the second dataset iterator after advancing it.
+    ds1_iter = datasets[1].__iter__()
+    next(ds1_iter)  # Consumes 3
+    ds1_state = ds1_iter.get_state()
+
+    # Inject future state for the second dataset (index 1).
+    state["future_states"] = {1: ds1_state}
+
+    ds_iter.set_state(state)
+
+    # Consume elements.
+    # It should yield elements from the first dataset (1, 2) and then
+    # yield elements from the second dataset starting from the future state (4).
+    self.assertEqual(next(ds_iter), 1)
+    self.assertEqual(next(ds_iter), 2)
+    self.assertEqual(next(ds_iter), 4)
+
+    with self.assertRaises(StopIteration):
+      next(ds_iter)
+
 
 if __name__ == "__main__":
   absltest.main()
