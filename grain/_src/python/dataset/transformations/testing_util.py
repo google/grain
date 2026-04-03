@@ -1414,6 +1414,79 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
           max_sequences_per_bin=max_sequences_per_bin,
       )
 
+  def test_pack_sequences_with_zeros(self):
+    input_elements = [
+        {
+            "input_tokens": [8, 8],
+            "input_vectors": np.empty((0, 3), dtype=np.int64),
+            "targets": np.array([], dtype=np.int64),
+        },
+        {
+            "input_tokens": [1],
+            "input_vectors": [[0, 1, 2], [1, 2, 3], [2, 3, 4]],
+            "targets": [10],
+        },
+        {
+            "input_tokens": [4, 5],
+            "input_vectors": [[3, 4, 5], [4, 5, 6]],
+            "targets": [20, 30, 40],
+        },
+        {
+            "input_tokens": [6],
+            "input_vectors": [[5, 6, 7]],
+            "targets": [50, 60],
+        },
+        {
+            "input_tokens": np.array([], dtype=np.int64),
+            "input_vectors": np.empty((0, 3), dtype=np.int64),
+            "targets": np.array([], dtype=np.int64),
+        },
+    ]
+    length_struct = {"input_tokens": 5, "input_vectors": 3, "targets": 5}
+
+    expected_elements = [
+        {
+            "input_tokens": [8, 8, 1, 0, 0],
+            "input_tokens_segment_ids": [1, 1, 2, 0, 0],
+            "input_tokens_positions": [0, 1, 0, 0, 0],
+            "input_vectors": [
+                [0, 1, 2],
+                [1, 2, 3],
+                [2, 3, 4],
+            ],
+            "input_vectors_segment_ids": [2, 2, 2],
+            "input_vectors_positions": [0, 1, 2],
+            "targets": [10, 0, 0, 0, 0],
+            "targets_segment_ids": [2, 0, 0, 0, 0],
+            "targets_positions": [0, 0, 0, 0, 0],
+        },
+        {
+            "input_tokens": [4, 5, 6, 0, 0],
+            "input_tokens_segment_ids": [1, 1, 2, 0, 0],
+            "input_tokens_positions": [0, 1, 0, 0, 0],
+            "input_vectors": [
+                [3, 4, 5],
+                [4, 5, 6],
+                [5, 6, 7],
+            ],
+            "input_vectors_segment_ids": [1, 1, 2],
+            "input_vectors_positions": [0, 1, 0],
+            "targets": [20, 30, 40, 50, 60],
+            "targets_segment_ids": [1, 1, 1, 2, 2],
+            "targets_positions": [0, 1, 2, 0, 1],
+        },
+    ]
+
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        kwargs=self.kwargs,
+        num_packing_bins=2,
+        max_sequences_per_bin=3,
+    )
+
 
 class BaseBestFitPackIterDatasetTest(BaseFirstFitPackIterDatasetTest):
   """Base test for the Best-Fit packing algorithm.
