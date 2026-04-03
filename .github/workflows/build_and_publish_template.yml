@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14", "3.14t"]
         os: [ubuntu-22.04, ubuntu-22.04-arm, macos-14, windows-2022]
         is-ci-tests:
           - ${{ inputs.is_ci_tests }}
@@ -48,6 +48,8 @@ jobs:
             os: windows-2022
           - python-version: "3.14"
             os: ubuntu-22.04-arm
+          - python-version: "3.14t"
+            os: ubuntu-22.04
 
     env:
       USE_BAZEL_VERSION: "7.2.1"

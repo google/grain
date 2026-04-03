@@ -7,13 +7,14 @@ FROM quay.io/pypa/${AUDITWHEEL_PLATFORM}
 LABEL maintainer="Grain team <grain-dev@google.com>"
 
 ARG PYTHON_VERSION
+ARG PYTHON_BASE_VERSION
 ARG BAZEL_VERSION
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN ulimit -n 1024 && yum install -y rsync
 
-ENV PYTHON_BIN_PATH=/opt/python/cp${PYTHON_VERSION}-cp${PYTHON_VERSION}/bin
+ENV PYTHON_BIN_PATH=/opt/python/cp${PYTHON_BASE_VERSION}-cp${PYTHON_VERSION}/bin
 ENV PATH="${PYTHON_BIN_PATH}:${PATH}"
 
 ENV PYTHON_BIN=${PYTHON_BIN_PATH}/python
