@@ -253,6 +253,20 @@ class MixedMapDatasetTest(parameterized.TestCase):
           parents=[self.even_ds, self.odd_ds], proportions=[0, 1]
       )
 
+  def test_mixing_zero_length_dataset_fails_with_error(self):
+    ds0 = dataset.MapDataset.range(0)
+    ds1 = dataset.MapDataset.range(0)
+    with self.assertRaisesRegex(
+        ValueError,
+        r"All datasets must have positive length for mixing, but dataset\(s\) "
+        r"at index 0 \(RangeMapDataset\(start=0, stop=0, step=1\)\), "
+        r"index 2 \(RangeMapDataset\(start=0, stop=0, step=1\)\) have"
+        r" length 0.",
+    ):
+      _ = mix.MixedMapDataset(
+          parents=[ds0, self.even_ds, ds1], proportions=[1, 1, 1]
+      )
+
   def test_mix_infinite_datasets(self):
     zeros = dataset.MapDataset.range(0, 1).repeat()
     ones = dataset.MapDataset.range(1, 2).repeat()

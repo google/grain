@@ -57,6 +57,15 @@ class SelectionWithProportionsMap(base.DatasetSelectionMap):
         len(parent) / (weight / weight_sum)
         for parent, weight in zip(parents, proportions)
     ]
+    zero_length_datasets = []
+    for i, length in enumerate(lengths):
+      if length == 0:
+        zero_length_datasets.append(f"index {i} ({parents[i]})")
+    if zero_length_datasets:
+      raise ValueError(
+          "All datasets must have positive length for mixing, but dataset(s) "
+          f"at {', '.join(zero_length_datasets)} have length 0."
+      )
     self._length = min(sys.maxsize, int(min(lengths)))
 
   def __len__(self) -> int:
