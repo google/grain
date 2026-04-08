@@ -175,6 +175,7 @@ py_test(
         ":operations",
         ":options",
         ":samplers",
+        "//grain",
         "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
         "//grain/_src/python/dataset",

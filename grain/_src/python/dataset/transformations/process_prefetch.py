@@ -28,7 +28,6 @@ import weakref
 
 from absl import flags
 import cloudpickle
-from grain._src.core import monitoring as grain_monitoring
 from grain._src.core.config import config
 import multiprocessing as mp
 from grain._src.python import grain_logging
@@ -379,7 +378,7 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     )
 
   # pytype: enable=attribute-error
-  # pylint: enable=protected-access
+  # pylint: disable=protected-access
 
   def start_prefetch(self) -> None:
     """Starts prefetching elements in background.

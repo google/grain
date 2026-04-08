@@ -15,9 +15,11 @@
 
 from collections.abc import Sequence
 import functools
+from multiprocessing import shared_memory
 import pathlib
 import platform
 import sys
+import threading
 from typing import Any, Union
 from unittest import mock
 
@@ -30,17 +32,17 @@ import multiprocessing as mp
 from grain._src.python import data_loader as data_loader_lib
 from grain._src.python import options
 from grain._src.python import samplers
-# pylint: disable=g-importing-member
 from grain._src.python.data_sources import ArrayRecordDataSource
 from grain._src.python.data_sources import RangeDataSource
 from grain._src.python.data_sources import SharedMemoryDataSource
 from grain._src.python.dataset.transformations import batch
+from grain._src.python.dataset.transformations import process_prefetch
+from grain._src.python.dataset.transformations import source
 from grain._src.python.ipc import shared_memory_array
 from grain._src.python.operations import BatchOperation
 from grain._src.python.operations import FilterOperation
 from grain._src.python.operations import MapOperation
 from grain._src.python.testing.experimental import assert_equal_output_after_checkpoint
-# pylint: enable=g-importing-member
 import numpy as np
 import parameterized
 
@@ -186,6 +188,10 @@ class CopyNumPyArrayToSharedMemoryTest(absltest.TestCase):
     {"num_threads_per_worker": 15},
 ])
 class DataLoaderTest(absl_parameterized.TestCase):
+
+  def tearDown(self):
+    super().tearDown()
+
   # Number of prefetch threads for each Grain worker
   num_threads_per_worker: int | None
 
