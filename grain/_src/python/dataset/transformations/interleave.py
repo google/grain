@@ -369,9 +369,11 @@ def _add_prefetch_and_make_iterator(
         ds, prefetch_buffer_size=interleave_iterator_obj._iter_buffer_size  # pylint: disable=protected-access
     )
   iterator = iter_dataset.__iter__()
+
   # Propagate options applied after InterleaveIterDataset to the iterators that
   # are being interleaved.
   iterator._ctx.dataset_options = interleave_iterator_obj._ctx.dataset_options.merge(iterator._ctx.dataset_options)  # pylint: disable=protected-access
+
   if start_prefetch:
     iterator.start_prefetch()
   return iterator

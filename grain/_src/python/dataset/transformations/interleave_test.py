@@ -90,7 +90,11 @@ class _IteratorIdIterDataset(dataset.IterDataset):
     return _IteratorIdDatasetIterator(self._parent.__iter__())
 
 
-class InterleaveIterDatasetTest(parameterized.TestCase):
+@absltest.skipThisClass("Base class")
+class _InterleaveIterDatasetTestBase(parameterized.TestCase):
+
+  def _maybe_wrap_ds(self, ds):
+    return ds
 
   @parameterized.named_parameters(*_INTERLEAVE_TEST_CASES)
   def test_interleaved_mix(self, to_mix, cycle_length, expected):
@@ -99,6 +103,7 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
         for elements in to_mix
     ]
     ds = interleave.InterleaveIterDataset(datasets, cycle_length=cycle_length)
+    ds = self._maybe_wrap_ds(ds)
     self.assertEqual(list(ds), expected)
     # Sanity check.
     flat_inputs = []
@@ -113,6 +118,7 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
         for elements in to_mix
     ]
     ds = interleave.InterleaveIterDataset(datasets, cycle_length=cycle_length)
+    ds = self._maybe_wrap_ds(ds)
     ds_iter = ds.__iter__()
     checkpoints = {}
     for i in range(len(expected)):
@@ -138,6 +144,7 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
         num_make_iter_threads=10,
         make_iter_buffer_size=10,
     )
+    ds = self._maybe_wrap_ds(ds)
     ds_iter = ds.__iter__()
     checkpoints = {}
     for i in range(len(expected)):
@@ -158,6 +165,7 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
     filenames = dataset.MapDataset.source(["11", "2345", "678", "9999"])
     sources = filenames.shuffle(seed=42).map(make_dummy_source)
     ds = interleave.InterleaveIterDataset(sources, cycle_length=2)
+    ds = self._maybe_wrap_ds(ds)
     self.assertEqual(
         list(ds),
         ["1", "2", "1", "3", "4", "6", "5", "7", "8", "9", "9", "9", "9"],
@@ -168,6 +176,7 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
         lambda i: dataset.MapDataset.source([i]).repeat(i).to_iter_dataset()
     )
     ds = interleave.InterleaveIterDataset(ds, cycle_length=5)
+    ds = self._maybe_wrap_ds(ds)
     ds = ds.mp_prefetch(options.MultiprocessingOptions(num_workers=3))
     self.assertEqual(list(ds), [1, 2, 3, 4, 5, 3, 4, 2, 3, 4, 5, 4, 5, 5, 5])
 
@@ -176,6 +185,7 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
     ds1 = ds1.filter(lambda x: False)
     ds2 = dataset.MapDataset.source([2]).repeat(1000).to_iter_dataset()
     ds = interleave.InterleaveIterDataset([ds1, ds2], cycle_length=1)
+    ds = self._maybe_wrap_ds(ds)
     ds_options = base.DatasetOptions(filter_raise_threshold_ratio=0.1)
     ds = dataset.WithOptionsIterDataset(ds, ds_options)
     with self.assertRaisesRegex(ValueError, r"skipped 100\.00 %"):
@@ -187,6 +197,7 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
         for i in range(1, 6)
     ]
     ds = interleave.InterleaveIterDataset(ds, cycle_length=5)
+    ds = self._maybe_wrap_ds(ds)
     assert_equal_output_after_checkpoint(ds)
 
   def test_set_state_does_not_recreate_iterators_if_not_needed(self):
@@ -196,6 +207,7 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
     ds = interleave.InterleaveIterDataset(
         [ds] * cycle_length, cycle_length=cycle_length
     )
+    ds = self._maybe_wrap_ds(ds)
     ds_iter = ds.__iter__()
     iter_ids1 = []
     for _ in range(cycle_length):
@@ -211,6 +223,7 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
   def test_element_spec(self):
     ds = dataset.MapDataset.range(3).to_iter_dataset()
     ds = interleave.InterleaveIterDataset([ds, ds], cycle_length=2)
+    ds = self._maybe_wrap_ds(ds)
     spec = dataset.get_element_spec(ds)
     self.assertEqual(spec.dtype, np.int64)
     self.assertEqual(spec.shape, ())
@@ -255,6 +268,7 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
   def test_get_next_index(self):
     ds = dataset.MapDataset.range(10).to_iter_dataset()
     ds = interleave.InterleaveIterDataset([ds], cycle_length=1)
+    ds = self._maybe_wrap_ds(ds)
     ds_iter = ds.__iter__()
     self.assertEqual(dataset.get_next_index(ds_iter), 0)
     for i in range(10):
@@ -264,6 +278,7 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
   def test_set_next_index(self):
     ds = dataset.MapDataset.range(10).to_iter_dataset()
     ds = interleave.InterleaveIterDataset([ds], cycle_length=1)
+    ds = self._maybe_wrap_ds(ds)
     ds_iter = ds.__iter__()
     for i in reversed(range(10)):
       dataset.set_next_index(ds_iter, i)
@@ -272,6 +287,7 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
   def test_get_next_index_with_multiple_datasets(self):
     ds = dataset.MapDataset.range(10).to_iter_dataset()
     ds = interleave.InterleaveIterDataset([ds, ds], cycle_length=2)
+    ds = self._maybe_wrap_ds(ds)
     ds_iter = ds.__iter__()
     with self.assertRaisesRegex(
         NotImplementedError,
@@ -283,6 +299,7 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
   def test_set_next_index_with_multiple_datasets(self):
     ds = dataset.MapDataset.range(10).to_iter_dataset()
     ds = interleave.InterleaveIterDataset([ds, ds], cycle_length=2)
+    ds = self._maybe_wrap_ds(ds)
     ds_iter = ds.__iter__()
     with self.assertRaisesRegex(
         NotImplementedError,
@@ -297,6 +314,7 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
         dataset.MapDataset.source([3, 4]).to_iter_dataset(),
     ]
     ds = interleave.InterleaveIterDataset(datasets, cycle_length=1)
+    ds = self._maybe_wrap_ds(ds)
     ds_iter = ds.__iter__()
 
     # Initialize the first iterator and get state.
@@ -321,6 +339,10 @@ class InterleaveIterDatasetTest(parameterized.TestCase):
 
     with self.assertRaises(StopIteration):
       next(ds_iter)
+
+
+class InterleaveIterDatasetTest(_InterleaveIterDatasetTestBase):
+  """Runs tests without prefetch."""
 
 
 if __name__ == "__main__":

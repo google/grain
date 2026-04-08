@@ -534,6 +534,7 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       return
 
     self._prefetch_should_stop.clear()
+
     self._prefetch_thread = threading.Thread(
         target=functools.partial(
             _put_iterator_elements_in_buffer,
@@ -595,8 +596,10 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       # is shutting down. Attempting to join can lead to hanging in Python
       # 3.13 as daemon threads can hang during interpreter shutdown. See
       # https://github.com/python/cpython/issues/123940#issuecomment-2976446309
-      self._prefetch_thread.join()
+      if self._prefetch_thread is not None:
+        self._prefetch_thread.join()
     self._prefetch_thread = None
+
     # Clear the buffer again in case the prefetch loop added more elements on
     # exit.
     self._clear_buffer()

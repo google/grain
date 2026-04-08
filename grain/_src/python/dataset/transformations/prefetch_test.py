@@ -448,7 +448,8 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
       self.assertEqual(next(ds_iter), i)
 
 
-class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
+@absltest.skipThisClass('Base class')
+class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
@@ -766,6 +767,10 @@ class ThreadPrefetchIterDatasetTest(parameterized.TestCase):
       self.assertEqual(get_state_counter.call_count - get_state_count, 0)
       ds_iter.get_state()
       self.assertEqual(get_state_counter.call_count - get_state_count, 1)
+
+
+class ThreadPrefetchIterDatasetTest(_ThreadPrefetchIterDatasetTestBase):
+  """Runs tests without provided executor."""
 
 
 class _MpContextCheckIterDataset(dataset.IterDataset[_T]):

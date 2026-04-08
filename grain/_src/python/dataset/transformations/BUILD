@@ -64,7 +64,6 @@ py_test(
     shard_count = 50,
     srcs_version = "PY3",
     deps = [
-        "//grain/_src/core:config",
         "//grain/_src/core:transforms",
         "//grain/_src/python:options",
         "//grain/_src/python/dataset",
