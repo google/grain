@@ -57,7 +57,6 @@ py_library(
         "//grain/_src/python/checkpoint:base",
         "//grain/_src/python/ipc:queue",
         "//grain/_src/python/ipc:shared_memory_array",
-        "//grain/_src/python/ipc:variable_size_queue",
         "//grain/proto:execution_summary_py_pb2",
         "@abseil-py//absl/flags",
         "@abseil-py//absl/logging",
