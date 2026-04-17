@@ -60,6 +60,18 @@ class RebatchIterDataset(dataset.IterDataset):
         f" drop_remainder={self._drop_remainder})"
     )
 
+  @property
+  def _element_spec(self) -> Any:  # PyTree[ShapeDtypeStructProtocol]
+    parent_spec = self._parent._element_spec  # pylint: disable=protected-access
+
+    def _replace_batch_dim(x):
+      if not hasattr(x, "shape") or not hasattr(x, "dtype"):
+        return x
+      new_shape = (self._batch_size,) + x.shape[1:]
+      return type(x)(shape=new_shape, dtype=x.dtype)
+
+    return tree_lib.map_structure(_replace_batch_dim, parent_spec)
+
 
 class _RebatchDatasetIterator(dataset.DatasetIterator):
   """Iterator that rebatches elements to a new batch size."""

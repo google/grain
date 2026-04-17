@@ -13,14 +13,37 @@
 # limitations under the License.
 """Tests for rebatch transformation."""
 
+from typing import Any
+
 from absl.testing import absltest
 from absl.testing import parameterized
+from grain._src.core import transforms
 from grain._src.core import tree_lib
+from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import batch
 from grain._src.python.dataset.transformations import rebatch
 from grain._src.python.testing.experimental import assert_equal_output_after_checkpoint
 import numpy as np
+
+
+class _GetTestTreeElement(transforms.Map):
+  """Returns a test tree element with the given integer as content."""
+
+  def map(self, x: int) -> dict[str, np.ndarray]:
+    element = {}
+    # Simulates having 3 features in a single dictionary.
+    for i in range(3):
+      feature = np.full(2, x)
+      key = f"key_{i}"
+      element[key] = feature
+    return element
+
+  def output_spec(self, _: Any) -> dict[str, base.ShapeDtypeStruct]:
+    return {
+        f"key_{i}": base.ShapeDtypeStruct(shape=(2,), dtype=np.int64)
+        for i in range(3)
+    }
 
 
 class RebatchIterDatasetTest(parameterized.TestCase):
@@ -41,17 +64,8 @@ class RebatchIterDatasetTest(parameterized.TestCase):
   def _get_test_dataset_ten_elements(
       self, batch_size, rebatch_size, drop_remainder=False
   ):
-    def _get_test_tree_element(x: int) -> dict[str, np.ndarray]:
-      element = {}
-      # Simulates having 3 features in a single dictionary.
-      for i in range(3):
-        feature = np.full(2, x)
-        key = f"key_{i}"
-        element[key] = feature
-      return element
-
     ds = dataset.MapDataset.range(0, 10)
-    ds = ds.map(_get_test_tree_element)
+    ds = ds.map(_GetTestTreeElement())
     ds = ds.to_iter_dataset()
     ds = batch.BatchIterDataset(ds, batch_size=batch_size)
     ds = rebatch.RebatchIterDataset(
@@ -82,6 +96,11 @@ class RebatchIterDatasetTest(parameterized.TestCase):
                   key_2=np.array([[8, 8], [9, 9]]),
               ),
           ],
+          expected_element_spec=dict(
+              key_0=base.ShapeDtypeStruct(shape=(4, 2), dtype=np.int64),
+              key_1=base.ShapeDtypeStruct(shape=(4, 2), dtype=np.int64),
+              key_2=base.ShapeDtypeStruct(shape=(4, 2), dtype=np.int64),
+          ),
       ),
       dict(
           testcase_name="to_smaller_batch",
@@ -115,6 +134,11 @@ class RebatchIterDatasetTest(parameterized.TestCase):
                   key_2=np.array([[8, 8], [9, 9]]),
               ),
           ],
+          expected_element_spec=dict(
+              key_0=base.ShapeDtypeStruct(shape=(2, 2), dtype=np.int64),
+              key_1=base.ShapeDtypeStruct(shape=(2, 2), dtype=np.int64),
+              key_2=base.ShapeDtypeStruct(shape=(2, 2), dtype=np.int64),
+          ),
       ),
       dict(
           testcase_name="to_same_batch",
@@ -143,6 +167,11 @@ class RebatchIterDatasetTest(parameterized.TestCase):
                   key_2=np.array([[9, 9]]),
               ),
           ],
+          expected_element_spec=dict(
+              key_0=base.ShapeDtypeStruct(shape=(3, 2), dtype=np.int64),
+              key_1=base.ShapeDtypeStruct(shape=(3, 2), dtype=np.int64),
+              key_2=base.ShapeDtypeStruct(shape=(3, 2), dtype=np.int64),
+          ),
       ),
       dict(
           testcase_name="uneven_batches",
@@ -166,6 +195,11 @@ class RebatchIterDatasetTest(parameterized.TestCase):
                   key_2=np.array([[8, 8], [9, 9]]),
               ),
           ],
+          expected_element_spec=dict(
+              key_0=base.ShapeDtypeStruct(shape=(4, 2), dtype=np.int64),
+              key_1=base.ShapeDtypeStruct(shape=(4, 2), dtype=np.int64),
+              key_2=base.ShapeDtypeStruct(shape=(4, 2), dtype=np.int64),
+          ),
       ),
       dict(
           testcase_name="to_larger_batch_drop_remainder",
@@ -184,6 +218,11 @@ class RebatchIterDatasetTest(parameterized.TestCase):
                   key_2=np.array([[4, 4], [5, 5], [6, 6], [7, 7]]),
               ),
           ],
+          expected_element_spec=dict(
+              key_0=base.ShapeDtypeStruct(shape=(4, 2), dtype=np.int64),
+              key_1=base.ShapeDtypeStruct(shape=(4, 2), dtype=np.int64),
+              key_2=base.ShapeDtypeStruct(shape=(4, 2), dtype=np.int64),
+          ),
       ),
       dict(
           testcase_name="to_smaller_batch_drop_remainder",
@@ -207,10 +246,20 @@ class RebatchIterDatasetTest(parameterized.TestCase):
                   key_2=np.array([[6, 6], [7, 7], [8, 8]]),
               ),
           ],
+          expected_element_spec=dict(
+              key_0=base.ShapeDtypeStruct(shape=(3, 2), dtype=np.int64),
+              key_1=base.ShapeDtypeStruct(shape=(3, 2), dtype=np.int64),
+              key_2=base.ShapeDtypeStruct(shape=(3, 2), dtype=np.int64),
+          ),
       ),
   )
   def test_rebatch(
-      self, batch_size, rebatch_size, drop_remainder, expected_elements
+      self,
+      batch_size,
+      rebatch_size,
+      drop_remainder,
+      expected_elements,
+      expected_element_spec,
   ):
     ds = self._get_test_dataset_ten_elements(
         batch_size=batch_size,
@@ -220,6 +269,7 @@ class RebatchIterDatasetTest(parameterized.TestCase):
     actual_elements = list(ds)
     self.assertLen(actual_elements, len(expected_elements))
     self._assert_trees_equal(actual_elements, expected_elements)
+    self.assertEqual(dataset.get_element_spec(ds), expected_element_spec)
 
   @parameterized.named_parameters(
       dict(
