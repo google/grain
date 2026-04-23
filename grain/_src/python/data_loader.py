@@ -456,10 +456,20 @@ class DataLoader:
     ds = ds.to_iter_dataset(self._read_options)
     for operation in self._operations:
       ds = _apply_transform_to_dataset(operation, ds)
+    from grain._src.python import execution_backend
+    backend = execution_backend.get_execution_backend()
     if self.multiprocessing_options.num_workers > 0 and isinstance(
         ds, dataset_base.SupportsSharedMemoryOutput
     ):
-      ds.enable_shared_memory_output()
+      if backend.is_multiprocess():
+        ds.enable_shared_memory_output()
+      else:
+        import warnings
+        warnings.warn(
+            "Shared memory fallback is active (ThreadingBackend). "
+            "This will result in severely degraded performance for large data volumes "
+            "because memory buffers must be repeatedly copied across thread boundaries."
+        )
     ds = ds.map(lambda r: r.data)
     if self.multiprocessing_options.num_workers > 0:
       ds = ds.mp_prefetch(self.multiprocessing_options)
