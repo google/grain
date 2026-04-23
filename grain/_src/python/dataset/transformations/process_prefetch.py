@@ -77,17 +77,6 @@ def _parse_debug_flags(debug_flags: dict[str, Any]):
   )
 
 
-def _get_dataset_options(ds: dataset.IterDataset) -> base.DatasetOptions:
-  result = base.DatasetOptions()
-  to_visit = [ds]
-  while to_visit:
-    parent = to_visit.pop()
-    if isinstance(parent, dataset.WithOptionsIterDataset):
-      result = result.merge(parent.options)
-    to_visit.extend(parent.parents)
-  return result
-
-
 def _check_picklable(
     ds: dataset.IterDataset | dataset.MapDataset,
 ):
@@ -312,7 +301,7 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     # Since the parent iterator is going to be created in each subprocess, and
     # the options are propagated during iterator creation, we need to manually
     # propagate them.
-    self._ctx.dataset_options = _get_dataset_options(parent)
+    self._ctx.dataset_options = prefetch.get_dataset_options(parent)
 
     self._process_ctx = mp.get_context("spawn")
     self._state: StateT | None = None
@@ -629,7 +618,7 @@ def multiprocess_prefetch(
   if num_workers == 0:
     return ds
 
-  dataset_options = _get_dataset_options(ds)
+  dataset_options = prefetch.get_dataset_options(ds)
 
   shards = []
   for i in range(num_workers):

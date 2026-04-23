@@ -13,11 +13,14 @@
 # limitations under the License.
 """Implements dataset interleaving."""
 
+import collections
 from collections.abc import Sequence
+import copy
 import functools
 from typing import Any, TypeVar
 import weakref
 
+from concurrent import futures
 from grain._src.python import options as grain_options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
@@ -296,6 +299,11 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
   def _initialize_stats(
       self, execution_tracking_mode: base.ExecutionTrackingMode
   ) -> stats.Stats:
+    # We pass an empty list of parents to `stats.make_stats` below. The
+    # parents of InterleaveDatasetIterator are the iterators of the
+    # datasets being interleaved. These are dynamically created and tracked
+    # in `self._iterators_in_use`. When an iterator produces an element in
+    # `__next__`, its Stats object is added to `self._stats._parents`.
     config = stats.StatsConfig(
         name=str(self),
         transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
@@ -337,8 +345,9 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
 
 def _add_prefetch_and_make_iterator(
     ds: dataset.IterDataset[T] | dataset.MapDataset[T],
-    interleave_iterator: weakref.ref[InterleaveDatasetIterator[T]],
+    interleave_iterator: weakref.ref[dataset.DatasetIterator[T]],
     start_prefetch: bool,
+    starting_state: dict[str, Any] | None = None,
 ) -> dataset.DatasetIterator[T]:
   """Adds prefetching to an IterDataset and returns an iterator.
 
@@ -350,6 +359,7 @@ def _add_prefetch_and_make_iterator(
     ds: The dataset to create an iterator from.
     interleave_iterator: The `InterleaveDatasetIterator` instance.
     start_prefetch: Whether to start the prefetching on iterator creation.
+    starting_state: The state of the iterator to set.
 
   Returns:
     A `dataset.DatasetIterator` for the given dataset, with prefetching
@@ -358,24 +368,38 @@ def _add_prefetch_and_make_iterator(
   Raises:
     RuntimeError: If the interleave_iterator has been garbage collected.
   """
+  # pylint: disable=protected-access
   interleave_iterator_obj = interleave_iterator()
+  assert isinstance(interleave_iterator_obj, InterleaveDatasetIterator)
   if interleave_iterator_obj is None:
     raise RuntimeError("InterleaveDatasetIterator has been garbage collected.")
+  iter_buffer_size = interleave_iterator_obj._iter_buffer_size
+  ctx = interleave_iterator_obj._ctx
+  # Release the strong reference before potentially slow iterator creation.
+  # This prevents the worker thread from triggering parent destruction.
+  del interleave_iterator_obj
+
   if isinstance(ds, dataset.MapDataset):
     # Prefetch is automatically added in `MapDataset.__iter__`.
     iter_dataset = ds.to_iter_dataset()
   else:
     iter_dataset = prefetch.ThreadPrefetchIterDataset(
-        ds, prefetch_buffer_size=interleave_iterator_obj._iter_buffer_size  # pylint: disable=protected-access
+        ds, prefetch_buffer_size=iter_buffer_size
     )
   iterator = iter_dataset.__iter__()
 
   # Propagate options applied after InterleaveIterDataset to the iterators that
   # are being interleaved.
-  iterator._ctx.dataset_options = interleave_iterator_obj._ctx.dataset_options.merge(iterator._ctx.dataset_options)  # pylint: disable=protected-access
+  iterator._ctx.dataset_options = ctx.dataset_options.merge(
+      iterator._ctx.dataset_options
+  )
+  iterator._ctx.dataset_options = ctx.dataset_options.merge(iterator._ctx.dataset_options)  # pylint: disable=protected-access
 
   if start_prefetch:
     iterator.start_prefetch()
+  if starting_state is not None:
+    iterator.set_state(starting_state)
+  # pylint: enable=protected-access
   return iterator
 
 
@@ -409,7 +433,7 @@ class InterleaveIterDataset(dataset.IterDataset[T]):
       self,
       datasets: Sequence[dataset.IterDataset[T] | dataset.MapDataset[T]],
       *,
-      cycle_length: int,
+      cycle_length: int | grain_options.AutotuneParameter,
       num_make_iter_threads: int = 1,
       make_iter_buffer_size: int = 1,
       iter_buffer_size: int = 1,

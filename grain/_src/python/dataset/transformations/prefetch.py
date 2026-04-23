@@ -386,7 +386,7 @@ def _set_slice_map_dataset(
       _set_slice_iter_dataset(parent, sl, sequential_slice)
 
 
-def _get_dataset_options(ds: dataset.IterDataset) -> base.DatasetOptions:
+def get_dataset_options(ds: dataset.IterDataset) -> base.DatasetOptions:
   result = base.DatasetOptions()
   to_visit = [ds]
   while to_visit:
@@ -412,7 +412,7 @@ class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
       self,
       parent: dataset.IterDataset[T],
       *,
-      prefetch_buffer_size: int | bindings.AutotuneParameter,
+      prefetch_buffer_size: int | grain_options.AutotuneParameter,
   ):
     super().__init__(parent)
     target_prefetch_buffer_size = prefetch_buffer_size
@@ -480,7 +480,7 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   def __init__(
       self,
       parent: CheckpointableIterator[T],
-      prefetch_buffer_size: int | bindings.AutotuneParameter,
+      prefetch_buffer_size: int | grain_options.AutotuneParameter,
   ):
     if isinstance(parent, dataset.DatasetIterator):
       super().__init__(parent)
@@ -739,7 +739,7 @@ def multithread_prefetch(
   if num_threads == 0:
     return ds
 
-  dataset_options = _get_dataset_options(ds)
+  dataset_options = get_dataset_options(ds)
 
   shards = []
   for i in range(num_threads):
