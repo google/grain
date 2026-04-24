@@ -240,5 +240,7 @@ py_test(
         ":traceback_util",
         "//grain",
         "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+        "@pypi//cloudpickle:pkg",
     ],
 )

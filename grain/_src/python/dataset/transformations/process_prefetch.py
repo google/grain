@@ -28,7 +28,8 @@ import weakref
 
 from absl import flags
 import cloudpickle
-from grain._src.core.config import config
+from grain._src.core import traceback_util
+from grain._src.core.config import config  # pylint: disable=g-importing-member
 import multiprocessing as mp
 from grain._src.python import grain_logging
 from grain._src.python.dataset import base
@@ -75,6 +76,12 @@ def _parse_debug_flags(debug_flags: dict[str, Any]):
       "py_dataset_visualization_output_dir",
       debug_flags["grain_py_dataset_visualization_output_dir"],
   )
+  if "grain_py_traceback_filtering" in debug_flags:
+    flags.FLAGS["grain_py_traceback_filtering"].present = True
+    config.update(
+        "py_traceback_filtering",
+        debug_flags["grain_py_traceback_filtering"],
+    )
 
 
 def _check_picklable(
@@ -174,7 +181,13 @@ def _put_dataset_elements_in_buffer(
     pickled_worker_init_fn: bytes,
     pickled_ds: bytes,
     buffer: queues.Queue[
-        tuple[Any, StateT | None, int | None, Exception | None]
+        tuple[
+            Any,
+            StateT | None,
+            int | None,
+            Exception | None,
+            traceback_util.PicklableTraceback | None,
+        ]
     ],
     should_stop: synchronize.Event,
     set_state_request_count: sharedctypes.Synchronized[int],
@@ -212,7 +225,7 @@ def _put_dataset_elements_in_buffer(
             parent_exhausted = False
         if new_state_or_index is not None:
           if not grain_queue.add_element_to_queue(  # pytype: disable=wrong-arg-types
-              (_SetStateIsDone(), None, None, None),
+              (_SetStateIsDone(), None, None, None, None),
               buffer,
               should_stop.is_set,
           ):
@@ -229,11 +242,22 @@ def _put_dataset_elements_in_buffer(
         time.sleep(_PARENT_EXHAUSTED_WAIT_S)
         continue
       try:
-        element = it.__next__()
+        element = next(it)
       except Exception as e:  # pylint: disable=broad-except
         grain_queue.add_element_to_queue(  # pytype: disable=wrong-arg-types
-            (None, None, None, e), buffer, should_stop.is_set
+            (
+                None,
+                None,
+                None,
+                e,
+                traceback_util.PicklableTraceback.from_traceback(
+                    e.__traceback__
+                ),
+            ),
+            buffer,
+            should_stop.is_set,
         )
+
         parent_exhausted = True
         continue
       element = shared_memory_array.copy_to_shm(element, min_size=min_shm_size)
@@ -244,7 +268,7 @@ def _put_dataset_elements_in_buffer(
       if next_index is not None:
         next_index += 1
       if not grain_queue.add_element_to_queue(  # pytype: disable=wrong-arg-types
-          (element, it.get_state(), next_index, None),
+          (element, it.get_state(), next_index, None, None),
           buffer,
           should_stop.is_set,
       ):
@@ -256,7 +280,15 @@ def _put_dataset_elements_in_buffer(
     _clear_queue_and_maybe_unlink_shm(buffer)
     _clear_queue_and_maybe_unlink_shm(set_state_queue)
     grain_queue.add_element_to_queue(  # pytype: disable=wrong-arg-types
-        (None, None, None, e), buffer, should_stop.is_set
+        (
+            None,
+            None,
+            None,
+            e,
+            traceback_util.PicklableTraceback.from_traceback(e.__traceback__),
+        ),
+        buffer,
+        should_stop.is_set,
     )
     return
   _clear_queue_and_maybe_unlink_shm(buffer)
@@ -314,7 +346,13 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         5
     )
     self._buffer: queues.Queue[
-        tuple[T, StateT | None, int | None, Exception | None]
+        tuple[
+            T,
+            StateT | None,
+            int | None,
+            Exception | None,
+            traceback_util.PicklableTraceback | None,
+        ]
     ] = self._process_ctx.Queue(maxsize=self._buffer_size)
     self._stats_in_queue = self._process_ctx.Queue(maxsize=5)
     self._start_profiling_event = self._process_ctx.Event()
@@ -403,10 +441,14 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
                 grain_py_dataset_visualization_output_dir=(
                     config.get_or_default("py_dataset_visualization_output_dir")
                 ),
+                # Always turn off traceback filtering in the worker process.
+                # Tracebacks will be fully reconstructed in the main process and
+                # then filtered at the top level.
+                grain_py_traceback_filtering="off",
             ),
         ),
         daemon=True,
-        name=f"grain-process-prefetch-{str(self)}",
+        name=f"grain-process-prefetch-{self}",
     )
     self._prefetch_process.start()
     shared_memory_array.SharedMemoryArray.enable_async_del(1)
@@ -423,11 +465,12 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       raise StopIteration
     timer = dataset_stats.Timer()
     with timer:
+      err_traceback = None
       self.start_prefetch()
       # Loop until we get a non-stale element.
       while True:
         try:
-          element, state, next_index, err = self._buffer.get(
+          element, state, next_index, err, err_traceback = self._buffer.get(
               timeout=_QUEUE_WAIT_TIMEOUT_S
           )
         except queue.Empty:
@@ -455,6 +498,12 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         ):
           self._stop_prefetch()
         self._exhausted = True
+        if isinstance(err, StopIteration):
+          raise err
+        if err_traceback is not None:
+          err = err.with_traceback(
+              traceback_util.reconstruct_traceback(err_traceback)
+          )
         raise err
       self._state = state
       self._next_index = next_index

@@ -19,8 +19,11 @@ Copied and modified from jax-ml/jax/jax/_src/traceback_util.py
 from __future__ import annotations
 
 from collections.abc import Callable
+import dataclasses
 import functools
+import logging
 import pathlib
+import sys
 import traceback
 import types
 from typing import Any, TypeVar, cast
@@ -34,6 +37,134 @@ _grain_message_append = (
     "The preceding is the original exception that occurred, unmodified.\n"
     "\n--------------------"
 )
+
+
+_simplified_tb_msg = (
+    "--------------------\n"
+    "For simplicity, Grain has removed its internal frames "
+    "from the traceback of the following exception. Set "
+    "--grain_py_traceback_filtering=off to include these."
+)
+
+_FUNCNAME_MAP = {
+    "<module>": "module",
+    "<listcomp>": "listcomp",
+    "<dictcomp>": "dictcomp",
+    "<setcomp>": "setcomp",
+    "<genexpr>": "genexpr",
+    "<lambda>": "lambda_func",
+}
+
+
+@dataclasses.dataclass
+class PicklableFrame:
+  filename: str
+  lineno: int
+  name: str
+  line: str | None
+  end_lineno: int | None = None
+  colno: int | None = None
+  end_colno: int | None = None
+  locals: dict[str, str] | None = None
+
+
+@dataclasses.dataclass
+class PicklableTraceback:
+  """A serializable representation of a Python traceback object.
+
+  Attributes:
+    frames: A list of PicklableFrame objects representing the stack trace.
+  """
+
+  frames: list[PicklableFrame]
+
+  @classmethod
+  def from_traceback(cls, tb: types.TracebackType | None) -> PicklableTraceback:
+    """Creates a PicklableTraceback from a Python traceback object."""
+    if tb is None:
+      return cls(frames=[])
+
+    summary = traceback.StackSummary.extract(
+        traceback.walk_tb(tb), capture_locals=False
+    )
+    return cls(
+        frames=[
+            PicklableFrame(
+                f.filename,
+                f.lineno,
+                f.name,
+                f.line,
+                getattr(f, "end_lineno", None),
+                getattr(f, "colno", None),
+                getattr(f, "end_colno", None),
+                f.locals,
+            )
+            for f in summary
+        ]
+    )
+
+
+class _TracebackConstructorError(Exception):
+  """Error used for traceback reconstruction."""
+
+
+def reconstruct_traceback(
+    picklable_traceback: PicklableTraceback,
+) -> types.TracebackType | None:
+  """Reconstructs a traceback object from a PicklableTraceback.
+
+  Args:
+    picklable_traceback: A PicklableTraceback containing the serialized frame
+      data.
+
+  Returns:
+    A traceback object or None if the list is empty.
+  """
+  tb = None
+  for frame in reversed(picklable_traceback.frames):
+    filename = frame.filename
+    lineno = frame.lineno
+    funcname = _FUNCNAME_MAP.get(frame.name, frame.name)
+
+    # Make sure funcname is a valid Python identifier, otherwise fallback to
+    # dummy_func.
+    if not funcname.isidentifier():
+      funcname = "dummy_func"
+
+    # Reconstruct the stacktrace frame by raising an exception inside a dummy
+    # function then executing it. Use blank lines so that the line number in
+    # the compiled code matches the original line number.
+    blank_lines = "\n" * (lineno - 1) if lineno > 0 else ""
+    code_str = (
+        f"{blank_lines}def {funcname}(): raise _TracebackConstructorError()"
+    )
+    try:
+      compiled = compile(code_str, filename, "exec")
+      namespace = {"_TracebackConstructorError": _TracebackConstructorError}
+      exec(compiled, namespace)  # pylint: disable=exec-used
+      func = namespace[funcname]
+      try:
+        func()
+      except _TracebackConstructorError:
+        _, _, current_tb = sys.exc_info()
+        assert current_tb is not None
+        if current_tb.tb_next:
+          frame_tb = current_tb.tb_next
+          tb = types.TracebackType(
+              tb, frame_tb.tb_frame, frame_tb.tb_lasti, lineno
+          )
+    except Exception:  # pylint: disable=broad-except
+      # If we fail to compile or execute the dummy frame (e.g. due to invalid
+      # characters in the filename or funcname), we simply skip reconstructing
+      # this specific frame and continue to the next one.
+      logging.warning(
+          "Failed to reconstruct traceback frame for %s:%d %s",
+          filename,
+          lineno,
+          funcname,
+          exc_info=True,
+      )
+  return tb
 
 
 def include_frame(f: types.FrameType) -> bool:
@@ -54,18 +185,25 @@ def include_filename(filename: str) -> bool:
   return True
 
 
-def _add_tracebackhide_to_hidden_frames(tb: types.TracebackType):
-  for f, _ in traceback.walk_tb(tb):
-    if not include_frame(f) and not _is_reraiser_frame(f):
+def _add_tracebackhide_to_hidden_frames(tb: types.TracebackType) -> None:
+  frames = list(traceback.walk_tb(tb))
+  # Intentionally never filter the frame in which the exception is raised.
+  for i, (f, _) in enumerate(reversed(frames)):
+    if (
+        not include_frame(f)
+        and "__tracebackhide__" not in f.f_locals
+        and i != 0
+    ):
       f.f_locals["__tracebackhide__"] = True
 
 
 def filter_traceback(tb: types.TracebackType) -> types.TracebackType | None:
   out = None
   # Scan the traceback and collect relevant frames.
+  # Intentionally never filter the frame in which the exception is raised.
   frames = list(traceback.walk_tb(tb))
-  for f, lineno in reversed(frames):
-    if include_frame(f):
+  for i, (f, lineno) in enumerate(reversed(frames)):
+    if include_frame(f) or i == 0:
       out = types.TracebackType(out, f, f.f_lasti, lineno)
   return out
 
@@ -108,11 +246,17 @@ def _is_reraiser_frame(f: traceback.FrameSummary | types.FrameType) -> bool:
   return filename == __file__ and name == "reraise_with_filtered_traceback"
 
 
-def _is_under_reraiser(e: BaseException) -> bool:
+def _should_filter(e: BaseException) -> bool:
+  """Returns True if the exception should be filtered."""
   if e.__traceback__ is None:
     return False
+
+  # We should filter unless the stack frame will be filtered again
+  # higher up the stack to avoid redundant filtering. We can detect this by
+  # checking if the stack contains a frame from this function.
+  # For the same reason, worker processes should never filter tracebacks.
   tb = traceback.extract_stack(e.__traceback__.tb_frame)
-  return any(_is_reraiser_frame(f) for f in tb[:-1])
+  return not any(_is_reraiser_frame(f) for f in tb[:-1])
 
 
 def format_exception_only(e: BaseException) -> str:
@@ -121,13 +265,6 @@ def format_exception_only(e: BaseException) -> str:
 
 class UnfilteredStackTraceError(Exception):
   pass
-
-
-_simplified_tb_msg = (
-    "For simplicity, Grain has removed its internal frames "
-    "from the traceback of the following exception. Set "
-    "--grain_py_traceback_filtering=off to include these."
-)
 
 
 class SimplifiedTracebackError(Exception):
@@ -217,7 +354,7 @@ def run_with_traceback_filter(fun: C) -> C:
       return fun(*args, **kwargs)
     except Exception as e:  # pylint: disable=broad-except
       mode = _filtering_mode()
-      if _is_under_reraiser(e) or mode == "off":
+      if not _should_filter(e) or mode == "off":
         raise
       if mode == "tracebackhide":
         _add_tracebackhide_to_hidden_frames(e.__traceback__)
@@ -227,7 +364,10 @@ def run_with_traceback_filter(fun: C) -> C:
       try:
         e.with_traceback(filter_traceback(tb))
         if mode == "quiet_remove_frames":
-          e.add_note("--------------------\n" + _simplified_tb_msg)
+          if hasattr(e, "add_note"):
+            e.add_note(_simplified_tb_msg)
+          else:
+            e.__notes__ = getattr(e, "__notes__", []) + [_simplified_tb_msg]
         else:
           if mode == "remove_frames":
             msg = format_exception_only(e)
