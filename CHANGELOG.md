@@ -14,6 +14,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 * Deprecations:
 
 * Bug fixes:
+  * Fixes bug causing tracebacks to be swallowed in worker processes.
 
 ## Grain 0.2.16 (February 25, 2025)
 

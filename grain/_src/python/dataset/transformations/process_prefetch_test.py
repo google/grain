@@ -11,12 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from collections.abc import Sequence
 from concurrent import futures
 import dataclasses
 import logging as std_logging
 import os
 import sys
 import time
+import traceback
 import types
 from typing import TypeVar
 from unittest import mock
@@ -24,6 +26,7 @@ from unittest import mock
 from absl import logging
 from absl.testing import absltest
 from absl.testing import parameterized
+from grain._src.core import config
 from grain._src.core import transforms
 import multiprocessing as mp
 from grain._src.python import options
@@ -56,6 +59,84 @@ class ProcessPrefetchIterDatasetTest(parameterized.TestCase):
         dataset.MapDataset.range(20)
         .to_iter_dataset()
         .filter(FilterKeepingOddElementsOnly())
+    )
+
+  @parameterized.parameters(
+      (
+          'off',
+          [
+              'map',
+              'nested_function_a',
+              'nested_function_b',
+              'nested_function_c',
+          ],
+          [],
+      ),
+      ('quiet_remove_frames', ['nested_function_c'], []),
+      (
+          'remove_frames',
+          ['nested_function_c'],
+          [
+              'map',
+              'nested_function_a',
+              'nested_function_b',
+              'nested_function_c',
+          ],
+      ),
+  )
+  def test_prefetch_traceback_preserves_worker_frames(
+      self,
+      traceback_filtering_mode: str,
+      expected_function_names_in_tb: Sequence[str],
+      expected_function_names_in_cause_tb: Sequence[str],
+  ):
+    class ErrorTransform(transforms.Map):
+
+      def nested_function_a(self, element: int) -> int:
+        return self.nested_function_b(element)
+
+      def nested_function_b(self, element: int) -> int:
+        return self.nested_function_c(element)
+
+      def nested_function_c(self, element: int) -> int:
+        if element == 3:
+          raise ValueError('Intentional error at element 3')
+        return element
+
+      def map(self, element: int) -> int:
+        return self.nested_function_a(element)
+
+    config.config.update('py_traceback_filtering', traceback_filtering_mode)
+    error_ds = (
+        dataset.MapDataset.range(10).to_iter_dataset().map(ErrorTransform())
+    )
+    prefetch_iter_ds = process_prefetch.ProcessPrefetchIterDataset(
+        error_ds, buffer_size=2
+    )
+
+    ds_iter = prefetch_iter_ds.__iter__()
+
+    # We cannot use self.assertRaises because it clears the traceback.
+    try:
+      for _ in range(5):
+        next(ds_iter)
+      self.fail('Expected ValueError to be raised.')
+    except ValueError as e:
+      tb = e.__traceback__
+      cause_tb = None
+      if e.__cause__ is not None:
+        cause_tb = e.__cause__.__traceback__
+
+    self.assertIsNotNone(tb)
+    extracted_tb = traceback.extract_tb(tb)
+    frame_names = [f.name for f in extracted_tb]
+    self.assertContainsSubset(expected_function_names_in_tb, frame_names)
+    cause_frame_names = []
+    if cause_tb is not None:
+      extracted_cause_tb = traceback.extract_tb(cause_tb)
+      cause_frame_names = [f.name for f in extracted_cause_tb]
+    self.assertContainsSubset(
+        expected_function_names_in_cause_tb, cause_frame_names
     )
 
   @parameterized.named_parameters(
