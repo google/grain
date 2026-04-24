@@ -56,7 +56,7 @@ import warnings
 
 from etils import epath
 from grain._src.core import config as grain_config  # pylint: disable=g-importing-member.
-from grain._src.core import monitoring as grain_monitoring
+from grain._src.core import monitoring
 from grain._src.core import traceback_util
 from grain._src.core import transforms
 from grain._src.python import options as grain_options
@@ -66,15 +66,12 @@ from grain._src.python.dataset import stats as dataset_stats
 from grain.proto import execution_summary_pb2
 import numpy as np
 
-from grain._src.core import monitoring
-
 
 _api_usage_counter = monitoring.Counter(
     "/grain/python/lazy_dataset/api",
     metadata=monitoring.Metadata(
         description="Lazy Dataset API initialization counter."
     ),
-    root=grain_monitoring.get_monitoring_root(),
     fields=[("name", str)],
 )
 

@@ -22,6 +22,7 @@ etils[epath,epy]
 cloudpickle
 jax
 numpy
+prometheus-client
 attrs
 pyarrow
 pytest
