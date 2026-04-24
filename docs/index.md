@@ -64,7 +64,7 @@ GCS <tutorials/data_sources/load_from_gcs_tutorial>
 Amazon S3 <tutorials/data_sources/load_from_s3_tutorial>
 ```
 
-``` {toctree}
+```{toctree}
 :maxdepth: 1
 :hidden:
 :caption: Dataset
@@ -72,6 +72,7 @@ Basics <tutorials/dataset_basic_tutorial>
 Advanced usage <tutorials/dataset_advanced_tutorial>
 Transformations <./grain.dataset>
 Performance debugging <tutorials/dataset_debugging_tutorial>
+Performance autotuning <performance/autotuning>
 ```
 
 ``` {toctree}
@@ -91,7 +92,7 @@ grain
 changelog
 ```
 
-``` {toctree}
+```{toctree}
 :maxdepth: 1
 :hidden:
 :caption: For contributors
