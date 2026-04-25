@@ -151,6 +151,14 @@ class ArrayRecordDataSourceTest(DataSourceTest):
     with self.assertRaises(ValueError):
       data_sources.ArrayRecordDataSource([])
 
+  def test_array_record_source_reader_pool_size_passed(self):
+    testdata_dir = pathlib.Path(__file__).parent / "testdata"
+    paths = [
+        str(testdata_dir / "digits.array_record-00000-of-00002"),
+    ]
+    ds = data_sources.ArrayRecordDataSource(paths, reader_pool_size=5)
+    self.assertEqual(ds._reader_pool_size, 5)
+
 
 if __name__ == "__main__":
   absltest.main()
