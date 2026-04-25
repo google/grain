@@ -21,8 +21,6 @@ import functools
 from typing import Any
 
 from absl import flags
-from grain._src.core import monitoring as grain_monitoring
-
 from grain._src.core import monitoring
 
 # Performance optimisations. Consider most of these experimental. We might
@@ -148,9 +146,8 @@ _GRAIN_FLAGS = (
 
 _grain_experiment_metric = monitoring.Metric(
     "/grain/experiment",
-    value_type=int,
+    int,
     metadata=monitoring.Metadata(description="Grain experiment opt-in metric."),
-    root=grain_monitoring.get_monitoring_root(),
     fields=[("name", str)],
 )
 

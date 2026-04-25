@@ -16,13 +16,11 @@
 import sys
 from typing import Optional, Protocol
 
-from grain._src.core import monitoring as grain_monitoring
+from grain._src.core import monitoring
 from grain._src.core import sharding
 from grain._src.python import record
 from grain._src.python.dataset import dataset
 import numpy as np
-
-from grain._src.core import monitoring
 
 
 _api_usage_counter = monitoring.Counter(
@@ -30,7 +28,6 @@ _api_usage_counter = monitoring.Counter(
     metadata=monitoring.Metadata(
         description="Sampler API initialization counter."
     ),
-    root=grain_monitoring.get_monitoring_root(),
     fields=[("name", str)],
 )
 

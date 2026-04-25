@@ -13,11 +13,12 @@
 # limitations under the License.
 """Public API for Grain."""
 
-
 # pylint: disable=g-importing-member
 # pylint: disable=unused-import
 # pylint: disable=g-multiple-import
 # pylint: disable=g-import-not-at-top
+
+import os
 
 # We import all public modules here to enable the use of `grain.foo.Bar`
 # instead of forcing users to write `from grain import foo as grain_foo`.
@@ -46,3 +47,9 @@ from grain._src.python.dataset.dataset import (
 from grain._src.python.load import load
 from grain._src.python.options import ReadOptions, MultiprocessingOptions
 from grain._src.python.record import Record, RecordMetadata
+
+# Autostart Prometheus metrics server if enabled via environment variable.
+if os.environ.get('ENABLE_PYGRAIN_TELEMETRY', 'false').lower() == 'true':
+  from grain._src.core import monitoring
+
+  monitoring.setup_telemetry()

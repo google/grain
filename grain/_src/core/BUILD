@@ -32,6 +32,7 @@ py_library(
     srcs = ["monitoring.py"],
     srcs_version = "PY3",
     deps = [
+        "@pypi//prometheus_client:pkg",
     ],
 )
 
@@ -242,5 +243,16 @@ py_test(
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
         "@pypi//cloudpickle:pkg",
+    ],
+)
+
+py_test(
+    name = "monitoring_test",
+    srcs = ["monitoring_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":monitoring",
+        "@abseil-py//absl/testing:absltest",
+        "@pypi//prometheus_client:pkg",
     ],
 )

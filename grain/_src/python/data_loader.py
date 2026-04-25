@@ -25,7 +25,7 @@ import sys
 from typing import Any, Awaitable, Callable, Optional, Sequence, TypeVar
 
 from etils import epath
-from grain._src.core import monitoring as grain_monitoring
+from grain._src.core import monitoring
 from grain._src.core import sharding
 from grain._src.core import transforms
 from grain._src.core import tree_lib
@@ -41,13 +41,10 @@ from grain._src.python.dataset.transformations import flatmap
 from grain._src.python.ipc import shared_memory_array
 import numpy as np
 
-from grain._src.core import monitoring
-
 
 _api_usage_counter = monitoring.Counter(
     "/grain/python/data_loader/api",
     monitoring.Metadata(description="API initialization counter."),
-    root=grain_monitoring.get_monitoring_root(),
     fields=[("name", str)],
 )
 _iterator_get_next_metric = monitoring.EventMetric(
@@ -56,7 +53,6 @@ _iterator_get_next_metric = monitoring.EventMetric(
         description="Gauge for DataLoaderIterator.__next__() latency.",
         units=monitoring.Units.NANOSECONDS,
     ),
-    root=grain_monitoring.get_monitoring_root(),
 )
 
 _T = TypeVar("_T")
