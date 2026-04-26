@@ -32,9 +32,11 @@ build_and_test_grain() {
       AUDITWHEEL_PLATFORM='manylinux_2_28_'"$(uname -m)"
       docker rmi -f grain:${PYTHON_VERSION}
       docker rm -f grain
+      PYTHON_BASE_VERSION="${PYTHON_MAJOR_VERSION}${PYTHON_MINOR_VERSION%t}"
       DOCKER_BUILDKIT=1 docker build --progress=plain --no-cache \
         --build-arg AUDITWHEEL_PLATFORM="${AUDITWHEEL_PLATFORM}" \
         --build-arg PYTHON_VERSION="${PYTHON_MAJOR_VERSION}""${PYTHON_MINOR_VERSION}" \
+        --build-arg PYTHON_BASE_VERSION="${PYTHON_BASE_VERSION}" \
         --build-arg BAZEL_VERSION="${BAZEL_VERSION}" \
         -t grain:"${PYTHON_VERSION}" "${SOURCE_DIR}"'/grain/oss'
 

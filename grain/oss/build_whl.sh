@@ -32,7 +32,17 @@ main() {
   write_to_bazelrc "build:macos --action_env=CC=clang"
   write_to_bazelrc "build:macos --action_env=CXX=clang++"
 
-  write_to_bazelrc "build --@rules_python//python/config_settings:python_version=${PYTHON_VERSION}"
+  BAZEL_PYTHON_VERSION="${PYTHON_VERSION}"
+  case "${PYTHON_VERSION}" in
+    *t)
+      BAZEL_PYTHON_VERSION="${PYTHON_VERSION%t}"
+      write_to_bazelrc "build --@rules_python//python/config_settings:py_freethreaded=yes"
+      write_to_bazelrc "test --@rules_python//python/config_settings:py_freethreaded=yes"
+      write_to_bazelrc "test --test_env=PYTHON_GIL=0"
+      ;;
+  esac
+
+  write_to_bazelrc "build --@rules_python//python/config_settings:python_version=${BAZEL_PYTHON_VERSION}"
   # Set platform-wise file extension for extension modules.
   case "$(uname)" in
     CYGWIN*|MINGW*|MSYS_NT*)
@@ -47,7 +57,7 @@ main() {
       ;;
   esac
 
-  write_to_bazelrc "test --@rules_python//python/config_settings:python_version=${PYTHON_VERSION}"
+  write_to_bazelrc "test --@rules_python//python/config_settings:python_version=${BAZEL_PYTHON_VERSION}"
   write_to_bazelrc "test --action_env PYTHON_VERSION=${PYTHON_VERSION}"
   write_to_bazelrc "test --test_timeout=300"
 
