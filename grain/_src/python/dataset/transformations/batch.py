@@ -311,8 +311,15 @@ def _get_batch_element_spec(
     batch_size: int,
     drop_remainder: bool,
     batch_fn: Callable[[Sequence[Any]], Any],
-):
-  if batch_fn != make_batch and not isinstance(batch_fn, _MakeBatchParallel):  # pylint: disable=comparison-with-callable
+) -> Any:
+  """Returns the element spec of the batched dataset."""
+
+  wrapped_batch_fn = batch_fn
+  if isinstance(batch_fn, functools.partial):
+    wrapped_batch_fn = batch_fn.func
+  if wrapped_batch_fn is not make_batch and not isinstance(
+      wrapped_batch_fn, _MakeBatchParallel
+  ):
     raise NotImplementedError(
         "Element spec inference is not supported with custom batching functions"
     )

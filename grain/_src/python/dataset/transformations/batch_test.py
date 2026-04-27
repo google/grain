@@ -781,18 +781,40 @@ class BatchIterDatasetTest(parameterized.TestCase):
         ],
     )
 
-  @parameterized.parameters(
-      dict(batch_size=3, drop_remainder=True, expected_shape=(3,)),
-      dict(batch_size=5, drop_remainder=False, expected_shape=(None,)),
+  @parameterized.named_parameters(
+      dict(
+          testcase_name="batch_3_drop_remainder",
+          batch_size=3,
+          drop_remainder=True,
+          expected_shape=(3,),
+          enable_shared_memory_output=False,
+      ),
+      dict(
+          testcase_name="batch_5_keep_remainder",
+          batch_size=5,
+          drop_remainder=False,
+          expected_shape=(None,),
+          enable_shared_memory_output=False,
+      ),
+      dict(
+          testcase_name="batch_3_shared_memory_output",
+          batch_size=3,
+          drop_remainder=True,
+          expected_shape=(3,),
+          enable_shared_memory_output=True,
+      ),
   )
   def test_element_spec(
       self,
       batch_size: int,
       drop_remainder: bool,
       expected_shape: tuple[int | None, ...],
+      enable_shared_memory_output: bool,
   ):
     ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
     ds = batch.BatchIterDataset(ds, batch_size, drop_remainder)
+    if enable_shared_memory_output:
+      ds.enable_shared_memory_output()
     spec = dataset.get_element_spec(ds)
     self.assertEqual(spec.shape, expected_shape)
     self.assertEqual(spec.dtype, np.int64)
