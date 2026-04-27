@@ -132,8 +132,10 @@ main() {
     $PYTHON_BIN -m pip install --force ${OUTPUT_DIR}/all_dist/grain*.whl
     $PYTHON_BIN -m pip install -r test_requirements.in  --only-binary pyarrow
     # TF does not have Python 3.14 support yet.
+    # Once majority of our users are on TF >= 2.21, we should update the
+    # protobuf dependency and bump the smoke test to TF >= 2.21.
     if (( "${PYTHON_MINOR_VERSION}" < 14 )); then
-      $PYTHON_BIN -m pip install tensorflow  --only-binary h5py
+      $PYTHON_BIN -m pip install "tensorflow<2.21" "protobuf>=5.26.1" --only-binary h5py
     fi
 
     pushd "${OUTPUT_DIR}/all_dist"
