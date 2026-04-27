@@ -393,3 +393,15 @@ py_test(
         "@pypi//numpy:pkg",
     ],
 )
+
+py_strict_test(
+    name = "autotune_sandbox_test",
+    srcs = ["autotune_sandbox_test.py"],
+    deps = [
+        ":core_transformations",
+        "//grain",
+        "//grain/_src/python:options",
+        "//grain/_src/python/experimental/autotune/python:bindings",
+        "@abseil-py//absl/testing:absltest",
+    ],
+)
