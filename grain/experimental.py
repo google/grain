@@ -27,6 +27,7 @@ from grain._src.core.transforms import (
 from grain._src.python.dataset.base import (
     DatasetOptions,
     ExecutionTrackingMode,
+    ShapeDtypeStruct,
 )
 from grain._src.python.dataset.dataset import (
     apply_transformations,
