@@ -5,7 +5,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.4
+    jupytext_version: 1.19.1
 kernelspec:
   display_name: Python 3
   name: python3
@@ -222,6 +222,8 @@ executionInfo:
 id: irJix4sJkNcf
 outputId: 648ffc5d-088e-4747-da1d-f0bfd87e4360
 ---
+import grain.checkpoint
+
 data_iter = iter(data_loader)
 
 num_steps = 5
@@ -251,7 +253,7 @@ mngr = ocp.CheckpointManager("/tmp/orbax")
 
 # Save the checkpoint
 assert mngr.save(
-    step=num_steps, args=grain.GrainCheckpointSave(data_iter), force=True)
+    step=num_steps, args=grain.checkpoint.CheckpointSave(data_iter), force=True)
 # Checkpoint saving in Orbax is asynchronous by default, so we'll wait until
 # finished before examining checkpoint.
 mngr.wait_until_finished()
@@ -312,7 +314,7 @@ id: Js3hheiGnykN
 outputId: 31cc1d8d-9a89-4fa8-af7a-5c74650f118e
 ---
 # Restore iterator from previously saved checkpoint
-mngr.restore(num_steps, args=grain.GrainCheckpointRestore(data_iter))
+mngr.restore(num_steps, args=grain.checkpoint.CheckpointRestore(data_iter))
 ```
 
 ```{code-cell}
@@ -332,6 +334,113 @@ outputId: 591c4799-a1cb-418e-a08f-2f78e54e5282
 for i in range(5, 10):
   x = next(data_iter)
   print(i, x["file_name"], x["label"])
+```
+
++++ {"id": "composite_checkpoint_intro"}
+
+### Checkpointing alongside model state
+
+In a real training run you typically want to save and restore **both** your model
+state and the data iterator in a single atomic checkpoint, so that resuming
+training is fully reproducible. Orbax's `ocp.args.Composite` lets you combine
+multiple objects in one `save` / `restore` call.
+
+The most important rule: **keep a direct reference to the `DataLoaderIterator`
+returned by `iter(data_loader)`**. Do not call `iter()` again during the training
+loop — that would reset the iterator and lose checkpoint state.
+
+```{code-cell}
+:id: composite_checkpoint_setup
+
+# A minimal stand-in for a real model state.
+# In practice this would be a JAX/Flax TrainState or a Pytree of parameters.
+import numpy as np
+model_weights = np.array([0.1, 0.2, 0.3])
+
+# Build a fresh data loader and hold on to the iterator.
+ckpt_source = tfds.data_source("imagenet_a", split="test")
+ckpt_loader = grain.DataLoader(
+    data_source=ckpt_source,
+    operations=[ResizeAndCrop()],
+    sampler=grain.IndexSampler(
+        num_records=20,
+        num_epochs=1,
+        shard_options=grain.ShardOptions(
+            shard_index=0, shard_count=1, drop_remainder=True),
+        shuffle=True,
+        seed=42),
+    worker_count=0)
+
+# Keep this iterator alive for the full training run.
+ckpt_iter = iter(ckpt_loader)
+```
+
+```{code-cell}
+:id: composite_checkpoint_save
+
+ckpt_dir = "/tmp/orbax_composite"
+!rm -rf {ckpt_dir}
+
+mngr = ocp.CheckpointManager(
+    ckpt_dir,
+    options=ocp.CheckpointManagerOptions(max_to_keep=3),
+)
+
+# --- Simulate a short training loop ---
+num_train_steps = 5
+for step in range(num_train_steps):
+  batch = next(ckpt_iter)
+  # ... model update would happen here ...
+
+# Save model weights and data iterator state together.
+mngr.save(
+    step=num_train_steps,
+    args=ocp.args.Composite(
+        model_state=ocp.args.StandardSave(model_weights),
+        data_state=grain.checkpoint.CheckpointSave(ckpt_iter),
+    ),
+    force=True,
+)
+mngr.wait_until_finished()
+print(f"Saved checkpoint at step {num_train_steps}")
+```
+
+```{code-cell}
+:id: composite_checkpoint_restore
+
+# --- Simulate resuming from a checkpoint ---
+# Create a fresh loader/iterator with the same config.
+resumed_loader = grain.DataLoader(
+    data_source=ckpt_source,
+    operations=[ResizeAndCrop()],
+    sampler=grain.IndexSampler(
+        num_records=20,
+        num_epochs=1,
+        shard_options=grain.ShardOptions(
+            shard_index=0, shard_count=1, drop_remainder=True),
+        shuffle=True,
+        seed=42),
+    worker_count=0)
+resumed_iter = iter(resumed_loader)
+resumed_weights = np.zeros(3)
+
+latest_step = mngr.latest_step()
+if latest_step is not None:
+  restored = mngr.restore(
+      latest_step,
+      args=ocp.args.Composite(
+          model_state=ocp.args.StandardRestore(resumed_weights),
+          data_state=grain.checkpoint.CheckpointRestore(resumed_iter),
+      ),
+  )
+  resumed_weights = restored["model_state"]
+  # resumed_iter is restored in-place; the next element will be step 5's batch.
+  print(f"Restored from step {latest_step}, model_weights={resumed_weights}")
+
+# Continue training — the data iterator picks up exactly where it left off.
+for i in range(num_train_steps, num_train_steps + 3):
+  batch = next(resumed_iter)
+  print(i, batch["file_name"])
 ```
 
 +++ {"id": "btSRh4EL_Zbo"}
