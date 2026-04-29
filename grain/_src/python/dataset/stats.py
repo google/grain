@@ -34,14 +34,12 @@ import weakref
 
 from absl import logging
 from grain._src.core import config as grain_config
-from grain._src.core import monitoring as grain_monitoring
+from grain._src.core import monitoring
 from grain._src.core import profiler
 from grain._src.core import tree_lib
 from grain._src.python.dataset import base
 from grain._src.python.dataset import stats_utils
 from grain.proto import execution_summary_pb2
-
-from grain._src.core import monitoring
 
 
 # Registry of weak references to output dataset iterators for collecting
@@ -67,7 +65,6 @@ _self_time_ns_histogram = monitoring.EventMetric(
         ),
         units=monitoring.Units.NANOSECONDS,
     ),
-    root=grain_monitoring.get_monitoring_root(),
     fields=[("name", str)],
     bucketer=monitoring.Bucketer.PowersOf(2.0),
 )
@@ -82,7 +79,6 @@ _next_duration_ns_histogram = monitoring.EventMetric(
         ),
         units=monitoring.Units.NANOSECONDS,
     ),
-    root=grain_monitoring.get_monitoring_root(),
     bucketer=monitoring.Bucketer.PowersOf(2.0),
 )
 

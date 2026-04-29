@@ -13,11 +13,12 @@
 # limitations under the License.
 """Public API for Grain."""
 
-
 # pylint: disable=g-importing-member
 # pylint: disable=unused-import
 # pylint: disable=g-multiple-import
 # pylint: disable=g-import-not-at-top
+
+import os
 
 # We import all public modules here to enable the use of `grain.foo.Bar`
 # instead of forcing users to write `from grain import foo as grain_foo`.
@@ -32,6 +33,7 @@ from grain import (
     transforms,
 )
 
+from grain._src.core import monitoring as _grain_monitoring
 from grain._src.core.config import config
 from grain._src.core.version import __version__, __version_info__
 from grain._src.python.data_loader import (
@@ -46,3 +48,13 @@ from grain._src.python.dataset.dataset import (
 from grain._src.python.load import load
 from grain._src.python.options import ReadOptions, MultiprocessingOptions
 from grain._src.python.record import Record, RecordMetadata
+
+# Autostart Prometheus metrics server if not disabled.
+# Default port is 8000. Use environment variable to override or set to 0 to
+# disable.
+try:
+  _prometheus_port = int(os.environ.get('GRAIN_PROMETHEUS_PORT', 8000))
+except ValueError:
+  _prometheus_port = 8000
+if _prometheus_port > 0:
+  _grain_monitoring.initialize(port=_prometheus_port)
