@@ -32,6 +32,9 @@ main() {
   write_to_bazelrc "build:macos --action_env=CC=clang"
   write_to_bazelrc "build:macos --action_env=CXX=clang++"
 
+  # Speed up the build.
+  write_to_bazelrc "build --jobs=4"
+
   write_to_bazelrc "build --@rules_python//python/config_settings:python_version=${PYTHON_VERSION}"
   # Set platform-wise file extension for extension modules.
   case "$(uname)" in
