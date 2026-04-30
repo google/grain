@@ -214,6 +214,10 @@ pluggy==1.6.0 \
     --hash=sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3 \
     --hash=sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746
     # via pytest
+prometheus-client==0.21.1 \
+    --hash=sha256:252505a722ac04b0456be05c05f75f45d760c2911ffc45f2a06bcaed9f3ae3fb \
+    --hash=sha256:594b45c410d6f4f8888940fe80b5cc2521b305a1fafe1c58609ef715a001f301
+    # via -r test_requirements.in
 pyarrow==22.0.0 \
     --hash=sha256:001ea83a58024818826a9e3f89bf9310a114f7e26dfe404a4c32686f97bd7901 \
     --hash=sha256:00626d9dc0f5ef3a75fe63fd68b9c7c8302d2b5bbc7f74ecaedba83447a24f84 \
