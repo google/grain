@@ -21,7 +21,7 @@ import functools
 import math
 import pprint
 import sys
-from typing import Any, Callable, TypeVar, cast
+from typing import Any, Callable, Generic, Protocol, TypeVar, cast, runtime_checkable
 
 from grain._src.core import tree_lib
 from grain._src.python.dataset import base
@@ -306,6 +306,24 @@ class _BatchDatasetIterator(dataset.DatasetIterator[T]):
     )
 
 
+@runtime_checkable
+class BatchFn(Protocol, Generic[S, T]):
+  """Custom batch function that support element spec inference.
+
+  If you need a custom batch function with `ds.batch(batch_fn=...)`, you can
+  implement this protocol to allow `batch` to infer the element spec of the
+  batched dataset. If not implemented, the output element spec will be unknown.
+  """
+
+  def __call__(self, elements: Sequence[S]) -> T:
+    """Batches elements."""
+
+  def output_spec(
+      self, input_spec: Any, batch_size: int, drop_remainder: bool
+  ) -> Any:
+    """Returns the element spec for batches produced by this function."""
+
+
 def _get_batch_element_spec(
     input_spec: Any,
     batch_size: int,
@@ -317,6 +335,10 @@ def _get_batch_element_spec(
   wrapped_batch_fn = batch_fn
   if isinstance(batch_fn, functools.partial):
     wrapped_batch_fn = batch_fn.func
+
+  if isinstance(wrapped_batch_fn, BatchFn):
+    return wrapped_batch_fn.output_spec(input_spec, batch_size, drop_remainder)
+
   if wrapped_batch_fn is not make_batch and not isinstance(
       wrapped_batch_fn, _MakeBatchParallel
   ):

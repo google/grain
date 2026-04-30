@@ -17,7 +17,7 @@ import dataclasses
 import functools
 import importlib
 import sys
-from typing import Any
+from typing import Any, Sequence
 from unittest import mock
 
 from absl.testing import absltest
@@ -54,6 +54,25 @@ class MapWithElementSpecInference(transforms.Map):
     return {
         "parsed": base.ShapeDtypeStruct(shape=(10, 10), dtype=np.int64),
         "nested": {"record": base.ShapeDtypeStruct(shape=(), dtype=str)},
+    }
+
+
+class CustomBatchFn(batch.BatchFn):
+
+  def __call__(self, elements: Sequence[Any]) -> dict[str, Any]:
+    return {"batch": batch.make_batch(elements)}
+
+  def output_spec(
+      self, input_spec: Any, batch_size: int, drop_remainder: bool
+  ) -> Any:
+    batch_dim = batch_size if drop_remainder else None
+    return {
+        "batch": tree_lib.map_structure(
+            lambda s: base.ShapeDtypeStruct(
+                shape=(batch_dim,) + s.shape, dtype=s.dtype
+            ),
+            input_spec,
+        )
     }
 
 
@@ -553,6 +572,18 @@ class BatchMapDatasetTest(parameterized.TestCase):
     spec = dataset.get_element_spec(ds)
     self.assertEqual(spec.shape, expected_shape)
     self.assertEqual(spec.dtype, np.int64)
+
+  def test_element_spec_custom_batch_fn(self):
+    ds = dataset.MapDataset.range(0, 10)
+    batch_size = 3
+    ds = batch.BatchMapDataset(
+        ds, batch_size, drop_remainder=True, batch_fn=CustomBatchFn()
+    )
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(
+        spec,
+        {"batch": base.ShapeDtypeStruct(shape=(batch_size,), dtype=np.int64)},
+    )
 
 
 class BatchIterDatasetTest(parameterized.TestCase):
