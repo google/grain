@@ -153,3 +153,4 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * Automatic publishing releases to PyPI via GitHub actions.
   * Nightly builds.
   * Introduced changelog.
+* Internal performance improvements to the experimental Autotune feature.
