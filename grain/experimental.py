@@ -28,6 +28,7 @@ from grain._src.python.dataset.base import (
     DatasetOptions,
     ExecutionTrackingMode,
     ShapeDtypeStruct,
+    ShapeDtypeStructProtocol,
 )
 from grain._src.python.dataset.dataset import (
     apply_transformations,
