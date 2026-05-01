@@ -224,6 +224,42 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
     )
 
   @parameterized.parameters(
+      (np.int8, 42),
+      (np.int8, 123),
+      (np.int16, 42),
+      (np.int16, 12345),
+      (np.int32, 42),
+      (np.int32, 123456789),
+      (np.float32, 42.0),
+  )
+  def test_non_zero_padding(self, dtype, pad_val):
+    input_elements = [
+        {"features": np.asarray([1, 2], dtype=dtype)},
+        {"features": np.asarray([3], dtype=dtype)},
+    ]
+    length_struct = {"features": 5}
+    padding_struct = {"features": pad_val}
+
+    expected_elements = [
+        {
+            "features": np.asarray([1, 2, 3, pad_val, pad_val], dtype=dtype),
+            "features_segment_ids": np.asarray([1, 1, 2, 0, 0], dtype=np.int32),
+            "features_positions": np.asarray([0, 1, 0, 0, 0], dtype=np.int32),
+        },
+    ]
+
+    _common_test_body(
+        self.packer_cls,
+        input_elements,
+        expected_elements,
+        length_struct,
+        num_packing_bins=1,
+        padding_struct=padding_struct,
+        kwargs=self.kwargs,
+        convert_input_to_np=False,
+    )
+
+  @parameterized.parameters(
       {"num_packing_bins": 1},
       {"num_packing_bins": 2},
       {"num_packing_bins": 3},
