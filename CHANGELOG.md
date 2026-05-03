@@ -17,6 +17,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 
 * Bug fixes:
   * Fixes bug causing tracebacks to be swallowed in worker processes.
+  * Fixes performance regression in traceback filtering when workers are
+    frequently exhausting small datasets.
 
 ## Grain 0.2.16 (February 25, 2025)
 

@@ -238,16 +238,21 @@ def _add_call_stack_frames(tb: types.TracebackType) -> types.TracebackType:
   return out
 
 
-def _is_reraiser_frame(f: traceback.FrameSummary | types.FrameType) -> bool:
-  if isinstance(f, traceback.FrameSummary):
-    filename, name = f.filename, f.name
-  else:
-    filename, name = f.f_code.co_filename, f.f_code.co_name
+def _is_reraiser_frame(f: types.FrameType) -> bool:
+  filename, name = f.f_code.co_filename, f.f_code.co_name
   return filename == __file__ and name == "reraise_with_filtered_traceback"
 
 
 def _should_filter(e: BaseException) -> bool:
   """Returns True if the exception should be filtered."""
+
+  # StopIteration is a relatively common exception which occurs when
+  # when we e.g. exhaust an iterator in prefetch which typically
+  # does not indicate an actual failure, which means we do not need
+  # to filter its stacktraces.
+  if isinstance(e, StopIteration):
+    return False
+
   if e.__traceback__ is None:
     return False
 
@@ -255,8 +260,12 @@ def _should_filter(e: BaseException) -> bool:
   # higher up the stack to avoid redundant filtering. We can detect this by
   # checking if the stack contains a frame from this function.
   # For the same reason, worker processes should never filter tracebacks.
-  tb = traceback.extract_stack(e.__traceback__.tb_frame)
-  return not any(_is_reraiser_frame(f) for f in tb[:-1])
+  # Make sure we don't use traceback.extract_stack as it makes a
+  # posix.stat call for every frame's file to verify line number mappings are
+  # not stale. We use walk_stack instead which is much faster.
+  walked = traceback.walk_stack(e.__traceback__.tb_frame)
+  next(walked, None)  # Skip the first frame which is the reraiser itself.
+  return not any(_is_reraiser_frame(f) for f, _ in walked)
 
 
 def format_exception_only(e: BaseException) -> str:
