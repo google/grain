@@ -371,6 +371,10 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         exitpriority=1,
     )
 
+  @property
+  def buffer_size(self) -> int:
+    return self._buffer_size
+
   # pytype: disable=attribute-error
   # pylint: disable=protected-access
   def _initialize_stats(
