@@ -10,6 +10,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     used to save one data copy.
   * Adds experimental `ShapeDtypeStructProtocol` and `ShapeDtypeStruct` to
     represent dataset element specs.
+  * Updates TfMixtureIndexSampler to support datasets with weights of 0.
 
 * Breaking changes:
 
