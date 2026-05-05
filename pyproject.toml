@@ -16,7 +16,7 @@ dependencies = [
     "cloudpickle",
     "etils[epath,epy]",
     "numpy",
-    "protobuf>=5.28.3",
+    "protobuf>=5.28.3,<=6.33.3",
 ]
 readme = "README.md"
 license = { file = "LICENSE" }

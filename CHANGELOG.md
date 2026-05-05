@@ -12,6 +12,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     represent dataset element specs.
 
 * Breaking changes:
+  * Depends on `protobuf>=5.28.3,<7`.
 
 * Deprecations:
 
