@@ -16,7 +16,19 @@ jupyter:
 
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/google/grain/blob/main/docs/tutorials/data_sources/parquet_dataset_tutorial.ipynb)
 
-This tutorial provides an example of how to read data from [Apache Parquet](https://parquet.apache.org/) file, also covers how to process and transform the data with Grain.
+This tutorial provides an example of how to read data from an
+[Apache Parquet](https://parquet.apache.org/) file, and how to process and
+transform the data with Grain.
+
+`grain.experimental.ParquetIterDataset` is a thin wrapper around
+[`pyarrow.parquet.ParquetFile`](https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetFile.html).
+Any extra keyword arguments passed to `ParquetIterDataset(...)` are forwarded to
+`ParquetFile`, so you can use the PyArrow reference to discover supported read
+options.
+
+Internally, Grain streams one row group at a time from each parquet file. If you
+pass multiple paths, Grain lazily interleaves per-file iterators, which is
+useful for sharded datasets that do not support efficient random access.
 
 <!-- #endregion -->
 
@@ -73,6 +85,35 @@ ds = grain.experimental.ParquetIterDataset('./emails.parquet')
 
 ```python id="DlhbJX5zdrQo"
 list(ds)[0]
+```
+
+Example of passing some kwargs through to ParquetFile.
+
+```python
+ds = grain.experimental.ParquetIterDataset(
+    './emails.parquet',
+    memory_map=True,
+)
+list(ds)[0]
+```
+
+To read multiple parquet files in parallel, provide a list of paths. Grain will
+automatically use InterleaveIterDataset internally to interleave the files.
+
+```
+ds = grain.experimental.ParquetIterDataset(
+    ['./emails.parquet', './emails.parquet'],
+)
+```
+
+You can also use `grain.experimental.ThreadPrefetchIterDataset` to overlap
+CPU-side reading with downstream work.
+
+```
+ds = grain.experimental.ThreadPrefetchIterDataset(
+    ds,
+    prefetch_buffer_size=10,
+)
 ```
 
 <!-- #region id="BAXS0bgKdrQo" -->
