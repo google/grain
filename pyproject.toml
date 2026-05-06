@@ -16,6 +16,7 @@ dependencies = [
     "cloudpickle",
     "etils[epath,epy]",
     "numpy",
+    "prometheus-client",
     "protobuf>=5.28.3",
 ]
 readme = "README.md"

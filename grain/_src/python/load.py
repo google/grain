@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from grain._src.core import monitoring as grain_monitoring
+from grain._src.core import monitoring
 from grain._src.core import sharding
 from grain._src.core import transforms
 from grain._src.python import data_loader
@@ -10,13 +10,10 @@ from grain._src.python import options
 from grain._src.python import samplers
 from grain._src.python.dataset import base as dataset_base
 
-from grain._src.core import monitoring
-
 
 _api_usage_counter = monitoring.Counter(
     "/grain/python/load/api",
     monitoring.Metadata(description="API initialization counter."),
-    root=grain_monitoring.get_monitoring_root(),
     fields=[("name", str)],
 )
 
