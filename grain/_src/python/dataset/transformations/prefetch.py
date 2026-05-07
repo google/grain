@@ -188,6 +188,8 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._buffer = collections.deque()
     self._lock = threading.Lock()
     self._executor_wrapper = None
+    self._next_depth_measure_step = 0
+    self._depth_measure_freq = 100
 
     assert isinstance(read_options.num_threads, int)
     assert isinstance(read_options.prefetch_buffer_size, int)
@@ -257,7 +259,9 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
           if not self._buffer:
             # Fill the buffer on the first iteration.
             self._fill_buffer()
-          self._measure_prefetch_depth()
+          if self._next_returned_index >= self._next_depth_measure_step:
+            self._measure_prefetch_depth()
+            self._next_depth_measure_step += self._depth_measure_freq
           element = self._buffer.popleft()
           # Prefetch elements until the buffer is full again.
           self._fill_buffer()
