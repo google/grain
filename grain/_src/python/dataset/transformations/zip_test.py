@@ -18,6 +18,7 @@ import itertools
 from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset.transformations import source
 import grain._src.python.dataset.transformations.zip as zip_ds
 import grain._src.python.testing.experimental as test_util
 import numpy as np
@@ -77,6 +78,27 @@ class ZipMapDatasetTest(parameterized.TestCase):
     for spec in specs:
       self.assertEqual(spec.dtype, np.int64)
       self.assertEqual(spec.shape, ())
+
+  def test_dict(self):
+    source1 = source.SourceMapDataset(
+        [{"a": [1, 2]}, {"b": [3]}, {"c": [4, 5, 6]}]
+    )
+    self.assertLen(list(source1), 3)
+    source2 = source.SourceMapDataset(
+        [{"d": [7]}, {"e": [8, 9]}, {"f": [10, 11, 12]}]
+    )
+    self.assertLen(list(source2), 3)
+    ds = zip_ds.ZipMapDataset(parents=[source1, source2])
+    out = list(ds)
+    self.assertLen(out, 3)
+    self.assertEqual(
+        out,
+        [
+            ({"a": [1, 2]}, {"d": [7]}),
+            ({"b": [3]}, {"e": [8, 9]}),
+            ({"c": [4, 5, 6]}, {"f": [10, 11, 12]}),
+        ],
+    )
 
 
 class ZipIterDatasetTest(parameterized.TestCase):
