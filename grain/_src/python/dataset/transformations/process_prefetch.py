@@ -27,7 +27,9 @@ from typing import Any, TypeVar
 import weakref
 
 from absl import flags
+from absl import logging
 import cloudpickle
+from grain._src.core import profiler
 from grain._src.core import traceback_util
 from grain._src.core.config import config  # pylint: disable=g-importing-member
 import multiprocessing as mp
@@ -39,6 +41,7 @@ from grain._src.python.dataset.transformations import interleave
 from grain._src.python.dataset.transformations import prefetch
 from grain._src.python.ipc import queue as grain_queue
 from grain._src.python.ipc import shared_memory_array
+import portpicker
 
 
 T = TypeVar("T")
@@ -165,10 +168,22 @@ class ProcessPrefetchIterDataset(dataset.IterDataset[T]):
     return f"ProcessPrefetchIterDataset(buffer_size={self._buffer_size})"
 
   def __iter__(self) -> dataset.DatasetIterator[T]:
+    worker_init_fn = self._worker_init_fn
+    worker_profiler_port = None
+    if profiler.is_worker_profiling_enabled() and profiler.is_loaded():
+      worker_profiler_port = portpicker.pick_unused_port()
+      profiler_init_fn = profiler.get_worker_init_fn(worker_profiler_port)
+      if worker_init_fn is None:
+        worker_init_fn = profiler_init_fn
+      else:
+        worker_init_fn = functools.partial(
+            _run_all, [worker_init_fn, profiler_init_fn]
+        )
     return ProcessPrefetchDatasetIterator(
         self._parent,
         self._buffer_size,
-        self._worker_init_fn,
+        worker_init_fn,
+        worker_profiler_port=worker_profiler_port,
     )
 
   @property
@@ -324,11 +339,14 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       parent: dataset.IterDataset[T],
       buffer_size: int,
       worker_init_fn: Callable[[], None] | None = None,
+      worker_profiler_port: int | None = None,
   ):
     super().__init__()
     self._iter_parent = parent
     self._buffer_size = buffer_size
     self._worker_init_fn = worker_init_fn
+    self._worker_profiler_port = worker_profiler_port
+    self._unregister_fn = None
     self._keep_workers_after_stop_iteration = False
     # Since the parent iterator is going to be created in each subprocess, and
     # the options are propagated during iterator creation, we need to manually
@@ -456,6 +474,16 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     )
     self._prefetch_process.start()
     shared_memory_array.SharedMemoryArray.enable_async_del(1)
+    if (
+        self._prefetch_process.is_alive()
+        and self._worker_profiler_port is not None
+    ):
+      try:
+        self._unregister_fn = profiler.register_subprocess(
+            self._prefetch_process.pid, self._worker_profiler_port
+        )
+      except Exception as e:  # pylint: disable=broad-except
+        logging.warning("Failed to register subprocess: %s", str(e))
 
   def _process_failed(self) -> bool:
     if self._prefetch_process is None:
@@ -530,6 +558,9 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     """Stops the prefetching process if it's currently running."""
     if self._prefetch_process is None:
       return
+
+    if self._unregister_fn is not None:
+      self._unregister_fn()
 
     self._prefetch_should_stop.set()
     _clear_queue_and_maybe_unlink_shm(self._buffer)

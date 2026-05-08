@@ -11,6 +11,9 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * Adds experimental `ShapeDtypeStructProtocol` and `ShapeDtypeStruct` to
     represent dataset element specs.
   * Updates TfMixtureIndexSampler to support datasets with weights of 0.
+  * Adds profiling of multiprocess workers when using XProf profiler. To enable,
+    set flag `grain_enable_multiprocess_worker_profiling=true` and add
+    `"profile_subprocesses" = True` in advanced profiler options.
 
 * Breaking changes:
 

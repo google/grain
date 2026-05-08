@@ -48,6 +48,7 @@ py_library(
         "//grain/_src/core:config",
         "//grain/_src/core:exceptions",
         "//grain/_src/core:monitoring",
+        "//grain/_src/core:profiler",
         "//grain/_src/core:sharding",
         "//grain/_src/core:traceback_util",
         "//grain/_src/core:transforms",
@@ -64,6 +65,7 @@ py_library(
         "@pypi//cloudpickle:pkg",
         "@pypi//etils:pkg",
         "@pypi//numpy:pkg",
+        "@pypi//portpicker:pkg",
     ],
 )
 

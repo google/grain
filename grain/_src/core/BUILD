@@ -181,7 +181,10 @@ py_library(
     name = "profiler",
     srcs = ["profiler.py"],
     srcs_version = "PY3",
-    deps = ["@abseil-py//absl/logging"],
+    deps = [
+        "@abseil-py//absl/flags",
+        "@abseil-py//absl/logging",
+    ],
 )
 
 py_test(
@@ -194,7 +197,11 @@ py_test(
     srcs_version = "PY3",
     deps = [
         ":profiler",
+        "@abseil-py//absl/flags",
         "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:flagsaver",
+        "@pypi//cloudpickle:pkg",
+        "@pypi//portpicker:pkg",
     ],
 )
 
@@ -208,8 +215,12 @@ py_test(
     srcs_version = "PY3",
     deps = [
         ":profiler",
+        "@abseil-py//absl/flags",
         "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:flagsaver",
+        "@pypi//cloudpickle:pkg",
         "@pypi//jax:pkg",  # buildcleaner: keep
+        "@pypi//portpicker:pkg",
     ],
 )
 
