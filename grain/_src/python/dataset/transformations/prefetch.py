@@ -146,6 +146,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._next_buffered_index = 0
     self._buffer = collections.deque()
     self._lock = threading.Lock()
+    self._executor_wrapper = None
 
     assert isinstance(read_options.num_threads, int)
     assert isinstance(read_options.prefetch_buffer_size, int)
@@ -262,6 +263,11 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
         f" allow_nones={self._allow_nones})"
     )
 
+  def set_executor_wrapper(
+      self, wrapper: typing.Callable[[futures.Executor], futures.Executor]
+  ):
+    self._executor_wrapper = wrapper
+
   def _set_prefetch_buffer_size(self, buffer_size: int):
     self._target_prefetch_buffer_size = buffer_size
     # The executor is created in the constructor only if the prefetch buffer
@@ -275,6 +281,8 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
       self._executor = futures.ThreadPoolExecutor(
           self._target_num_threads, thread_name_prefix="grain-prefetch"
       )
+      if self._executor_wrapper:
+        self._executor = self._executor_wrapper(self._executor)
     elif self._target_prefetch_buffer_size == 0 and hasattr(self, "_executor"):
       self._executor.shutdown()
       delattr(self, "_executor")
@@ -290,6 +298,8 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
       self._executor = futures.ThreadPoolExecutor(
           self._target_num_threads, thread_name_prefix="grain-prefetch"
       )
+      if self._executor_wrapper:
+        self._executor = self._executor_wrapper(self._executor)
     elif hasattr(self, "_executor"):
       delattr(self, "_executor")
     if old_executor is not None:
