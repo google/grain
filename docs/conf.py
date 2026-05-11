@@ -9,6 +9,7 @@ https://www.sphinx-doc.org/en/master/usage/configuration.html
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
+import inspect
 import os
 import pathlib
 import sys
@@ -28,11 +29,12 @@ author = 'Grain team'
 
 extensions = [
     'myst_nb',
-    'sphinx_copybutton',
-    'sphinx_design',
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
+    'sphinx.ext.linkcode',
     'sphinx.ext.napoleon',
+    'sphinx_copybutton',
+    'sphinx_design',
 ]
 
 templates_path = ['_templates']
@@ -114,3 +116,47 @@ nb_execution_excludepatterns = [
     'tutorials/data_sources/huggingface_dataset_tutorial.ipynb',
     'tutorials/data_sources/pytorch_dataset_tutorial.ipynb',
 ]
+
+
+def linkcode_resolve(domain, info):
+  """Resolve a GitHub URL corresponding to Python object."""
+  if domain != 'py':
+    return None
+
+  try:
+    mod = sys.modules[info['module']]
+  except KeyError:
+    return None
+
+  obj = mod
+  try:
+    for attr in info['fullname'].split('.'):
+      obj = getattr(obj, attr)
+  except AttributeError:
+    return None
+
+  try:
+    obj = inspect.unwrap(obj)
+  except ValueError:
+    return None
+
+  try:
+    filename = inspect.getsourcefile(obj)
+  except TypeError:
+    return None
+  if not filename:
+    return None
+
+  try:
+    source, lineno = inspect.getsourcelines(obj)
+  except OSError:
+    return None
+
+  path = os.path.relpath(
+      filename, start=os.path.dirname(pathlib.Path('..', 'grain').resolve())
+  )
+
+  return (
+      'https://github.com/google/grain/blob/main/'
+      f'{path}#L{lineno}-L{lineno + len(source) - 1}'
+  )
