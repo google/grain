@@ -20,6 +20,7 @@ import functools
 from typing import Any, TypeVar
 import weakref
 
+from absl import logging
 from concurrent import futures
 from grain._src.python import options as grain_options
 from grain._src.python.dataset import base
