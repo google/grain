@@ -28,5 +28,5 @@ PYBIND11_MODULE(index_shuffle_module, m) {
         return grain::random::index_shuffle(index, max_index, seed, rounds);
       },
       kDoc, py::arg("index"), py::arg("max_index"), py::arg("seed"),
-      py::arg("rounds"));
+      py::arg("rounds"), py::call_guard<py::gil_scoped_release>());
 }
