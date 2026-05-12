@@ -85,6 +85,7 @@ autodoc_mock_imports = [
     'cloudpickle',
     'numpy',
     'orbax',
+    'portpicker',
     'tree',
     'absl',
     'absl.logging',
