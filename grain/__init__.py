@@ -13,7 +13,6 @@
 # limitations under the License.
 """Public API for Grain."""
 
-
 # pylint: disable=g-importing-member
 # pylint: disable=unused-import
 # pylint: disable=g-multiple-import
@@ -32,6 +31,7 @@ from grain import (
     transforms,
 )
 
+from grain._src.core import monitoring
 from grain._src.core.config import config
 from grain._src.core.version import __version__, __version_info__
 from grain._src.python.data_loader import (
@@ -46,3 +46,5 @@ from grain._src.python.dataset.dataset import (
 from grain._src.python.load import load
 from grain._src.python.options import ReadOptions, MultiprocessingOptions
 from grain._src.python.record import Record, RecordMetadata
+
+monitoring.setup_telemetry()

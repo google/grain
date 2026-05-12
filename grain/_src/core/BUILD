@@ -28,10 +28,27 @@ py_library(
 )
 
 py_library(
-    name = "monitoring",
-    srcs = ["monitoring.py"],
+    name = "monitoring_base",
+    srcs = ["monitoring_base.py"],
     srcs_version = "PY3",
+)
+
+py_library(
+    name = "monitoring",
+    srcs = [
+        "monitoring.py",
+        "prometheus_monitoring.py",
+    ],
+    srcs_version = "PY3",
+    tags = [
+        "ignore_for_dep=grain._src.core.fast_monitoring",
+        "ignore_for_dep=grain._src.core.google.streamz_monitoring",
+        "ignore_for_dep=grain._src.core.monitoring_base",
+        "ignore_for_dep=grain._src.core.prometheus_monitoring",
+    ],
     deps = [
+        ":monitoring_base",
+        "@pypi//prometheus_client:pkg",
     ],
 )
 
@@ -253,5 +270,21 @@ py_test(
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
         "@pypi//cloudpickle:pkg",
+    ],
+)
+
+py_test(
+    name = "prometheus_monitoring_test",
+    srcs = ["prometheus_monitoring_test.py"],
+    srcs_version = "PY3",
+    tags = [
+        "ignore_for_dep=grain._src.core.google_monitoring",
+        "ignore_for_dep=grain._src.core.monitoring_base",
+        "ignore_for_dep=grain._src.core.prometheus_monitoring",
+    ],
+    deps = [
+        ":monitoring",
+        "@abseil-py//absl/testing:absltest",
+        "@pypi//prometheus_client:pkg",
     ],
 )

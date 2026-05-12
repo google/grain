@@ -32,11 +32,9 @@ from typing import Any, Generic, Optional, SupportsIndex, TypeVar, Union
 
 from absl import logging
 from etils import epath
-
-from grain._src.core import monitoring as grain_monitoring
+from grain._src.core import monitoring
 from grain._src.python.dataset import stats as dataset_stats
 
-from grain._src.core import monitoring  # pylint: disable=g-bad-import-order
 
 # pylint: disable=g-import-not-at-top, g-importing-member, g-bad-import-order
 import platform
@@ -55,7 +53,6 @@ else:
 _api_usage_counter = monitoring.Counter(
     "/grain/python/data_sources/api",
     monitoring.Metadata(description="API initialization counter."),
-    root=grain_monitoring.get_monitoring_root(),
     fields=[("name", str)],
 )
 
