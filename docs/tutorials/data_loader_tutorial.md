@@ -5,9 +5,10 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.16.4
+    jupytext_version: 1.16.6
 kernelspec:
-  display_name: Python 3
+  display_name: .venv
+  language: python
   name: python3
 ---
 
@@ -21,15 +22,17 @@ kernelspec:
 
 ## Install Grain and tutorial dependencies
 
-```{code-cell}
-:id: EZ9EXOZKehes
-
+```{code-cell} ipython3
+---
+colab:
+  base_uri: https://localhost:8080/
+id: EZ9EXOZKehes
+outputId: 2de6bc20-8edb-4376-e5d3-3ec7bff35462
+---
 !pip install grain tfds-nightly opencv-python matplotlib orbax-checkpoint
-
 import cv2
 import orbax.checkpoint as ocp
 import grain.python as grain
-import matplotlib.pyplot as plt
 import numpy as np
 
 import os
@@ -54,18 +57,12 @@ A `Sampler` is responsible for determining which records to read next. This invo
 
 Grain provides an `IndexSampler` implementation, which we explore below.
 
-```{code-cell}
+```{code-cell} ipython3
 ---
-executionInfo:
-  elapsed: 59
-  status: ok
-  timestamp: 1734464259034
-  user:
-    displayName: ''
-    userId: ''
-  user_tz: 480
+colab:
+  base_uri: https://localhost:8080/
 id: qk4MtXvXe1Bl
-outputId: e851d69c-0bfa-4af1-e4ad-bb14d07cd4a3
+outputId: 0ecd27db-9080-4a78-d13a-36b1ca590b77
 ---
 # Setting `num_records` to 5 to limit results.
 # For full dataset, set to `len(data_source)`.
@@ -106,18 +103,12 @@ Below, we show an example using a TFDS data source, but using other data sources
 
 ## TFDS Data source
 
-```{code-cell}
+```{code-cell} ipython3
 ---
-executionInfo:
-  elapsed: 38785
-  status: ok
-  timestamp: 1734464297879
-  user:
-    displayName: ''
-    userId: ''
-  user_tz: 480
+colab:
+  base_uri: https://localhost:8080/
 id: y6Yav1dCg8Ny
-outputId: 76f2a8f1-90b2-45ed-e2ba-97fce09b2a0f
+outputId: 084e6c0b-79c5-4e03-8731-a9966eccbd65
 ---
 # We use a small version of ImageNet data to spare disk and network
 # usage for the demo. Prefer "imagenet2012"'s "train" split for a
@@ -145,7 +136,7 @@ You'd need to create your concrete transformation by inheriting above classes.
 1. Since Grain uses Python multiprocessing to parallelize work, transformation must be picklable, so they can be sent from the main process to the workers.
 2. When using `BatchTransform` the `batch_size` is the global batch size if it is done before sharding, if it is done after sharding it is the batch size *per host* (this is typically the case when using `IndexSampler` with `DataLoader`).
 
-```{code-cell}
+```{code-cell} ipython3
 :id: lRKLPtMK8w1A
 
 class ResizeAndCrop(grain.MapTransform):
@@ -168,7 +159,7 @@ transformations = [ResizeAndCrop()]
 
 For quick experimentation, use `worker_count=0`, to run everything in a single process, saving the time to setup workers. When going to real training / evaluation, increase the number of workers to parallelize processing.
 
-```{code-cell}
+```{code-cell} ipython3
 :id: RhcG6Ehs9uVy
 
 data_loader = grain.DataLoader(
@@ -178,49 +169,34 @@ data_loader = grain.DataLoader(
     worker_count=0)
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 colab:
+  base_uri: https://localhost:8080/
   height: 1000
-executionInfo:
-  elapsed: 2051
-  status: ok
-  timestamp: 1734464300160
-  user:
-    displayName: ''
-    userId: ''
-  user_tz: 480
 id: aXN-iffE94Qc
-outputId: 4174b044-e9f8-49d7-b83a-2e524f2bfae4
+outputId: cae6e071-0964-4454-ce4c-0e66a1d4bf32
 ---
 for element in data_loader:
-  fig = plt.figure
-  plt.imshow(element["image"])
-  plt.show()
+  display(element["image"])
 ```
 
 +++ {"id": "eODdpQcZeOfo"}
 
 ## Checkpointing
-We provide `GrainCheckpointHandler` to checkpoint the iterator returned by Grain. It is recommended to use it with [Orbax](https://orbax.readthedocs.io), which can checkpoint both input pipeline and model and handles the edge cases for distributed training.
+We provide `PyGrainCheckpointHandler` to checkpoint the iterator returned by Grain. It is recommended to use it with [Orbax](https://orbax.readthedocs.io), which can checkpoint both input pipeline and model and handles the edge cases for distributed training.
 
 +++ {"id": "0JI0hvnUetWB"}
 
 ### Integration with Orbax
 Orbax contains a powerful library for checkpointing various objects - incl. Flax models and Grain `DatasetIterators`. This makes it easy to checkpoint the `DatasetIterator` together with the model in a multihost environment. Orbax will take care of synchronizing all JAX processes.
 
-```{code-cell}
+```{code-cell} ipython3
 ---
-executionInfo:
-  elapsed: 496
-  status: ok
-  timestamp: 1734464300715
-  user:
-    displayName: ''
-    userId: ''
-  user_tz: 480
+colab:
+  base_uri: https://localhost:8080/
 id: irJix4sJkNcf
-outputId: 648ffc5d-088e-4747-da1d-f0bfd87e4360
+outputId: 4dd5c594-176f-4d6e-9ae1-5f5b2532c472
 ---
 data_iter = iter(data_loader)
 
@@ -232,18 +208,12 @@ for i in range(num_steps):
   print(i, x["file_name"], x["label"])
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 ---
-executionInfo:
-  elapsed: 74
-  status: ok
-  timestamp: 1734464309851
-  user:
-    displayName: ''
-    userId: ''
-  user_tz: 480
+colab:
+  base_uri: https://localhost:8080/
 id: qRoTuxBNl8DB
-outputId: e0868eb6-3412-4508-c665-074cd534a65d
+outputId: 1fd4cc3a-4cb4-4edd-f230-55631494b105
 ---
 mngr = ocp.CheckpointManager("/tmp/orbax")
 
@@ -251,7 +221,7 @@ mngr = ocp.CheckpointManager("/tmp/orbax")
 
 # Save the checkpoint
 assert mngr.save(
-    step=num_steps, args=grain.GrainCheckpointSave(data_iter), force=True)
+    step=num_steps, args=grain.PyGrainCheckpointSave(data_iter), force=True)
 # Checkpoint saving in Orbax is asynchronous by default, so we'll wait until
 # finished before examining checkpoint.
 mngr.wait_until_finished()
@@ -259,18 +229,12 @@ mngr.wait_until_finished()
 !ls -R /tmp/orbax
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 ---
-executionInfo:
-  elapsed: 545
-  status: ok
-  timestamp: 1734464314411
-  user:
-    displayName: ''
-    userId: ''
-  user_tz: 480
+colab:
+  base_uri: https://localhost:8080/
 id: JVt1F3JbkWrz
-outputId: fa44fd08-d98e-43e2-9efe-37766db514e2
+outputId: 763d9e1c-61ad-4490-a2b0-6a0ff633a06b
 ---
 !cat /tmp/orbax/*/*/*.json
 ```
@@ -279,18 +243,12 @@ outputId: fa44fd08-d98e-43e2-9efe-37766db514e2
 
 Note: the checkpoint contains the string representation of the sampler and the data source. Checkpoints are only valid when loaded with the same sampler/data source and Grain uses the string representation for a basic check.
 
-```{code-cell}
+```{code-cell} ipython3
 ---
-executionInfo:
-  elapsed: 23
-  status: ok
-  timestamp: 1734464315897
-  user:
-    displayName: ''
-    userId: ''
-  user_tz: 480
+colab:
+  base_uri: https://localhost:8080/
 id: wT04O9cdlpPJ
-outputId: a1d350bc-e893-4535-895f-650f5cbd9c88
+outputId: 67d7ba4f-1bb1-4295-e304-8b0d677be7aa
 ---
 # Read more elements and advance the iterator
 for i in range(5, 10):
@@ -298,35 +256,23 @@ for i in range(5, 10):
   print(i, x["file_name"], x["label"])
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 ---
-executionInfo:
-  elapsed: 21
-  status: ok
-  timestamp: 1734464317504
-  user:
-    displayName: ''
-    userId: ''
-  user_tz: 480
+colab:
+  base_uri: https://localhost:8080/
 id: Js3hheiGnykN
-outputId: 31cc1d8d-9a89-4fa8-af7a-5c74650f118e
+outputId: a47a427e-5ba5-4249-92c9-7614d42f752d
 ---
 # Restore iterator from previously saved checkpoint
-mngr.restore(num_steps, args=grain.GrainCheckpointRestore(data_iter))
+mngr.restore(num_steps, args=grain.PyGrainCheckpointRestore(data_iter))
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 ---
-executionInfo:
-  elapsed: 340
-  status: ok
-  timestamp: 1734464320007
-  user:
-    displayName: ''
-    userId: ''
-  user_tz: 480
+colab:
+  base_uri: https://localhost:8080/
 id: X6NT-drgoaJk
-outputId: 591c4799-a1cb-418e-a08f-2f78e54e5282
+outputId: 785def82-0776-49e2-a0d4-9130fb01241a
 ---
 # Iterator should be set back to start from 5.
 for i in range(5, 10):
@@ -337,6 +283,67 @@ for i in range(5, 10):
 +++ {"id": "btSRh4EL_Zbo"}
 
 ## Extras
+
++++ {"id": "2UJ_sreV9qWs"}
+
+### Torchvision Dataset Source
+If we look at `torchvision.datasets` (which we will shorten to `tvds`) the abstract class `tvds.Dataset` very almost matches the `data_sources.RandomAccessDataSource` protocol in `grain`. The only feature that might be missing is a `__len__` method (that returns the number of total elements in the data source). However, many of the included `tvds.Dataset` subclasses however provide this method, e.g. `tvds.CIFAR10`, which is what we use below.
+
+```{code-cell} ipython3
+---
+colab:
+  base_uri: https://localhost:8080/
+id: nbw8Tr95BepR
+outputId: 99ba9c90-4343-4c2f-ed24-b9caf319071b
+---
+!pip install torchvision
+import torchvision.datasets as tvds
+```
+
+```{code-cell} ipython3
+---
+colab:
+  base_uri: https://localhost:8080/
+  height: 258
+id: FdPyI-dF9qWs
+outputId: e0a4c0f6-eb19-4051-be77-4c58edd0a1d2
+---
+data_source = tvds.CIFAR10(root='./data', train=True, download=True)
+
+def pil_to_numpy(example):
+  # convert PIL images to numpy arrays, but can be torch tensors or anything
+  image, label = example
+  image = np.array(image)
+  return image, label
+
+# as before, grain.MapDataset, is an ordinary python iterator
+data_loader = grain.MapDataset.source(data_source).map(pil_to_numpy)
+data_loader = iter(data_loader)
+
+for _ in range(4):
+  image, label = next(data_loader)
+  display(image)
+```
+
++++ {"id": "LINDtlJY9qWs"}
+
+#### Supplying `__len__`
+
+In the event that you have a `tvds.Dataclass` which does not suply `__len__` one can be provided by patching it as follows.
+
+```python
+class UnfriendlyDataset(tvds.Dataset):
+    def __getitem__(self, index: int):
+        # some implementation here
+        pass
+
+def unfriendly_dataset_len(_):
+    # determine the number of examples in the datset, lets say it's 10_000
+    return 10_000
+
+UnfriendlyDataset.__len__ = unfriendly_dataset_len
+```
+Then you can follow the steps above as we demonstrated with CIFAR10 and `grain.MapDataset`, one of the other grain data loaders.
 
 +++ {"id": "LyIXwNWct7mQ"}
 
@@ -349,18 +356,12 @@ It allows to avoid replicating the data in memory of each worker process.
 Note: Currently this constrains storable values to only the int, float, bool, str (less than
 10M bytes each), bytes (less than 10M bytes each), and None built-in data types.
 
-```{code-cell}
+```{code-cell} ipython3
 ---
-executionInfo:
-  elapsed: 22
-  status: ok
-  timestamp: 1734464322747
-  user:
-    displayName: ''
-    userId: ''
-  user_tz: 480
+colab:
+  base_uri: https://localhost:8080/
 id: -0hJjr9UuNxR
-outputId: bd2e4198-9902-4003-f639-58020fa953a1
+outputId: 0aae5e52-601c-408a-ab19-fb58ad174e5a
 ---
 in_memory_datasource = grain.InMemoryDataSource(range(5))
 
@@ -368,18 +369,12 @@ print(in_memory_datasource)
 print(f"First Record Read: {in_memory_datasource[0]}")
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 ---
-executionInfo:
-  elapsed: 21210
-  status: ok
-  timestamp: 1734464345506
-  user:
-    displayName: ''
-    userId: ''
-  user_tz: 480
+colab:
+  base_uri: https://localhost:8080/
 id: 7aVz3km3_qAw
-outputId: 349df7eb-e464-4164-ed0d-1dd683daf148
+outputId: e4fcef1d-c2f7-474a-ba4c-591e37c55c08
 ---
 data_loader = grain.DataLoader(
     data_source=in_memory_datasource,
@@ -404,7 +399,7 @@ for i in range(len(in_memory_datasource) * 2):
 
 You can configure per-worker data source read options (for example, number of threads, prefetch buffer size) in `ReadOptions`.
 
-```{code-cell}
+```{code-cell} ipython3
 :id: _W360gEYNLYW
 
 # Following configuration makes 8*10=80 threads reading data.
