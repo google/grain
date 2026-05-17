@@ -22,6 +22,7 @@ import contextlib
 import dataclasses
 import enum
 import functools
+import html
 from multiprocessing import queues
 import pprint
 import queue
