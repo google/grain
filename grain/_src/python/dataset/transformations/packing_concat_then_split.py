@@ -601,7 +601,7 @@ class ConcatThenSplitIterDataset(dataset.IterDataset):
   packed element. Positions indicate the position within the unpacked sequence.
 
   Features can be "meta features" in which case they are never split
-  and we do not create *_positions and *_segment_ids features for them.
+  and we do not create ``*_positions`` and ``*_segment_ids`` features for them.
   """
 
   def __init__(
@@ -623,8 +623,8 @@ class ConcatThenSplitIterDataset(dataset.IterDataset):
       meta_features: Set of feature names that are considered meta features.
         Meta features are never split and will be duplicated when other features
         of the same element are split. Otherwise, meta features are packed
-        normally (they have their own sequence length). No *_positions and
-        *_segment_ids features are created for meta features.
+        normally (they have their own sequence length). No ``*_positions`` and
+        ``*_segment_ids`` features are created for meta features.
       split_full_length_features: Whether full-length features are split, or
         they are considered packed and passed through in priority. Setting
         split_full_length_features=False is an optimization when some sequences

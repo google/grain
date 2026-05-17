@@ -1,5 +1,5 @@
 ``grain`` DataLoader
-=================
+====================
 
 .. automodule:: grain._src.python.data_loader
 .. currentmodule:: grain

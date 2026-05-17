@@ -44,6 +44,7 @@ not depend on TensorFlow.
 :maxdepth: 1
 :hidden:
 :caption: Get started
+overview
 installation
 api_choice
 ```

@@ -43,7 +43,7 @@ exclude_patterns = [
     '_build',
     'Thumbs.db',
     '.DS_Store',
-    'tutorials/dataset_basic_tutorial.md',
+    '**/*_tutorial.md',  # ipynb files will be used instead.
 ]
 
 # Suppress warning in exception basic_data_tutorial
@@ -116,6 +116,8 @@ nb_execution_excludepatterns = [
     'tutorials/data_sources/bagz_data_source_tutorial.ipynb',
     'tutorials/data_sources/huggingface_dataset_tutorial.ipynb',
     'tutorials/data_sources/pytorch_dataset_tutorial.ipynb',
+    'tutorials/performance_debugging.ipynb',
+    'dataset/performance_debugging.ipynb',
 ]
 
 

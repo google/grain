@@ -223,9 +223,10 @@ class MapDatasetMeta(abc.ABCMeta):
 
     Input arguments are interpreted the same way as in Python built-in
     ``range``:
-      - ``range(n)`` => start=0, stop=n, step=1
-      - ``range(m, n)`` => start=m, stop=n, step=1
-      - ``range(m, n, p)`` => start=m, stop=n, step=p
+
+    - ``range(n)`` => start=0, stop=n, step=1
+    - ``range(m, n)`` => start=m, stop=n, step=1
+    - ``range(m, n, p)`` => start=m, stop=n, step=p
 
     The produced values are consistent with the built-in `range` function::
 
@@ -572,8 +573,9 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
     When default seed generation is enabled by calling ``ds.seed``, every
     downstream random transformation will be automatically seeded with a unique
     seed by default. This simplifies seed management, making it easier to avoid:
-     - Having to provide a seed in multiple transformations.
-     - Accidentally reusing the same seed across transformations.
+
+    - Having to provide a seed in multiple transformations.
+    - Accidentally reusing the same seed across transformations.
 
     It is recommended to call this right after the source. ``ds.seed`` has to be
     called before any random transformations (such as ``shuffle`` or
@@ -1079,8 +1081,9 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
     When default seed generation is enabled by calling ``ds.seed``, every
     downstream random transformation will be automatically seeded with a unique
     seed by default. This simplifies seed management, making it easier to avoid:
-     - Having to provide a seed in multiple transformations.
-     - Accidentally reusing the same seed across transformations.
+
+    - Having to provide a seed in multiple transformations.
+    - Accidentally reusing the same seed across transformations.
 
     It is recommended to call this right after the source. ``ds.seed`` has to be
     called before any random transformations (such as ``random_map`` that rely

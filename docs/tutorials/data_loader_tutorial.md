@@ -11,6 +11,8 @@ kernelspec:
   name: python3
 ---
 
+
+
 +++ {"id": "qGiXX-sg4l9o"}
 
 # `DataLoader` guide
@@ -96,7 +98,7 @@ index_sampler = grain.IndexSampler(
 ## Data source
 A data source is responsible for reading indvidual records from underlying files / storage system. We provide the following data sources:
 
-*   `ArrayRecordDataSource`: reads records from [ArrayRecord](go/array-record-design) files.
+*   `ArrayRecordDataSource`: reads records from [ArrayRecord](https://github.com/google/array_record) files.
 *   `tfds.data_source`: data source for [TFDS](https://www.tensorflow.org/datasets) datasets without a TensorFlow dependency.
 
 
@@ -106,7 +108,7 @@ Below, we show an example using a TFDS data source, but using other data sources
 
 ## TFDS Data source
 
-```{code-cell}
+``` {code-cell}
 ---
 executionInfo:
   elapsed: 38785
