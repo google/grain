@@ -8,7 +8,7 @@
 namespace py = pybind11;
 
 PYBIND11_MODULE(index_shuffle_module, m) {
-  constexpr char kDoc[] =
+  static constexpr char kDoc[] =
       "Returns the position of `index` in a permutation of [0, ..., "
       "max_index].";
   m.doc() = kDoc;
