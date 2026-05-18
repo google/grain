@@ -9,4 +9,5 @@ cc_library(
     name = "index_shuffle",
     srcs = ["index_shuffle.cc"],
     hdrs = ["index_shuffle.h"],
+    deps = ["@abseil-cpp//absl/log"],
 )

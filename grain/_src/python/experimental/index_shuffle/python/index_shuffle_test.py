@@ -14,10 +14,11 @@
 """Minimal unit test for the Python wrapper of index_shuffle."""
 
 from absl.testing import absltest
+from absl.testing import parameterized
 from grain._src.python.experimental.index_shuffle.python import index_shuffle_module as index_shuffle
 
 
-class IndexShuffleTest(absltest.TestCase):
+class IndexShuffleTest(parameterized.TestCase):
 
   def test_index_shuffle(self):
     max_index = 46_204
@@ -43,11 +44,20 @@ class IndexShuffleTest(absltest.TestCase):
     )
 
   def test_index_shuffle_invalid_rounds(self):
-    regex = r'rounds must be an even integer >= 4'
+    regex = r'rounds must be an even integer between 4 and 1024'
     with self.assertRaisesRegex(ValueError, regex):
       index_shuffle.index_shuffle(index=0, max_index=8, seed=33, rounds=2)
     with self.assertRaisesRegex(ValueError, regex):
+      index_shuffle.index_shuffle(index=0, max_index=8, seed=33, rounds=1025)
+    with self.assertRaisesRegex(ValueError, regex):
       index_shuffle.index_shuffle(index=0, max_index=8, seed=76, rounds=5)
+
+  def test_index_shuffle_rounds_too_large(self):
+    regex = r'rounds must be an even integer between 4 and 1024'
+    with self.assertRaisesRegex(ValueError, regex):
+      index_shuffle.index_shuffle(
+          index=0, max_index=1, seed=0, rounds=4294967294
+      )
 
   def test_index_shuffle_invalid_index(self):
     regex = r'index must be in \[0, max_index\]'

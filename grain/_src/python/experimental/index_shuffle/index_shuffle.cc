@@ -58,7 +58,8 @@ namespace impl {
 // Returns the keys per round for the cipher.
 // This is not the proposed key schedule for a Simon cipher but simply uses
 // std::seed_seq. We found that this gives better results.
-std::vector<uint32_t> generate_keys(const uint32_t seed, const int32_t rounds) {
+std::vector<uint32_t> generate_keys(const uint32_t seed,
+                                    const uint32_t rounds) {
   std::vector<uint32_t> rk(rounds);
   std::seed_seq seq{seed};
   seq.generate(rk.begin(), rk.end());
@@ -117,8 +118,8 @@ uint64_t index_shuffle(const uint64_t index, const uint64_t max_index,
   int block_size = static_cast<int>(std::ceil(std::log2(max_index)));
   block_size = std::max(block_size + block_size % 2, kMinBlockSize);
   assert(block_size > 0 && block_size % 2 == 0 && block_size <= 64);
-  // At least 4 rounds and number of rounds must be even.
-  assert(rounds >= 4 && rounds % 2 == 0);
+  // rounds should be in [4, 1024] and number of rounds must be even.
+  assert(rounds >= 4 && rounds <= 1024 && rounds % 2 == 0);
   // Assert the index is bounded by [0, max_index].
   assert(index >= 0 && index <= max_index);
 #define HANDLE_BLOCK_SIZE(B) \

@@ -28,5 +28,6 @@ py_test(
     deps = [
         ":index_shuffle_module",
         "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
     ],
 )

@@ -29,10 +29,10 @@ namespace random {
 // The returned index will also be in [0, ..., max_index]. For a fixed `key`
 // and `max_index` all the possible `index` values and the returned values form
 // a bijection.
-// Rounds must be a positive even integer >= 4. Larger values improve
-// 'randomness' of permutations for small `max_index` values. The time to
-// compute the result scales linearly with the number of rounds. We recommend 8
-// rounds for a good trade off.
+// Rounds must be a positive even integer in range [4, 1024]. Larger values
+// improve 'randomness' of permutations for small `max_index` values. The time
+// to compute the result scales linearly with the number of rounds. We recommend
+// 8 rounds for a good trade off.
 //
 // For more details on the algorithm see the top of the cc file.
 uint64_t index_shuffle(uint64_t index, uint64_t max_index, uint32_t seed,

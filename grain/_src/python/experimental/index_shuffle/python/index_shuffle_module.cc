@@ -15,10 +15,11 @@ PYBIND11_MODULE(index_shuffle_module, m) {
   m.def(
       "index_shuffle",
       [](int64_t index, int64_t max_index, uint32_t seed, uint32_t rounds) {
-        if (rounds < 4 || rounds % 2 != 0) {
-          throw py::value_error(absl::StrCat(
-              "rounds must be an even integer >= 4, but got rounds = ",
-              rounds));
+        if (rounds < 4 || rounds % 2 != 0 || rounds > 1024) {
+          throw py::value_error(
+              absl::StrCat("rounds must be an even integer between 4 and 1024, "
+                           "but got rounds = ",
+                           rounds));
         }
         if (index < 0 || index > max_index) {
           throw py::value_error(absl::StrCat(
