@@ -57,14 +57,45 @@ class ShapeDtypeStruct(ShapeDtypeStructProtocol):
 class RandomAccessDataSource(Protocol[T]):
   """Interface for datasets where storage supports efficient random access.
 
-  If used with `DataLoader`, `__repr__` has to be additionally implemented to
-  support checkpointing.
+  This `Protocol` defines the contract for any custom data source injected into
+  the PyGrain pipeline. Implementations do not need to inherit from this class
+  directly; they only need to implement the required structural methods
+  (`__len__` and `__getitem__`).
 
-  If used with multiprocessing, must be picklable.
+  Notes:
+  **Checkpointing**: If used with `DataLoader`, `__repr__` has to be
+  additionally implemented to support checkpointing.
+
+  **Multiprocessing**: If used with multiprocessing, the instance must be fully
+  picklable.
+
+  Example:
+    Implementing a minimal, checkpoint-safe custom data source::
+
+      from grain.sources import RandomAccessDataSource
+
+      class MyInMemorySource:
+        def __init__(self, data: list):
+          self._data = data
+        def __len__(self) -> int:
+          return len(self._data)
+        def __getitem__(self, index: int):
+          return self._data[index]
+        def __repr__(self) -> str:
+          # Required for PyGrain checkpointing with DataLoader
+          return f"MyInMemorySource(size={len(self)})"
+
+      source = MyInMemorySource(["a", "b", "c"])
+      # source satisfies the RandomAccessDataSource protocol.
+      assert isinstance(source, RandomAccessDataSource)
   """
 
   def __len__(self) -> int:
-    """Returns the total number of records in the data source."""
+    """Returns the total number of records in the data source.
+
+    Returns:
+      int: The total count of accessible records.
+    """
 
   def __getitem__(self, index: int) -> T:
     """Returns the value for the given index.
@@ -106,22 +137,63 @@ class SupportsBatchedReadRandomAccessDataSource(
 class DatasetSelectionMap(abc.ABC):
   """Map from index to (constituent dataset index, index within dataset).
 
+  This abstract base class defines the interface for mapping a single global
+  sequence index across multiple underlying (constituent) datasets. It acts
+  as a routing table for mixed or concatenated data pipelines.
+
   Note, this must be stateless, picklable and should avoid randomness to
   support determinism since it may be created and called concurrently in
   multiple processes.
+
+  Example:
+    Implementing a simple concatenation map for two datasets of size 2 and 3::
+
+      import grain
+
+      class ConcatMap(grain.transforms.DatasetSelectionMap):
+        def __len__(self) -> int:
+          return 7
+        def __getitem__(self, index: int) -> tuple[int, int]:
+          if index >= len(self):
+            raise IndexError("Index out of range")
+          if index < 3:
+            return (0, index)
+          else:
+            return (1, index - 3)
+
+      cmap = ConcatMap()
+      assert len(cmap) == 7
+      assert cmap[3] == (1, 0)
   """
 
   @abc.abstractmethod
   def __len__(self) -> int:
-    """Returns the length of this dataset."""
+    """Returns the length of this dataset.
+
+    Returns:
+      int: The total number of addressable records across all constituent
+      datasets managed by this map.
+    """
 
   @abc.abstractmethod
   def __getitem__(self, index: int) -> tuple[int, int]:
-    """Returns constituent dataset index and index within this dataset."""
+    """Returns constituent dataset index and index within this dataset.
+
+    This method acts as a deterministic router, taking a global index and
+    resolving it to a specific dataset and a local offset.
+
+    Args:
+      index: The global integer index being queried.
+
+    Returns:
+      tuple[int, int]: A two-element tuple containing:
+        - The integer index of the target constituent dataset.
+        - The local integer index within that specific dataset.
+    """
 
 
 @enum.unique
-class ExecutionTrackingMode(enum.Flag):
+class ExecutionTrackingMode(enum.Enum):
   """Represents different modes for tracking execution statistics.
 
   Available modes:
@@ -133,6 +205,25 @@ class ExecutionTrackingMode(enum.Flag):
       specific transformation to return an element, excluding the time spent in
       any parent transformations. The recorded time can be retrieved using
       `grain.experimental.get_execution_summary` method.
+
+  Example:
+    To enable stage timing, set `execution_tracking_mode` in
+    `grain.experimental.DatasetOptions` and pass it to your dataset pipeline
+    using `grain.experimental.WithOptionsIterDataset` or
+    `grain.experimental.WithOptionsMapDataset`::
+
+      import grain
+
+      options = grain.experimental.DatasetOptions(
+          execution_tracking_mode=grain.experimental.ExecutionTrackingMode.STAGE_TIMING
+      )
+      ds = grain.MapDataset.range(10).to_iter_dataset()
+      ds_with_stage_timing = (
+          grain.experimental.WithOptionsIterDataset(ds, options)
+      )
+
+      for element in ds_with_stage_timing:
+        print(element)
   """
 
   DISABLED = enum.auto()
@@ -165,6 +256,11 @@ class DatasetOptions:
   # pyformat: disable
   """Holds options used by dataset transformations.
 
+  This dataclass manages execution, telemetry, and performance parameters
+  for PyGrain data pipelines. It tracks which fields are explicitly set by
+  the user versus which fallback to default values, enabling intelligent
+  option merging across different pipeline stages.
+
   Attributes:
     filter_warn_threshold_ratio: If the ratio of filtered out elements is above
       these thresholds, a warning will be issued. Value `None` disables the
@@ -183,6 +279,20 @@ class DatasetOptions:
     min_shm_size: The minimum size below which numpy arrays will copied between
       processes rather than passed via shared memory. For smaller arrays, the
       overhead of using shared memory can be higher than the cost of copying.
+
+  Example:
+    Applying custom options to dataset transformations::
+
+      import grain
+
+      ds = (
+          grain.MapDataset.range(0, 1000)
+          .filter(lambda x: x % 2 == 0)
+          .to_iter_dataset()
+      )
+      # apply the DatasetOptions to create another IterDataset.
+      ds_options = grain.experimental.DatasetOptions(filter_raise_threshold_ratio=0.1)
+      ds = grain.experimental.WithOptionsIterDataset(ds, ds_options)
   """
   # pyformat: enable
 
@@ -209,15 +319,37 @@ class DatasetOptions:
         self._user_set_fields.add(field.name)
 
   def merge(self, other: DatasetOptions | None) -> DatasetOptions:
-    """Merges these options with the other.
+    """Merges these options with another DatasetOptions instance.
 
-    Explicitly set options in `self` take precedence over options in `other`.
+    This merge logic respects explicit user configurations over defaults.
+    Explicitly set options in `self` take highest precedence, followed by
+    explicitly set options in `other`, followed by the class default values.
 
     Args:
-      other: Options to merge.
+      other: Another DatasetOptions instance to merge into this one. If `None`,
+        this method returns the current instance unmodified.
 
     Returns:
-      Merged options.
+      DatasetOptions: A new DatasetOptions instance containing the merged
+        configuration values.
+
+    Example:
+      Demonstrating the explicit-set precedence during a merge::
+
+        import grain
+        # opt1 explicitly sets min_shm_size
+        opt1 = grain.experimental.DatasetOptions(min_shm_size=1024)
+
+        # opt2 explicitly sets min_shm_size AND filter thresholds
+        opt2 = grain.experimental.DatasetOptions(
+            min_shm_size=512,
+            filter_warn_threshold_ratio=None
+        )
+
+        # Merge opt2 into opt1. opt1's explicit values take precedence.
+        merged = opt1.merge(opt2)
+        assert merged.min_shm_size == 1024
+        assert merged.filter_warn_threshold_ratio is None
     """
     if other is None:
       return self

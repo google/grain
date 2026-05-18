@@ -35,8 +35,54 @@ class RandomAccessDataSourceTest(parameterized.TestCase):
   def test_protocol(self, source_cls):
     self.assertIsInstance(source_cls, base.RandomAccessDataSource)
 
+  def test_example_docstring(self):
+    class MyInMemorySource:
+
+      def __init__(self, data: list[str]):
+        self._data = data
+
+      def __len__(self) -> int:
+        return len(self._data)
+
+      def __getitem__(self, index: int):
+        return self._data[index]
+
+      def __repr__(self) -> str:
+        return f"MyInMemorySource(size={len(self)})"
+
+    source = MyInMemorySource(["a", "b", "c"])
+    self.assertIsInstance(source, base.RandomAccessDataSource)
+
+
+class DatasetSelectionMapTest(parameterized.TestCase):
+
+  def test_example_docstring(self):
+    class ConcatMap(base.DatasetSelectionMap):
+
+      def __len__(self) -> int:
+        return 5
+
+      def __getitem__(self, index: int) -> tuple[int, int]:
+        if index < 2:
+          return (0, index)
+        else:
+          return (1, index - 2)
+
+    cmap = ConcatMap()
+    self.assertLen(cmap, 5)
+    self.assertEqual(cmap[3], (1, 1))
+
 
 class DatasetOptionsTest(parameterized.TestCase):
+
+  def test_example_docstring_for_merge(self):
+    opt1 = base.DatasetOptions(min_shm_size=1024)
+    opt2 = base.DatasetOptions(
+        min_shm_size=512, filter_warn_threshold_ratio=None
+    )
+    merged = opt1.merge(opt2)
+    self.assertEqual(merged.min_shm_size, 1024)
+    self.assertIsNone(merged.filter_warn_threshold_ratio)
 
   @parameterized.named_parameters(
       dict(
