@@ -15,6 +15,7 @@ py_library(
 py_library(
     name = "handler",
     srcs = ["handler.py"],
+    lazy_imports = True,
     srcs_version = "PY3",
     deps = [
         "//grain/_src/core:sharding",
