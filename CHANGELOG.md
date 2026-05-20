@@ -10,8 +10,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     used to save one data copy.
   * Adds experimental `ShapeDtypeStructProtocol` and `ShapeDtypeStruct` to
     represent dataset element specs.
-  * Updates TfMixtureIndexSampler to accept dynamic Tensor/Variable proportions
-    that could be updated during runtime.
+  * Updates TfMixtureIndexSampler to accept dynamic 1D/2D Tensor/Variable
+    proportions that could be updated during runtime.
   * Adds profiling of multiprocess workers when using XProf profiler. To enable,
     set flag `grain_enable_multiprocess_worker_profiling=true` and add
     `"profile_subprocesses" = True` in advanced profiler options.
