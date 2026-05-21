@@ -24,6 +24,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * Fixes bug causing tracebacks to be swallowed in worker processes.
   * Fixes performance regression in traceback filtering when workers are
     frequently exhausting small datasets.
+  * Fixes a bug so to skip scaling proportions if the minimum nonzero value
+    equal to scale_min_to in IndexSampler.
 
 ## Grain 0.2.16 (February 25, 2025)
 
