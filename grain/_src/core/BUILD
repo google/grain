@@ -41,8 +41,6 @@ py_library(
     ],
     srcs_version = "PY3",
     tags = [
-        "ignore_for_dep=grain._src.core.fast_monitoring",
-        "ignore_for_dep=grain._src.core.google.streamz_monitoring",
         "ignore_for_dep=grain._src.core.monitoring_base",
         "ignore_for_dep=grain._src.core.prometheus_monitoring",
     ],
@@ -278,7 +276,6 @@ py_test(
     srcs = ["prometheus_monitoring_test.py"],
     srcs_version = "PY3",
     tags = [
-        "ignore_for_dep=grain._src.core.google_monitoring",
         "ignore_for_dep=grain._src.core.monitoring_base",
         "ignore_for_dep=grain._src.core.prometheus_monitoring",
     ],

@@ -63,6 +63,7 @@ _PROMETHEUS_ALLOWED_METRICS = {
     '/grain/python/dataset/prefetch_buffer_ready_count',
     '/grain/python/data_sources/bytes_read',
     '/grain/python/dataset/source_read_time_ns',
+    '/grain/python/data_loader/iterator_get_next',
 }
 
 
