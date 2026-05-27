@@ -88,6 +88,7 @@ class _MakeBatchParallel:
     self._output_to_shared_memory = True
 
   def _stack(self, xs: Sequence[Any]) -> Any:
+    """Stacks elements, optionally into shared memory."""
     if not self._output_to_shared_memory:
       return np.stack(xs)
 
@@ -95,6 +96,16 @@ class _MakeBatchParallel:
     shape, dtype = (len(xs),) + first_arg.shape, first_arg.dtype
     if dtype.hasobject:
       return np.stack(xs)
+    # For string dtypes, np.stack with a pre-allocated out= array would
+    # silently truncate strings longer than the first element's width.
+    # Fall back to safe np.stack (which infers max-width dtype) + copy.
+    if dtype.kind in ("U", "S"):
+      stacked = np.stack(xs)
+      shm_arr = shared_memory_array.SharedMemoryArray(
+          stacked.shape, dtype=stacked.dtype
+      )
+      np.copyto(shm_arr, stacked, casting="no")
+      return shm_arr
 
     return np.stack(
         xs, out=shared_memory_array.SharedMemoryArray(shape, dtype=dtype)
@@ -110,6 +121,11 @@ class _MakeBatchParallel:
       xs = cast(Sequence[np.ndarray], xs)
       first_arg = xs[0]
       shape, dtype = (len(xs),) + first_arg.shape, first_arg.dtype
+      # For string dtypes, the parallel path would silently truncate strings
+      # because the output array dtype is inferred from the first element only.
+      # Fall back to the serial _stack path which handles strings correctly.
+      if dtype.kind in ("U", "S"):
+        return self._stack(xs)
       # Fall back to the standard serial `np.stack` operation if the size of
       # of the entire batch is smaller (measured in bytes) than the threshold.
       if sum(x.nbytes for x in xs) < _PARALLEL_BATCHING_MIN_TOTAL_BYTES:
@@ -179,6 +195,16 @@ def make_batch(
       shape, dtype = (len(args),) + first_arg.shape, first_arg.dtype
       if dtype.hasobject:
         return np.stack(args)
+      # For string dtypes, np.stack with a pre-allocated out= array would
+      # silently truncate strings longer than the first element's width.
+      # Fall back to safe np.stack (which infers max-width dtype) + copy.
+      if dtype.kind in ("U", "S"):
+        stacked = np.stack(args)
+        shm_arr = shared_memory_array.SharedMemoryArray(
+            stacked.shape, dtype=stacked.dtype
+        )
+        np.copyto(shm_arr, stacked, casting="no")
+        return shm_arr
       return np.stack(
           args, out=shared_memory_array.SharedMemoryArray(shape, dtype=dtype)
       )

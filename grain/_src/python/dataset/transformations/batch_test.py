@@ -1061,5 +1061,193 @@ class MakeBatchParallelTest(absltest.TestCase):
     self.assertIsInstance(batched_values, np.ndarray)
 
 
+class StringTruncationTest(absltest.TestCase):
+  """Tests exposing silent string truncation when batching variable-length strings via shared memory."""
+
+  # Strings ordered short-to-long. The first element is shortest, which causes
+  # the SharedMemoryArray to be allocated with a narrow fixed-width dtype,
+  # silently truncating longer strings.
+  SHORT_STR = "short"
+  MEDIUM_STR = "this_is_a_medium_length_string"
+  LONG_STR = (
+      "<start_of_turn>user\n311 : A28 B33 C102 D0 A105 B223 C209 D0 A28 B33"
+      " C184 D0 A247 B232 C224 D0 A36 B204 C97 D0 A28 B42 C187 D0 A176 B202"
+      " C127 D1<end_of_turn>\n<start_of_turn>model\n"
+  )
+
+  def _assert_strings_not_truncated(self, result, expected_strings):
+    """Asserts that all strings in the batched result match the originals."""
+    for i, expected in enumerate(expected_strings):
+      actual = str(result[i])
+      self.assertEqual(
+          len(actual),
+          len(expected),
+          f"String at index {i} was truncated: expected len={len(expected)},"
+          f" got len={len(actual)}.\n  Expected: {expected!r}\n  Actual:  "
+          f" {actual!r}",
+      )
+      self.assertEqual(actual, expected)
+
+  def test_make_batch_shm_preserves_variable_length_strings(self):
+    """make_batch with shared memory must not truncate variable-length strings."""
+    values = [
+        np.asarray(self.SHORT_STR),
+        np.asarray(self.MEDIUM_STR),
+        np.asarray(self.LONG_STR),
+    ]
+    result = batch.make_batch(values, output_to_shared_memory=True)
+    self._assert_strings_not_truncated(
+        result, [self.SHORT_STR, self.MEDIUM_STR, self.LONG_STR]
+    )
+
+  def test_make_batch_shm_string_order_independence(self):
+    """Truncation must not depend on which string is first in the batch."""
+    values_long_first = [
+        np.asarray(self.LONG_STR),
+        np.asarray(self.SHORT_STR),
+    ]
+    values_short_first = [
+        np.asarray(self.SHORT_STR),
+        np.asarray(self.LONG_STR),
+    ]
+    result_long_first = batch.make_batch(
+        values_long_first, output_to_shared_memory=True
+    )
+    result_short_first = batch.make_batch(
+        values_short_first, output_to_shared_memory=True
+    )
+    # Long-first should naturally work (allocated with wide dtype)
+    self._assert_strings_not_truncated(
+        result_long_first, [self.LONG_STR, self.SHORT_STR]
+    )
+    # Short-first is where the bug manifests
+    self._assert_strings_not_truncated(
+        result_short_first, [self.SHORT_STR, self.LONG_STR]
+    )
+
+  def test_make_batch_shm_equal_length_strings_ok(self):
+    """Equal-length strings should not be affected regardless."""
+    s1 = "aaaa"
+    s2 = "bbbb"
+    s3 = "cccc"
+    values = [np.asarray(s1), np.asarray(s2), np.asarray(s3)]
+    result = batch.make_batch(values, output_to_shared_memory=True)
+    self._assert_strings_not_truncated(result, [s1, s2, s3])
+
+  def test_make_batch_without_shm_preserves_strings(self):
+    """Baseline: make_batch WITHOUT shared memory does not truncate strings."""
+    values = [
+        np.asarray(self.SHORT_STR),
+        np.asarray(self.MEDIUM_STR),
+        np.asarray(self.LONG_STR),
+    ]
+    result = batch.make_batch(values, output_to_shared_memory=False)
+    self._assert_strings_not_truncated(
+        result, [self.SHORT_STR, self.MEDIUM_STR, self.LONG_STR]
+    )
+
+  def test_parallel_batch_stack_shm_preserves_variable_length_strings(self):
+    """_MakeBatchParallel serial fallback must not truncate strings."""
+    make_batch_parallel = batch._MakeBatchParallel()
+    make_batch_parallel.enable_shared_memory_output()
+    # String values are not np.ndarray so _batch_fn falls back to _stack.
+    values = [self.SHORT_STR, self.MEDIUM_STR, self.LONG_STR]
+    result = make_batch_parallel(values)
+    self._assert_strings_not_truncated(
+        result, [self.SHORT_STR, self.MEDIUM_STR, self.LONG_STR]
+    )
+
+  def test_parallel_batch_stack_shm_numpy_strings(self):
+    """_MakeBatchParallel serial fallback with numpy string arrays."""
+    make_batch_parallel = batch._MakeBatchParallel()
+    make_batch_parallel.enable_shared_memory_output()
+    # Small numpy string arrays (< 4MB) fall back to _stack() via nbytes check.
+    values = [
+        np.asarray(self.SHORT_STR),
+        np.asarray(self.MEDIUM_STR),
+        np.asarray(self.LONG_STR),
+    ]
+    result = make_batch_parallel(values)
+    self._assert_strings_not_truncated(
+        result, [self.SHORT_STR, self.MEDIUM_STR, self.LONG_STR]
+    )
+
+  def test_parallel_batch_parallel_path_shm_preserves_strings(self):
+    """_MakeBatchParallel parallel path must not truncate strings."""
+    make_batch_parallel = batch._MakeBatchParallel()
+    make_batch_parallel.enable_shared_memory_output()
+
+    # Create large numpy string arrays that exceed the 4MB threshold.
+    # Each array has many elements to push total nbytes above 4MB.
+    # We use 1D string arrays where each element is a full string.
+    num_strings = 6000  # enough to push past 4MB
+    short_arr = np.full((num_strings,), self.SHORT_STR)
+    long_arr = np.full((num_strings,), self.LONG_STR)
+    values = [short_arr, long_arr]
+
+    # Verify we exceed the threshold so the parallel path is taken.
+    total_bytes = sum(v.nbytes for v in values)
+    self.assertGreaterEqual(
+        total_bytes,
+        batch._PARALLEL_BATCHING_MIN_TOTAL_BYTES,
+        f"Test setup error: total_bytes={total_bytes} must exceed"
+        f" {batch._PARALLEL_BATCHING_MIN_TOTAL_BYTES} for parallel path.",
+    )
+
+    result = make_batch_parallel(values)
+
+    # Check that the long strings in the second array are fully preserved.
+    for j in range(min(10, num_strings)):
+      actual = str(result[1, j])
+      self.assertEqual(
+          len(actual),
+          len(self.LONG_STR),
+          f"Parallel path truncated string at [1,{j}]: expected"
+          f" len={len(self.LONG_STR)}, got len={len(actual)}.",
+      )
+      self.assertEqual(actual, self.LONG_STR)
+
+  def test_parallel_batch_parallel_path_no_shm_preserves_strings(self):
+    """_MakeBatchParallel parallel path without SHM must not truncate strings."""
+    make_batch_parallel = batch._MakeBatchParallel()
+    # SHM disabled → uses np.empty instead of SharedMemoryArray, but same
+    # first-element dtype inference applies.
+
+    num_strings = 6000
+    short_arr = np.full((num_strings,), self.SHORT_STR)
+    long_arr = np.full((num_strings,), self.LONG_STR)
+    values = [short_arr, long_arr]
+
+    total_bytes = sum(v.nbytes for v in values)
+    self.assertGreaterEqual(
+        total_bytes, batch._PARALLEL_BATCHING_MIN_TOTAL_BYTES
+    )
+
+    result = make_batch_parallel(values)
+
+    for j in range(min(10, num_strings)):
+      actual = str(result[1, j])
+      self.assertEqual(
+          len(actual),
+          len(self.LONG_STR),
+          f"Parallel path (no SHM) truncated string at [1,{j}]: expected"
+          f" len={len(self.LONG_STR)}, got len={len(actual)}.",
+      )
+
+  def test_batch_iter_dataset_shm_preserves_variable_length_strings(self):
+    """Full pipeline: BatchIterDataset with shared memory must not truncate."""
+    ds = source.SourceMapDataset(
+        [self.SHORT_STR, self.MEDIUM_STR, self.LONG_STR]
+    )
+    ds = ds.to_iter_dataset()
+    ds = batch.BatchIterDataset(ds, batch_size=3)
+    ds.enable_shared_memory_output()
+
+    result = next(iter(ds))
+    self._assert_strings_not_truncated(
+        result, [self.SHORT_STR, self.MEDIUM_STR, self.LONG_STR]
+    )
+
+
 if __name__ == "__main__":
   absltest.main()

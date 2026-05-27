@@ -24,6 +24,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * Fixes bug causing tracebacks to be swallowed in worker processes.
   * Fixes performance regression in traceback filtering when workers are
     frequently exhausting small datasets.
+  * Fixes silent string truncation in shared memory batching.
 
 ## Grain 0.2.16 (February 25, 2025)
 
