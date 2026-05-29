@@ -696,6 +696,32 @@ class DataLoaderTest(absl_parameterized.TestCase):
       actual.append(item)
     np.testing.assert_equal(actual, expected)
 
+  @absl_parameterized.parameters(
+      {"num_workers": 0}, {"num_workers": 1}, {"num_workers": 2}
+  )
+  def test_data_loader_sequential_checkpoint_restore_drift(
+      self, num_workers: int
+  ):
+    data_loader_iterator = iter(
+        self.create_checkpointing_dataloader(num_workers=num_workers)
+    )
+
+    # Fetch the first element to have nontrivial initial state.
+    first_element = next(data_loader_iterator)
+    np.testing.assert_equal(first_element, np.array([2, 4]))
+
+    # Perform sequential get/set state operations without advancing.
+    state1 = data_loader_iterator.get_state()
+    data_loader_iterator.set_state(state1)
+
+    state2 = data_loader_iterator.get_state()
+    data_loader_iterator.set_state(state2)
+
+    # Assert that we can still advance the iterator and that the state is
+    # still the same after all these operations.
+    next_element = next(data_loader_iterator)
+    np.testing.assert_equal(next_element, np.array([6, 8]))
+
   def test_batch_transform_mapped_to_batch_operation(self):
     # Map transforms elements to be [1, 2, 3, 4, 5, 6, 7, 8]
     # Filter keeps only even elements [2, 4, 6, 8]

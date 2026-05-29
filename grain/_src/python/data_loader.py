@@ -322,7 +322,7 @@ class _DataLoaderStateDatasetIterator(dataset.DatasetIterator[_T]):
     ]
 
     dataset_state = {
-        "next_index_in_cycle": last_worker_index + 1 % worker_count,
+        "next_index_in_cycle": (last_worker_index + 1) % worker_count,
         "next_index_in_datasets": worker_count,
         "iterators_in_use_indices": iterators_in_use_indices,
         "iterators_in_use_states": iterators_in_use_states,
