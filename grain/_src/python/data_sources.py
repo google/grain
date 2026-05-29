@@ -61,6 +61,7 @@ ArrayRecordDataSourcePaths = Union[
     PathLikeOrFileInstruction, Sequence[PathLikeOrFileInstruction]
 ]
 
+
 ArrayRecordReaderOptions = dict[str, str] | None
 
 
@@ -71,6 +72,7 @@ class ArrayRecordDataSource(ARDataSource):
       self,
       paths: ArrayRecordDataSourcePaths,
       reader_options: ArrayRecordReaderOptions = None,
+      reader_pool_size: int | None = None,
   ):
     """Creates a new ArrayRecordDataSource object.
 
@@ -82,18 +84,21 @@ class ArrayRecordDataSource(ARDataSource):
         example, {index_storage_option:"in_memory"} stores the reader indices in
         memory versus {index_storage_option:"offloaded"} stores the indices on
         disk to save memory usage.
+      reader_pool_size: The number of readers to pool per shard.
     """
     array_record_signature = inspect.signature(ARDataSource.__init__)
-    if "reader_options" in array_record_signature.parameters:
-      super().__init__(paths, reader_options)
-    elif reader_options is not None:
-      # Reader options should not be set if they are not supported by the
-      # current version of ArrayRecord.
-      raise ValueError(
-          "reader_options is not supported in this version of ArrayRecord."
-      )
-    else:
-      super().__init__(paths)
+    kwargs = {}
+    if (
+        "reader_options" in array_record_signature.parameters
+        and reader_options is not None
+    ):
+      kwargs["reader_options"] = reader_options
+    if (
+        "reader_pool_size" in array_record_signature.parameters
+        and reader_pool_size is not None
+    ):
+      kwargs["reader_pool_size"] = reader_pool_size
+    super().__init__(paths, **kwargs)
     _api_usage_counter.Increment("ArrayRecordDataSource")
 
   @dataset_stats.trace_input_pipeline(stage_category=dataset_stats.IPL_CAT_READ)

@@ -15,8 +15,21 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * Adds profiling of multiprocess workers when using XProf profiler. To enable,
     set flag `grain_enable_multiprocess_worker_profiling=true` and add
     `"profile_subprocesses" = True` in advanced profiler options.
+  * Configures automatic, thread-safe reader connection pooling
+    (`BoundedReaderPool`) per shard inside `ArrayRecordDataSource` to support
+    high-performance, multi-threaded parallel dataset prefetching without file
+    descriptor exhaustion. Exposes safe context manager connection lease API
+    `borrow()` and custom configuration parameter `reader_pool_size` /
+    `grain_reader_pool_size` flag.
 
 * Breaking changes:
+  * Upgrades `ArrayRecordDataSource` to implement the new
+    `RandomAccessDataSource` single-indexing protocol. The standard index
+    method `__getitem__` now accepts only a single `SupportsIndex` index key
+    (returning a single byte string). Caller threads performing sequential
+    batch loading must migrate execution to the batch method `__getitems__`
+    which continues to perform highly-optimized direct counting-sort parallel
+    fetches.
 
 * Deprecations:
 
