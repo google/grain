@@ -14,6 +14,7 @@
 from collections.abc import Sequence
 from concurrent import futures
 import dataclasses
+import gc
 import logging as std_logging
 import os
 import sys
