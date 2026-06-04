@@ -115,7 +115,8 @@ ragged = grain.MapDataset.source(
     [{"tokens": np.arange(np.random.randint(2, 6))} for _ in range(16)]
 )
 ragged = ragged.batch(4, batch_fn=pad_collate, drop_remainder=True)
-print(ragged[0]["tokens"].shape)
+for i in range(3):
+    print(ragged[i]["tokens"])
 ```
 
 +++ {"id": "jx-pad-md"}
@@ -148,7 +149,7 @@ ds = (
 
 for step, batch in zip(range(2), ds):
     batch = jax.device_put(batch)
-    print(step, batch["image"].sharding)
+    print(step, batch["image"].shape, batch["image"].sharding)
 ```
 
 +++ {"id": "jx-option-a-caveat"}
@@ -175,8 +176,8 @@ ds = (
 ds = grain.experimental.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=4)
 ds = ds.map(jax.device_put)  # transfer still on iter thread
 
-first = next(iter(ds))
-print(first["image"].shape, first["image"].sharding)
+for step, batch in zip(range(3), ds):
+    print(step, batch["image"].shape, batch["image"].sharding)
 ```
 
 +++ {"id": "jx-option-c-md"}
@@ -242,8 +243,8 @@ ds = grain.experimental.device_put(
     device_buffer_size=2,
 )
 
-batch = next(iter(ds))
-print(batch["image"].sharding)
+for step, batch in zip(range(3), ds):
+    print(step, batch["image"].sharding)
 ```
 
 +++ {"id": "jx-shard-arrays-notes"}
@@ -259,7 +260,7 @@ A realistic single-host, multi-device template:
 ```{code-cell} ipython3
 :id: jx-template-code
 
-BATCH = 256
+BATCH_SIZE = 256
 devices = jax.devices()
 mesh = jax.sharding.Mesh(np.array(devices), axis_names=("data",))
 sharding = jax.sharding.NamedSharding(mesh, jax.sharding.PartitionSpec("data"))
@@ -272,7 +273,7 @@ ds = (
     grain.MapDataset.source(source)
     .seed(42).shuffle().repeat()
     .map(preprocess)
-    .batch(BATCH, drop_remainder=True)
+    .batch(BATCH_SIZE, drop_remainder=True)
     .to_iter_dataset()
 )
 
