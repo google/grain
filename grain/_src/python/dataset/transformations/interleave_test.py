@@ -68,6 +68,12 @@ _INTERLEAVE_TEST_CASES = (
         cycle_length=3,
         expected=[1, 3, 1, 4, 3, 1, 4, 3, 3],
     ),
+    dict(
+        testcase_name="five_datasets_cycle_3",
+        to_mix=[[1, 2, 3], [4], [5, 6], [7], [8, 9]],
+        cycle_length=3,
+        expected=[1, 4, 5, 2, 6, 3, 7, 8, 9],
+    ),
 )
 
 
