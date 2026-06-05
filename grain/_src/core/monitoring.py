@@ -16,8 +16,22 @@
 from __future__ import annotations
 
 from grain._src.core import monitoring_base
-
 from grain._src.core import prometheus_monitoring as _impl
+fast_monitoring = None
+
+
+def record_bytes_read_and_latency(
+    source: str, num_bytes: int, latency_ns: int, num_reads: int
+):
+  if fast_monitoring is not None:
+    fast_monitoring.record_bytes_read_and_latency(
+        source, num_bytes, latency_ns, num_reads
+    )
+  else:
+    _impl.record_bytes_read_and_latency(
+        source, num_bytes, latency_ns, num_reads
+    )
+
 
 Bucketer = monitoring_base.Bucketer
 Metadata = monitoring_base.Metadata

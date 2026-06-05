@@ -22,6 +22,7 @@ import functools
 import json
 import os
 import sys
+import time
 from typing import Any, Awaitable, Callable, Optional, Sequence, TypeVar
 
 from etils import epath
@@ -544,7 +545,11 @@ class DataLoaderIterator(collections.abc.Iterator[_T]):
     return self
 
   def __next__(self) -> _T:
-    return next(self._iterator)
+    start_time = time.perf_counter_ns()
+    try:
+      return next(self._iterator)
+    finally:
+      _iterator_get_next_metric.Record(time.perf_counter_ns() - start_time)
 
   def get_state(self) -> bytes:
     state = self._iterator.get_state()
