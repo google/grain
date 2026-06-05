@@ -6,6 +6,16 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features:
+
+* Breaking changes:
+
+* Deprecations:
+
+* Bug fixes:
+
+## Grain 0.2.17 (June 1, 2026)
+
+* New features:
   * Adds automated batching into shared memory when multiprocess prefetch is
     used to save one data copy.
   * Adds experimental `ShapeDtypeStructProtocol` and `ShapeDtypeStruct` to
@@ -17,6 +27,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     `"profile_subprocesses" = True` in advanced profiler options.
 
 * Breaking changes:
+  * Force index shuffle rounds to not be bigger than 1024.
 
 * Deprecations:
 
@@ -25,6 +36,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * Fixes performance regression in traceback filtering when workers are
     frequently exhausting small datasets.
   * Fixes silent string truncation in shared memory batching.
+  * Preserve and reconstruct tracebacks for exceptions thrown in worker processes across multiprocessing boundaries
 
 ## Grain 0.2.16 (February 25, 2025)
 
