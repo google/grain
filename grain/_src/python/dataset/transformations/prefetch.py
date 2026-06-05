@@ -38,6 +38,17 @@ from grain._src.python.dataset.transformations import interleave
 from grain._src.python.dataset.transformations import source
 from grain._src.python.ipc import variable_size_queue
 
+_prefetch_ready_elements = grain_monitoring.EventMetric(
+    "/grain/python/dataset/prefetch_buffer_ready_count",
+    metadata=grain_monitoring.Metadata(
+        description=(
+            "Distribution of the number of consecutive elements from the"
+            " front of the prefetch buffer that are ready for consumption."
+            " Low values indicate a possible IO bottleneck."
+        ),
+    ),
+)
+
 T = TypeVar("T")
 
 
@@ -185,6 +196,15 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
         raise_threshold=self._ctx.dataset_options.filter_raise_threshold_ratio,
     )
 
+  def _measure_prefetch_depth(self):
+    ready_count = 0
+    for future in self._buffer:
+      if future.done():
+        ready_count += 1
+      else:
+        break
+    _prefetch_ready_elements.Record(ready_count)
+
   @dataset_stats.record_next_duration_if_output
   @dataset_stats.trace_input_pipeline_next(
       stage_category=dataset_stats.IPL_CAT_PREFETCH
@@ -207,6 +227,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
           if not self._buffer:
             # Fill the buffer on the first iteration.
             self._fill_buffer()
+          self._measure_prefetch_depth()
           element = self._buffer.popleft()
           # Prefetch elements until the buffer is full again.
           self._fill_buffer()
