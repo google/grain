@@ -411,3 +411,36 @@ def SetupTelemetry():
       Initialize(port=9431)
     else:
       Initialize(port=0)
+
+
+_bytes_read = Counter(
+    '/grain/python/data_sources/bytes_read',
+    Metadata(
+        description=(
+            'Number of bytes produced by a data source via random access.'
+        )
+    ),
+    fields=[('source', str)],
+)
+
+_source_read_time_ns = EventMetric(
+    '/grain/python/dataset/source_read_time_ns',
+    metadata=Metadata(
+        description='Histogram of source read time in nanoseconds.',
+        units=Units.NANOSECONDS,
+    ),
+    bucketer=Bucketer.PowersOf(4.0),
+    fields=[('source', str)],
+)
+
+
+def RecordBytesReadAndLatency(
+    source: str, num_bytes: int, latency_ns: int, num_reads: int
+):
+  """Records the number of bytes read and read latency for a Grain source."""
+  _bytes_read.IncrementBy(num_bytes, source)
+  for _ in range(num_reads):
+    _source_read_time_ns.Record(latency_ns / num_reads, source)
+
+
+record_bytes_read_and_latency = RecordBytesReadAndLatency

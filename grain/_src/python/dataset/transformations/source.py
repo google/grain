@@ -22,7 +22,9 @@ from typing import Any, Sequence, Union
 
 from absl import logging
 
+from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import sharding
+from grain._src.core import tree_lib
 from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
@@ -87,6 +89,13 @@ class SourceMapDataset(dataset.MapDataset):
             self._source[self._index_mod_len(index)]
         )
         stop_time = time.perf_counter_ns()
+        if self._record_metrics:
+          grain_monitoring.record_bytes_read_and_latency(
+              self._source_name,
+              tree_lib.estimate_byte_size(result),
+              stop_time - start_time,
+              1,
+          )
         return result
 
   def _getitems(self, indices: Sequence[int]):
@@ -100,6 +109,13 @@ class SourceMapDataset(dataset.MapDataset):
           [self._index_mod_len(index) for index in indices]
       )
       stop_time = time.perf_counter_ns()
+      if self._record_metrics:
+        grain_monitoring.record_bytes_read_and_latency(
+            self._source_name,
+            tree_lib.estimate_byte_size(elements),
+            stop_time - start_time,
+            len(indices),
+        )
     return self._stats.record_output_spec_for_batch(elements)
 
   def _get_sequential_slice(self, sl: slice) -> slice:
