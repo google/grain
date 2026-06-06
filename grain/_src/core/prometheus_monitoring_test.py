@@ -321,6 +321,57 @@ class MonitoringTest(absltest.TestCase):
           self.assertIn(2.0, upper_bounds)
           self.assertIn(4.0, upper_bounds)
 
+  def test_record_bytes_read_and_latency(self):
+    if prometheus_client is None:
+      self.skipTest('prometheus-client not installed')
+
+    prometheus_monitoring._bytes_read = prometheus_monitoring.Counter(
+        '/grain/python/data_sources/bytes_read',
+        monitoring.Metadata(
+            description=(
+                'Number of bytes produced by a data source via random access.'
+            )
+        ),
+        fields=[('source', str)],
+    )
+    prometheus_monitoring._source_read_time_ns = (
+        prometheus_monitoring.EventMetric(
+            '/grain/python/dataset/source_read_time_ns',
+            metadata=monitoring.Metadata(
+                description='Histogram of source read time in nanoseconds.',
+                units=monitoring.Units.NANOSECONDS,
+            ),
+            bucketer=monitoring.Bucketer.PowersOf(4.0),
+            fields=[('source', str)],
+        )
+    )
+
+    prometheus_monitoring.record_bytes_read_and_latency(
+        'source_baz', 1000, 8000, 2
+    )
+
+    self.assertEqual(
+        prometheus_client.REGISTRY.get_sample_value(
+            'grain_python_data_sources_bytes_read_total',
+            labels={'source': 'source_baz'},
+        ),
+        1000,
+    )
+    self.assertEqual(
+        prometheus_client.REGISTRY.get_sample_value(
+            'grain_python_dataset_source_read_time_ns_sum',
+            labels={'source': 'source_baz'},
+        ),
+        8000,
+    )
+    self.assertEqual(
+        prometheus_client.REGISTRY.get_sample_value(
+            'grain_python_dataset_source_read_time_ns_count',
+            labels={'source': 'source_baz'},
+        ),
+        2,
+    )
+
 
 if __name__ == '__main__':
   absltest.main()

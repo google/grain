@@ -285,3 +285,13 @@ py_test(
         "@pypi//prometheus_client:pkg",
     ],
 )
+
+py_test(
+    name = "monitoring_test",
+    srcs = ["monitoring_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":monitoring",
+        "@abseil-py//absl/testing:absltest",
+    ],
+)
