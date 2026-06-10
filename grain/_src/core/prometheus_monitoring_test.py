@@ -321,6 +321,69 @@ class MonitoringTest(absltest.TestCase):
           self.assertIn(2.0, upper_bounds)
           self.assertIn(4.0, upper_bounds)
 
+  def test_record_bytes_read_and_latency(self):
+    if prometheus_client is None:
+      self.skipTest('prometheus-client not installed')
+
+    bytes_read = prometheus_monitoring.Counter(
+        '/grain/python/data_sources/bytes_read',
+        monitoring.Metadata(
+            description=(
+                'Number of bytes produced by a data source via random access.'
+            )
+        ),
+        fields=[('source', str)],
+    )
+    source_read_time_ns = prometheus_monitoring.EventMetric(
+        '/grain/python/dataset/source_read_time_ns',
+        metadata=monitoring.Metadata(
+            description='Histogram of source read time in nanoseconds.',
+            units=monitoring.Units.NANOSECONDS,
+        ),
+        bucketer=monitoring.Bucketer.PowersOf(4.0),
+        fields=[('source', str)],
+    )
+
+    self.enter_context(
+        mock.patch.object(prometheus_monitoring, '_bytes_read', bytes_read)
+    )
+    self.enter_context(
+        mock.patch.object(
+            prometheus_monitoring, '_source_read_time_ns', source_read_time_ns
+        )
+    )
+
+    prometheus_monitoring.record_bytes_read_and_latency(
+        'source_baz', num_bytes=1000, latency_ns=8000, num_reads=2
+    )
+
+    with self.subTest(name='bytes_read'):
+      self.assertEqual(
+          prometheus_client.REGISTRY.get_sample_value(
+              'grain_python_data_sources_bytes_read_total',
+              labels={'source': 'source_baz'},
+          ),
+          1000,
+      )
+
+    with self.subTest(name='latency_ns_sum'):
+      self.assertEqual(
+          prometheus_client.REGISTRY.get_sample_value(
+              'grain_python_dataset_source_read_time_ns_sum',
+              labels={'source': 'source_baz'},
+          ),
+          8000,
+      )
+
+    with self.subTest(name='latency_ns_count'):
+      self.assertEqual(
+          prometheus_client.REGISTRY.get_sample_value(
+              'grain_python_dataset_source_read_time_ns_count',
+              labels={'source': 'source_baz'},
+          ),
+          2,
+      )
+
 
 if __name__ == '__main__':
   absltest.main()
