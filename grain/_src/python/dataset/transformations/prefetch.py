@@ -99,6 +99,36 @@ class SupportsInPlaceSlicing(Protocol):
     ...
 
 
+@typing.runtime_checkable
+@typing.runtime_checkable
+class SupportsSlicedStateManagement(Protocol):
+  """Iterators that support setting a sliced state.
+
+  This protocol is used to support elastic resizing of iterators.
+  """
+
+  def get_shard_states(self) -> Sequence[Any]:
+    """Returns the states of all shards managed by this iterator.
+
+    Used for elastic resizing to capture the current progress of each
+    shard.
+    """
+    ...
+
+  def set_shard_states(self, shard_states: Sequence[Any]):
+    """Sets the states of all shards managed by this iterator.
+
+    Used for elastic resizing to restore the progress of each shard.
+
+    Args:
+      shard_states: A sequence of dictionaries, one for each shard. Each dict
+        must contain 'exhausted' key with value bool indicating if the shard is
+        exhausted and 'state' key with value Any representing the state of the
+        shard.
+    """
+    ...
+
+
 class PrefetchIterDataset(dataset.IterDataset[T]):
   """Iterable dataset that uses a thread pool for prefetching."""
 

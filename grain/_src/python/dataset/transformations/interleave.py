@@ -17,7 +17,7 @@ import collections
 from collections.abc import Sequence
 import copy
 import functools
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 import weakref
 
 from absl import logging
@@ -27,7 +27,6 @@ from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
 from grain._src.python.dataset.transformations import prefetch
-
 
 T = TypeVar("T")
 
@@ -92,6 +91,7 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     ] = [None] * self._cycle_length
     # Future states used for elastic iterators
     self._future_states: dict[int, Any] = {}
+    self._cached_start_states: dict[int, Any] = {}
 
   @stats.record_next_duration_if_output
   @stats.trace_input_pipeline_next(stage_category=stats.IPL_CAT_PREPROCESSING)
@@ -208,6 +208,49 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     }
     return state
 
+  def get_shard_states(self) -> Sequence[Any]:
+    """Retrieves individual shard states for elastic resizing."""
+    state = self.get_state()
+    indices = state["iterators_in_use_indices"]
+    states = state["iterators_in_use_states"]
+    exhausted = state["exhausted"]
+    next_index_in_datasets = state["next_index_in_datasets"]
+
+    shard_states = [None] * len(self._datasets)
+
+    for i in range(len(self._datasets)):  # pylint: disable=protected-access
+      # `next_index_in_datasets` marks the end of the cycle. If the current
+      # shard index is greater than or equal to `next_index_in_datasets`, it
+      # means the current shard has not yet started to be iterated on or have a
+      # future state has been saved for it.
+      if i >= next_index_in_datasets:
+        if i in self._future_states:
+          shard_states[i] = {
+              "exhausted": 0,
+              "state": self._future_states[i],
+          }
+        else:
+          shard_states[i] = {
+              "exhausted": 0,
+              "state": self._get_iterator_start_state(i),  # pylint: disable=protected-access
+          }
+      elif i not in indices:
+        # These shards are exhausted but should still create a state to maintain
+        # static state spec shapes.
+        shard_states[i] = {
+            "exhausted": 1,
+            "state": self._get_iterator_start_state(i),  # pylint: disable=protected-access
+        }
+
+    for index, ds_state, is_exhausted in zip(indices, states, exhausted):
+      # These shards are currently being iterated on.
+      shard_states[index] = {
+          "exhausted": is_exhausted,
+          "state": ds_state,
+      }
+
+    return shard_states
+
   def set_state(self, state):
     exhausted = state["exhausted"]
     for index_in_cycle, (index_in_datasets, it_state) in enumerate(
@@ -252,7 +295,52 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     self._next_index_in_cycle = state["next_index_in_cycle"]
     self._next_index_in_datasets = state["next_index_in_datasets"]
     self._iterators_in_use_indices = state["iterators_in_use_indices"]
-    self._future_states = state.get("future_states", {})
+    self._future_states = cast(dict[int, Any], state.get("future_states", {}))
+
+  def set_shard_states(self, shard_states: Sequence[Any]) -> None:
+    active_states = []
+    for indx, shard_state in enumerate(shard_states):
+      if not shard_state["exhausted"]:
+        active_states.append((indx, shard_state["state"]))
+
+    iterators_in_use_indices = []
+    iterators_in_use_states = []
+    exhausted = []
+    count = 0
+    future_states = {}
+    for indx, s in active_states:
+      if count < self._cycle_length:
+        iterators_in_use_indices.append(indx)
+        iterators_in_use_states.append(s)
+        exhausted.append(0)
+        count += 1
+      elif s:
+        future_states[indx] = s
+    next_index_in_datasets = (
+        max(iterators_in_use_indices) + 1 if iterators_in_use_indices else 0
+    )
+
+    # This is the case where the cycle length is greater than the number of
+    # non-exhausted shards. We will just go back through the datasets to fill
+    # the cycle length.
+    fill_index = 0
+    while count < self._cycle_length and fill_index < len(shard_states):
+      if shard_states[fill_index]["exhausted"]:
+        iterators_in_use_indices.append(fill_index)
+        iterators_in_use_states.append(shard_states[fill_index]["state"])
+        exhausted.append(1)
+        count += 1
+      fill_index += 1
+
+    new_state = {
+        "next_index_in_cycle": 0,
+        "next_index_in_datasets": next_index_in_datasets,
+        "iterators_in_use_indices": iterators_in_use_indices,
+        "iterators_in_use_states": iterators_in_use_states,
+        "exhausted": exhausted,
+        "future_states": future_states,
+    }
+    self.set_state(new_state)
 
   def _get_next_index(self) -> int:
     if len(self._datasets) == 1:
@@ -334,14 +422,15 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     )
 
   def _get_iterator_start_state(self, index: int) -> dict[str, Any]:
-    it = _add_prefetch_and_make_iterator(
-        self._datasets[index],
-        weakref.ref(self),
-        start_prefetch=False,
-    )
-    state = it.get_state()
-    del it
-    return state
+    if index not in self._cached_start_states:
+      it = _add_prefetch_and_make_iterator(
+          self._datasets[index],
+          weakref.ref(self),
+          start_prefetch=False,
+      )
+      self._cached_start_states[index] = it.get_state()
+      it.close()
+    return self._cached_start_states[index]
 
 
 def _add_prefetch_and_make_iterator(

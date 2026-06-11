@@ -21,9 +21,9 @@ from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import interleave
+from grain._src.python.dataset.transformations import prefetch
 from grain._src.python.testing.experimental import assert_equal_output_after_checkpoint
 import numpy as np
-
 
 _INTERLEAVE_TEST_CASES = (
     dict(
@@ -344,6 +344,176 @@ class _InterleaveIterDatasetTestBase(parameterized.TestCase):
 
     with self.assertRaises(StopIteration):
       next(ds_iter)
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name="cycle_length_equals_num_datasets",
+          ds_elements=[[1, 2, 3], [4, 5, 6]],
+          cycle_length=2,
+          expected_shard_state=[
+              {"exhausted": 0, "state": {"next_index": 1}},
+              {"exhausted": 0, "state": {"next_index": 1}},
+          ],
+          expected_remaining=[2, 5, 3, 6],
+      ),
+      dict(
+          testcase_name="cycle_length_less_than_num_datasets",
+          ds_elements=[[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+          cycle_length=2,
+          expected_shard_state=[
+              {"exhausted": 0, "state": {"next_index": 1}},
+              {"exhausted": 0, "state": {"next_index": 1}},
+              {"exhausted": 0, "state": {"next_index": 0}},
+          ],
+          expected_remaining=[2, 5, 3, 6, 7, 8, 9],
+      ),
+  )
+  def test_slice_state_management_checkpoints_correctly(
+      self,
+      ds_elements,
+      cycle_length,
+      expected_shard_state,
+      expected_remaining,
+  ):
+    datasets = [
+        dataset.MapDataset.source(elements).to_iter_dataset()
+        for elements in ds_elements
+    ]
+    ds = self._create_dataset(datasets, cycle_length=cycle_length)
+    ds = self._maybe_wrap_ds(ds)
+    it = ds.__iter__()
+
+    # Consume some elements to advance state.
+    for _ in range(2):
+      next(it)
+
+    # Get the shard state.
+    assert isinstance(it, prefetch.SupportsSlicedStateManagement)
+    shard_state = it.get_shard_states()
+    self.assertEqual(shard_state, expected_shard_state)
+
+    # Create a new iterator and restore state.
+    it2 = ds.__iter__()
+    assert isinstance(it2, prefetch.SupportsSlicedStateManagement)
+    it2.set_shard_states(shard_state)
+
+    # Verify it continues from the correct position.
+    self.assertSequenceEqual(list(it2), expected_remaining)
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name="cycle_length_equals_num_datasets",
+          ds_elements=[[1, 2, 3], [4, 5, 6]],
+          cycle_length=2,
+          expected_shard_state=[
+              {"exhausted": 0, "state": {"next_index": 1}},
+              {"exhausted": 0, "state": {"next_index": 1}},
+          ],
+          expected_future_states={},
+          expected_next_index_in_datasets=2,
+          expected_iterators_in_use_indices=[0, 1],
+          expected_iterators_in_use_states=[
+              {"next_index": 1},
+              {"next_index": 1},
+          ],
+      ),
+      dict(
+          testcase_name="cycle_length_less_than_num_datasets",
+          ds_elements=[[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+          cycle_length=2,
+          expected_shard_state=[
+              {"exhausted": 0, "state": {"next_index": 1}},
+              {"exhausted": 0, "state": {"next_index": 1}},
+              {"exhausted": 0, "state": {"next_index": 0}},
+          ],
+          expected_future_states={2: {"next_index": 0}},
+          expected_next_index_in_datasets=2,
+          expected_iterators_in_use_indices=[0, 1],
+          expected_iterators_in_use_states=[
+              {"next_index": 1},
+              {"next_index": 1},
+          ],
+      ),
+  )
+  def test_correct_interleave_state_after_setting_shards(
+      self,
+      ds_elements,
+      cycle_length,
+      expected_shard_state,
+      expected_future_states,
+      expected_next_index_in_datasets,
+      expected_iterators_in_use_indices,
+      expected_iterators_in_use_states,
+  ):
+    datasets = [
+        dataset.MapDataset.source(elements).to_iter_dataset()
+        for elements in ds_elements
+    ]
+    ds = self._create_dataset(datasets, cycle_length=cycle_length)
+    ds = self._maybe_wrap_ds(ds)
+    it = ds.__iter__()
+
+    # Consume some elements to advance state.
+    for _ in range(2):
+      next(it)
+
+    assert isinstance(it, prefetch.SupportsSlicedStateManagement)
+    shard_state = it.get_shard_states()
+    self.assertEqual(shard_state, expected_shard_state)
+
+    # Create a new iterator and restore state.
+    it2 = ds.__iter__()
+    assert isinstance(it2, prefetch.SupportsSlicedStateManagement)
+    it2.set_shard_states(shard_state)
+
+    # Check get_shard_states() returns the set shard states correctly.
+    self.assertEqual(it2.get_shard_states(), expected_shard_state)
+
+    # Check get_state() internal values.
+    state = it2.get_state()
+    self.assertEqual(state["next_index_in_cycle"], 0)
+    self.assertEqual(
+        state["next_index_in_datasets"], expected_next_index_in_datasets
+    )
+    self.assertEqual(
+        state["iterators_in_use_indices"], expected_iterators_in_use_indices
+    )
+    self.assertEqual(
+        state["iterators_in_use_states"], expected_iterators_in_use_states
+    )
+    self.assertEqual(state["future_states"], expected_future_states)
+
+  def test_setting_shard_state_with_exhausted_states(self):
+    datasets_data = [[1], [2, 3], [4, 5]]
+    datasets = [
+        dataset.MapDataset.source(elements).to_iter_dataset()
+        for elements in datasets_data
+    ]
+    ds = self._create_dataset(datasets, cycle_length=2)
+    ds = self._maybe_wrap_ds(ds)
+    it = ds.__iter__()
+
+    shard_state = [
+        {"exhausted": 1, "state": {"next_index": 1}},
+        {"exhausted": 1, "state": {"next_index": 2}},
+        {"exhausted": 0, "state": {"next_index": 0}},
+    ]
+
+    # Create a new iterator and restore state.
+    assert isinstance(it, prefetch.SupportsSlicedStateManagement)
+    it.set_shard_states(shard_state)
+
+    # Check get_state() internal values.
+    state = it.get_state()
+    self.assertEqual(state["next_index_in_cycle"], 0)
+    self.assertEqual(state["next_index_in_datasets"], 3)
+    self.assertEqual(state["iterators_in_use_indices"], [2, 0])
+    self.assertEqual(
+        state["iterators_in_use_states"],
+        [{"next_index": 0}, {"next_index": 1}],
+    )
+    if isinstance(self, InterleaveIterDatasetTest):
+      self.assertEqual(state["exhausted"], [0, 1])
 
 
 if __name__ == "__main__":
