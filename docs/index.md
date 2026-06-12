@@ -73,6 +73,7 @@ Basics <tutorials/dataset_basic_tutorial>
 Advanced usage <tutorials/dataset_advanced_tutorial>
 Transformations <./grain.dataset>
 Performance debugging <tutorials/dataset_debugging_tutorial>
+JAX training tips <tutorials/jax_training_tutorial>
 Performance autotuning <performance/autotuning>
 ```
 
