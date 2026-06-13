@@ -82,7 +82,14 @@ Performance autotuning <performance/autotuning>
 :caption: DataLoader
 data_loader/samplers
 data_loader/transformations
-Tutorial <tutorials/data_loader_tutorial>
+DataLoader tutorial <tutorials/data_loader_tutorial>
+```
+
+``` {toctree}
+:maxdepth: 1
+:hidden:
+:caption: Tutorials
+JAX training tips <tutorials/jax_training_tutorial>
 ```
 
 ``` {toctree}

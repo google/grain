@@ -83,6 +83,7 @@ autodoc_mock_imports = [
     'grain.proto.execution_summary_pb2',
     'grain._src.python.experimental.index_shuffle.python.index_shuffle_module',
     'cloudpickle',
+    'jax',
     'numpy',
     'orbax',
     'portpicker',
@@ -116,6 +117,7 @@ nb_execution_excludepatterns = [
     'tutorials/data_sources/bagz_data_source_tutorial.ipynb',
     'tutorials/data_sources/huggingface_dataset_tutorial.ipynb',
     'tutorials/data_sources/pytorch_dataset_tutorial.ipynb',
+    'tutorials/jax_training_tutorial.ipynb',
     'tutorials/performance_debugging.ipynb',
     'dataset/performance_debugging.ipynb',
 ]
