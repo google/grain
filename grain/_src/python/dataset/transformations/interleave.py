@@ -385,6 +385,11 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
       if iterator is not None:
         iterator.close()
 
+  def start_prefetch(self):
+    for it in self._iterators_in_use:
+      if it is not None:
+        it.start_prefetch()
+
   def _initialize_stats(
       self, execution_tracking_mode: base.ExecutionTrackingMode
   ) -> stats.Stats:

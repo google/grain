@@ -12,6 +12,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 * Deprecations:
 
 * Bug fixes:
+  * `InterleaveDatasetIterator` now overrides `start_prefetch()` such that it
+    indeed starts prefetching (it did not do anything before.)
 
 ## Grain 0.2.17 (June 1, 2026)
 
