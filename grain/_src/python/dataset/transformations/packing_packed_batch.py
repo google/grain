@@ -47,6 +47,29 @@ import numpy as np
 _T = TypeVar("_T")
 
 
+def get_key_name(path_element: Any) -> str:
+  if hasattr(path_element, "key"):
+    return path_element.key
+  if hasattr(path_element, "name"):
+    return path_element.name
+  return path_element
+
+
+def get_length_struct_keys(length_struct: Any) -> set[str]:
+  return {
+      get_key_name(p[0])
+      for (p, _) in tree_lib.flatten_with_path(length_struct)
+      if p
+  }
+
+
+def get_non_sequence_meta_features(
+    length_struct: Any, meta_features: Sequence[str]
+) -> list[str]:
+  keys = get_length_struct_keys(length_struct)
+  return [k for k in meta_features if k not in keys]
+
+
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class SuccessfulRowOrFailingComponents:
   # Holds the index of the row to put a new element into if it can fit,
@@ -118,6 +141,14 @@ class PackedBatch(abc.ABC, Generic[_T]):
     self._size_bytes = 0
     self._max_sequences_per_bin = max_sequences_per_bin
 
+    self._non_sequence_meta_features = get_non_sequence_meta_features(
+        length_struct, meta_features
+    )
+    self._non_sequence_meta_values = {
+        k: [[] for _ in range(num_packing_bins)]
+        for k in self._non_sequence_meta_features
+    }
+
     # Define the main buffers we will pack the data into.
     def make_packed_buffer(length: int, x: np.ndarray | int, padding: Any):
       is_scalar = np.ndim(x) == 0
@@ -143,8 +174,15 @@ class PackedBatch(abc.ABC, Generic[_T]):
     if padding_struct is None:
       padding_struct = tree_lib.map_structure(lambda x: None, length_struct)
 
+    pruned_element_for_shapes = tree_lib.map_structure_up_to(
+        length_struct, lambda x: x, element_for_shapes
+    )
+
     self._values = tree_lib.map_structure(
-        make_packed_buffer, length_struct, element_for_shapes, padding_struct
+        make_packed_buffer,
+        length_struct,
+        pruned_element_for_shapes,
+        padding_struct,
     )
 
     def make_packed_aux_info(length: int):
@@ -219,8 +257,16 @@ class PackedBatch(abc.ABC, Generic[_T]):
           self._positions,
       )
 
+    values_copy = copy.copy(values)
+    for k in self._non_sequence_meta_features:
+      sliced_list = self._non_sequence_meta_values[k][:rows_with_values]
+      arr = np.empty(len(sliced_list), dtype=object)
+      for i, val in enumerate(sliced_list):
+        arr[i] = val
+      values_copy[k] = arr
+
     return _extract_and_rekey_packed_batch(
-        values,
+        values_copy,
         segment_ids=segment_ids,
         positions=positions,
         meta_features=self._meta_features,
@@ -237,7 +283,10 @@ class PackedBatch(abc.ABC, Generic[_T]):
 
   def add_element_to_batch(self, element: Any, row: int) -> None:
     """Adds an element to the specified row using pre-flattened buffers."""
-    flat_element = tree_lib.flatten(element)
+    packable_element = tree_lib.map_structure_up_to(
+        self._length_struct, lambda x: x, element
+    )
+    flat_element = tree_lib.flatten(packable_element)
     flat_alignments = tree_lib.flatten(self._pack_alignments)
     segment_id = self._num_examples_per_row[row] + 1
 
@@ -257,6 +306,10 @@ class PackedBatch(abc.ABC, Generic[_T]):
       self._flat_first_free_cell_per_row[idx][row] = padded_end
     self._num_examples_per_row[row] += 1
 
+    for k in self._non_sequence_meta_features:
+      if k in element:
+        self._non_sequence_meta_values[k][row].append(element[k])
+
   @abc.abstractmethod
   def try_add_to_batch(self, element: Any) -> list[str] | None:
     """Tries to add an element to the batch using a specific strategy."""
@@ -267,8 +320,11 @@ class FirstFitPackedBatch(PackedBatch[_T]):
   """Implements first-fit packing of sequences."""
 
   def try_add_to_batch(self, element: Any) -> list[str] | None:
-    tree_lib.assert_same_structure(element, self._length_struct)
-    element_lengths = self._get_element_lengths_flat(element)
+    packable_element = tree_lib.map_structure_up_to(
+        self._length_struct, lambda x: x, element
+    )
+    tree_lib.assert_same_structure(packable_element, self._length_struct)
+    element_lengths = self._get_element_lengths_flat(packable_element)
 
     # Check if any feature exceeds its max length before attempting to pack.
     too_long = element_lengths > self._capacities
@@ -336,8 +392,11 @@ class BestFitPackedBatch(PackedBatch[_T]):
   """Implements best-fit packing of sequences."""
 
   def try_add_to_batch(self, element: Any) -> list[str] | None:
-    tree_lib.assert_same_structure(element, self._length_struct)
-    element_lengths = self._get_element_lengths_flat(element)
+    packable_element = tree_lib.map_structure_up_to(
+        self._length_struct, lambda x: x, element
+    )
+    tree_lib.assert_same_structure(packable_element, self._length_struct)
+    element_lengths = self._get_element_lengths_flat(packable_element)
 
     # Check if any feature exceeds its max length before attempting to pack.
     too_long = element_lengths > self._capacities

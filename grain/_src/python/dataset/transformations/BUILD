@@ -94,6 +94,7 @@ py_library(
     srcs_version = "PY3",
     deps = [
         ":packing",
+        ":packing_packed_batch",
         "//grain/_src/core:tree_lib",
         "//grain/_src/python/dataset",
         "@abseil-py//absl/testing:absltest",

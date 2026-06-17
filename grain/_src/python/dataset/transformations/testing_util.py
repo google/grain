@@ -9,6 +9,7 @@ from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.core import tree_lib
 from grain._src.python.dataset.transformations import packing
+from grain._src.python.dataset.transformations import packing_packed_batch
 from grain._src.python.dataset.transformations import source
 from jax import numpy as jnp
 import numpy as np
@@ -50,8 +51,18 @@ def _common_test_body(
     input_elements = [
         {k: np.asarray(v) for k, v in d.items()} for d in input_elements
     ]
+  non_sequence_meta_features = (
+      packing_packed_batch.get_non_sequence_meta_features(
+          length_struct, meta_features
+      )
+  )
+
   expected_elements = [
-      {k: np.asarray(v) for k, v in d.items()} for d in expected_elements
+      {
+          k: v if k in non_sequence_meta_features else np.asarray(v)
+          for k, v in d.items()
+      }
+      for d in expected_elements
   ]
   ds = packer_cls(
       source.SourceMapDataset(input_elements).to_iter_dataset(),
@@ -1486,6 +1497,142 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
         num_packing_bins=2,
         max_sequences_per_bin=3,
     )
+
+  @parameterized.product(
+      convert_input_to_np=[True, False],
+  )
+  def test_non_sequence_meta_feature(self, convert_input_to_np: bool):
+    input_elements = [
+        {
+            "inputs": np.asarray([1]),
+            "targets": np.asarray([10]),
+            "image": np.ones((2, 2, 3), dtype=np.int32) * 1,
+        },
+        {
+            "inputs": np.asarray([2]),
+            "targets": np.asarray([20]),
+            "image": np.ones((2, 2, 3), dtype=np.int32) * 2,
+        },
+        {
+            "inputs": np.asarray([3]),
+            "targets": np.asarray([30]),
+            "image": np.ones((2, 2, 3), dtype=np.int32) * 3,
+        },
+    ]
+    length_struct = {"inputs": 3, "targets": 3}
+
+    expected_elements = [{
+        "inputs": [1, 2, 3],
+        "targets": [10, 20, 30],
+        "inputs_segment_ids": [1, 2, 3],
+        "targets_segment_ids": [1, 2, 3],
+        "inputs_positions": [0, 0, 0],
+        "targets_positions": [0, 0, 0],
+        "image": [
+            np.ones((2, 2, 3), dtype=np.int32) * 1,
+            np.ones((2, 2, 3), dtype=np.int32) * 2,
+            np.ones((2, 2, 3), dtype=np.int32) * 3,
+        ],
+    }]
+    if self.kwargs.get("use_fast_cc_impl", False):
+      expected_elements_without_meta = [
+          {k: v for k, v in el.items() if k != "image"}
+          for el in expected_elements
+      ]
+      with self.assertWarnsRegex(
+          UserWarning,
+          "packing implementation does not support non-sequence meta-features",
+      ):
+        _common_test_body(
+            self.packer_cls,
+            input_elements,
+            expected_elements_without_meta,
+            length_struct,
+            kwargs=self.kwargs,
+            num_packing_bins=1,
+            meta_features=["image"],
+            convert_input_to_np=convert_input_to_np,
+        )
+    else:
+      _common_test_body(
+          self.packer_cls,
+          input_elements,
+          expected_elements,
+          length_struct,
+          kwargs=self.kwargs,
+          num_packing_bins=1,
+          meta_features=["image"],
+          convert_input_to_np=convert_input_to_np,
+      )
+
+  @parameterized.product(
+      convert_input_to_np=[True, False],
+  )
+  def test_non_sequence_meta_feature_variable_shapes(
+      self, convert_input_to_np: bool
+  ):
+    input_elements = [
+        {
+            "inputs": np.asarray([1]),
+            "targets": np.asarray([10]),
+            "image": np.ones((2, 1, 3, 3), dtype=np.int32) * 1,
+        },
+        {
+            "inputs": np.asarray([2]),
+            "targets": np.asarray([20]),
+            "image": np.ones((1, 1, 3, 3), dtype=np.int32) * 2,
+        },
+        {
+            "inputs": np.asarray([3]),
+            "targets": np.asarray([30]),
+            "image": np.ones((3, 1, 3, 3), dtype=np.int32) * 3,
+        },
+    ]
+    length_struct = {"inputs": 3, "targets": 3}
+
+    expected_elements = [{
+        "inputs": [1, 2, 3],
+        "targets": [10, 20, 30],
+        "inputs_segment_ids": [1, 2, 3],
+        "targets_segment_ids": [1, 2, 3],
+        "inputs_positions": [0, 0, 0],
+        "targets_positions": [0, 0, 0],
+        "image": [
+            np.ones((2, 1, 3, 3), dtype=np.int32) * 1,
+            np.ones((1, 1, 3, 3), dtype=np.int32) * 2,
+            np.ones((3, 1, 3, 3), dtype=np.int32) * 3,
+        ],
+    }]
+    if self.kwargs.get("use_fast_cc_impl", False):
+      expected_elements_without_meta = [
+          {k: v for k, v in el.items() if k != "image"}
+          for el in expected_elements
+      ]
+      with self.assertWarnsRegex(
+          UserWarning,
+          "packing implementation does not support non-sequence meta-features",
+      ):
+        _common_test_body(
+            self.packer_cls,
+            input_elements,
+            expected_elements_without_meta,
+            length_struct,
+            kwargs=self.kwargs,
+            num_packing_bins=1,
+            meta_features=["image"],
+            convert_input_to_np=convert_input_to_np,
+        )
+    else:
+      _common_test_body(
+          self.packer_cls,
+          input_elements,
+          expected_elements,
+          length_struct,
+          kwargs=self.kwargs,
+          num_packing_bins=1,
+          meta_features=["image"],
+          convert_input_to_np=convert_input_to_np,
+      )
 
 
 class BaseBestFitPackIterDatasetTest(BaseFirstFitPackIterDatasetTest):

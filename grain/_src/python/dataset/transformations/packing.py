@@ -14,7 +14,9 @@
 """Implements packing transformations."""
 
 from collections.abc import Sequence
+import copy
 from typing import Any, Type
+import warnings
 
 from grain._src.core import tree_lib
 from grain._src.python.dataset import dataset
@@ -75,6 +77,11 @@ class PackingDatasetIterator(dataset.DatasetIterator):
     self._pack_alignment_struct = pack_alignment_struct
     self._padding_struct = padding_struct
     self._max_sequences_per_bin = max_sequences_per_bin
+    self._combined_struct = copy.copy(length_struct)
+    if isinstance(self._combined_struct, dict):
+      for k in meta_features:
+        if k not in self._combined_struct:
+          self._combined_struct[k] = None
     self._reset()
 
   def _reset(self):
@@ -217,7 +224,7 @@ class PackingDatasetIterator(dataset.DatasetIterator):
       with timer:
         # Remove elements not in packing struct.
         element = tree_lib.map_structure_up_to(
-            self._length_struct, lambda x: x, element
+            self._combined_struct, lambda x: x, element
         )
 
         if self._current_batch is None:
@@ -287,7 +294,11 @@ class PackIterDataset(dataset.IterDataset):
       seed: Random seed for shuffling bins.
       shuffle_bins: Whether to shuffle bins after packing.
       shuffle_bins_group_by_feature: Feature to group by for shuffling.
-      meta_features: Meta features that do not need packing logic.
+      meta_features: Meta features that do not need packing logic. They can be
+        sequence meta-features (if present in `length_struct`, packed and padded
+        to target length) or non-sequence meta-features (if not present in
+        `length_struct`, returned as a list of meta-features from the packed
+        examples in each bin).
       pack_alignment_struct: Optional per-feature alignment values.
       padding_struct: Optional per-feature padding values.
       max_sequences_per_bin: Optional maximum number of input sequences that can
@@ -367,7 +378,11 @@ class FirstFitPackIterDataset(PackIterDataset):
       seed: Random seed for shuffling bins.
       shuffle_bins: Whether to shuffle bins after packing.
       shuffle_bins_group_by_feature: Feature to group by for shuffling.
-      meta_features: Meta features that do not need packing logic.
+      meta_features: Meta features that do not need packing logic. They can be
+        sequence meta-features (if present in `length_struct`, packed and padded
+        to target length) or non-sequence meta-features (if not present in
+        `length_struct`, returned as a list of meta-features from the packed
+        examples in each bin).
       pack_alignment_struct: Optional per-feature alignment values.
       padding_struct: Optional per-feature padding values.
       max_sequences_per_bin: Optional maximum number of input sequences that can
@@ -424,7 +439,11 @@ class BestFitPackIterDataset(PackIterDataset):
       seed: Random seed for shuffling bins.
       shuffle_bins: Whether to shuffle bins after packing.
       shuffle_bins_group_by_feature: Feature to group by for shuffling.
-      meta_features: Meta features that do not need packing logic.
+      meta_features: Meta features that do not need packing logic. They can be
+        sequence meta-features (if present in `length_struct`, packed and padded
+        to target length) or non-sequence meta-features (if not present in
+        `length_struct`, returned as a list of meta-features from the packed
+        examples in each bin).
       pack_alignment_struct: Optional per-feature alignment values.
       padding_struct: Optional per-feature padding values.
       max_sequences_per_bin: Optional maximum number of input sequences that can
