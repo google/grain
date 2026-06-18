@@ -12,6 +12,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 * Deprecations:
 
 * Bug fixes:
+  * Fixed bug in DataLoader where sharding remainder was dropped even when ShardOptions.drop_remainder=False.
 
 ## Grain 0.2.18 (June 17, 2026)
 

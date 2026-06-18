@@ -125,7 +125,15 @@ class _SamplerMapDataset(dataset.MapDataset[record.Record]):
     super().__init__(dataset.MapDataset.source(data_source))
     self._sampler = sampler
     self._shard_options = shard_options
-    self.length = self._sampler_size() // self._shard_options.shard_count
+    sampler_size = self._sampler_size()
+    shard_count = self._shard_options.shard_count
+    if self._shard_options.drop_remainder:
+      self.length = sampler_size // shard_count
+    else:
+      remainder = sampler_size % shard_count
+      self.length = sampler_size // shard_count + (
+          1 if self._shard_options.shard_index < remainder else 0
+      )
 
   def _sampler_size(self) -> int:
     """Returns the length of the sampler."""

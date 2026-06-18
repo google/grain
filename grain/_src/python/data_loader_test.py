@@ -825,6 +825,54 @@ class DataLoaderTest(absl_parameterized.TestCase):
       data_loader_iterator.start_prefetch()
     self.assertEqual(list(data_loader_iterator), list(range(16)))
 
+  def test_data_loader_sharding_drop_remainder(self):
+    range_data_source = RangeDataSource(start=0, stop=10, step=1)
+
+    # Shard 0, drop_remainder=False
+    sampler = samplers.SequentialSampler(
+        num_records=len(range_data_source),
+        shard_options=sharding.ShardOptions(
+            shard_index=0, shard_count=3, drop_remainder=False
+        ),
+    )
+    dataloader = data_loader_lib.DataLoader(
+        data_source=range_data_source,
+        sampler=sampler,
+    )
+    actual = list(dataloader)
+    self.assertEqual(actual, [0, 3, 6, 9])
+    self.assertLen(actual, 4)
+
+    # Shard 0, drop_remainder=True
+    sampler = samplers.SequentialSampler(
+        num_records=len(range_data_source),
+        shard_options=sharding.ShardOptions(
+            shard_index=0, shard_count=3, drop_remainder=True
+        ),
+    )
+    dataloader = data_loader_lib.DataLoader(
+        data_source=range_data_source,
+        sampler=sampler,
+    )
+    actual = list(dataloader)
+    self.assertEqual(actual, [0, 3, 6])
+    self.assertLen(actual, 3)
+
+    # Shard 1, drop_remainder=False
+    sampler = samplers.SequentialSampler(
+        num_records=len(range_data_source),
+        shard_options=sharding.ShardOptions(
+            shard_index=1, shard_count=3, drop_remainder=False
+        ),
+    )
+    dataloader = data_loader_lib.DataLoader(
+        data_source=range_data_source,
+        sampler=sampler,
+    )
+    actual = list(dataloader)
+    self.assertEqual(actual, [1, 4, 7])
+    self.assertLen(actual, 3)
+
 
 class PyGrainDatasetIteratorTest(absltest.TestCase):
 
