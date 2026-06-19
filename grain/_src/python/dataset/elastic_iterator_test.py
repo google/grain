@@ -11,8 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import contextlib
+import itertools
 import platform
+
 from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.core import sharding
@@ -20,12 +22,41 @@ import multiprocessing as mp
 from grain._src.python import options
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import elastic_iterator
+from grain._src.python.dataset.transformations import interleave
 import grain._src.python.testing.experimental as test_util
 import numpy as np
 
 
+def assert_equal_bag_output_after_checkpoint(ds_iter):
+  checkpoints = []
+  expected_values = []
+  with contextlib.closing(ds_iter) as iterator:
+    for _ in itertools.count():
+      current_state = iterator.get_state()
+      try:
+        value = next(iterator)
+      except StopIteration:
+        break
+      checkpoints.append(current_state)
+      expected_values.append(value)
+
+  assert expected_values, "Dataset did not produce any elements."
+
+  for i, state in enumerate(checkpoints):
+    with contextlib.closing(ds_iter) as new_iterator:
+      new_iterator.set_state(state)
+      new_values = list(new_iterator)
+
+      np.testing.assert_equal(
+          sorted(new_values),
+          sorted(expected_values[i:]),
+          f"Restored values mismatch (ignoring order) at step {i} for state"
+          f" {state}.",
+      )
+
+
 @absltest.skipIf(platform.system() == "Windows", "Skipped under bazel.")
-class ElasticIteratorTest(parameterized.TestCase):
+class ElasticMapDatasetTest(parameterized.TestCase):
 
   @parameterized.parameters(
       dict(
@@ -251,7 +282,186 @@ class ElasticIteratorTest(parameterized.TestCase):
         ValueError,
         "ElasticIterator does not support `filter` transformation.",
     ):
-      elastic_iterator.ElasticIterator(ds, 5, sharding.NoSharding())
+      elastic_iterator.ElasticIterator(ds, 5, sharding.NoSharding()).__iter__()
+
+  def test_shard_state_not_implemented(self):
+    ds = dataset.MapDataset.range(10).map(lambda x: x + 1)
+    it = elastic_iterator.ElasticIterator(ds, 5, sharding.NoSharding())
+    with self.assertRaisesRegex(
+        NotImplementedError, "get_shard_states is only supported"
+    ):
+      it.get_shard_states()
+    with self.assertRaisesRegex(
+        NotImplementedError, "set_shard_states is only supported"
+    ):
+      it.set_shard_states({})
+
+
+class ElasticIterDatasetTest(parameterized.TestCase):
+
+  @parameterized.parameters(
+      dict(
+          shard_options=sharding.NoSharding(),
+          global_batch_size=1,
+          expected=list(range(15)),
+      ),
+      dict(
+          shard_options=sharding.ShardOptions(shard_index=0, shard_count=1),
+          global_batch_size=1,
+          expected=list(range(15)),
+      ),
+      dict(
+          shard_options=sharding.NoSharding(),
+          global_batch_size=3,
+          # Data is interleaved with cycle length 3.
+          expected=[[0, 5, 10], [1, 6, 11], [2, 7, 12], [3, 8, 13], [4, 9, 14]],
+      ),
+  )
+  def test_no_sharding_produces_correct_elements(
+      self, shard_options, global_batch_size, expected
+  ):
+    ds = [
+        # 3 shards, each with 5 elements.
+        dataset.MapDataset.range(i * 5, (i + 1) * 5).to_iter_dataset()
+        for i in range(3)
+    ]
+    interleave_ds = interleave.InterleaveIterDataset(
+        ds, cycle_length=global_batch_size
+    )
+    it = elastic_iterator.ElasticIterator(
+        interleave_ds,
+        shard_options=shard_options,
+        global_batch_size=global_batch_size,
+    )
+    actual = list(it)
+    np.testing.assert_equal(actual, expected)
+
+  @parameterized.parameters(
+      dict(
+          shard_options=sharding.ShardOptions(shard_index=0, shard_count=2),
+          global_batch_size=2,
+          expected=[[0], [2], [4], [6], [8]],
+      ),
+      dict(
+          shard_options=sharding.ShardOptions(shard_index=1, shard_count=2),
+          global_batch_size=0,
+          expected=[1, 3, 5, 7, 9],
+      ),
+      dict(
+          shard_options=sharding.ShardOptions(shard_index=0, shard_count=2),
+          global_batch_size=4,
+          expected=[[0, 2], [4, 6], [8]],
+      ),
+  )
+  def test_sharding_produces_correct_elements(
+      self, shard_options, global_batch_size, expected
+  ):
+    ds = [
+        # 4 shards, 0: [0, 4, 8], 1: [1, 5, 9], 2: [2, 6], 3: [3, 7]
+        dataset.MapDataset.range(i, 10, 4).to_iter_dataset()
+        for i in range(4)
+    ]
+    # Use cycle_length=2 as in the original test.
+    interleave_ds = interleave.InterleaveIterDataset(ds, cycle_length=2)
+    it = elastic_iterator.ElasticIterator(
+        interleave_ds,
+        shard_options=shard_options,
+        global_batch_size=global_batch_size,
+    )
+    actual = list(it)
+    np.testing.assert_equal(actual, expected)
+
+  def test_checkpointing_no_change(self):
+    ds = [
+        dataset.MapDataset.range(i, 100, 25).to_iter_dataset()
+        for i in range(25)
+    ]
+    global_batch_size = 4
+    interleave_ds = interleave.InterleaveIterDataset(
+        ds, cycle_length=global_batch_size
+    )
+    it = elastic_iterator.ElasticIterator(
+        interleave_ds,
+        shard_options=sharding.ShardOptions(shard_index=2, shard_count=4),
+        global_batch_size=global_batch_size,
+    )
+    assert_equal_bag_output_after_checkpoint(it)
+
+  def test_checkpointing_with_map_iter_dataset(self):
+    ds = [
+        dataset.MapDataset.range(i, 100, 25).to_iter_dataset()
+        for i in range(25)
+    ]
+    global_batch_size = 4
+    interleave_ds = interleave.InterleaveIterDataset(
+        ds, cycle_length=global_batch_size
+    )
+    mapped_ds = interleave_ds.map(lambda x: x + 1)
+    it = elastic_iterator.ElasticIterator(
+        mapped_ds,
+        shard_options=sharding.ShardOptions(shard_index=2, shard_count=4),
+        global_batch_size=global_batch_size,
+    )
+    assert_equal_bag_output_after_checkpoint(it)
+
+  def test_get_set_state(self):
+    ds = [
+        dataset.MapDataset.range(i, 100, 25).to_iter_dataset()
+        for i in range(25)
+    ]
+    global_batch_size = 4
+    interleave_ds = interleave.InterleaveIterDataset(
+        ds, cycle_length=global_batch_size
+    )
+    it = elastic_iterator.ElasticIterator(
+        interleave_ds,
+        shard_options=sharding.ShardOptions(shard_index=2, shard_count=4),
+        global_batch_size=global_batch_size,
+    )
+    _ = [next(it) for _ in range(5)]
+
+    inner_state = it.get_state()
+
+    it2 = elastic_iterator.ElasticIterator(
+        interleave_ds,
+        shard_options=sharding.ShardOptions(shard_index=2, shard_count=4),
+        global_batch_size=global_batch_size,
+    )
+    it2.set_state(inner_state)
+
+    self.assertEqual(next(it), next(it2))
+
+  def test_set_shard_states_with_string_keys(self):
+    ds = [
+        dataset.MapDataset.range(i, 100, 25).to_iter_dataset()
+        for i in range(25)
+    ]
+    global_batch_size = 4
+    interleave_ds = interleave.InterleaveIterDataset(
+        ds, cycle_length=global_batch_size
+    )
+    it = elastic_iterator.ElasticIterator(
+        interleave_ds,
+        shard_options=sharding.ShardOptions(shard_index=2, shard_count=4),
+        global_batch_size=global_batch_size,
+    )
+    _ = [next(it) for _ in range(4)]
+
+    shard_states = it.get_shard_states()
+
+    # Simulate JSON serialization/deserialization.
+    # Convert keys in the sharded state to strings to simulate JSON behavior.
+    json_like_shard_states = {str(k): v for k, v in shard_states.items()}
+
+    it2 = elastic_iterator.ElasticIterator(
+        interleave_ds,
+        shard_options=sharding.ShardOptions(shard_index=2, shard_count=4),
+        global_batch_size=global_batch_size,
+    )
+    # This should not raise an error even though keys are strings.
+    it2.set_shard_states(json_like_shard_states)
+
+    self.assertEqual(next(it), next(it2))
 
 
 if __name__ == "__main__":

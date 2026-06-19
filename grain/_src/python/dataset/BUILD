@@ -166,6 +166,7 @@ py_library(
         ":dataset",
         "//grain/_src/core:sharding",
         "//grain/_src/python:options",
+        "//grain/_src/python/dataset/transformations:zip",
     ],
 )
 
