@@ -6,8 +6,21 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features:
+  * Configures automatic, thread-safe reader connection pooling
+    (`_BoundedReaderPool`) per shard inside `ArrayRecordDataSource` to support
+    high-performance, multi-threaded parallel dataset prefetching without file
+    descriptor exhaustion. Exposes safe context manager connection lease API
+    `borrow()` and custom configuration parameter `reader_pool_size` /
+    `array_record_reader_pool_size` flag.
 
 * Breaking changes:
+  * Upgrades `ArrayRecordDataSource` to implement the new
+    `RandomAccessDataSource` single-indexing protocol. The standard index
+    method `__getitem__` now accepts only a single `SupportsIndex` index key
+    (returning a single byte string). Caller threads performing sequential
+    batch loading must migrate execution to the batch method `__getitems__`
+    which continues to perform highly-optimized direct counting-sort parallel
+    fetches.
 
 * Deprecations:
 
