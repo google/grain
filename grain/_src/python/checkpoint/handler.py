@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """This module provides a PyGrain CheckpointHandler for integration with Orbax."""
-
 import dataclasses
 import json
 from typing import Any, Optional, TypeVar
@@ -20,9 +19,7 @@ from typing import Any, Optional, TypeVar
 from etils import epath
 from grain._src.core import sharding
 from grain._src.python import data_loader
-from grain._src.python.checkpoint import elastic_checkpoint
 from grain._src.python.dataset import dataset
-from grain._src.python.dataset import elastic_iterator
 
 IteratorType = TypeVar(
     "IteratorType", data_loader.DataLoaderIterator, dataset.DatasetIterator
@@ -44,11 +41,6 @@ class CheckpointHandler:
     """Saves the given iterator to the checkpoint in `directory`."""
     item = item or args.item  # pytype:disable=attribute-error
     if isinstance(item, dataset.DatasetIterator):
-      # ElasticIterDatasetIterator uses a custom checkpointing mechanism which
-      # saves multiple files in the checkpoint directory. We should save the
-      # state from all iterators in a single file.
-      if isinstance(item, elastic_iterator.ElasticIterDatasetIterator):
-        elastic_checkpoint.save_elastic_iterator(directory, item)
       state = json.dumps(item.get_state(), indent=4)
     else:
       state = item.get_state().decode()
@@ -65,15 +57,6 @@ class CheckpointHandler:
     """Restores the given iterator from the checkpoint in `directory`."""
     item = item or args.item  # pytype:disable=attribute-error
     process_index, process_count = sharding.get_process_index_and_count()
-    if isinstance(item, elastic_iterator.ElasticIterDatasetIterator):
-      # In the case of elastic iterators, we can restore from a checkpoint even
-      # if the number of processes has changed. We check for this case and if
-      # so we restore from shards.
-      if process_count != elastic_checkpoint.get_checkpoint_process_count(
-          directory
-      ):
-        elastic_checkpoint.restore_elastic_iterator(directory, item)
-        return item
     filename = directory / f"process_{process_index}-of-{process_count}.json"
     if not filename.exists():
       raise ValueError(f"File {filename} does not exist.")
@@ -122,6 +105,7 @@ try:
   @dataclasses.dataclass
   class CheckpointRestore(ocp.args.CheckpointArgs):
     item: Any
+
 
 except (ImportError, TypeError, AttributeError):
   pass
