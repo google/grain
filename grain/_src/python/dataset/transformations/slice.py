@@ -61,3 +61,70 @@ class SliceMapDataset(dataset.MapDataset[T]):
   @property
   def _element_spec(self) -> Any:
     return dataset.get_element_spec(self._parent)
+
+
+class ReindexMapDataset(dataset.MapDataset[T]):
+  """Reindexes a MapDataset using a sequence of integer indices.
+
+  Similar to slicing, but instead of specifying a start/stop/step, you provide
+  an arbitrary sequence of indices into the parent dataset. The sequence itself
+  can be a ``MapDataset`` of integers.
+
+  Example usage::
+
+    parent = MapDataset.range(10)
+    indices = [3, 1, 4, 1, 5]
+    ds = ReindexMapDataset(parent, indices)
+    list(ds) == [3, 1, 4, 1, 5]
+
+  Multi-epoch access wraps around the index sequence and advances the parent
+  epoch accordingly::
+
+    ds[5] == parent[indices[0] + len(parent)]  # Second epoch of parent.
+  """
+
+  _MUTATES_ELEMENT_SPEC = False
+
+  def __init__(
+      self,
+      parent: dataset.MapDataset[T],
+      indices: Sequence[int],
+  ):
+    super().__init__(parent)
+    self._indices = indices
+    self._parent_length = len(parent)
+
+  def __len__(self) -> int:
+    return len(self._indices)
+
+  def _reindexed_index(self, index: int) -> int:
+    parent_epoch, relative_offset = divmod(index, len(self))
+    parent_index = self._indices[relative_offset]
+    return parent_index + parent_epoch * self._parent_length
+
+  def __getitem__(self, index):
+    if isinstance(index, slice):
+      return SliceMapDataset(self, index)
+    with self._stats.record_self_time():
+      parent_index = self._reindexed_index(index)
+    return self._parent[parent_index]
+
+  def _getitems(self, indices: Sequence[int]):
+    with self._stats.record_self_time(num_elements=len(indices)):
+      parent_indices = [self._reindexed_index(index) for index in indices]
+    return self._parent._getitems(parent_indices)  # pylint: disable=protected-access
+
+  def __str__(self) -> str:
+    length = len(self._indices)
+    if length <= 5:
+      indices_str = str(self._indices)
+    else:
+      indices_str = (
+          f"[{self._indices[0]}, {self._indices[1]}, ...,"
+          f" {self._indices[-2]}, {self._indices[-1]}]"
+      )
+    return f"ReindexMapDataset(indices={indices_str}, len={length})"
+
+  @property
+  def _element_spec(self) -> Any:
+    return dataset.get_element_spec(self._parent)

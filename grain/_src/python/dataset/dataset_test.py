@@ -670,6 +670,11 @@ class DatasetTest(parameterized.TestCase):
     )
     self.assertSequenceEqual(ds._getitems([0, 1]), [None, 7])
 
+  def test_slice_with_indices(self):
+    ds = dataset.MapDataset.range(10).slice([3, 1, 4, 1, 5])
+    self.assertLen(ds, 5)
+    self.assertSequenceEqual(list(ds), [3, 1, 4, 1, 5])
+
   def test_repeat_updates_length(self):
     ds = dataset.MapDataset.range(15).repeat(3)
     self.assertLen(ds, 45)

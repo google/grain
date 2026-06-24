@@ -682,18 +682,28 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
     # pylint: enable=g-import-not-at-top
     return shuffle.ShuffleMapDataset(parent=self, seed=seed)
 
-  def slice(self, sl: builtins.slice) -> MapDataset[T]:
+  def slice(self, sl: builtins.slice | Sequence[int]) -> MapDataset[T]:
     """Returns a dataset containing only the elements with indices in ``sl``.
 
     For most implementations of ``MapDataset`` slicing is also available through
     subscript operator: ``list(ds.slice(slice(1, 10, 2))) == ds[1:10:2]``.
 
-    Example usage::
+    Example usage with a slice::
 
       ds = MapDataset.range(5)
       list(ds.slice(slice(1, 3))) == [1, 2]
       list(ds.slice(slice(1, None, 2))) == [1, 3]
 
+    Example usage with a sequence of indices::
+
+      ds = MapDataset.range(10)
+      list(ds.slice([3, 1, 4, 1, 5])) == [3, 1, 4, 1, 5]
+
+    The indices sequence can also be a ``MapDataset`` of integers::
+
+      ds = MapDataset.range(10)
+      idx = MapDataset.range(3)
+      list(ds.slice(idx)) == [0, 1, 2]
 
     Commonly used for sharding:
     ``ds = ds.slice(slice(shard_index, None, shard_count))``, or, equivalently,
@@ -702,10 +712,12 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
     Args:
       sl: A ``slice`` object
         (https://docs.python.org/3/library/functions.html#slice) representing
-        the slice of elements to that should constitute the returned dataset.
+        the slice of elements to that should constitute the returned dataset, or
+        a ``Sequence[int]`` (including ``MapDataset[int]``) of indices into the
+        parent dataset.
 
     Returns:
-      A dataset containing only the elements with indices in the ``sl`` slice.
+      A dataset containing only the elements with indices in ``sl``.
     """
     # Loaded lazily due to a circular dependency (dataset <-> slice).
     # pylint: disable=g-import-not-at-top
@@ -713,7 +725,9 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
         slice as slice_dataset,
     )
     # pylint: enable=g-import-not-at-top
-    return slice_dataset.SliceMapDataset(parent=self, sl=sl)
+    if isinstance(sl, builtins.slice):
+      return slice_dataset.SliceMapDataset(parent=self, sl=sl)
+    return slice_dataset.ReindexMapDataset(parent=self, indices=sl)
 
   def random_map(
       self,

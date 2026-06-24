@@ -6,6 +6,9 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features:
+  * `MapDataset.slice` now accepts a `Sequence[int]` (including a
+    `MapDataset[int]`) in addition to a `slice` object, enabling arbitrary index
+    remapping similarly to NumPy's advanced indexing.
 
 * Breaking changes:
 
