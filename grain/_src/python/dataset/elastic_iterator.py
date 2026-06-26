@@ -443,7 +443,7 @@ class ElasticIterator(dataset.DatasetIterator):
       self._ds = ds
 
   @functools.cached_property
-  def _default_iterator(self) -> dataset.DatasetIterator:
+  def base_iterator(self) -> dataset.DatasetIterator:
     if isinstance(self._ds, dataset.IterDataset):
       return ElasticIterDatasetIterator(
           self._ds,
@@ -468,21 +468,21 @@ class ElasticIterator(dataset.DatasetIterator):
     """For backwards compatibility with direct next() calls.
 
     This allows using ElasticIterator as a one-shot iterator directly,
-    delegating to a default iterator created on the first call.
+    delegating to a base iterator created on the first call.
 
     Returns:
       The next element in the iteration.
     """
-    return next(self._default_iterator)
+    return next(self.base_iterator)
 
   def close(self) -> None:
-    """Closes the default iterator if it was created for backwards compatibility."""
-    if "_default_iterator" in self.__dict__:
-      self._default_iterator.close()
+    """Closes the base iterator if it was created for backwards compatibility."""
+    if "_base_iterator" in self.__dict__:
+      self.base_iterator.close()
 
   def get_state(self) -> dict[str, Any]:
     """Returns the state of the iterator."""
-    return self._default_iterator.get_state()
+    return self.base_iterator.get_state()
 
   def set_state(self, state):
     """Sets the state of the iterator.
@@ -490,10 +490,10 @@ class ElasticIterator(dataset.DatasetIterator):
     Args:
       state: The state to set.
     """
-    if "_default_iterator" in self.__dict__:
-      self._default_iterator.close()
-      self.__dict__.pop("_default_iterator")
-    self._default_iterator.set_state(state)
+    if "base_iterator" in self.__dict__:
+      self.base_iterator.close()
+      self.__dict__.pop("base_iterator")
+    self.base_iterator.set_state(state)
 
   def get_shard_states(self) -> Any:
     """Returns the state of the inner iterator.
@@ -501,12 +501,12 @@ class ElasticIterator(dataset.DatasetIterator):
     This is only intended to be used when the ElasticIterator changes its
     topology or the number of hosts.
     """
-    if not isinstance(self._default_iterator, ElasticIterDatasetIterator):
+    if not isinstance(self.base_iterator, ElasticIterDatasetIterator):
       raise NotImplementedError(
           "get_shard_states is only supported for IterDataset-based"
           " ElasticIterator."
       )
-    return self._default_iterator.get_shard_states()
+    return self.base_iterator.get_shard_states()
 
   def set_shard_states(self, shard_states: Any) -> None:
     """Sets the state of the inner iterator.
@@ -517,9 +517,9 @@ class ElasticIterator(dataset.DatasetIterator):
     Args:
       shard_states: The shard states to set.
     """
-    if not isinstance(self._default_iterator, ElasticIterDatasetIterator):
+    if not isinstance(self.base_iterator, ElasticIterDatasetIterator):
       raise NotImplementedError(
           "set_shard_states is only supported for IterDataset-based"
           " ElasticIterator."
       )
-    self._default_iterator.set_shard_states(shard_states)
+    self.base_iterator.set_shard_states(shard_states)

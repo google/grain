@@ -47,7 +47,12 @@ class CheckpointHandler:
       # ElasticIterDatasetIterator uses a custom checkpointing mechanism which
       # saves multiple files in the checkpoint directory. We should save the
       # state from all iterators in a single file.
-      if isinstance(item, elastic_iterator.ElasticIterDatasetIterator):
+      if isinstance(
+          item,
+          elastic_iterator.ElasticIterator,
+      ) and isinstance(
+          item.base_iterator, elastic_iterator.ElasticIterDatasetIterator
+      ):
         elastic_checkpoint.save_elastic_iterator(directory, item)
       state = json.dumps(item.get_state(), indent=4)
     else:
@@ -65,7 +70,12 @@ class CheckpointHandler:
     """Restores the given iterator from the checkpoint in `directory`."""
     item = item or args.item  # pytype:disable=attribute-error
     process_index, process_count = sharding.get_process_index_and_count()
-    if isinstance(item, elastic_iterator.ElasticIterDatasetIterator):
+    if isinstance(
+        item,
+        elastic_iterator.ElasticIterator,
+    ) and isinstance(
+        item.base_iterator, elastic_iterator.ElasticIterDatasetIterator
+    ):
       # In the case of elastic iterators, we can restore from a checkpoint even
       # if the number of processes has changed. We check for this case and if
       # so we restore from shards.

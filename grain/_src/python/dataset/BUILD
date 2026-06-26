@@ -185,9 +185,11 @@ py_test(
         ":elastic_iterator",
         "//grain/_src/core:sharding",
         "//grain/_src/python:options",
+        "//grain/_src/python/checkpoint:handler",
         "//grain/_src/python/testing:experimental",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
+        "@pypi//etils:pkg",
         "@pypi//numpy:pkg",
     ],
 )

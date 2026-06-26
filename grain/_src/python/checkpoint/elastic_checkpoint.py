@@ -27,7 +27,10 @@ def get_checkpoint_process_count(directory: epath.Path) -> int:
 
 def save_elastic_iterator(
     directory: epath.Path,
-    item: elastic_iterator.ElasticIterDatasetIterator,
+    item: (
+        elastic_iterator.ElasticIterDatasetIterator
+        | elastic_iterator.ElasticIterator
+    ),
 ) -> None:
   """Saves the given iterator to the checkpoint in `directory`."""
   state = item.get_shard_states()
@@ -39,7 +42,10 @@ def save_elastic_iterator(
 
 def restore_elastic_iterator(
     directory: epath.Path,
-    item: elastic_iterator.ElasticIterDatasetIterator,
+    item: (
+        elastic_iterator.ElasticIterDatasetIterator
+        | elastic_iterator.ElasticIterator
+    ),
 ) -> None:
   """Restores the given iterator from the checkpoint in `directory`."""
   shard_index = item.shard_options.shard_index
