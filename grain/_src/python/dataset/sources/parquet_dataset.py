@@ -86,7 +86,42 @@ class _ParquetDatasetIterator(dataset.DatasetIterator[T]):
 
 
 class ParquetIterDataset(dataset.IterDataset[T]):
-  """An IterDataset for a parquet format file."""
+  """An IterDataset for a Parquet format file.
+
+  This dataset provides an iterator over records stored in Parquet files. It
+  natively handles both single-file reads and multi-file interleaving. If a
+  sequence of multiple paths is provided, the dataset automatically interleaves
+  reads from the files (reading up to 16 files concurrently by default).
+
+  Additional keyword arguments provided during initialization are forwarded
+  directly to the underlying `pyarrow.parquet.ParquetFile` constructor. This
+  allows users to configure advanced Arrow features like memory mapping or
+  custom buffer sizes.
+
+  Example:
+    Initializing a dataset to read records from a Parquet file with `memory_map`
+    option passed to `ParquetFile`::
+
+      import tempfile
+      import grain
+      import pandas as pd
+      import pyarrow as pa
+      import pyarrow.parquet as pq
+
+      with tempfile.NamedTemporaryFile(suffix=".parquet") as tmp:
+        df = pd.DataFrame({"id": [1, 2], "val": ["A", "B"]})
+        pq.write_table(pa.Table.from_pandas(df), tmp.name)
+
+        # Create a Parquet dataset with a keyword arg.
+        ds = grain.experimental.ParquetIterDataset(
+            tmp.name,
+            memory_map=True
+        )
+
+        # Print each record from the dataset.
+        for record in ds:
+          print(record)
+  """
 
   def __init__(
       self,
@@ -96,10 +131,10 @@ class ParquetIterDataset(dataset.IterDataset[T]):
     """Initializes ParquetIterDataset.
 
     Args:
-      path: A path or sequence of paths to parquet format files. If multiple
-        paths are provided, they are interleaved with at most 16 files read in
-        parallel.
-      **read_kwargs: Keyword arguments to pass to pyarrow.parquet.ParquetFile.
+      path: A path or sequence of paths to Parquet format files. If multiple
+        paths are provided, they are interleaved with at most 16 files read
+        concurrently.
+      **read_kwargs: Keyword arguments to pass to `pyarrow.parquet.ParquetFile`.
     """
     super().__init__()
     if isinstance(path, (str, bytes)):

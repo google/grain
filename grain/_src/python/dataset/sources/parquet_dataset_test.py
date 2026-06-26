@@ -15,8 +15,8 @@ import platform
 
 from absl import flags
 from absl.testing import absltest
+import grain
 from grain._src.python.dataset.sources import parquet_dataset
-import grain.python as grain
 
 flags.FLAGS.mark_as_parsed()
 
@@ -136,6 +136,30 @@ class ParquetIterDatasetTest(absltest.TestCase):
     self.assertSequenceEqual(
         list(iter(dataset)), [{"text": x} for x in WINDOWSHUFFLED_TEXT]
     )
+
+  def test_docstring_example(self):
+    # This test verifies the examples provided in ParquetIterDataset docstring.
+    # pylint: disable=g-import-not-at-top
+    import tempfile
+    import pandas as pd
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    # pylint: enable=g-import-not-at-top
+
+    with tempfile.NamedTemporaryFile(suffix=".parquet") as tmp:
+      df = pd.DataFrame({"id": [1, 2], "val": ["A", "B"]})
+      pq.write_table(pa.Table.from_pandas(df), tmp.name)
+
+      # Create a Parquet dataset with a keyword arg.
+      ds = grain.experimental.ParquetIterDataset(tmp.name, memory_map=True)
+
+      # Print each record from the dataset.
+      records = []
+      for record in ds:
+        records.append(record)
+      self.assertSequenceEqual(
+          records, [{"id": 1, "val": "A"}, {"id": 2, "val": "B"}]
+      )
 
 
 if __name__ == "__main__":
