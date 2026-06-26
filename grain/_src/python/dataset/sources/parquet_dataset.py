@@ -86,7 +86,20 @@ class _ParquetDatasetIterator(dataset.DatasetIterator[T]):
 
 
 class ParquetIterDataset(dataset.IterDataset[T]):
-  """An IterDataset for a parquet format file."""
+  """An IterDataset for parquet files.
+
+  ``ParquetIterDataset`` is a thin wrapper around
+  :class:`pyarrow.parquet.ParquetFile`.
+
+  Records are streamed row-group by row-group instead of loading the whole file
+  into memory at once.
+
+  When multiple paths are provided, Grain lazily creates per-file iterators and
+  interleaves them with a bounded cycle length (default: 16). Then this
+  dataset can be combined with Grain prefetching utilities such as
+  ``ThreadPrefetchIterDataset`` or ``device_put`` to overlap CPU-side reading
+  with downstream work.
+  """
 
   def __init__(
       self,
@@ -97,9 +110,13 @@ class ParquetIterDataset(dataset.IterDataset[T]):
 
     Args:
       path: A path or sequence of paths to parquet format files. If multiple
-        paths are provided, they are interleaved with at most 16 files read in
-        parallel.
-      **read_kwargs: Keyword arguments to pass to pyarrow.parquet.ParquetFile.
+        paths are provided, they are lazily interleaved with at most 16 active
+        file iterators at a time.
+      **read_kwargs: Keyword arguments to pass to
+        :class:`pyarrow.parquet.ParquetFile`. Refer to the PyArrow `ParquetFile
+        API
+        <https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetFile.html>`__
+        for the supported options.
     """
     super().__init__()
     if isinstance(path, (str, bytes)):
