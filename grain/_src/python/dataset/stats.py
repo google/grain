@@ -42,7 +42,6 @@ from grain._src.python.dataset import base
 from grain._src.python.dataset import stats_utils
 from grain.proto import execution_summary_pb2
 
-
 # Registry of weak references to output dataset iterators for collecting
 # execution stats.
 _iter_weakref_registry = set()
