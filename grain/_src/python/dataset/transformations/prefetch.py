@@ -555,8 +555,7 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     assert target_prefetch_buffer_size >= 0, target_prefetch_buffer_size
     self._target_prefetch_buffer_size = target_prefetch_buffer_size
     self.autotune_buffer_size = autotune_buffer_size
-    self._step_zero_state: StateT = parent.get_state()
-    self._state: StateT | None = self._step_zero_state
+    self._state: StateT | None = None
     self._next_index: int | None = 0
 
     self._prefetch_thread: threading.Thread | None = None
@@ -627,6 +626,9 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       stage_category=dataset_stats.IPL_CAT_PREFETCH
   )
   def __next__(self):
+
+    if self._state is None:
+      self._state = self._maybe_nonnative_parent.get_state()
 
     timer = dataset_stats.Timer()
     with timer:

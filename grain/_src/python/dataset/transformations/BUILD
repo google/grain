@@ -268,6 +268,7 @@ py_test(
     srcs = ["interleave_test.py"],
     srcs_version = "PY3",
     deps = [
+        ":zip",
         "//grain/_src/python:options",
         "//grain/_src/python/dataset",
         "//grain/_src/python/dataset:base",

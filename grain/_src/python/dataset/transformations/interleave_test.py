@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import threading
 from typing import cast
+
 from absl.testing import absltest
 from absl.testing import flagsaver
 from absl.testing import parameterized
@@ -22,6 +24,8 @@ from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import interleave
 from grain._src.python.dataset.transformations import prefetch
+from grain._src.python.dataset.transformations import repeat
+from grain._src.python.dataset.transformations import zip as zip_dataset
 from grain._src.python.testing.experimental import assert_equal_output_after_checkpoint
 import numpy as np
 
@@ -514,6 +518,53 @@ class _InterleaveIterDatasetTestBase(parameterized.TestCase):
     )
     if isinstance(self, InterleaveIterDatasetTest):
       self.assertEqual(state["exhausted"], [0, 1])
+
+  def test_options_propagated_with_interleaved_interleaves(self):
+    ds = (
+        dataset.MapDataset.range(0, 1500)
+        .to_iter_dataset()
+        .filter(lambda x: False)
+    )
+    interleave_ds = self._create_dataset([ds], cycle_length=1)
+    interleave_ds_2 = self._create_dataset([interleave_ds], cycle_length=1)
+
+    filter_options = base.DatasetOptions(filter_raise_threshold_ratio=0.1)
+    ds_with_options = dataset.WithOptionsIterDataset(
+        interleave_ds_2, filter_options
+    )
+    with self.assertRaisesRegex(ValueError, r"skipped 100\.00 %"):
+      list(ds_with_options)
+
+  def test_options_propagated_with_zipped_interleaves(self):
+    no_filter_ds = dataset.MapDataset.range(
+        1200, 1500
+    ).to_iter_dataset()  # 300 elements
+
+    filter_ds = (
+        dataset.MapDataset.range(0, 1500)
+        .to_iter_dataset()
+        .filter(lambda x: x >= 1200)
+    )
+    interleave_ds1 = self._create_dataset([filter_ds], cycle_length=1)
+    interleave_ds2 = self._create_dataset([no_filter_ds], cycle_length=1)
+    zipped_ds = zip_dataset.ZipIterDataset([interleave_ds1, interleave_ds2])
+    zipped_ds2 = zip_dataset.ZipIterDataset([interleave_ds2, interleave_ds1])
+
+    filter_options = base.DatasetOptions(filter_raise_threshold_ratio=0.1)
+    ds_with_options1 = dataset.WithOptionsIterDataset(zipped_ds, filter_options)
+    ds_with_options2 = dataset.WithOptionsIterDataset(
+        zipped_ds2, filter_options
+    )
+
+    with self.assertRaisesRegex(
+        ValueError, r"FilterDatasetIterator.*skipped 100\.00 %"
+    ):
+      list(ds_with_options1)
+
+    with self.assertRaisesRegex(
+        ValueError, r"FilterDatasetIterator.*skipped 100\.00 %"
+    ):
+      list(ds_with_options2)
 
 
 if __name__ == "__main__":
