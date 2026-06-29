@@ -485,9 +485,6 @@ def _add_prefetch_and_make_iterator(
 
   # Propagate options applied after InterleaveIterDataset to the iterators that
   # are being interleaved.
-  iterator._ctx.dataset_options = ctx.dataset_options.merge(
-      iterator._ctx.dataset_options
-  )
   iterator._ctx.dataset_options = ctx.dataset_options.merge(iterator._ctx.dataset_options)  # pylint: disable=protected-access
 
   if start_prefetch:
