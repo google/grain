@@ -48,25 +48,21 @@ class RepeatMapDataset(dataset.MapDataset[T]):
           f"Repeating already infinite dataset {parent} does nothing."
       )
     self._num_epochs = num_epochs
-    self._parent_length = len(parent)
-    if num_epochs is None:
-      if self._parent_length == 0:  # pylint: disable=g-explicit-length-test
-        self._length: int = 0
-      else:
-        self._length: int = sys.maxsize
-    else:
-      self._length = num_epochs * self._parent_length
     self._reseed_each_epoch = reseed_each_epoch
 
   def __len__(self) -> int:
-    return self._length
+    parent_len = len(self._parent)
+    if self._num_epochs is None:
+      return 0 if parent_len == 0 else sys.maxsize
+    return self._num_epochs * parent_len
 
   def __str__(self) -> str:
     return f"RepeatMapDataset(num_epochs={self._num_epochs})"
 
   def _getitems(self, indices: Sequence[int]):
     if not self._reseed_each_epoch:
-      indices = [index % self._parent_length for index in indices]
+      parent_len = len(self._parent)
+      indices = [index % parent_len for index in indices]
     return self._stats.record_output_spec_for_batch(self._parent._getitems(indices))  # pylint: disable=protected-access
 
   def __getitem__(self, index):
@@ -74,7 +70,7 @@ class RepeatMapDataset(dataset.MapDataset[T]):
       return self.slice(index)
     if not self._reseed_each_epoch:
       # Use elements from the first epoch.
-      index = index % self._parent_length
+      index = index % len(self._parent)
     return self._stats.record_output_spec(self._parent[index])
 
   @property

@@ -33,6 +33,7 @@ from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import batch
 from grain._src.python.dataset.transformations import flatmap
+from grain._src.python.dataset.transformations import prefetch
 from grain._src.python.dataset.transformations import repeat
 from grain._src.python.dataset.transformations import source
 from grain._src.python.ipc import shared_memory_array
@@ -1247,6 +1248,43 @@ class StringTruncationTest(absltest.TestCase):
     self._assert_strings_not_truncated(
         result, [self.SHORT_STR, self.MEDIUM_STR, self.LONG_STR]
     )
+
+  def test_dynamic_length_and_drop_remainder_when_source_sliced(self):
+    """BatchMapDataset must update length and enforce drop_remainder when its source is sliced."""
+    ds = source.SourceMapDataset(list(range(31)))
+    batched_ds = batch.BatchMapDataset(ds, batch_size=4, drop_remainder=True)
+    self.assertLen(batched_ds, 7)
+
+    # Simulate worker 1 receiving slice(16, 31) -> 15 elements when sliced
+    # across 2 workers.
+    ds.set_slice(slice(1, None, 2), sequential_slice=True)
+    self.assertLen(batched_ds, 3)
+
+    batches = [batched_ds[i] for i in range(len(batched_ds))]
+    self.assertLen(batches, 3)
+    for b in batches:
+      self.assertLen(b, 4)
+
+  def test_end_to_end_multithread_prefetch_with_sequential_slice(self):
+    """End-to-end multi-worker pipelines drop remainders cleanly."""
+    ds = source.SourceMapDataset(list(range(31)))
+    batched_ds = batch.BatchMapDataset(ds, batch_size=4, drop_remainder=True)
+    repeated_ds = batched_ds.repeat(2)
+    iter_ds = repeated_ds.to_iter_dataset()
+
+    # Test batching when Grain slices workers automatically under the hood.
+    prefetched_ds = prefetch.multithread_prefetch(
+        iter_ds, num_threads=2, buffer_size=10, sequential_slice=True
+    )
+
+    batches = list(prefetched_ds)
+    self.assertNotEmpty(batches)
+    for i, b in enumerate(batches):
+      self.assertLen(
+          b,
+          4,
+          f"Batch {i} yielded length {len(b)} != 4 in multi-worker pipeline",
+      )
 
 
 if __name__ == "__main__":
