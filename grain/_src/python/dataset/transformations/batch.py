@@ -422,7 +422,6 @@ class BatchMapDataset(dataset.MapDataset[T]):
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
     self._batch_fn = make_batch if batch_fn is None else batch_fn
-    self._length = self._get_length()
 
   def _get_length(self) -> int:
     if self._drop_remainder:
@@ -439,14 +438,15 @@ class BatchMapDataset(dataset.MapDataset[T]):
     return lambda items: [self._parent[i] for i in items]
 
   def __len__(self):
-    return self._length
+    return self._get_length()
 
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
     # Each epoch gets batched separately. If users want to batch across epochs
     # they can repeat() before the batch().
-    epoch, index_in_epoch = divmod(index, self._length)
+    epoch, index_in_epoch = divmod(index, len(self))
+
     # Get range within the epoch without going outside the epoch.
     start = index_in_epoch * self._batch_size
     stop = min(len(self._parent), (index_in_epoch + 1) * self._batch_size)
