@@ -141,14 +141,13 @@ class ParquetIterDatasetTest(absltest.TestCase):
     # This test verifies the examples provided in ParquetIterDataset docstring.
     # pylint: disable=g-import-not-at-top
     import tempfile
-    import pandas as pd
     import pyarrow as pa
     import pyarrow.parquet as pq
     # pylint: enable=g-import-not-at-top
 
     with tempfile.NamedTemporaryFile(suffix=".parquet") as tmp:
-      df = pd.DataFrame({"id": [1, 2], "val": ["A", "B"]})
-      pq.write_table(pa.Table.from_pandas(df), tmp.name)
+      table = pa.table({"id": [1, 2], "val": ["A", "B"]})
+      pq.write_table(table, tmp.name)
 
       # Create a Parquet dataset with a keyword arg.
       ds = grain.experimental.ParquetIterDataset(tmp.name, memory_map=True)
