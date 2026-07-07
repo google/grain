@@ -153,6 +153,13 @@ class RepeatMapDatasetTest(parameterized.TestCase):
     self.assertEqual(spec.dtype, np.int64)
     self.assertEqual(spec.shape, ())
 
+  def test_set_slice_updates_length_and_parent(self):
+    ds = dataset.MapDataset.range(20)
+    repeated_ds = repeat.RepeatMapDataset(ds, num_epochs=3)
+    self.assertLen(repeated_ds, 60)
+    repeated_ds.set_slice(slice(0, None, 2), sequential_slice=True)
+    self.assertLen(repeated_ds, 30)
+
 
 class RepeatIterDatasetTest(parameterized.TestCase):
 

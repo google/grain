@@ -422,13 +422,18 @@ class BatchMapDataset(dataset.MapDataset[T]):
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
     self._batch_fn = make_batch if batch_fn is None else batch_fn
-    self._length = self._get_length()
+    self._update_length()
 
-  def _get_length(self) -> int:
+  def _update_length(self) -> None:
+    self._parent_length = len(self._parent)
     if self._drop_remainder:
-      return len(self._parent) // self._batch_size
+      self._length = self._parent_length // self._batch_size
     else:
-      return math.ceil(len(self._parent) / self._batch_size)
+      self._length = math.ceil(self._parent_length / self._batch_size)
+
+  def set_slice(self, sl: slice, sequential_slice: bool = False) -> None:
+    dataset.set_slice(self._parent, sl, sequential_slice)
+    self._update_length()
 
   @functools.cached_property
   def _get_parent_items_fn(self):
@@ -449,10 +454,10 @@ class BatchMapDataset(dataset.MapDataset[T]):
     epoch, index_in_epoch = divmod(index, self._length)
     # Get range within the epoch without going outside the epoch.
     start = index_in_epoch * self._batch_size
-    stop = min(len(self._parent), (index_in_epoch + 1) * self._batch_size)
+    stop = min(self._parent_length, (index_in_epoch + 1) * self._batch_size)
     # Add offset for epoch.
-    start += epoch * len(self._parent)
-    stop += epoch * len(self._parent)
+    start += epoch * self._parent_length
+    stop += epoch * self._parent_length
     values = self._get_parent_items_fn(range(start, stop))
     with self._stats.record_self_time():
       try:

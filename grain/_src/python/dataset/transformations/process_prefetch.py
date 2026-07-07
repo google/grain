@@ -662,9 +662,7 @@ class _LazyWorkerSliceIterDataset(dataset.IterDataset[T]):
   def __iter__(self) -> dataset.DatasetIterator[T]:
     if not _is_in_worker_process:
       return self._parent.__iter__()
-    prefetch._set_slice_iter_dataset(
-        self._parent, self._slice, self._sequential_slice
-    )
+    dataset.set_slice(self._parent, self._slice, self._sequential_slice)
     return self._parent.__iter__()
 
   @property

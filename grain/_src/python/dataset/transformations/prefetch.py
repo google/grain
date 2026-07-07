@@ -92,15 +92,6 @@ def _getitem(
 
 
 @typing.runtime_checkable
-class SupportsInPlaceSlicing(Protocol):
-  """Datasets that support mutation by setting the processed data slice."""
-
-  def set_slice(self, sl: slice, sequential_slice: bool = False) -> None:
-    ...
-
-
-@typing.runtime_checkable
-@typing.runtime_checkable
 class SupportsSlicedStateManagement(Protocol):
   """Iterators that support setting a sliced state.
 
@@ -149,7 +140,7 @@ class PrefetchIterDataset(dataset.IterDataset[T]):
     if not sequential_slice:
       self._parents = (self._parent.slice(sl),)
     else:
-      _set_slice_map_dataset(self._parent, sl, sequential_slice)
+      dataset.set_slice(self._parent, sl, sequential_slice)
 
   def __str__(self) -> str:
     return (
@@ -389,62 +380,6 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
       while self._buffer:
         future = self._buffer.popleft()
         future.cancel()
-
-
-def _set_slice_iter_dataset(
-    ds: dataset.IterDataset,
-    sl: slice,
-    sequential_slice: bool = False,
-) -> None:
-  """Sets data slice for the given dataset.IterDataset in place.
-
-  WARNING: mutates the dataset object. Must only be used on dataset object copy.
-
-  Applies recursively for parents.
-
-  Args:
-   ds: dataset.IterDataset to apply slice to.
-   sl: slice to apply.
-   sequential_slice: whether to apply sequential slicing.
-  """
-  if isinstance(ds, SupportsInPlaceSlicing):
-    ds.set_slice(sl, sequential_slice)
-    return
-  if not ds.parents:
-    raise ValueError(f"Cannot slice `IterDataset` source. {type(ds)}")
-  for parent in ds.parents:
-    if isinstance(parent, dataset.MapDataset):
-      _set_slice_map_dataset(parent, sl, sequential_slice)
-    else:
-      _set_slice_iter_dataset(parent, sl, sequential_slice)
-
-
-def _set_slice_map_dataset(
-    ds: dataset.MapDataset,
-    sl: slice,
-    sequential_slice: bool = False,
-) -> None:
-  """Sets data slice for the given dataset.MapDataset in place.
-
-  WARNING: mutates the dataset object. Must only be used on dataset object copy.
-
-  Applies recursively for parents.
-
-  Args:
-   ds: dataset.MapDataset to apply slice to.
-   sl: slice to apply.
-   sequential_slice: whether to apply sequential slicing.
-  """
-  if isinstance(ds, SupportsInPlaceSlicing):
-    ds.set_slice(sl, sequential_slice)
-    return
-  if not ds.parents:
-    raise ValueError(f"Cannot slice `MapDataset` source. {type(ds)}")
-  for parent in ds.parents:
-    if isinstance(parent, dataset.MapDataset):
-      _set_slice_map_dataset(parent, sl, sequential_slice)
-    else:
-      _set_slice_iter_dataset(parent, sl, sequential_slice)
 
 
 def get_dataset_options(ds: dataset.IterDataset) -> base.DatasetOptions:
@@ -808,7 +743,7 @@ def multithread_prefetch(
       worker_ds = ds
     else:
       worker_ds = copy.deepcopy(ds)
-      _set_slice_iter_dataset(
+      dataset.set_slice(
           worker_ds, slice(i, None, num_threads), sequential_slice
       )
     shards.append(

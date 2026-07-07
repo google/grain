@@ -48,15 +48,22 @@ class RepeatMapDataset(dataset.MapDataset[T]):
           f"Repeating already infinite dataset {parent} does nothing."
       )
     self._num_epochs = num_epochs
-    self._parent_length = len(parent)
-    if num_epochs is None:
+    self._update_length()
+    self._reseed_each_epoch = reseed_each_epoch
+
+  def _update_length(self) -> None:
+    self._parent_length = len(self._parent)
+    if self._num_epochs is None:
       if self._parent_length == 0:  # pylint: disable=g-explicit-length-test
         self._length: int = 0
       else:
         self._length: int = sys.maxsize
     else:
-      self._length = num_epochs * self._parent_length
-    self._reseed_each_epoch = reseed_each_epoch
+      self._length = self._num_epochs * self._parent_length
+
+  def set_slice(self, sl: slice, sequential_slice: bool = False) -> None:
+    dataset.set_slice(self._parent, sl, sequential_slice)
+    self._update_length()
 
   def __len__(self) -> int:
     return self._length

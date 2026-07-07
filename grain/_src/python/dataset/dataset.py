@@ -51,7 +51,7 @@ from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Se
 import functools
 import json
 import sys
-from typing import Any, Generic, TypeVar, Union, cast, overload
+from typing import Any, Generic, Protocol, TypeVar, Union, cast, overload, runtime_checkable
 import warnings
 
 from etils import epath
@@ -1885,3 +1885,39 @@ def get_next_index(ds_iter: DatasetIterator) -> int:
 def is_in_free_threaded_python() -> bool:
   """Returns whether Python is running in free-threaded mode."""
   return hasattr(sys, "_is_gil_enabled") and not sys._is_gil_enabled()  # pylint: disable=protected-access
+
+
+@runtime_checkable
+class SupportsInPlaceSlicing(Protocol):
+  """Datasets that support mutation by setting the processed data slice."""
+
+  def set_slice(self, sl: slice, sequential_slice: bool = False) -> None:
+    ...
+
+
+def set_slice(
+    ds: MapDataset | IterDataset,
+    sl: slice,
+    sequential_slice: bool = False,
+) -> None:
+  """Sets data slice for the given `MapDataset` or `IterDataset` in place.
+
+  WARNING: mutates the dataset object. Must only be used on dataset object copy.
+
+  Applies recursively for parents.
+
+  Args:
+   ds: `MapDataset` or `IterDataset` to apply slice to.
+   sl: slice to apply.
+   sequential_slice: whether to apply sequential slicing.
+  """
+  if isinstance(ds, SupportsInPlaceSlicing):
+    ds.set_slice(sl, sequential_slice)
+    return
+  if not ds.parents:
+    if isinstance(ds, MapDataset):
+      raise ValueError(f"Cannot slice `MapDataset` source. {type(ds)}")
+    else:
+      raise ValueError(f"Cannot slice `IterDataset` source. {type(ds)}")
+  for parent in ds.parents:
+    set_slice(parent, sl, sequential_slice)

@@ -73,7 +73,7 @@ def _find_sliceable_dataset(
   Returns:
     The first sliceable dataset found, or None if no such dataset is found.
   """
-  if isinstance(ds, prefetch.SupportsInPlaceSlicing):
+  if isinstance(ds, dataset.SupportsInPlaceSlicing):
     return ds
   if not hasattr(ds, "parents"):
     return None
@@ -423,7 +423,7 @@ class ElasticIterator(dataset.DatasetIterator):
       # We must set the slice on the original dataset so that the interleave
       # iterator is created with the correct (sliced) datasets.
       self._ds = copy.deepcopy(ds)
-      prefetch._set_slice_iter_dataset(
+      dataset.set_slice(
           self._ds,
           slice(shard_options.shard_index, None, shard_options.shard_count),
       )
@@ -432,7 +432,7 @@ class ElasticIterator(dataset.DatasetIterator):
           datasets = []
           for thread in range(self._read_options.num_threads):
             d = copy.deepcopy(self._ds)
-            prefetch._set_slice_iter_dataset(
+            dataset.set_slice(
                 d, slice(thread, None, self._read_options.num_threads)
             )
             datasets.append(d)
