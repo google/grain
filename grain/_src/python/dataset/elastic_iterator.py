@@ -379,6 +379,22 @@ class ElasticIterator(dataset.DatasetIterator):
   limitations. This class does not guarantee determinism between scaling. The
   limit of parallelism is the number of shards. The current implementation
   doesn't support multiprocessing.
+
+  Example:
+    Creating an elastic iterator for dynamic sharding recovery::
+
+      import grain
+
+      source_ds = grain.MapDataset.range(1000)
+      shard_opts = grain.sharding.ShardOptions(shard_index=0, shard_count=4)
+      elastic_iter = grain.experimental.ElasticIterator(
+          ds=source_ds,
+          global_batch_size=128,
+          shard_options=shard_opts,
+      )
+
+      # The state from this iterator can now safely restore a job that
+      # restarts with, for example, 8 shards and a batch size of 256.
   """
 
   def __init__(

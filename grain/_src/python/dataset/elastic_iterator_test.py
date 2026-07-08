@@ -467,6 +467,18 @@ class ElasticIterDatasetTest(parameterized.TestCase):
 
     self.assertEqual(next(it), next(it2))
 
+  def test_iter_dataset_docstring_example(self):
+    # This test verifies the example provided in the ElasticIterator docstring.
+    source_ds = dataset.MapDataset.range(1000)
+    shard_opts = sharding.ShardOptions(shard_index=0, shard_count=4)
+    elastic_iter = elastic_iterator.ElasticIterator(
+        ds=source_ds,
+        global_batch_size=128,
+        shard_options=shard_opts,
+    )
+    batch = next(elastic_iter)
+    self.assertLen(batch, 32)
+
 
 if __name__ == "__main__":
   absltest.main()
