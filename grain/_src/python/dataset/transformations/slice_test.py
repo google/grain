@@ -194,7 +194,7 @@ class ReindexMapDatasetTest(parameterized.TestCase):
   def test_reindex_with_map_dataset_indices(self):
     parent = dataset.MapDataset.range(10)
     indices = dataset.MapDataset.range(5)  # [0, 1, 2, 3, 4]
-    reindexed = slice_ds.ReindexMapDataset(parent, indices)
+    reindexed = slice_ds.ReindexMapDataset(parent, indices)  # pyrefly: ignore[bad-argument-type]
     self.assertLen(reindexed, 5)
     self.assertSequenceEqual(list(reindexed), [0, 1, 2, 3, 4])
 
@@ -202,7 +202,7 @@ class ReindexMapDatasetTest(parameterized.TestCase):
     parent = dataset.MapDataset.range(20)
     # Indices are [0, 2, 4, 6, 8] from a sliced MapDataset.
     indices = dataset.MapDataset.range(10)[::2]
-    reindexed = slice_ds.ReindexMapDataset(parent, indices)
+    reindexed = slice_ds.ReindexMapDataset(parent, indices)  # pyrefly: ignore[bad-argument-type]
     self.assertLen(reindexed, 5)
     self.assertSequenceEqual(list(reindexed), [0, 2, 4, 6, 8])
 
@@ -298,7 +298,7 @@ class ReindexMapDatasetTest(parameterized.TestCase):
     """Test that MapDataset.slice works with a MapDataset of indices."""
     parent = dataset.MapDataset.range(10)
     indices = dataset.MapDataset.range(3)
-    reindexed = parent.slice(indices)
+    reindexed = parent.slice(indices)  # pyrefly: ignore[bad-argument-type]
     self.assertIsInstance(reindexed, slice_ds.ReindexMapDataset)
     self.assertSequenceEqual(list(reindexed), [0, 1, 2])
 

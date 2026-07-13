@@ -150,7 +150,7 @@ class PrefetchIterDataset(dataset.IterDataset[T]):
 
   def __iter__(self) -> dataset.DatasetIterator[T]:
     return PrefetchDatasetIterator(
-        self._parent, self._read_options, self._allow_nones
+        self._parent, self._read_options, self._allow_nones  # pyrefly: ignore[bad-argument-type]
     )
 
   @property
@@ -204,7 +204,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
   @functools.cached_property
   def _stats(self):
     return self._initialize_stats(
-        self._ctx.dataset_options.execution_tracking_mode
+        self._ctx.dataset_options.execution_tracking_mode  # pyrefly: ignore[bad-argument-type]
     )
 
   @functools.cached_property
@@ -213,8 +213,8 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     # here. The validator helps to detect if we discard too many elements.
     return filter_dataset.FilterThresholdChecker(
         transform_name=str(self),
-        warn_threshold=self._ctx.dataset_options.filter_warn_threshold_ratio,
-        raise_threshold=self._ctx.dataset_options.filter_raise_threshold_ratio,
+        warn_threshold=self._ctx.dataset_options.filter_warn_threshold_ratio,  # pyrefly: ignore[bad-argument-type]
+        raise_threshold=self._ctx.dataset_options.filter_raise_threshold_ratio,  # pyrefly: ignore[bad-argument-type]
     )
 
   def _measure_prefetch_depth(self):
@@ -389,7 +389,7 @@ def get_dataset_options(ds: dataset.IterDataset) -> base.DatasetOptions:
     parent = to_visit.pop()
     if isinstance(parent, dataset.WithOptionsIterDataset):
       result = result.merge(parent.options)
-    to_visit.extend(parent.parents)
+    to_visit.extend(parent.parents)  # pyrefly: ignore[bad-argument-type]
   return result
 
 
@@ -455,7 +455,7 @@ def _put_iterator_elements_in_buffer(
       state = copy.deepcopy(iterator.get_state())
       buffer.put((element, state, None))
   except Exception as e:  # pylint: disable=broad-except
-    buffer.put((None, None, e))
+    buffer.put((None, None, e))  # pyrefly: ignore[bad-argument-type]
 
 
 class CheckpointableIterator(Iterator[T], Protocol[T]):

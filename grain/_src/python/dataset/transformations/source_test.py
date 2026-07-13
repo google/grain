@@ -148,12 +148,12 @@ class SourceMapDatasetTest(absltest.TestCase):
     self.assertEqual(expected_data, actual_data)
 
   def test_set_slice_raises_for_non_sequential_slice(self):
-    ds = source.SourceMapDataset(range(3))
+    ds = source.SourceMapDataset(range(3))  # pyrefly: ignore[bad-argument-type]
     with self.assertRaises(AssertionError):
       ds.set_slice(slice(0, 1, 1), sequential_slice=False)
 
   def test_set_slice(self):
-    ds = source.SourceMapDataset(range(21))
+    ds = source.SourceMapDataset(range(21))  # pyrefly: ignore[bad-argument-type]
     worker_index = 2
     workers_count = 3
     ds.set_slice(

@@ -303,7 +303,7 @@ class BatchMapDatasetTest(parameterized.TestCase):
       dict(
           testcase_name="source_ds_jax",
           use_jax=True,
-          initial_ds=source.SourceMapDataset([
+          initial_ds=source.SourceMapDataset([  # pyrefly: ignore[bad-argument-type]
               np.asarray([1, 2, 3]),
               np.asarray([4, 5, 6]),
               np.asarray([7, 8, 9]),
@@ -317,7 +317,7 @@ class BatchMapDatasetTest(parameterized.TestCase):
       dict(
           testcase_name="source_ds_no_jax",
           use_jax=False,
-          initial_ds=source.SourceMapDataset([
+          initial_ds=source.SourceMapDataset([  # pyrefly: ignore[bad-argument-type]
               np.asarray([1, 2, 3]),
               np.asarray([4, 5, 6]),
               np.asarray([7, 8, 9]),
@@ -346,7 +346,7 @@ class BatchMapDatasetTest(parameterized.TestCase):
   def test_custom_batch_fn(self):
 
     def custom_batch_fn_actual_equals_expected():
-      ds = source.SourceMapDataset([{"a": f"element_{i}"} for i in range(10)])
+      ds = source.SourceMapDataset([{"a": f"element_{i}"} for i in range(10)])  # pyrefly: ignore[bad-argument-type]
 
       def _batch_fn(xs):
         return tree_lib.map_structure(lambda *x: tuple(x), *xs)
@@ -381,7 +381,7 @@ class BatchMapDatasetTest(parameterized.TestCase):
       dict(
           testcase_name="source_ds_drop_remainder",
           drop_remainder=True,
-          initial_ds=source.SourceMapDataset([
+          initial_ds=source.SourceMapDataset([  # pyrefly: ignore[bad-argument-type]
               np.asarray([0, 1, 2]),
               np.asarray([3, 4, 5]),
               np.asarray([6, 7, 8]),
@@ -398,7 +398,7 @@ class BatchMapDatasetTest(parameterized.TestCase):
       dict(
           testcase_name="source_ds_no_drop_remainder",
           drop_remainder=False,
-          initial_ds=source.SourceMapDataset([
+          initial_ds=source.SourceMapDataset([  # pyrefly: ignore[bad-argument-type]
               np.asarray([0, 1, 2]),
               np.asarray([3, 4, 5]),
               np.asarray([6, 7, 8]),
@@ -529,7 +529,7 @@ class BatchMapDatasetTest(parameterized.TestCase):
   def test_batch_after_flatmap_raises_error(self):
     @dataclasses.dataclass(frozen=True)
     class TestFlatMap(transforms.FlatMap):
-      max_fan_out: int
+      max_fan_out: int  # pyrefly: ignore[bad-override]
 
       def flat_map(self, element: int):
         for i in range(self.max_fan_out):
@@ -647,7 +647,7 @@ class BatchIterDatasetTest(parameterized.TestCase):
       dict(
           testcase_name="source_ds_jax",
           use_jax=True,
-          initial_ds=source.SourceMapDataset([
+          initial_ds=source.SourceMapDataset([  # pyrefly: ignore[bad-argument-type]
               np.asarray([1, 2, 3]),
               np.asarray([4, 5, 6]),
               np.asarray([7, 8, 9]),
@@ -661,7 +661,7 @@ class BatchIterDatasetTest(parameterized.TestCase):
       dict(
           testcase_name="source_ds_no_jax",
           use_jax=False,
-          initial_ds=source.SourceMapDataset([
+          initial_ds=source.SourceMapDataset([  # pyrefly: ignore[bad-argument-type]
               np.asarray([1, 2, 3]),
               np.asarray([4, 5, 6]),
               np.asarray([7, 8, 9]),
@@ -694,7 +694,7 @@ class BatchIterDatasetTest(parameterized.TestCase):
 
     def test_custom_batch_fn_actual_equals_expected():
       iter_ds = source.SourceMapDataset(
-          [{"a": f"element_{i}"} for i in range(10)]
+          [{"a": f"element_{i}"} for i in range(10)]  # pyrefly: ignore[bad-argument-type]
       ).to_iter_dataset()
 
       def _batch_fn(xs):
@@ -776,7 +776,7 @@ class BatchIterDatasetTest(parameterized.TestCase):
       dict(
           testcase_name="source_ds_jax",
           use_jax=True,
-          initial_ds=source.SourceMapDataset([
+          initial_ds=source.SourceMapDataset([  # pyrefly: ignore[bad-argument-type]
               np.asarray([1, 2, 3]),
               np.asarray([4, 5, 6]),
               np.asarray([7, 8, 9]),
@@ -794,7 +794,7 @@ class BatchIterDatasetTest(parameterized.TestCase):
       dict(
           testcase_name="source_ds_no_jax",
           use_jax=False,
-          initial_ds=source.SourceMapDataset([
+          initial_ds=source.SourceMapDataset([  # pyrefly: ignore[bad-argument-type]
               np.asarray([1, 2, 3]),
               np.asarray([4, 5, 6]),
               np.asarray([7, 8, 9]),
@@ -961,7 +961,7 @@ class BatchIterDatasetTest(parameterized.TestCase):
       dict(
           testcase_name="source_ds_jax",
           use_jax=True,
-          initial_ds=source.SourceMapDataset([
+          initial_ds=source.SourceMapDataset([  # pyrefly: ignore[bad-argument-type]
               np.asarray([1, 2, 3]),
               np.asarray([4, 5, 6]),
               np.asarray([7, 8, 9]),
@@ -975,7 +975,7 @@ class BatchIterDatasetTest(parameterized.TestCase):
       dict(
           testcase_name="source_ds_no_jax",
           use_jax=False,
-          initial_ds=source.SourceMapDataset([
+          initial_ds=source.SourceMapDataset([  # pyrefly: ignore[bad-argument-type]
               np.asarray([1, 2, 3]),
               np.asarray([4, 5, 6]),
               np.asarray([7, 8, 9]),
@@ -1024,7 +1024,7 @@ class BatchIterDatasetTest(parameterized.TestCase):
         ),
     )
     dl = data_loader.DataLoader(
-        data_source=data_source,
+        data_source=data_source,  # pyrefly: ignore[bad-argument-type]
         sampler=sampler,
         operations=[transforms.Batch(batch_size=2)],
         worker_count=2,
@@ -1039,7 +1039,7 @@ class BatchIterDatasetTest(parameterized.TestCase):
         batch_ds = curr
         break
       if hasattr(curr, "parents") and curr.parents:
-        to_visit.extend([p for p in curr.parents if p is not None])
+        to_visit.extend([p for p in curr.parents if p is not None])  # pyrefly: ignore[bad-argument-type]
       if hasattr(curr, "_datasets"):
         to_visit.extend(curr._datasets)
 
@@ -1275,7 +1275,7 @@ class StringTruncationTest(absltest.TestCase):
   def test_batch_iter_dataset_shm_preserves_variable_length_strings(self):
     """Full pipeline: BatchIterDataset with shared memory must not truncate."""
     ds = source.SourceMapDataset(
-        [self.SHORT_STR, self.MEDIUM_STR, self.LONG_STR]
+        [self.SHORT_STR, self.MEDIUM_STR, self.LONG_STR]  # pyrefly: ignore[bad-argument-type]
     )
     ds = ds.to_iter_dataset()
     ds = batch.BatchIterDataset(ds, batch_size=3)

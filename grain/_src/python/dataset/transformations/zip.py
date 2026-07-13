@@ -29,7 +29,7 @@ class ZipMapDataset(dataset.MapDataset[T]):
 
   def __init__(self, parents: Sequence[dataset.MapDataset[T]]):
     super().__init__(parents)
-    lengths = [len(p) for p in self._parents]
+    lengths = [len(p) for p in self._parents]  # pyrefly: ignore[bad-argument-type]
     if not lengths:
       raise ValueError("At least one parent must be provided.")
     if not all(lengths[0] == l for l in lengths):
@@ -42,7 +42,7 @@ class ZipMapDataset(dataset.MapDataset[T]):
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
-    return tuple(p[index] for p in self._parents)
+    return tuple(p[index] for p in self._parents)  # pyrefly: ignore[bad-index]
 
   def _getitems(self, indices: Sequence[int]):
     # p._getitems(indices) returns a list of elements of the requested indices.
@@ -57,7 +57,7 @@ class ZipMapDataset(dataset.MapDataset[T]):
 
   @property
   def _element_spec(self) -> Any:
-    return tuple(dataset.get_element_spec(p) for p in self._parents)
+    return tuple(dataset.get_element_spec(p) for p in self._parents)  # pyrefly: ignore[bad-argument-type]
 
 
 class ZipIterDataset(dataset.IterDataset[T]):
@@ -72,14 +72,14 @@ class ZipIterDataset(dataset.IterDataset[T]):
     self._strict = strict
 
   def __iter__(self) -> dataset.DatasetIterator[T]:
-    return _ZipDatasetIterator(self._parents, strict=self._strict)
+    return _ZipDatasetIterator(self._parents, strict=self._strict)  # pyrefly: ignore[bad-argument-type]
 
   def __str__(self) -> str:
     return f"ZipIterDataset(parents={self._parents}, strict={self._strict})"
 
   @property
   def _element_spec(self) -> Any:
-    return tuple(dataset.get_element_spec(p) for p in self._parents)
+    return tuple(dataset.get_element_spec(p) for p in self._parents)  # pyrefly: ignore[bad-argument-type]
 
 
 def _strict_zip_error(i: int, why: str) -> str:

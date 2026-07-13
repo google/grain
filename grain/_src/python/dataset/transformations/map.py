@@ -38,10 +38,10 @@ def _reset_rng_state(
 ) -> None:
   state = rng.bit_generator.state
   state["state"]["counter"] = np.array([0, 0, op_seed, index], dtype=np.uint64)
-  state["buffer"] = np.array([0, 0, 0, 0], dtype=np.uint64)
-  state["buffer_pos"] = 4
-  state["has_uint32"] = 0
-  state["uinteger"] = 0
+  state["buffer"] = np.array([0, 0, 0, 0], dtype=np.uint64)  # pyrefly: ignore[unsupported-operation]
+  state["buffer_pos"] = 4  # pyrefly: ignore[unsupported-operation]
+  state["has_uint32"] = 0  # pyrefly: ignore[unsupported-operation]
+  state["uinteger"] = 0  # pyrefly: ignore[unsupported-operation]
   rng.bit_generator.state = state
 
 
@@ -157,7 +157,7 @@ class MapMapDataset(_ElementSpecFromTransformMapDatasetMixin[T]):
 
   def _map_element(self, element: Any) -> T:
     if element is None:
-      return None
+      return None  # pyrefly: ignore[bad-return]
     return self._map_fn(element)
 
   def __getitem__(self, index):
@@ -210,7 +210,7 @@ class RandomMapMapDataset(_ElementSpecFromTransformMapDatasetMixin[T]):
 
   def _random_map_element(self, element: Any, index: int) -> T:
     if element is None:
-      return None
+      return None  # pyrefly: ignore[bad-return]
     rng = self._rng_pool.acquire_rng(index)
     element = self._map_fn(element, rng)
     self._rng_pool.release_rng(rng)
@@ -264,7 +264,7 @@ class MapWithIndexMapDataset(_ElementSpecFromTransformMapDatasetMixin[T]):
 
   def _map_with_index_fn(self, index: int, element: Any) -> T:
     if element is None:
-      return None
+      return None  # pyrefly: ignore[bad-return]
     return self._map_fn(index, element)
 
   def __getitem__(self, index):
@@ -455,7 +455,7 @@ class RandomMapIterDataset(_ElementSpecFromTransformIterDatasetMixin[T]):
     return _RandomMapDatasetIterator(
         self._parent.__iter__(),
         map_fn=self._map_fn,
-        seed=self._seed,
+        seed=self._seed,  # pyrefly: ignore[bad-argument-type]
         transform_name=self._transform_name,
     )
 

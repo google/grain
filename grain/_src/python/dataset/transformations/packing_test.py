@@ -30,7 +30,7 @@ class _PackedBatchSizeBytesTestMixin:
   kwargs: dict[str, Any]
 
   def test_get_packed_batch_size_bytes(self):
-    ds = source.SourceMapDataset([
+    ds = source.SourceMapDataset([  # pyrefly: ignore[bad-argument-type]
         {"x": np.zeros(5, dtype=np.int64)},
         {"x": np.ones(4, dtype=np.int64)},
         {"x": np.zeros(10, dtype=np.int64)},
@@ -52,7 +52,7 @@ class _PackedBatchSizeBytesTestMixin:
     self.assertEqual(iterator.get_packed_batch_size_bytes(), 336)  # pytype: disable=attribute-error
 
   def test_get_packed_batch_size_bytes_before_next(self):
-    ds = source.SourceMapDataset([
+    ds = source.SourceMapDataset([  # pyrefly: ignore[bad-argument-type]
         {"x": np.zeros(5, dtype=np.int64)},
     ]).to_iter_dataset()
     ds = packing.FirstFitPackIterDataset(

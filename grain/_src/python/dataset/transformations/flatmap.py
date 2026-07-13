@@ -85,7 +85,7 @@ class _FlatMapDatasetIterator(dataset.DatasetIterator[T]):
       transform_name: str,
   ):
     super().__init__(parent)
-    self._flat_map = flat_map
+    self._flat_map = flat_map  # pyrefly: ignore[invalid-type-var]
     self._next_index_in_buffer = 0
     self._buffer = []
     self._last_parent_state = self._parent.get_state()
@@ -109,7 +109,7 @@ class _FlatMapDatasetIterator(dataset.DatasetIterator[T]):
 
       with timer:
         self._next_index_in_buffer = 0
-        self._buffer = self._flat_map(element)
+        self._buffer = self._flat_map(element)  # pyrefly: ignore[bad-assignment]
 
     with self._stats.record_self_time(offset_ns=timer.value()):
       mapped_element = self._buffer[self._next_index_in_buffer]
@@ -129,7 +129,7 @@ class _FlatMapDatasetIterator(dataset.DatasetIterator[T]):
     try:
       element = next(self._parent)
       # Recovers the buffer
-      self._buffer = self._flat_map(element)
+      self._buffer = self._flat_map(element)  # pyrefly: ignore[bad-assignment]
     except StopIteration:
       # Edge case: The iterator has run out of elements.
       # We keep this EOF state.

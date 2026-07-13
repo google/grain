@@ -82,7 +82,7 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     self.prefetch_lazy_iter_ds = prefetch.PrefetchIterDataset(
         self.range_ds, read_options=options.ReadOptions()
     )
-    filter_lazy_dataset._WARN_FILTERED_INTERVAL_SEC = 0.0
+    filter_lazy_dataset._WARN_FILTERED_INTERVAL_SEC = 0.0  # pyrefly: ignore[bad-assignment]
 
   def test_dataset_and_iterator_types(self):
     self.assertIsInstance(
@@ -781,7 +781,7 @@ class _MpContextCheckIterDataset(dataset.IterDataset[_T]):
 
 class _MpContextCheckIterator(dataset.DatasetIterator[_T]):
 
-  def __next__(self) -> tuple[_T, base.MultiprocessingContext]:
+  def __next__(self) -> tuple[_T, base.MultiprocessingContext]:  # pyrefly: ignore[bad-override]
     element = next(self._parent)
     return (element, self._ctx.mp_context)
 

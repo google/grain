@@ -266,7 +266,7 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
     has_full_length_feature = False
     for key, target_sequence_length in self._config.length_struct.items():
       feature = element.get_sliced_features(key)
-      sequence_length = 1 if np.ndim(feature) == 0 else len(feature)
+      sequence_length = 1 if np.ndim(feature) == 0 else len(feature)  # pyrefly: ignore[bad-argument-type]
       if sequence_length > target_sequence_length:
         return False
       if sequence_length == target_sequence_length:
@@ -297,7 +297,7 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
         # Insert `sequence` into `values[start:end]`.
         # For non-meta features also handle segment_ids and positions.
         sequence = element.get_sliced_features(key)
-        sequence_length = 1 if np.ndim(sequence) == 0 else len(sequence)
+        sequence_length = 1 if np.ndim(sequence) == 0 else len(sequence)  # pyrefly: ignore[bad-argument-type]
         replace_with_bos = (
             self._config.bos_handling
             == BOSHandling.REPLACE_FIRST_TOKEN_WITH_BOS
@@ -356,7 +356,7 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
     for key, target_sequence_length in self._config.length_struct.items():
       is_meta_feature = key in self._config.meta_features
       sequence = element.get_sliced_features(key)
-      sequence_length = 1 if np.ndim(sequence) == 0 else len(sequence)
+      sequence_length = 1 if np.ndim(sequence) == 0 else len(sequence)  # pyrefly: ignore[bad-argument-type]
       new_tokens_in_buffer[key] = sequence_length
       assert target_sequence_length >= tokens_in_buffer[key]
       available_tokens = target_sequence_length - tokens_in_buffer[key]
@@ -389,7 +389,7 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
           new_tokens_in_buffer[key] = sequence_length
 
     if needs_splitting:
-      element, remainder = element.split(split_points)
+      element, remainder = element.split(split_points)  # pyrefly: ignore[bad-assignment]
     else:
       remainder = None
 
@@ -524,14 +524,14 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
     return dataclasses.asdict(self._state)
 
   def set_state(self, state: dict[str, Any]):
-    state = _CtsState(**state)
+    state = _CtsState(**state)  # pyrefly: ignore[bad-assignment]
     # Clear internal state.
     self._packed_elements = collections.deque()
     self._remainder_element = None
     self._stop_iteration = False
 
-    self._parent.set_state(state.parent_state)
-    has_remainder = state.has_remainder
+    self._parent.set_state(state.parent_state)  # pyrefly: ignore[missing-attribute]
+    has_remainder = state.has_remainder  # pyrefly: ignore[missing-attribute]
     if not has_remainder:
       self._remainder_element = None
     else:
@@ -543,15 +543,15 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
             f" checkpoint {state} on {self}."
         ) from e
       self._remainder_element = _CtsElement(
-          parent_state=state.parent_state,
+          parent_state=state.parent_state,  # pyrefly: ignore[missing-attribute]
           features=features,
-          slices=state.remainder_slices,
+          slices=state.remainder_slices,  # pyrefly: ignore[missing-attribute]
       )
 
     self._state = self._checkpoint()
     # Advance until we have the same number of next calls.
     elements_from_buffer_after_checkpoint = (
-        state.elements_from_buffer_after_checkpoint
+        state.elements_from_buffer_after_checkpoint  # pyrefly: ignore[missing-attribute]
     )
     timer = stats.Timer()
     with timer:

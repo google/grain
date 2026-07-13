@@ -391,7 +391,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
     length_struct = {"a": 3}
 
     ld = self.packer_cls(
-        source.SourceMapDataset(input_elements).to_iter_dataset(),
+        source.SourceMapDataset(input_elements).to_iter_dataset(),  # pyrefly: ignore[bad-argument-type]
         num_packing_bins=1,
         length_struct=length_struct,
         **self.kwargs,
@@ -417,7 +417,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
 
     length_struct = {"aaa": 3, "bbb": 3}
     ld = self.packer_cls(
-        source.SourceMapDataset(input_elements).to_iter_dataset(),
+        source.SourceMapDataset(input_elements).to_iter_dataset(),  # pyrefly: ignore[bad-argument-type]
         num_packing_bins=1,
         length_struct=length_struct,
         **self.kwargs,
@@ -1170,7 +1170,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
     ]
     length_struct = {"inputs": 3, "targets": 3}
     ld = self.packer_cls(
-        source.SourceMapDataset(input_elements).to_iter_dataset(),
+        source.SourceMapDataset(input_elements).to_iter_dataset(),  # pyrefly: ignore[bad-argument-type]
         num_packing_bins=2,
         length_struct=length_struct,
         shuffle_bins=True,
@@ -1236,7 +1236,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
         for _ in range(100)
     ]
     ld = self.packer_cls(
-        source.SourceMapDataset(elements).repeat().to_iter_dataset(),
+        source.SourceMapDataset(elements).repeat().to_iter_dataset(),  # pyrefly: ignore[bad-argument-type]
         num_packing_bins=4,
         length_struct=dict(row=100),
         shuffle_bins=shuffle_bins,
@@ -1275,7 +1275,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
         for _ in range(100)
     ]
     ld = self.packer_cls(
-        source.SourceMapDataset(elements).repeat().to_iter_dataset(),
+        source.SourceMapDataset(elements).repeat().to_iter_dataset(),  # pyrefly: ignore[bad-argument-type]
         num_packing_bins=4,
         length_struct=dict(row=100, nested_feature=dict(inner_value=100)),
         meta_features=["nested_feature"] if mark_as_meta_feature else [],
@@ -1419,7 +1419,7 @@ class BaseFirstFitPackIterDatasetTest(parameterized.TestCase):
         f" but got {max_sequences_per_bin}.",
     ):
       self.packer_cls(
-          source.SourceMapDataset([]).to_iter_dataset(),
+          source.SourceMapDataset([]).to_iter_dataset(),  # pyrefly: ignore[bad-argument-type]
           length_struct={"inputs": 6, "targets": 6},
           num_packing_bins=2,
           max_sequences_per_bin=max_sequences_per_bin,

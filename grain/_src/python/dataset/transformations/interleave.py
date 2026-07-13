@@ -155,7 +155,7 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
               and self._iterators_in_use[self._next_index_in_cycle]
           ):
             future_state = self._future_states.pop(self._next_index_in_datasets)
-            self._iterators_in_use[self._next_index_in_cycle].set_state(
+            self._iterators_in_use[self._next_index_in_cycle].set_state(  # pyrefly: ignore[missing-attribute]
                 future_state
             )
           self._next_index_in_datasets += 1
@@ -171,9 +171,9 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     for i in range(self._cycle_length):
       it = self._iterators_in_use[i]
       if it is not None:
-        iterators_in_use_states[i] = it.get_state()
+        iterators_in_use_states[i] = it.get_state()  # pyrefly: ignore[unsupported-operation]
       elif self._exhausted_iterator_state[i] is not None:
-        iterators_in_use_states[i] = self._exhausted_iterator_state[i]
+        iterators_in_use_states[i] = self._exhausted_iterator_state[i]  # pyrefly: ignore[unsupported-operation]
       elif self._next_index_in_datasets >= len(self._datasets):
         break
       else:
@@ -186,7 +186,7 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
               start_prefetch=self._started,
           )
         self._iterators_in_use[i] = it
-        iterators_in_use_states[i] = it.get_state()
+        iterators_in_use_states[i] = it.get_state()  # pyrefly: ignore[unsupported-operation]
         self._iterators_in_use_indices[i] = self._next_index_in_datasets
         self._next_index_in_datasets += 1
     if not self._started:
@@ -225,26 +225,26 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
       # future state has been saved for it.
       if i >= next_index_in_datasets:
         if i in self._future_states:
-          shard_states[i] = {
+          shard_states[i] = {  # pyrefly: ignore[unsupported-operation]
               "exhausted": 0,
               "state": self._future_states[i],
           }
         else:
-          shard_states[i] = {
+          shard_states[i] = {  # pyrefly: ignore[unsupported-operation]
               "exhausted": 0,
               "state": self._get_iterator_start_state(i),  # pylint: disable=protected-access
           }
       elif i not in indices:
         # These shards are exhausted but should still create a state to maintain
         # static state spec shapes.
-        shard_states[i] = {
+        shard_states[i] = {  # pyrefly: ignore[unsupported-operation]
             "exhausted": 1,
             "state": self._get_iterator_start_state(i),  # pylint: disable=protected-access
         }
 
     for index, ds_state, is_exhausted in zip(indices, states, exhausted):
       # These shards are currently being iterated on.
-      shard_states[index] = {
+      shard_states[index] = {  # pyrefly: ignore[unsupported-operation]
           "exhausted": is_exhausted,
           "state": ds_state,
       }
@@ -270,10 +270,10 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
           if (
               self._keep_iterators_after_stop_iteration
               and self._exhausted_iterators[index_in_cycle] is not None
-              and self._exhausted_iterators[index_in_cycle][0]
+              and self._exhausted_iterators[index_in_cycle][0]  # pyrefly: ignore[unsupported-operation]
               == index_in_datasets
           ):
-            _, iterator = self._exhausted_iterators[index_in_cycle]
+            _, iterator = self._exhausted_iterators[index_in_cycle]  # pyrefly: ignore[not-iterable]
             self._exhausted_iterators[index_in_cycle] = None
           else:
             iterator = _add_prefetch_and_make_iterator(

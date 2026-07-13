@@ -113,8 +113,8 @@ class _RepeatDatasetIterator(dataset.DatasetIterator[T]):
         node.set_keep_workers_after_stop_iteration(True)
       if isinstance(node, interleave.InterleaveDatasetIterator):
         node.set_keep_iterators_after_stop_iteration(True)
-        to_visit.extend(n for n in node._iterators_in_use if n is not None)  # pylint: disable=protected-access
-      to_visit.extend(n for n in node._parents)
+        to_visit.extend(n for n in node._iterators_in_use if n is not None)  # pylint: disable=protected-access  # pyrefly: ignore[bad-argument-type]
+      to_visit.extend(n for n in node._parents)  # pyrefly: ignore[bad-argument-type]
 
   @stats.record_next_duration_if_output
   def __next__(self):

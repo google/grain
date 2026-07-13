@@ -398,7 +398,7 @@ class _InterleaveIterDatasetTestBase(parameterized.TestCase):
     it2.set_shard_states(shard_state)
 
     # Verify it continues from the correct position.
-    self.assertSequenceEqual(list(it2), expected_remaining)
+    self.assertSequenceEqual(list(it2), expected_remaining)  # pyrefly: ignore[bad-argument-type]
 
   @parameterized.named_parameters(
       dict(
@@ -470,7 +470,7 @@ class _InterleaveIterDatasetTestBase(parameterized.TestCase):
     self.assertEqual(it2.get_shard_states(), expected_shard_state)
 
     # Check get_state() internal values.
-    state = it2.get_state()
+    state = it2.get_state()  # pyrefly: ignore[missing-attribute]
     self.assertEqual(state["next_index_in_cycle"], 0)
     self.assertEqual(
         state["next_index_in_datasets"], expected_next_index_in_datasets
@@ -504,7 +504,7 @@ class _InterleaveIterDatasetTestBase(parameterized.TestCase):
     it.set_shard_states(shard_state)
 
     # Check get_state() internal values.
-    state = it.get_state()
+    state = it.get_state()  # pyrefly: ignore[missing-attribute]
     self.assertEqual(state["next_index_in_cycle"], 0)
     self.assertEqual(state["next_index_in_datasets"], 3)
     self.assertEqual(state["iterators_in_use_indices"], [2, 0])

@@ -27,7 +27,7 @@ from grain._src.python.dataset.transformations import source
 
 @dataclasses.dataclass(frozen=True)
 class FixedSizeSplitWithNoTransform(transforms.FlatMap):
-  max_fan_out: int
+  max_fan_out: int  # pyrefly: ignore[bad-override]
 
   def flat_map(self, element: int):
     for _ in range(self.max_fan_out):
@@ -36,7 +36,7 @@ class FixedSizeSplitWithNoTransform(transforms.FlatMap):
 
 @dataclasses.dataclass(frozen=True)
 class FixedSizeSplitWithTransform(transforms.FlatMap):
-  max_fan_out: int
+  max_fan_out: int  # pyrefly: ignore[bad-override]
 
   def flat_map(self, element: int):
     for _ in range(self.max_fan_out):
@@ -45,7 +45,7 @@ class FixedSizeSplitWithTransform(transforms.FlatMap):
 
 @dataclasses.dataclass(frozen=True)
 class VariableSizeCappedSplitWithNoTransform(transforms.FlatMap):
-  max_fan_out: int
+  max_fan_out: int  # pyrefly: ignore[bad-override]
 
   def flat_map(self, element: int):
     return [element] * min(element, self.max_fan_out)
@@ -53,7 +53,7 @@ class VariableSizeCappedSplitWithNoTransform(transforms.FlatMap):
 
 @dataclasses.dataclass(frozen=True)
 class VariableSizeUncappedSplitWithNoTransform(transforms.FlatMap):
-  max_fan_out: int
+  max_fan_out: int  # pyrefly: ignore[bad-override]
 
   def flat_map(self, element: int):
     return [element] * element

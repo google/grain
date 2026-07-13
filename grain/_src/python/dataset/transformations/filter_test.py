@@ -127,7 +127,7 @@ class FilterIterDatasetTest(absltest.TestCase):
     super().setUp()
     self.range_iter_ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
     # Issue warnings without wait.
-    filter_dataset._WARN_FILTERED_INTERVAL_SEC = 0.0
+    filter_dataset._WARN_FILTERED_INTERVAL_SEC = 0.0  # pyrefly: ignore[bad-assignment]
 
   def test_filter_no_elements(self):
     filter_no_elts_iter_ds = iter(
@@ -200,14 +200,14 @@ class FilterValidatorTest(absltest.TestCase):
 
   def setUp(self):
     super().setUp()
-    filter_dataset._WARN_FILTERED_INTERVAL_SEC = 0.0
+    filter_dataset._WARN_FILTERED_INTERVAL_SEC = 0.0  # pyrefly: ignore[bad-assignment]
 
   def test_validates(self):
     default_options = base.DatasetOptions()
     v = filter_dataset.FilterThresholdChecker(
         "test",
-        default_options.filter_warn_threshold_ratio,
-        default_options.filter_raise_threshold_ratio,
+        default_options.filter_warn_threshold_ratio,  # pyrefly: ignore[bad-argument-type]
+        default_options.filter_raise_threshold_ratio,  # pyrefly: ignore[bad-argument-type]
     )
     passed = [True] * 101 + [False] * 899 + [True] * 100 + [False] * 900
     for p in passed:
@@ -217,8 +217,8 @@ class FilterValidatorTest(absltest.TestCase):
     default_options = base.DatasetOptions()
     v = filter_dataset.FilterThresholdChecker(
         "test",
-        default_options.filter_warn_threshold_ratio,
-        default_options.filter_raise_threshold_ratio,
+        default_options.filter_warn_threshold_ratio,  # pyrefly: ignore[bad-argument-type]
+        default_options.filter_raise_threshold_ratio,  # pyrefly: ignore[bad-argument-type]
     )
     passed = [True] + [False] * filter_dataset._CHECK_FILTERED_INTERVAL
     with self.assertLogs(level="WARNING") as logs:

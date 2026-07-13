@@ -132,7 +132,7 @@ class PackingDatasetIterator(dataset.DatasetIterator):
     if self._shuffle_bins_group_by_feature is not None:
       unique_groups_in_row = [
           np.unique(row)
-          for row in self._packed_batch[self._shuffle_bins_group_by_feature]
+          for row in self._packed_batch[self._shuffle_bins_group_by_feature]  # pyrefly: ignore[unsupported-operation]
       ]
       average_group_per_row = [
           # nan_to_num is for the divide by zero case.
@@ -183,7 +183,7 @@ class PackingDatasetIterator(dataset.DatasetIterator):
       # We have a packed batch, we emit one row at a time until exhausted.
       with self._stats.record_self_time(offset_ns=timer.value()):
         if self._shuffle_bins:
-          next_row = self._shuffled_rows[self._next_row]
+          next_row = self._shuffled_rows[self._next_row]  # pyrefly: ignore[unsupported-operation]
         else:
           next_row = self._next_row
         element = tree_lib.map_structure(
@@ -191,7 +191,7 @@ class PackingDatasetIterator(dataset.DatasetIterator):
         )
         self._next_row += 1
         self._counter += 1
-        if self._next_row >= self._packed_batch_num_bins:
+        if self._next_row >= self._packed_batch_num_bins:  # pyrefly: ignore[unsupported-operation]
           # We've emitted all the rows in the packed batch, so we reset the
           # state and start from scratch.
           self._packed_batch = None

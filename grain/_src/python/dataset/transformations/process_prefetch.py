@@ -180,7 +180,7 @@ class ProcessPrefetchIterDataset(dataset.IterDataset[T]):
             _run_all, [worker_init_fn, profiler_init_fn]
         )
     return ProcessPrefetchDatasetIterator(
-        self._parent,
+        self._parent,  # pyrefly: ignore[bad-argument-type]
         self._buffer_size,
         worker_init_fn,
         worker_profiler_port=worker_profiler_port,
@@ -241,7 +241,7 @@ def _put_dataset_elements_in_buffer(
         if new_state_or_index is not None:
           if not grain_queue.add_element_to_queue(  # pytype: disable=wrong-arg-types
               (_SetStateIsDone(), None, None, None, None),
-              buffer,
+              buffer,  # pyrefly: ignore[bad-argument-type]
               should_stop.is_set,
           ):
             continue
@@ -269,7 +269,7 @@ def _put_dataset_elements_in_buffer(
                     e.__traceback__
                 ),
             ),
-            buffer,
+            buffer,  # pyrefly: ignore[bad-argument-type]
             should_stop.is_set,
         )
 
@@ -284,7 +284,7 @@ def _put_dataset_elements_in_buffer(
         next_index += 1
       if not grain_queue.add_element_to_queue(  # pytype: disable=wrong-arg-types
           (element, it.get_state(), next_index, None, None),
-          buffer,
+          buffer,  # pyrefly: ignore[bad-argument-type]
           should_stop.is_set,
       ):
         # We failed to put the element into the output queue because the
@@ -302,7 +302,7 @@ def _put_dataset_elements_in_buffer(
             e,
             traceback_util.PicklableTraceback.from_traceback(e.__traceback__),
         ),
-        buffer,
+        buffer,  # pyrefly: ignore[bad-argument-type]
         should_stop.is_set,
     )
     return
@@ -590,7 +590,7 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       # `set_next_index` and before the next `__next__` call. Get the state
       # corresponding to the new `next_index`.
       ds_iter = self._iter_parent.__iter__()
-      dataset.set_next_index(ds_iter, self._next_index)
+      dataset.set_next_index(ds_iter, self._next_index)  # pyrefly: ignore[bad-argument-type]
       self._state = ds_iter.get_state()
       return self._state
 
@@ -615,7 +615,7 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       # Need to create iterator in main process to get the correct index if
       # `_get_next_index` is called after calling `set_state`.
       ds_iter = self._iter_parent.__iter__()
-      ds_iter.set_state(self._state)
+      ds_iter.set_state(self._state)  # pyrefly: ignore[bad-argument-type]
       self._next_index = dataset.get_next_index(ds_iter)
       return self._next_index
 
@@ -662,7 +662,7 @@ class _LazyWorkerSliceIterDataset(dataset.IterDataset[T]):
   def __iter__(self) -> dataset.DatasetIterator[T]:
     if not _is_in_worker_process:
       return self._parent.__iter__()
-    dataset.set_slice(self._parent, self._slice, self._sequential_slice)
+    dataset.set_slice(self._parent, self._slice, self._sequential_slice)  # pyrefly: ignore[bad-argument-type]
     return self._parent.__iter__()
 
   @property

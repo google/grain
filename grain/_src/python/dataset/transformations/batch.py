@@ -118,9 +118,9 @@ class _MakeBatchParallel:
       all_ndarray = all(isinstance(x, np.ndarray) for x in xs)
       if (self._parallel_batch_executor is None) or not all_ndarray:
         return self._stack(xs)
-      xs = cast(Sequence[np.ndarray], xs)
+      xs = cast(Sequence[np.ndarray], xs)  # pyrefly: ignore[bad-assignment]
       first_arg = xs[0]
-      shape, dtype = (len(xs),) + first_arg.shape, first_arg.dtype
+      shape, dtype = (len(xs),) + first_arg.shape, first_arg.dtype  # pyrefly: ignore[missing-attribute]
       # For string dtypes, the parallel path would silently truncate strings
       # because the output array dtype is inferred from the first element only.
       # Fall back to the serial _stack path which handles strings correctly.
@@ -128,7 +128,7 @@ class _MakeBatchParallel:
         return self._stack(xs)
       # Fall back to the standard serial `np.stack` operation if the size of
       # of the entire batch is smaller (measured in bytes) than the threshold.
-      if sum(x.nbytes for x in xs) < _PARALLEL_BATCHING_MIN_TOTAL_BYTES:
+      if sum(x.nbytes for x in xs) < _PARALLEL_BATCHING_MIN_TOTAL_BYTES:  # pyrefly: ignore[missing-attribute]
         return self._stack(xs)
 
       if not self._output_to_shared_memory or dtype.hasobject:
@@ -145,7 +145,7 @@ class _MakeBatchParallel:
       for f in fs:
         f.result()
 
-      return out
+      return out  # pyrefly: ignore[bad-return]
 
     if not values:
       raise ValueError("Cannot batch 0 values. Please file a bug.")
@@ -171,7 +171,7 @@ class _MakeBatchParallel:
   def __del__(self):
     if self._parallel_batch_executor:
       self._parallel_batch_executor.shutdown(wait=False, cancel_futures=True)
-      self._parallel_batch_executor = None
+      self._parallel_batch_executor = None  # pyrefly: ignore[bad-assignment]
 
 
 def make_batch(
@@ -293,7 +293,7 @@ class _BatchDatasetIterator(dataset.DatasetIterator[T]):
     super().__init__(parent)
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
-    self._batch_fn = batch_fn
+    self._batch_fn = batch_fn  # pyrefly: ignore[invalid-type-var]
 
   @stats.record_next_duration_if_output
   @stats.trace_input_pipeline_next(stage_category=stats.IPL_CAT_PREPROCESSING)
@@ -371,7 +371,7 @@ def _get_batch_element_spec(
     raise NotImplementedError(
         "Element spec inference is not supported with custom batching functions"
     )
-  batch_size = batch_size if drop_remainder else None
+  batch_size = batch_size if drop_remainder else None  # pyrefly: ignore[bad-assignment]
   return tree_lib.map_structure(
       lambda x: base.ShapeDtypeStruct(
           shape=(batch_size,) + x.shape, dtype=x.dtype
@@ -421,7 +421,7 @@ class BatchMapDataset(dataset.MapDataset[T]):
       to_check.extend(next_ds.parents)
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
-    self._batch_fn = make_batch if batch_fn is None else batch_fn
+    self._batch_fn = make_batch if batch_fn is None else batch_fn  # pyrefly: ignore[invalid-type-var]
     self._update_length()
 
   def _update_length(self) -> None:
@@ -522,7 +522,7 @@ class BatchIterDataset(dataset.IterDataset[T]):
       raise ValueError("batch_size must be positive.")
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
-    self._batch_fn = make_batch if batch_fn is None else batch_fn
+    self._batch_fn = make_batch if batch_fn is None else batch_fn  # pyrefly: ignore[invalid-type-var]
     if (
         _is_parallel_batch_experiment_enabled()
         and batch_fn is None

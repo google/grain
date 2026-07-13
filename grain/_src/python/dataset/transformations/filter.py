@@ -155,8 +155,8 @@ class _FilterDatasetIterator(dataset.DatasetIterator[T]):
   def _threshold_checker(self):
     return FilterThresholdChecker(
         transform_name=str(self),
-        warn_threshold=self._ctx.dataset_options.filter_warn_threshold_ratio,
-        raise_threshold=self._ctx.dataset_options.filter_raise_threshold_ratio,
+        warn_threshold=self._ctx.dataset_options.filter_warn_threshold_ratio,  # pyrefly: ignore[bad-argument-type]
+        raise_threshold=self._ctx.dataset_options.filter_raise_threshold_ratio,  # pyrefly: ignore[bad-argument-type]
     )
 
   @dataset_stats.record_next_duration_if_output

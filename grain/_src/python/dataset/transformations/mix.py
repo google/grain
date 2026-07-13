@@ -73,7 +73,7 @@ class SelectionWithProportionsMap(base.DatasetSelectionMap):
 
   def __getitem__(self, index: int):
     input_index, index = _dataset_and_key_of_next_element(
-        index, self._proportions
+        index, self._proportions  # pyrefly: ignore[bad-argument-type]
     )
     return input_index, index
 
@@ -125,6 +125,7 @@ class MixedMapDataset(dataset.MapDataset[T]):
     # the component datasets will likely not have `__repr__` implemented
     # resulting in unstable output.
     return (
+        # pyrefly: ignore[bad-argument-type]
         f"MixedMapDataset(parent_lengths={[len(p) for p in self._parents]}, "
         f"selection_map={repr(self._selection_map)})"
     )
@@ -136,7 +137,7 @@ class MixedMapDataset(dataset.MapDataset[T]):
       dataset_index, index_in_dataset = self._selection_map[index]
     try:
       return self._stats.record_output_spec(
-          self._parents[dataset_index][index_in_dataset]
+          self._parents[dataset_index][index_in_dataset]  # pyrefly: ignore[bad-index]
       )
     except Exception as e:
       if sys.version_info >= (3, 11):
@@ -177,7 +178,7 @@ class MixedMapDataset(dataset.MapDataset[T]):
   @property
   def _element_spec(self) -> Any:
     # Assumes that mixed datasets have the same element spec.
-    return dataset.get_element_spec(self._parents[0])
+    return dataset.get_element_spec(self._parents[0])  # pyrefly: ignore[bad-argument-type]
 
 
 class _MixedDatasetIterator(dataset.DatasetIterator[T]):
@@ -300,7 +301,7 @@ class MixedIterDataset(dataset.IterDataset[T]):
   @property
   def _element_spec(self) -> Any:
     # Assumes that mixed datasets have the same element spec.
-    return dataset.get_element_spec(self._parents[0])
+    return dataset.get_element_spec(self._parents[0])  # pyrefly: ignore[bad-argument-type]
 
 
 def _float_to_int_proportions(

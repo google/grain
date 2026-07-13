@@ -81,11 +81,11 @@ class ZipMapDatasetTest(parameterized.TestCase):
 
   def test_dict(self):
     source1 = source.SourceMapDataset(
-        [{"a": [1, 2]}, {"b": [3]}, {"c": [4, 5, 6]}]
+        [{"a": [1, 2]}, {"b": [3]}, {"c": [4, 5, 6]}]  # pyrefly: ignore[bad-argument-type]
     )
     self.assertLen(list(source1), 3)
     source2 = source.SourceMapDataset(
-        [{"d": [7]}, {"e": [8, 9]}, {"f": [10, 11, 12]}]
+        [{"d": [7]}, {"e": [8, 9]}, {"f": [10, 11, 12]}]  # pyrefly: ignore[bad-argument-type]
     )
     self.assertLen(list(source2), 3)
     ds = zip_ds.ZipMapDataset(parents=[source1, source2])
