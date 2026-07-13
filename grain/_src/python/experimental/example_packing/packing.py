@@ -240,4 +240,4 @@ class PackAndBatchOperation(Generic[_T]):
         self._cur_batch.try_add_to_batch(element)
 
     # Final batch
-    yield self._cur_batch.get_packed_batch()
+    yield self._cur_batch.get_packed_batch()  # pyrefly: ignore[missing-attribute]

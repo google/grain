@@ -84,7 +84,7 @@ class PlusOne(transforms.Map):
 class PlusRandom(transforms.RandomMap):
 
   def random_map(self, x: int, rng: np.random.Generator) -> int:
-    return x + rng.integers(100_000)
+    return x + rng.integers(100_000)  # pyrefly: ignore[bad-return]
 
 
 class FailingMap(transforms.Map):
@@ -328,7 +328,7 @@ class DataLoaderTest(absl_parameterized.TestCase):
 
     num_workers = 2
     data_loader = data_loader_lib.DataLoader(
-        data_source=data_source,
+        data_source=data_source,  # pyrefly: ignore[bad-argument-type]
         sampler=sampler,
         operations=operations,
         worker_count=num_workers,
@@ -758,7 +758,7 @@ class DataLoaderTest(absl_parameterized.TestCase):
   def test_state_without_in_memory_data(self):
     data_source = list(range(10000))
     loader = data_loader_lib.DataLoader(
-        data_source=data_source,
+        data_source=data_source,  # pyrefly: ignore[bad-argument-type]
         sampler=samplers.SequentialSampler(num_records=len(data_source)),
         read_options=self.read_options,
     )

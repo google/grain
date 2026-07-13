@@ -77,7 +77,7 @@ class RandomMapOperation(Generic[_IN, _OUT]):
     for input_record in input_iterator:
       try:
         random_map_result = self.random_map_function(
-            input_record.data, input_record.metadata.rng
+            input_record.data, input_record.metadata.rng  # pyrefly: ignore[bad-argument-type]
         )
       except Exception as e:
         raise ValueError(
@@ -156,13 +156,13 @@ class BatchOperation(Generic[_IN, _OUT]):
       last_record_metadata = input_record.metadata
       records_to_batch.append(input_record.data)
       if len(records_to_batch) == self.batch_size:
-        batch = self.batch_fn(records_to_batch)
+        batch = self.batch_fn(records_to_batch)  # pyrefly: ignore[not-callable]
         records_to_batch = []
         yield record.Record(last_record_metadata.remove_record_key(), batch)
     if records_to_batch and not self.drop_remainder:
       yield record.Record(
           last_record_metadata.remove_record_key(),  # pytype: disable=attribute-error
-          self.batch_fn(records_to_batch),
+          self.batch_fn(records_to_batch),  # pyrefly: ignore[not-callable]
       )
 
   def _enable_shared_memory(self):

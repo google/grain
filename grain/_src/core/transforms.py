@@ -169,14 +169,14 @@ def get_pretty_transform_name(
   # Some functions may not have `__name__`, e.g. `functools.partial`.
   transform_name = getattr(transform, "__name__", repr(transform))
   try:
-    src_file = inspect.getsourcefile(transform)
+    src_file = inspect.getsourcefile(transform)  # pyrefly: ignore[bad-argument-type]
     if src_file is None:
       return transform_name
     # If path is too long, shorten it to the last 3 parts.
     src_file_parts = src_file.split("/")
     if len(src_file_parts) >= 3:
       src_file = f".../{'/'.join(src_file_parts[-3:])}"
-    src_lineno = inspect.getsourcelines(transform)[1]
+    src_lineno = inspect.getsourcelines(transform)[1]  # pyrefly: ignore[bad-argument-type]
     return f"{transform_name} @ {src_file}:{src_lineno}"
   except (OSError, TypeError):
     # `inspect` may raise if called on built-in functions.

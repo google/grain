@@ -30,7 +30,7 @@ class MultiProcessingCommonTest(absltest.TestCase):
     self.assertTrue(
         multiprocessing_common.add_element_to_queue(  # pytype: disable=wrong-arg-types
             element=element,
-            elements_queue=test_queue,
+            elements_queue=test_queue,  # pyrefly: ignore[bad-argument-type]
             should_stop=termination_event.is_set,
         )
     )
@@ -44,7 +44,7 @@ class MultiProcessingCommonTest(absltest.TestCase):
     self.assertFalse(
         multiprocessing_common.add_element_to_queue(  # pytype: disable=wrong-arg-types
             element=element,
-            elements_queue=test_queue,
+            elements_queue=test_queue,  # pyrefly: ignore[bad-argument-type]
             should_stop=termination_event.is_set,
         )
     )
@@ -57,7 +57,7 @@ class MultiProcessingCommonTest(absltest.TestCase):
     test_queue.put(expected_element)
     termination_event = multiprocessing.Event()
     actual_element = multiprocessing_common.get_element_from_queue(  # pytype: disable=wrong-arg-types
-        elements_queue=test_queue,
+        elements_queue=test_queue,  # pyrefly: ignore[bad-argument-type]
         should_stop=termination_event.is_set,
     )
     self.assertEqual(actual_element, expected_element)
@@ -69,7 +69,7 @@ class MultiProcessingCommonTest(absltest.TestCase):
     termination_event = multiprocessing.Event()
     termination_event.set()
     actual_element = multiprocessing_common.get_element_from_queue(  # pytype: disable=wrong-arg-types
-        elements_queue=test_queue,
+        elements_queue=test_queue,  # pyrefly: ignore[bad-argument-type]
         should_stop=termination_event.is_set,
     )
     self.assertEqual(actual_element, multiprocessing_common.SYSTEM_TERMINATED)

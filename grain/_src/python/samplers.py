@@ -170,7 +170,7 @@ class IndexSampler:
       if self._max_index is not None and shard_options.drop_remainder:
         self._max_index = min(  # Account for no remainder
             self._max_index,
-            len(self._record_keys) * shard_options.shard_count * num_epochs,
+            len(self._record_keys) * shard_options.shard_count * num_epochs,  # pyrefly: ignore[unsupported-operation]
         )
     if shuffle:
       self._record_keys = self._record_keys.shuffle(seed=seed)

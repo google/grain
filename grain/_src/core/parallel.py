@@ -67,6 +67,6 @@ def run_in_parallel(
           remaining_future.cancel()
 
         # Propagate exception to main thread.
-        raise completed.exception()
+        raise completed.exception()  # pyrefly: ignore[bad-raise]
 
   return [f.result() for f in fs]

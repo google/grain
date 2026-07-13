@@ -961,7 +961,7 @@ class _ExecutionStats(_VisualizationStats):
       if self._is_output:
         # We avoid acquiring `_reporting_thread_init_lock` here to avoid lock
         # contention.
-        self._last_update_time = time.time()
+        self._last_update_time = time.time()  # pyrefly: ignore[bad-assignment]
         if self._reporting_thread is None:
           with self._reporting_thread_init_lock:
             # Check above together with update would not be atomic -- another
@@ -1039,7 +1039,7 @@ class _MPPrefetchExecutionStats(_ExecutionStats):
     """Calculates the aggregated execution summary from all workers."""
     aggregated_summary_from_workers = execution_summary_pb2.ExecutionSummary()
     stats_in_queues = self._config.stats_in_queues
-    for worker_index, worker_queue in enumerate(stats_in_queues):
+    for worker_index, worker_queue in enumerate(stats_in_queues):  # pyrefly: ignore[bad-argument-type]
       try:
         summary_from_worker = worker_queue.get(
             timeout=_WORKER_QUEUE_TIMEOUT_SEC

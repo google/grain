@@ -86,7 +86,7 @@ class _TFRecordDatasetIterator(dataset.DatasetIterator[T]):
     self._reader = _TFRecordReader(path)
 
   def __next__(self) -> T:
-    return next(self._reader)
+    return next(self._reader)  # pyrefly: ignore[bad-return]
 
   def get_state(self) -> dict[str, int]:
     return {

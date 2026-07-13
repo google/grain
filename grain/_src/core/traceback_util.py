@@ -91,7 +91,7 @@ class PicklableTraceback:
         frames=[
             PicklableFrame(
                 f.filename,
-                f.lineno,
+                f.lineno,  # pyrefly: ignore[bad-argument-type]
                 f.name,
                 f.line,
                 getattr(f, "end_lineno", None),
@@ -366,12 +366,12 @@ def run_with_traceback_filter(fun: C) -> C:
       if not _should_filter(e) or mode == "off":
         raise
       if mode == "tracebackhide":
-        _add_tracebackhide_to_hidden_frames(e.__traceback__)
+        _add_tracebackhide_to_hidden_frames(e.__traceback__)  # pyrefly: ignore[bad-argument-type]
         raise
 
       tb = e.__traceback__
       try:
-        e.with_traceback(filter_traceback(tb))
+        e.with_traceback(filter_traceback(tb))  # pyrefly: ignore[bad-argument-type]
         if mode == "quiet_remove_frames":
           if hasattr(e, "add_note"):
             e.add_note(_simplified_tb_msg)
@@ -382,7 +382,7 @@ def run_with_traceback_filter(fun: C) -> C:
             msg = format_exception_only(e)
             msg = f"{msg}\n\n{_grain_message_append}"
             unfiltered_error = UnfilteredStackTraceError(msg)
-            unfiltered_error.with_traceback(_add_call_stack_frames(tb))
+            unfiltered_error.with_traceback(_add_call_stack_frames(tb))  # pyrefly: ignore[bad-argument-type]
           else:
             raise ValueError(
                 f"grain_py_traceback_filtering={mode} is not a valid value."
@@ -396,5 +396,5 @@ def run_with_traceback_filter(fun: C) -> C:
         raise
       finally:
         del mode, tb
-  reraise_with_filtered_traceback.is_traceback_filtered = True
+  reraise_with_filtered_traceback.is_traceback_filtered = True  # pyrefly: ignore[missing-attribute]
   return cast(C, reraise_with_filtered_traceback)

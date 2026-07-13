@@ -73,7 +73,7 @@ class InMemoryDataSourceTest(DataSourceTest):
     output_by_index = [in_memory_ds[i] for i in range(len(in_memory_ds))]
     self.assertEqual(sequence, output_by_index)
 
-    output_by_list = list(in_memory_ds)
+    output_by_list = list(in_memory_ds)  # pyrefly: ignore[bad-argument-type]
     self.assertEqual(sequence, output_by_list)
 
     in_memory_ds.close()

@@ -124,7 +124,7 @@ class ParquetIterDatasetTest(absltest.TestCase):
     dataset = grain.MapDataset.source(self.filenames)
     dataset = dataset.map(parquet_dataset.ParquetIterDataset)
     dataset = grain.experimental.InterleaveIterDataset(
-        dataset, cycle_length=len(self.filenames)
+        dataset, cycle_length=len(self.filenames)  # pyrefly: ignore[bad-argument-type]
     )
     self.assertSequenceEqual(
         list(iter(dataset)), [{"text": x} for x in INTERLEAVED_TEXT]

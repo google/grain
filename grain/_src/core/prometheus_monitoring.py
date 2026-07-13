@@ -242,7 +242,7 @@ class EventMetric:
       if prom_name not in _prometheus_metrics:
         construct_kwargs = {'labelnames': labelnames}
         if buckets:
-          construct_kwargs['buckets'] = buckets
+          construct_kwargs['buckets'] = buckets  # pyrefly: ignore[bad-assignment]
         _prometheus_metrics[prom_name] = _prom_histogram(
             prom_name, description, **construct_kwargs
         )

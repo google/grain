@@ -59,7 +59,7 @@ def _verify_transformations_supported(ds: dataset.IterDataset) -> None:
           "ElasticIterator for IterDataset does not support zip, mix or"
           " prefetch transformation yet."
       )
-    to_check.extend(next_ds.parents)
+    to_check.extend(next_ds.parents)  # pyrefly: ignore[bad-argument-type]
 
 
 def _find_sliceable_dataset(

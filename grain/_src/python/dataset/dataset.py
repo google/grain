@@ -108,7 +108,7 @@ class _Dataset:
       if (node_seed := getattr(node, "_seed_rng_seed", None)) is not None:
         aggregated_seed.extend((node_seed, depth))
       else:
-        to_visit.extend((n, depth + 1) for n in node._parents)
+        to_visit.extend((n, depth + 1) for n in node._parents)  # pyrefly: ignore[bad-argument-type]
     # pylint:  enable=protected-access
     if not aggregated_seed:
       return None
@@ -214,7 +214,7 @@ class MapDatasetMeta(abc.ABCMeta):
         source as source_dataset,
     )
     # pylint: enable=g-import-not-at-top
-    return source_dataset.SourceMapDataset(source)
+    return source_dataset.SourceMapDataset(source)  # pyrefly: ignore[bad-argument-type]
 
   def range(
       cls, start: int, stop: int | None = None, step: int = 1
@@ -362,12 +362,12 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
 
   @property
   def parents(self) -> Sequence[MapDataset]:
-    return self._parents
+    return self._parents  # pyrefly: ignore[bad-return]
 
   @property
   def _parent(self) -> MapDataset:
     assert len(self._parents) == 1
-    return self._parents[0]
+    return self._parents[0]  # pyrefly: ignore[bad-return]
 
   @abc.abstractmethod
   def __len__(self) -> int:
@@ -1020,12 +1020,12 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
 
   @property
   def parents(self) -> Sequence[MapDataset | IterDataset]:
-    return self._parents
+    return self._parents  # pyrefly: ignore[bad-return]
 
   @property
   def _parent(self) -> MapDataset | IterDataset:
     assert len(self._parents) == 1, self._parents
-    return self._parents[0]
+    return self._parents[0]  # pyrefly: ignore[bad-return]
 
   def apply(
       self,
@@ -1815,26 +1815,26 @@ def apply_transformations(
   for transformation in transformations:
     match transformation:
       case transforms.Batch():
-        ds = ds.batch(
+        ds = ds.batch(  # pyrefly: ignore[bad-assignment]
             transformation.batch_size,
             drop_remainder=transformation.drop_remainder,
             batch_fn=transformation.batch_fn,
         )
       case transforms.Map():
-        ds = ds.map(transformation)
+        ds = ds.map(transformation)  # pyrefly: ignore[bad-assignment]
       case transforms.RandomMap():
-        ds = ds.random_map(transformation)
+        ds = ds.random_map(transformation)  # pyrefly: ignore[bad-assignment]
       case transforms.MapWithIndex():
-        ds = ds.map_with_index(transformation)
+        ds = ds.map_with_index(transformation)  # pyrefly: ignore[bad-assignment]
       case transforms.FlatMap():
         # Loaded lazily due to a circular dependency (dataset <-> flatmap).
         # pylint: disable=g-import-not-at-top
         from grain._src.python.dataset.transformations import flatmap
         # pylint: enable=g-import-not-at-top
         if isinstance(ds, MapDataset):
-          ds = flatmap.FlatMapMapDataset(ds, transformation)
+          ds = flatmap.FlatMapMapDataset(ds, transformation)  # pyrefly: ignore[bad-assignment]
         else:
-          ds = flatmap.FlatMapIterDataset(ds, transformation)
+          ds = flatmap.FlatMapIterDataset(ds, transformation)  # pyrefly: ignore[bad-assignment]
       case transforms.Filter():
         ds = ds.filter(transformation)
       case _:

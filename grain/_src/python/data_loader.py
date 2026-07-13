@@ -138,7 +138,7 @@ class _SamplerMapDataset(dataset.MapDataset[record.Record]):
   def _sampler_size(self) -> int:
     """Returns the length of the sampler."""
     if hasattr(self._sampler, "__len__"):
-      return len(self._sampler)
+      return len(self._sampler)  # pyrefly: ignore[bad-argument-type]
     lo = 0
     hi = sys.maxsize
     while lo < hi:
@@ -165,7 +165,7 @@ class _SamplerMapDataset(dataset.MapDataset[record.Record]):
     with self._stats.record_self_time():
       metadata = self._sampler[index]
       return record.Record(
-          metadata=metadata, data=self._parent[metadata.record_key]
+          metadata=metadata, data=self._parent[metadata.record_key]  # pyrefly: ignore[bad-index]
       )
 
 
@@ -198,10 +198,10 @@ class _OperationDatasetIterator(dataset.DatasetIterator[_T]):
   ):
     super().__init__(parent)
     self._operation = operation
-    self._iterator = operation(parent)
+    self._iterator = operation(parent)  # pyrefly: ignore[bad-argument-type]
 
   def __next__(self) -> _T:
-    return next(self._iterator)
+    return next(self._iterator)  # pyrefly: ignore[bad-return]
 
   def get_state(self):
     return self._parent.get_state()
@@ -456,7 +456,7 @@ class DataLoader:
   def _create_dataset(self) -> dataset.IterDataset:
     """Returns the dataset for this data loader."""
     ds = _SamplerMapDataset(
-        self._data_source, self._sampler, self._shard_options
+        self._data_source, self._sampler, self._shard_options  # pyrefly: ignore[bad-argument-type]
     )
     ds = ds.to_iter_dataset(self._read_options)
     for operation in self._operations:
@@ -471,7 +471,7 @@ class DataLoader:
     if not self._use_native_dataset_checkpointing:
       ds = _DataLoaderStateIterDataset(
           ds,
-          self._shard_options,
+          self._shard_options,  # pyrefly: ignore[bad-argument-type]
           self._multiprocessing_options.num_workers,
           self._sampler,
           self._data_source,
@@ -737,4 +737,4 @@ def _apply_transform_to_dataset(
     )
   else:
     # Handle legacy operations
-    return _OperationIterDataset(ds, transform)
+    return _OperationIterDataset(ds, transform)  # pyrefly: ignore[bad-argument-type]

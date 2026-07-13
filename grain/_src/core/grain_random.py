@@ -100,7 +100,7 @@ def as_rng_key(seed: RNGKeyLike) -> RNGKey:
   if hasattr(seed, "dtype") and jax.dtypes.issubdtype(
       seed.dtype, jax.dtypes.prng_key
   ):
-    return seed
+    return seed  # pyrefly: ignore[bad-return]
   if isinstance(seed, (int, jnp.integer)):
     return jax.random.key(seed)
   if isinstance(seed, jnp.ndarray):

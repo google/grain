@@ -296,7 +296,7 @@ class RaiseErrorTransform(grain.transforms.Map):
   def raise_error_in_transform(self):
     raise ValueError("Boom!")
 
-  def map(self, x: int) -> int:
+  def map(self, x: int) -> int:  # pyrefly: ignore[bad-return]
     self.raise_error_in_transform()
 
 
@@ -308,7 +308,7 @@ class TracebackFilterTest(absltest.TestCase):
     sampler = grain.samplers.IndexSampler(num_records=10, seed=42)
     ops = [RaiseErrorTransform()]
     for _ in range(100):
-      ops.append(AddOneTransform())
+      ops.append(AddOneTransform())  # pyrefly: ignore[bad-argument-type]
     data_loader = grain.DataLoader(
         data_source=range_ds, sampler=sampler, operations=ops
     )

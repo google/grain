@@ -83,7 +83,7 @@ class CheckpointHandler:
           directory
       ):
         elastic_checkpoint.restore_elastic_iterator(directory, item)
-        return item
+        return item  # pyrefly: ignore[bad-return]
     filename = directory / f"process_{process_index}-of-{process_count}.json"
     if not filename.exists():
       raise ValueError(f"File {filename} does not exist.")
@@ -92,7 +92,7 @@ class CheckpointHandler:
       state = json.loads(state)
     else:
       state = state.encode()
-    item.set_state(state)
+    item.set_state(state)  # pyrefly: ignore[bad-argument-type]
     item.start_prefetch()
     return item
 

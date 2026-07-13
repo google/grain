@@ -270,7 +270,7 @@ class DebugModeStatsTest(absltest.TestCase):
     while to_visit:
       node = to_visit.pop(0)
       flat_stats.append(node)
-      to_visit.extend(node._parents)
+      to_visit.extend(node._parents)  # pyrefly: ignore[bad-argument-type]
 
     reported_self_times = collections.defaultdict(int)
 

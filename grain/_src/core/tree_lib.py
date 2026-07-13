@@ -38,14 +38,14 @@ _ALL_TYPES = _SEQUENCE_TYPES + _MAPPING_TYPES
 try:
   # `attrs` is not a native package, avoid explicit dependency and only check if
   # it's present.
-  import attrs  # pylint: disable=g-import-not-at-top
+  import attrs  # pylint: disable=g-import-not-at-top  # pyrefly: ignore[missing-import]
 
   def _is_attrs(obj):
-    return attrs.has(obj)
+    return attrs.has(obj)  # pyrefly: ignore[missing-attribute]
 
   def _attrs_fields(obj):
     result = {}
-    for field in attrs.fields(obj.__class__):
+    for field in attrs.fields(obj.__class__):  # pyrefly: ignore[missing-attribute]
       result[field.name] = getattr(obj, field.name)
     return result
 
@@ -107,7 +107,7 @@ except ImportError:
         new_tree.update(new_items)
         return new_tree
       else:
-        return type(a)(new_items)
+        return type(a)(new_items)  # pyrefly: ignore[bad-argument-count, bad-instantiation]
     else:  # leaf
       return f(*trees)
 
@@ -143,7 +143,7 @@ except ImportError:
         new_tree.update(new_items)
         return new_tree
       else:
-        return type(structure)(new_items)
+        return type(structure)(new_items)  # pyrefly: ignore[bad-argument-count, bad-instantiation]
     else:  # leaf
       return next(flat_iter)
 
@@ -176,7 +176,7 @@ except ImportError:
       if k0 != k1:
         raise AssertionError(f"dict keys do not match: {k0} != {k1}")
       # Flatten sort the keys, so reconstruct the ordered sorted
-      for k, (v0, v1) in epy.zip_dict(a, b):
+      for k, (v0, v1) in epy.zip_dict(a, b):  # pyrefly: ignore[bad-argument-type]
         try:
           _assert_same_structure(v0, v1)
         except AssertionError as e:
@@ -232,7 +232,7 @@ except ImportError:
         new_tree.update(new_items)
         return new_tree
       else:
-        return type(a)(new_items)
+        return type(a)(new_items)  # pyrefly: ignore[bad-argument-count, bad-instantiation]
     else:  # leaf
       return f(prefix, *trees)
 
@@ -258,7 +258,7 @@ def map_structure_up_to(shallow_structure, f, structure):
       new_tree.update(new_items)
       return new_tree
     else:
-      return type(shallow_structure)(new_items)
+      return type(shallow_structure)(new_items)  # pyrefly: ignore[bad-argument-count, bad-instantiation]
   else:  # leaf
     return f(structure)
 

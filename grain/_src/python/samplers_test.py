@@ -130,7 +130,7 @@ class SequentialSamplerTest(parameterized.TestCase):
 class IndexSamplerTest(absltest.TestCase):
 
   def assertRngsAreUnique(self, actual: Sequence[record.RecordMetadata]):
-    actual_floats = [metadata.rng.random() for metadata in actual]
+    actual_floats = [metadata.rng.random() for metadata in actual]  # pyrefly: ignore[missing-attribute]
     if len(actual_floats) != len(set(actual_floats)):
       self.fail(
           'At least 2 RNGs returned the same random number. Metadata with'
@@ -675,7 +675,7 @@ class IndexSamplerTest(absltest.TestCase):
     second_metadata = _get_all_metadata(second_sampler, sharding.NoSharding())
     self.assertEqual(len(first_metadata), len(second_metadata))
     for m1, m2 in zip(first_metadata, second_metadata):
-      if m1.rng.random() != m2.rng.random():
+      if m1.rng.random() != m2.rng.random():  # pyrefly: ignore[missing-attribute]
         self.fail('Metadata RNGs returned different floats.')
     self.assertEqual(
         _remove_rngs(first_metadata), _remove_rngs(second_metadata)

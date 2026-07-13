@@ -44,9 +44,9 @@ async def background_save(directory: PathAwaitingCreation, state: str):
     directory: The directory to save the state to.
     state: The state to save.
   """
-  directory = await directory.await_creation()
+  directory = await directory.await_creation()  # pyrefly: ignore[bad-assignment]
   process_index, process_count = sharding.get_process_index_and_count()
-  filename = directory / f"process_{process_index}-of-{process_count}.json"
+  filename = directory / f"process_{process_index}-of-{process_count}.json"  # pyrefly: ignore[unsupported-operation]
   await asyncio.to_thread(filename.write_text, state)
 
 

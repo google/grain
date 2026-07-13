@@ -53,7 +53,7 @@ class FilterKeepingOddElementsOnly(transforms.Filter):
 class RandomMapAddingRandomInt(transforms.RandomMap):
 
   def random_map(self, element: int, rng: np.random.Generator) -> int:
-    return element + rng.integers(0, 100)
+    return element + rng.integers(0, 100)  # pyrefly: ignore[bad-return]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1130,7 +1130,7 @@ class DatasetTest(parameterized.TestCase):
     while to_visit:
       next_ds = to_visit.pop()
       ds_types.add(type(next_ds))
-      to_visit.extend(next_ds.parents)
+      to_visit.extend(next_ds.parents)  # pyrefly: ignore[bad-argument-type]
 
     del ds, it
 
