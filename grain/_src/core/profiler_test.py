@@ -101,6 +101,15 @@ class ProfilerTest(absltest.TestCase):
         profiler.is_worker_profiling_supported(),
     )
 
+  def test_worker_profiling_enabled_before_flags_are_parsed(self):
+    flags_were_parsed = flags.FLAGS.is_parsed()
+    flags.FLAGS.unparse_flags()
+    try:
+      self.assertFalse(profiler.is_worker_profiling_enabled())
+    finally:
+      if flags_were_parsed:
+        flags.FLAGS.mark_as_parsed()
+
 
 if __name__ == "__main__":
   absltest.main()
