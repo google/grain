@@ -64,10 +64,12 @@ def is_worker_profiling_supported() -> bool:
 
 def is_worker_profiling_enabled() -> bool:
   """Returns whether worker profiling is enabled."""
-  return (
-      is_worker_profiling_supported()
-      and _GRAIN_ENABLE_MULTIPROCESS_WORKER_PROFILING.value
-  )
+  if not is_worker_profiling_supported():
+    return False
+  try:
+    return _GRAIN_ENABLE_MULTIPROCESS_WORKER_PROFILING.value
+  except flags.UnparsedFlagAccessError:
+    return _GRAIN_ENABLE_MULTIPROCESS_WORKER_PROFILING.default
 
 
 def get_framework() -> str:
