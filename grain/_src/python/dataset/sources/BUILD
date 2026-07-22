@@ -47,3 +47,27 @@ py_test(
         "@abseil-py//absl/testing:absltest",
     ],
 )
+
+py_library(
+    name = "hf_source",
+    srcs = ["hf_source.py"],
+    srcs_version = "PY3",
+    deps = [
+        "//grain/_src/python/dataset",
+        "//grain/_src/python/dataset:stats",
+        "@abseil-py//absl/logging",
+    ],
+)
+
+py_test(
+    name = "hf_source_test",
+    srcs = ["hf_source_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":hf_source",
+        "//grain/_src/python/dataset",
+        "//grain/_src/python/dataset:base",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+    ],
+)
