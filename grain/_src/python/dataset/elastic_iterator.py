@@ -26,9 +26,6 @@ from grain._src.python.dataset.transformations import (
 from grain._src.python.dataset.transformations import interleave
 from grain._src.python.dataset.transformations import mix
 from grain._src.python.dataset.transformations import prefetch
-from grain._src.python.dataset.transformations import (
-    zip as zip_dataset,
-)
 
 T = TypeVar("T")
 
@@ -50,14 +47,13 @@ def _verify_transformations_supported(ds: dataset.IterDataset) -> None:
     if isinstance(
         next_ds,
         (
-            zip_dataset.ZipIterDataset,
             prefetch.PrefetchIterDataset,
             mix.MixedIterDataset,
         ),
     ):
       raise ValueError(
-          "ElasticIterator for IterDataset does not support zip, mix or"
-          " prefetch transformation yet."
+          "ElasticIterator for IterDataset does not support mix or prefetch"
+          " transformation yet."
       )
     to_check.extend(next_ds.parents)  # pyrefly: ignore[bad-argument-type]
 
@@ -91,7 +87,7 @@ def _find_sliceable_iterator(
   """Finds the first sliceable iterator in the iterator graph.
 
   This function recursively searches through the parents of the given iterator
-  to find an iterator that supports `prefetch.SupportsSlicedStateManagement`.
+  to find an iterator that supports `dataset.SupportsSlicedStateManagement`.
 
   Args:
     it: The starting DatasetIterator.
@@ -100,7 +96,7 @@ def _find_sliceable_iterator(
     The first sliceable DatasetIterator found, or None if no such iterator
     is found in the graph.
   """
-  if isinstance(it, prefetch.SupportsSlicedStateManagement):
+  if isinstance(it, dataset.SupportsSlicedStateManagement):
     return it
   if not hasattr(it, "_parents"):
     return None
@@ -207,11 +203,11 @@ class ElasticIterDatasetIterator(dataset.DatasetIterator):
       A dictionary mapping global shard indices to their states.
     """
     if not isinstance(
-        self._sliceable_iterator, prefetch.SupportsSlicedStateManagement
+        self._sliceable_iterator, dataset.SupportsSlicedStateManagement
     ):
       raise ValueError(
           "ElasticIterDatasetIterator does not support"
-          " prefetch.SupportsSlicedStateManagement."
+          " dataset.SupportsSlicedStateManagement."
       )
     iter_shard_states = self._sliceable_iterator.get_shard_states()
     state_by_shard_index = {}
@@ -249,11 +245,11 @@ class ElasticIterDatasetIterator(dataset.DatasetIterator):
     self._closed = False
 
     if not isinstance(
-        self._sliceable_iterator, prefetch.SupportsSlicedStateManagement
+        self._sliceable_iterator, dataset.SupportsSlicedStateManagement
     ):
       raise ValueError(
           "ElasticIterDatasetIterator only supports"
-          " prefetch.SupportsSlicedStateManagement."
+          " dataset.SupportsSlicedStateManagement."
       )
     ds_iterator_states = {int(k): v for k, v in state.items()}
     # We need to sort the states by the global shard index to ensure that the

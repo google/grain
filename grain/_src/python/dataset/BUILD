@@ -166,7 +166,6 @@ py_library(
         ":dataset",
         "//grain/_src/core:sharding",
         "//grain/_src/python:options",
-        "//grain/_src/python/dataset/transformations:zip",
     ],
 )
 
@@ -186,6 +185,7 @@ py_test(
         "//grain/_src/core:sharding",
         "//grain/_src/python:options",
         "//grain/_src/python/checkpoint:handler",
+        "//grain/_src/python/dataset/transformations:zip",
         "//grain/_src/python/testing:experimental",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",

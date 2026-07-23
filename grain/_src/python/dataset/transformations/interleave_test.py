@@ -23,10 +23,9 @@ from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import interleave
-from grain._src.python.dataset.transformations import prefetch
 from grain._src.python.dataset.transformations import repeat
 from grain._src.python.dataset.transformations import zip as zip_dataset
-from grain._src.python.testing.experimental import assert_equal_output_after_checkpoint
+from grain._src.python.testing import experimental
 import numpy as np
 
 _INTERLEAVE_TEST_CASES = (
@@ -212,7 +211,7 @@ class _InterleaveIterDatasetTestBase(parameterized.TestCase):
     ]
     ds = self._create_dataset(ds, cycle_length=5)
     ds = self._maybe_wrap_ds(ds)
-    assert_equal_output_after_checkpoint(ds)
+    experimental.assert_equal_output_after_checkpoint(ds)
 
   def test_set_state_does_not_recreate_iterators_if_not_needed(self):
     cycle_length = 5
@@ -392,17 +391,21 @@ class _InterleaveIterDatasetTestBase(parameterized.TestCase):
       next(it)
 
     # Get the shard state.
-    assert isinstance(it, prefetch.SupportsSlicedStateManagement)
-    shard_state = it.get_shard_states()
+    assert isinstance(it, dataset.SupportsSlicedStateManagement)
+    shard_state = cast(
+        dataset.SupportsSlicedStateManagement, it
+    ).get_shard_states()
     self.assertEqual(shard_state, expected_shard_state)
 
     # Create a new iterator and restore state.
     it2 = ds.__iter__()
-    assert isinstance(it2, prefetch.SupportsSlicedStateManagement)
-    it2.set_shard_states(shard_state)
+    assert isinstance(it2, dataset.SupportsSlicedStateManagement)
+    cast(dataset.SupportsSlicedStateManagement, it2).set_shard_states(
+        shard_state
+    )
 
     # Verify it continues from the correct position.
-    self.assertSequenceEqual(list(it2), expected_remaining)  # pyrefly: ignore[bad-argument-type]
+    self.assertSequenceEqual(list(it2), expected_remaining)
 
   @parameterized.named_parameters(
       dict(
@@ -461,20 +464,27 @@ class _InterleaveIterDatasetTestBase(parameterized.TestCase):
     for _ in range(2):
       next(it)
 
-    assert isinstance(it, prefetch.SupportsSlicedStateManagement)
-    shard_state = it.get_shard_states()
+    assert isinstance(it, dataset.SupportsSlicedStateManagement)
+    shard_state = cast(
+        dataset.SupportsSlicedStateManagement, it
+    ).get_shard_states()
     self.assertEqual(shard_state, expected_shard_state)
 
     # Create a new iterator and restore state.
     it2 = ds.__iter__()
-    assert isinstance(it2, prefetch.SupportsSlicedStateManagement)
-    it2.set_shard_states(shard_state)
+    assert isinstance(it2, dataset.SupportsSlicedStateManagement)
+    cast(dataset.SupportsSlicedStateManagement, it2).set_shard_states(
+        shard_state
+    )
 
     # Check get_shard_states() returns the set shard states correctly.
-    self.assertEqual(it2.get_shard_states(), expected_shard_state)
+    self.assertEqual(
+        cast(dataset.SupportsSlicedStateManagement, it2).get_shard_states(),
+        expected_shard_state,
+    )
 
     # Check get_state() internal values.
-    state = it2.get_state()  # pyrefly: ignore[missing-attribute]
+    state = it2.get_state()
     self.assertEqual(state["next_index_in_cycle"], 0)
     self.assertEqual(
         state["next_index_in_datasets"], expected_next_index_in_datasets
@@ -504,11 +514,13 @@ class _InterleaveIterDatasetTestBase(parameterized.TestCase):
     ]
 
     # Create a new iterator and restore state.
-    assert isinstance(it, prefetch.SupportsSlicedStateManagement)
-    it.set_shard_states(shard_state)
+    assert isinstance(it, dataset.SupportsSlicedStateManagement)
+    cast(dataset.SupportsSlicedStateManagement, it).set_shard_states(
+        shard_state
+    )
 
     # Check get_state() internal values.
-    state = it.get_state()  # pyrefly: ignore[missing-attribute]
+    state = it.get_state()
     self.assertEqual(state["next_index_in_cycle"], 0)
     self.assertEqual(state["next_index_in_datasets"], 3)
     self.assertEqual(state["iterators_in_use_indices"], [2, 0])

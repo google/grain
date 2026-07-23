@@ -66,7 +66,6 @@ from grain._src.python.dataset import stats as dataset_stats
 from grain.proto import execution_summary_pb2
 import numpy as np
 
-
 _api_usage_counter = monitoring.Counter(
     "/grain/python/lazy_dataset/api",
     metadata=monitoring.Metadata(
@@ -1895,6 +1894,35 @@ class SupportsInPlaceSlicing(Protocol):
     ...
 
 
+@runtime_checkable
+class SupportsSlicedStateManagement(Protocol):
+  """Iterators that support setting a sliced state.
+
+  This protocol is used to support elastic resizing of iterators.
+  """
+
+  def get_shard_states(self) -> Sequence[Any]:
+    """Returns the states of all shards managed by this iterator.
+
+    Used for elastic resizing to capture the current progress of each
+    shard.
+    """
+    ...
+
+  def set_shard_states(self, shard_states: Sequence[Any]) -> None:
+    """Sets the states of all shards managed by this iterator.
+
+    Used for elastic resizing to restore the progress of each shard.
+
+    Args:
+      shard_states: A sequence of dictionaries, one for each shard. Each dict
+        must contain 'exhausted' key with value bool indicating if the shard is
+        exhausted and 'state' key with value Any representing the state of the
+        shard.
+    """
+    ...
+
+
 def set_slice(
     ds: MapDataset | IterDataset,
     sl: slice,
@@ -1921,3 +1949,36 @@ def set_slice(
       raise ValueError(f"Cannot slice `IterDataset` source. {type(ds)}")
   for parent in ds.parents:
     set_slice(parent, sl, sequential_slice)
+
+
+def find_shard_states(it: DatasetIterator) -> Sequence[Any]:
+  """Returns the shard states for the given dataset iterator."""
+  if isinstance(it, SupportsSlicedStateManagement):
+    return it.get_shard_states()
+  if not hasattr(it, "_parents"):
+    return []
+  parent_shard_states = []
+  # Access the iterators parents to get the parents of the iterator.
+  for parent in it._parents:  # pylint: disable=protected-access
+    parent_shard_states.append(find_shard_states(parent))
+  return list(zip(*parent_shard_states))
+
+
+def set_shard_states(it: DatasetIterator, shard_states: Sequence[Any]) -> None:
+  """Sets the shard states for the given dataset iterator."""
+  if isinstance(it, SupportsSlicedStateManagement):
+    it.set_shard_states(shard_states)
+    return
+  if not hasattr(it, "_parents"):
+    raise ValueError(f"Iterator {it} does not support elastic resizing.")
+  if not shard_states:
+    return
+  unzipped_states = list(zip(*shard_states))
+  # Access the iterators parents to set the parents of the iterator.
+  if len(it._parents) != len(unzipped_states):  # pylint: disable=protected-access
+    raise ValueError(
+        f"Iterator has {len(it._parents)} parents but shard states have"  # pylint: disable=protected-access
+        f" {len(unzipped_states)} elements."
+    )
+  for parent, states in zip(it._parents, unzipped_states):  # pylint: disable=protected-access
+    set_shard_states(parent, states)
