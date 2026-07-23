@@ -17,7 +17,7 @@ import dataclasses
 import gc
 import sys
 import time
-from typing import TypeVar
+from typing import Any, Sequence, TypeVar
 from unittest import mock
 
 from absl.testing import absltest
@@ -1430,6 +1430,95 @@ class GetElementSpecTest(parameterized.TestCase):
     spec = dataset.get_element_spec(ds)
     self.assertEqual(spec.shape, ())
     self.assertEqual(spec.dtype, np.int64)
+
+
+def _find_shortest_cycle_recursive(
+    path: list[Any],
+    current_obj: Any,
+    visited_ids: set[int],
+    object_predicate: Any,
+) -> list[Any] | None:
+  if not object_predicate(current_obj):
+    return None
+
+  current_id = id(current_obj)
+  visited_ids.add(current_id)
+  path.append(current_obj)
+
+  shortest_cycle = None
+  neighbors = gc.get_referents(current_obj)
+  for neighbor in neighbors:
+    neighbor_id = id(neighbor)
+    if neighbor_id == id(path[0]):
+      shortest_cycle = list(path)
+      break
+    elif neighbor_id not in visited_ids:
+      cycle = _find_shortest_cycle_recursive(
+          path,
+          neighbor,
+          visited_ids,
+          object_predicate,
+      )
+      if cycle is not None and (
+          shortest_cycle is None or len(cycle) < len(shortest_cycle)
+      ):
+        shortest_cycle = cycle
+
+  if shortest_cycle is not None:
+    visited_ids.remove(current_id)
+
+  path.pop()
+  return shortest_cycle
+
+
+def _find_cycles(objects: Sequence[Any]) -> list[list[Any]]:
+  object_ids = {id(o) for o in objects}
+  object_predicate = lambda obj: id(obj) in object_ids
+
+  path = []
+  visited_ids = set()
+  cycles = []
+  for obj in objects:
+    visited_ids_from_obj = set(visited_ids)
+    shortest_cycle = _find_shortest_cycle_recursive(
+        path,
+        obj,
+        visited_ids_from_obj,
+        object_predicate,
+    )
+    if shortest_cycle is not None:
+      cycles.append(shortest_cycle)
+      visited_ids = visited_ids.union(
+          id(cycle_obj) for cycle_obj in shortest_cycle
+      )
+    else:
+      visited_ids.add(id(obj))
+  return cycles
+
+
+class ReferenceCycleTest(parameterized.TestCase):
+
+  def test_batch_map_no_reference_cycles(self):
+    original_debug_flags = gc.get_debug()
+    try:
+      gc.disable()
+      gc.garbage.clear()
+      gc.collect()
+      gc.set_debug(gc.DEBUG_SAVEALL)
+
+      ds = dataset.MapDataset.range(10).batch(batch_size=2)
+      _ = next(iter(ds))
+
+      del ds
+      gc.collect()
+
+      reference_cycles = _find_cycles(gc.garbage)
+      self.assertEmpty(reference_cycles)
+    finally:
+      gc.set_debug(original_debug_flags)
+      gc.garbage.clear()
+      gc.collect()
+      gc.enable()
 
 
 if __name__ == "__main__":

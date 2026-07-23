@@ -37,6 +37,7 @@ T = TypeVar("T")
 S = TypeVar("S")
 
 
+@functools.cache
 def _is_batch_map_pushdown_experiment_enabled() -> bool:
   return False
 
@@ -435,13 +436,12 @@ class BatchMapDataset(dataset.MapDataset[T]):
     dataset.set_slice(self._parent, sl, sequential_slice)
     self._update_length()
 
-  @functools.cached_property
-  def _get_parent_items_fn(self):
+  def _get_parent_items(self, items):
     # Leverage batch pushdown API to retrieve multiple items at once if the
     # experiment is enabled.
     if _is_batch_map_pushdown_experiment_enabled():
-      return lambda items: self._parent._getitems(list(items))  # pylint: disable=protected-access
-    return lambda items: [self._parent[i] for i in items]
+      return self._parent._getitems(list(items))  # pylint: disable=protected-access
+    return [self._parent[i] for i in items]
 
   def __len__(self):
     return self._length
@@ -458,7 +458,7 @@ class BatchMapDataset(dataset.MapDataset[T]):
     # Add offset for epoch.
     start += epoch * self._parent_length
     stop += epoch * self._parent_length
-    values = self._get_parent_items_fn(range(start, stop))
+    values = self._get_parent_items(range(start, stop))
     with self._stats.record_self_time():
       try:
         return self._stats.record_output_spec(self._batch_fn(values))

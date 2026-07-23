@@ -21,6 +21,7 @@ import sys
 import threading
 import time
 from unittest import mock
+import weakref
 
 from absl import flags
 from absl.testing import flagsaver
