@@ -7,10 +7,7 @@ licenses(["notice"])
 pybind_extension(
     name = "index_shuffle_module",
     srcs = ["index_shuffle_module.cc"],
-    deps = [
-        "//grain/_src/python/experimental/index_shuffle",
-        "@abseil-cpp//absl/strings",
-    ],
+    deps = ["//grain/_src/python/experimental/index_shuffle"],
 )
 
 py_test(

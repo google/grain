@@ -112,7 +112,7 @@ main() {
   if [ "$(uname)" == "Darwin" ]; then
     WHEEL_BLD_ARGS="${WHEEL_BLD_ARGS} --plat-name macosx_11_0_$(uname -m)"
   fi
-  "$PYTHON_BIN" setup.py $WHEEL_BLD_ARGS
+  GRAIN_SKIP_EXTRA_BUILD=1 "$PYTHON_BIN" setup.py $WHEEL_BLD_ARGS
 
   if [ -n "${AUDITWHEEL_PLATFORM}" ]; then
     printf '%s : "=== Auditing wheel\n' "$(date)"
