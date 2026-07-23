@@ -27,6 +27,7 @@ from grain._src.python.checkpoint import handler
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import elastic_iterator
 from grain._src.python.dataset.transformations import interleave
+from grain._src.python.dataset.transformations import zip as zip_transform
 import grain._src.python.testing.experimental as test_util
 import numpy as np
 
@@ -375,6 +376,37 @@ class ElasticIterDatasetTest(parameterized.TestCase):
     actual = list(it)
     np.testing.assert_equal(actual, expected)
 
+  def test_zip_sharding_produces_correct_elements(self):
+    """Tests elastic sharding for ZipIterDataset over stream/sequential iterators (InterleaveIterDataset)."""
+    ds1 = [
+        dataset.MapDataset.range(i, 10, 4).to_iter_dataset() for i in range(4)
+    ]
+    interleave_ds1 = interleave.InterleaveIterDataset(ds1, cycle_length=2)
+
+    ds2 = [
+        dataset.MapDataset.range(i + 10, 20, 4).to_iter_dataset()
+        for i in range(4)
+    ]
+    interleave_ds2 = interleave.InterleaveIterDataset(ds2, cycle_length=2)
+
+    zip_ds = zip_transform.ZipIterDataset([interleave_ds1, interleave_ds2])
+
+    it = elastic_iterator.ElasticIterator(
+        zip_ds,
+        shard_options=sharding.ShardOptions(shard_index=0, shard_count=2),
+        global_batch_size=2,
+    )
+    actual = list(it)
+    # Zip of Batches: Tuple of Lists
+    expected = [
+        ([0], [10]),
+        ([2], [12]),
+        ([4], [14]),
+        ([6], [16]),
+        ([8], [18]),
+    ]
+    self.assertEqual(actual, expected)
+
   def test_checkpointing_no_change(self):
     ds = [
         dataset.MapDataset.range(i, 100, 25).to_iter_dataset()
@@ -466,6 +498,215 @@ class ElasticIterDatasetTest(parameterized.TestCase):
     it2.set_shard_states(json_like_shard_states)
 
     self.assertEqual(next(it), next(it2))
+
+  def _create_sharded_datasource(
+      self,
+      cycle_length=10,
+  ):
+    # Dataset looks like:
+    # [0, 25, 50, 75]
+    # [1, 26, 51, 76]
+    # [2, 27, 52, 77]
+    # ...
+    # [24, 49, 74, 99]
+    datasource_ds = [
+        dataset.MapDataset.range(i, 100, 25).to_iter_dataset()
+        for i in range(25)
+    ]
+    interleave_ds = interleave.InterleaveIterDataset(
+        datasource_ds, cycle_length=cycle_length
+    )
+    return interleave_ds
+
+  def _create_iterators(
+      self,
+      ds: dataset.MapDataset | dataset.IterDataset,
+      shard_count: int,
+      global_batch_size: int,
+  ) -> list[elastic_iterator.ElasticIterator]:
+    return [
+        elastic_iterator.ElasticIterator(
+            ds,
+            shard_options=sharding.ShardOptions(
+                shard_index=i, shard_count=shard_count
+            ),
+            global_batch_size=global_batch_size,
+        )
+        for i in range(shard_count)
+    ]
+
+  def _consume_elements(
+      self,
+      iterators: list[elastic_iterator.ElasticIterator],
+      num_elements: int,
+  ) -> list[Any]:
+    actual_elements = []
+    for i in range(num_elements):
+      actual_elements.append(next(iterators[i % len(iterators)]))
+    return actual_elements
+
+  def _consume_remaining(
+      self,
+      iterators: list[elastic_iterator.ElasticIterator],
+  ) -> list[Any]:
+    actual_elements = []
+    iterators = list(iterators)
+    i = 0
+    while iterators:
+      it_index = i % len(iterators)
+      try:
+        element = next(iterators[it_index])
+      except StopIteration:
+        iterators[it_index].close()
+        iterators.pop(it_index)
+        continue
+      actual_elements.append(element)
+      i += 1
+    return actual_elements
+
+  def _flatten_and_assert_equal(
+      self,
+      actual_elements: list[Any],
+      expected_elements: list[Any],
+  ):
+    flat_elements = []
+    for batch in actual_elements:
+      flat_elements.extend(batch)
+    self.assertCountEqual(flat_elements, expected_elements)
+
+  def _save_elastic_iterators(
+      self,
+      directory: str,
+      iterators: list[elastic_iterator.ElasticIterator],
+  ):
+    directory = epath.Path(directory)
+    checkpoint_handler = handler.CheckpointHandler()
+    for i, iterator in enumerate(iterators):
+      with mock.patch.object(
+          sharding,
+          "get_process_index_and_count",
+          return_value=(i, len(iterators)),
+      ):
+        checkpoint_handler.save(directory, iterator)
+
+  def _restore_elastic_iterators(
+      self,
+      directory: str,
+      iterators: list[elastic_iterator.ElasticIterator],
+  ):
+    directory = epath.Path(directory)
+    checkpoint_handler = handler.CheckpointHandler()
+    for i, iterator in enumerate(iterators):
+      with mock.patch.object(
+          sharding,
+          "get_process_index_and_count",
+          return_value=(i, len(iterators)),
+      ):
+        checkpoint_handler.restore(directory, iterator)
+
+  def test_checkpointing_with_scale_up(self):
+    temp_dir = self.create_tempdir()
+    global_batch_size = 10
+    # Dataset looks like:
+    # [0, 25, 50, 75]
+    # [1, 26, 51, 76]
+    # [2, 27, 52, 77]
+    # ...
+    # [24, 49, 74, 99]
+    interleave_ds = self._create_sharded_datasource()
+    elastic_iterators = self._create_iterators(
+        interleave_ds, 5, global_batch_size
+    )
+    all_elements = list(range(100))
+
+    actual_elements = self._consume_elements(elastic_iterators, 5)
+
+    # Save the state of the iterators all at once.
+    self._save_elastic_iterators(temp_dir.full_path, elastic_iterators)
+
+    new_elastic_iterators = self._create_iterators(
+        interleave_ds, 10, global_batch_size
+    )
+    self._restore_elastic_iterators(temp_dir.full_path, new_elastic_iterators)
+
+    actual_elements.extend(self._consume_remaining(new_elastic_iterators))
+    self._flatten_and_assert_equal(actual_elements, all_elements)
+
+  def test_checkpointing_with_scale_down(self):
+    global_batch_size = 10
+
+    temp_dir = self.create_tempdir()
+
+    interleaved_ds = self._create_sharded_datasource()
+
+    elastic_iterators = self._create_iterators(
+        interleaved_ds, 10, global_batch_size
+    )
+    all_elements = list(range(100))
+
+    actual_elements = self._consume_elements(elastic_iterators, 25)
+
+    # Save the state of the iterators.
+    self._save_elastic_iterators(temp_dir.full_path, elastic_iterators)
+
+    new_elastic_iterators = self._create_iterators(
+        interleaved_ds, 2, global_batch_size
+    )
+    self._restore_elastic_iterators(temp_dir.full_path, new_elastic_iterators)
+
+    actual_elements.extend(self._consume_remaining(new_elastic_iterators))
+    self._flatten_and_assert_equal(actual_elements, all_elements)
+
+  def _create_zipped_datasource(self, cycle_length=10):
+    ds1 = self._create_sharded_datasource(cycle_length)
+    datasource_ds2 = [
+        dataset.MapDataset.range(i + 100, 200, 25).to_iter_dataset()
+        for i in range(25)
+    ]
+    ds2 = interleave.InterleaveIterDataset(
+        datasource_ds2, cycle_length=cycle_length
+    )
+    return zip_transform.ZipIterDataset([ds1, ds2])
+
+  def _unzip_and_flatten_zipped_elements(self, actual_elements):
+    flat_x = []
+    flat_y = []
+    for batch in actual_elements:
+      flat_x.extend(batch[0])
+      flat_y.extend(batch[1])
+    return flat_x, flat_y
+
+  def test_zip_checkpointing_with_scale_down(self):
+    global_batch_size = 10
+    temp_dir = self.create_tempdir()
+    ds = self._create_zipped_datasource()
+    elastic_iterators = self._create_iterators(ds, 10, global_batch_size)
+    actual_elements = self._consume_elements(elastic_iterators, 25)
+    self._save_elastic_iterators(temp_dir.full_path, elastic_iterators)
+
+    new_elastic_iterators = self._create_iterators(ds, 2, global_batch_size)
+    self._restore_elastic_iterators(temp_dir.full_path, new_elastic_iterators)
+    actual_elements.extend(self._consume_remaining(new_elastic_iterators))
+
+    flat_x, flat_y = self._unzip_and_flatten_zipped_elements(actual_elements)
+    self.assertCountEqual(flat_x, list(range(100)))
+    self.assertCountEqual(flat_y, list(range(100, 200)))
+
+  def test_zip_checkpointing_with_scale_up(self):
+    global_batch_size = 10
+    temp_dir = self.create_tempdir()
+    ds = self._create_zipped_datasource()
+    elastic_iterators = self._create_iterators(ds, 5, global_batch_size)
+    actual_elements = self._consume_elements(elastic_iterators, 5)
+    self._save_elastic_iterators(temp_dir.full_path, elastic_iterators)
+
+    new_elastic_iterators = self._create_iterators(ds, 10, global_batch_size)
+    self._restore_elastic_iterators(temp_dir.full_path, new_elastic_iterators)
+    actual_elements.extend(self._consume_remaining(new_elastic_iterators))
+
+    flat_x, flat_y = self._unzip_and_flatten_zipped_elements(actual_elements)
+    self.assertCountEqual(flat_x, list(range(100)))
+    self.assertCountEqual(flat_y, list(range(100, 200)))
 
   def test_iter_dataset_docstring_example(self):
     # This test verifies the example provided in the ElasticIterator docstring.

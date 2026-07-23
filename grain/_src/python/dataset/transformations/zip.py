@@ -74,6 +74,11 @@ class ZipIterDataset(dataset.IterDataset[T]):
   def __iter__(self) -> dataset.DatasetIterator[T]:
     return _ZipDatasetIterator(self._parents, strict=self._strict)  # pyrefly: ignore[bad-argument-type]
 
+  def set_slice(self, sl: slice, sequential_slice: bool = False) -> None:
+    del sequential_slice
+    for parent in self._parents:
+      dataset.set_slice(parent, sl)
+
   def __str__(self) -> str:
     return f"ZipIterDataset(parents={self._parents}, strict={self._strict})"
 
@@ -141,6 +146,31 @@ class _ZipDatasetIterator(dataset.DatasetIterator[T]):
   def set_state(self, state):
     for it, s in zip(self._parents, state["parents"]):
       it.set_state(s)
+
+  def get_shard_states(self) -> Sequence[Any]:
+    """Returns the shard states for each shard across all parent iterators."""
+    parent_shard_states = []
+    for parent in self._parents:
+      shards_stats = dataset.find_shard_states(parent)
+      if not shards_stats:
+        raise ValueError(
+            f"Parent iterator {parent} does not support elastic resizing."
+        )
+      parent_shard_states.append(shards_stats)
+    if not parent_shard_states:
+      return []
+    num_shards = len(parent_shard_states[0])
+    if not all(len(l) == num_shards for l in parent_shard_states):
+      raise ValueError("All parents must have the same number of shards.")
+    return list(zip(*parent_shard_states))
+
+  def set_shard_states(self, shard_states: Sequence[Any]) -> None:
+    """Restores the shard states for each parent iterator."""
+    if not shard_states:
+      return
+    unzipped_states = list(zip(*shard_states))
+    for parent, states in zip(self._parents, unzipped_states):
+      dataset.set_shard_states(parent, states)
 
   def __str__(self) -> str:
     return f"ZipDatasetIterator([{len(self._parents)} parents])"
