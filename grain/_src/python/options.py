@@ -95,8 +95,9 @@ class MultiprocessingOptions:
       each worker maintains. These are elements after all transformations. If
       your transformations include batching this means a single element is a
       batch.
-    enable_profiling: If True, profiling info is logged. This is only available
-      when num_workers >= 1.
+    enable_profiling: Whether to enable profiling in worker processes. If False,
+      it defaults to the global --grain_enable_multiprocess_worker_profiling
+      flag. This is only available when num_workers >= 1.
   """
 
   num_workers: int = 0

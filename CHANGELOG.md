@@ -19,6 +19,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 * Bug fixes:
   * Fixed bug in DataLoader where sharding remainder was dropped even when ShardOptions.drop_remainder=False.
   * Fixes reference cycle in BatchMapDataset.
+  * Fixed `MultiprocessingOptions.enable_profiling` being ignored; it can now be used to enable worker profiling programmatically when the global flag is False.
 
 ## Grain 0.2.18 (June 17, 2026)
 

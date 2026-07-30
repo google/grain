@@ -1132,6 +1132,52 @@ class MultiprocessingPrefetchTest(parameterized.TestCase):
     self.assertEqual(spec.dtype, np.int64)
     self.assertEqual(spec.shape, ())
 
+  @mock.patch.object(
+      process_prefetch.profiler,
+      'is_worker_profiling_supported',
+      return_value=True,
+  )
+  @mock.patch.object(
+      process_prefetch.profiler,
+      'is_worker_profiling_enabled',
+      return_value=False,
+  )
+  @mock.patch.object(process_prefetch.profiler, 'is_loaded', return_value=True)
+  @mock.patch.object(
+      process_prefetch.portpicker, 'pick_unused_port', return_value=12345
+  )
+  @mock.patch.object(process_prefetch.profiler, 'start_server')
+  @mock.patch.object(process_prefetch, 'ProcessPrefetchDatasetIterator')
+  def test_enable_profiling_options(
+      self,
+      mock_iterator,
+      mock_start_server,
+      mock_pick_port,
+      mock_is_loaded,
+      mock_enabled,
+      mock_supported,
+  ):
+    del mock_pick_port, mock_is_loaded, mock_enabled, mock_supported
+    mock_iter_instance = mock.create_autospec(dataset.DatasetIterator)
+    mock_iter_instance._ctx = base.IteratorContext()
+    mock_iterator.return_value = mock_iter_instance
+    mock_iter_instance.__next__.side_effect = StopIteration
+
+    ds = dataset.MapDataset.range(10).to_iter_dataset()
+    ds = ds.mp_prefetch(
+        options.MultiprocessingOptions(num_workers=1, enable_profiling=True)
+    )
+
+    results = list(ds)
+    self.assertEqual(results, [])
+
+    mock_iterator.assert_called_once()
+    called_worker_init_fn = mock_iterator.call_args[0][2]
+
+    self.assertIsNotNone(called_worker_init_fn)
+    called_worker_init_fn()
+    mock_start_server.assert_called_once_with(12345)
+
 
 if __name__ == '__main__':
   absltest.main()

@@ -147,6 +147,7 @@ class ProcessPrefetchIterDataset(dataset.IterDataset[T]):
       parent: dataset.IterDataset[T],
       buffer_size: int,
       worker_init_fn: Callable[[], None] | None = None,
+      enable_profiling: bool = False,
   ):
     """Initializes the ProcessPrefetchIterDataset.
 
@@ -155,6 +156,8 @@ class ProcessPrefetchIterDataset(dataset.IterDataset[T]):
       buffer_size: The size of the buffer used for prefetching.
       worker_init_fn: An optional function to run in the worker process at
         startup.
+      enable_profiling: Whether to enable profiling in worker processes if not
+        enabled via the flag.
     """
     if buffer_size <= 0:
       raise ValueError(
@@ -163,6 +166,7 @@ class ProcessPrefetchIterDataset(dataset.IterDataset[T]):
     super().__init__(parent)
     self._buffer_size = buffer_size
     self._worker_init_fn = worker_init_fn
+    self._enable_profiling = enable_profiling
 
   def __str__(self) -> str:
     return f"ProcessPrefetchIterDataset(buffer_size={self._buffer_size})"
@@ -170,9 +174,14 @@ class ProcessPrefetchIterDataset(dataset.IterDataset[T]):
   def __iter__(self) -> dataset.DatasetIterator[T]:
     worker_init_fn = self._worker_init_fn
     worker_profiler_port = None
-    if profiler.is_worker_profiling_enabled() and profiler.is_loaded():
+    enable_worker_profiling = (
+        self._enable_profiling and profiler.is_worker_profiling_supported()
+    ) or profiler.is_worker_profiling_enabled()
+    if enable_worker_profiling and profiler.is_loaded():
       worker_profiler_port = portpicker.pick_unused_port()
-      profiler_init_fn = profiler.get_worker_init_fn(worker_profiler_port)
+      profiler_init_fn = profiler.get_worker_init_fn(
+          worker_profiler_port, enable_profiling=self._enable_profiling
+      )
       if worker_init_fn is None:
         worker_init_fn = profiler_init_fn
       else:
@@ -679,6 +688,7 @@ def multiprocess_prefetch(
     buffer_size: int = 1,
     worker_init_fn: Callable[[int, int], None] | None = None,
     sequential_slice: bool = False,
+    enable_profiling: bool = False,
 ) -> dataset.IterDataset[T]:
   """Uses a multiple processes to prefetch elements ahead of time.
 
@@ -693,6 +703,9 @@ def multiprocess_prefetch(
     buffer_size: The size of the prefetch buffer for each process.
     worker_init_fn: A function that is called in each worker process.
     sequential_slice: Whether to use sequential slicing.
+    enable_profiling: Whether to enable profiling in worker processes. If False,
+      it defaults to the global --grain_enable_multiprocess_worker_profiling
+      flag.
 
   Returns:
     `IterDataset` that prefetches elements from `ds` using multiple processes.
@@ -737,6 +750,7 @@ def multiprocess_prefetch(
         worker_ds,
         buffer_size=buffer_size,
         worker_init_fn=functools.partial(_run_all, worker_init_fns),
+        enable_profiling=enable_profiling,
     )
     shards.append(worker_ds)
 
