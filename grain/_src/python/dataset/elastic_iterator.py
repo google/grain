@@ -24,7 +24,6 @@ from grain._src.python.dataset.transformations import (
     filter as filter_dataset,
 )
 from grain._src.python.dataset.transformations import interleave
-from grain._src.python.dataset.transformations import mix
 from grain._src.python.dataset.transformations import prefetch
 
 T = TypeVar("T")
@@ -46,13 +45,10 @@ def _verify_transformations_supported(ds: dataset.IterDataset) -> None:
     next_ds = to_check.pop()
     if isinstance(
         next_ds,
-        (
-            prefetch.PrefetchIterDataset,
-            mix.MixedIterDataset,
-        ),
+        (prefetch.PrefetchIterDataset,),
     ):
       raise ValueError(
-          "ElasticIterator for IterDataset does not support mix or prefetch"
+          "ElasticIterator for IterDataset does not support prefetch"
           " transformation yet."
       )
     to_check.extend(next_ds.parents)  # pyrefly: ignore[bad-argument-type]

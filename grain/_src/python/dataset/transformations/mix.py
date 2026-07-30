@@ -27,7 +27,6 @@ from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
 
-
 Element = Any
 T = TypeVar("T")  # pylint: disable=invalid-name
 
@@ -253,6 +252,69 @@ class _MixedDatasetIterator(dataset.DatasetIterator[T]):
     self._index = state["index"]
     self._stop = state["stop"]
 
+  def get_shard_states(self) -> Sequence[Any]:
+    """Returns the shard states for the given dataset iterator."""
+
+    def get_states(parent):
+      shards_stats = dataset.find_shard_states(parent)
+      if not shards_stats:
+        raise ValueError(
+            f"Parent iterator {parent} does not support elastic resizing."
+        )
+      return shards_stats
+
+    flat_parents = tree_lib.flatten(self._parents_structure)
+    parent_shard_states = [get_states(parent) for parent in flat_parents]
+
+    if not parent_shard_states:
+      return []
+    num_shards = len(parent_shard_states[0])
+    if not all(
+        len(parent_shard) == num_shards for parent_shard in parent_shard_states
+    ):
+      raise ValueError("All parents must have the same number of shards.")
+
+    shard_states = []
+    for i in range(num_shards):
+      flat_leaves_i = [
+          parent_states[i] for parent_states in parent_shard_states
+      ]
+      parent_states = tree_lib.unflatten_as(
+          self._parents_structure, flat_leaves_i
+      )
+      shard_state = {
+          "parent_states": parent_states,
+          "index": self._index,
+          "stop": self._stop,
+      }
+      shard_states.append(shard_state)
+    return shard_states
+
+  def set_shard_states(self, shard_states: Sequence[Any]) -> None:
+    """Sets the shard states for the given dataset iterator."""
+    if not shard_states:
+      return
+
+    flat_parents = tree_lib.flatten(self._parents_structure)
+    index_structure = tree_lib.unflatten_as(
+        self._parents_structure, list(range(len(flat_parents)))
+    )
+    parent_states_lists = [[] for _ in flat_parents]
+
+    for state_struct in shard_states:
+      parent_states = state_struct["parent_states"]
+
+      def merge(idx, state):
+        parent_states_lists[idx].append(state)
+
+      tree_lib.map_structure(merge, index_structure, parent_states)
+
+    for parent, states in zip(flat_parents, parent_states_lists):
+      dataset.set_shard_states(parent, states)
+
+    self._index = shard_states[0]["index"]
+    self._stop = shard_states[0]["stop"]
+
   def __str__(self) -> str:
     return (
         f"MixedDatasetIterator([{len(self._parents)} parents],"
@@ -291,6 +353,10 @@ class MixedIterDataset(dataset.IterDataset[T]):
         tree_lib.map_structure(lambda p: p.__iter__(), self._parents_structure),
         proportions=self._proportions,
     )
+
+  def set_slice(self, sl: slice, sequential_slice: bool = False) -> None:
+    for parent in self._parents:
+      dataset.set_slice(parent, sl, sequential_slice)
 
   def __str__(self) -> str:
     return (

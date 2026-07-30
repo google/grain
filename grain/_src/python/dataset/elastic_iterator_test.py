@@ -27,6 +27,7 @@ from grain._src.python.checkpoint import handler
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import elastic_iterator
 from grain._src.python.dataset.transformations import interleave
+from grain._src.python.dataset.transformations import mix as mix_transform
 from grain._src.python.dataset.transformations import zip as zip_transform
 import grain._src.python.testing.experimental as test_util
 import numpy as np
@@ -407,6 +408,42 @@ class ElasticIterDatasetTest(parameterized.TestCase):
     ]
     self.assertEqual(actual, expected)
 
+  def test_mix_sharding_produces_correct_elements(self):
+    ds1 = [
+        dataset.MapDataset.range(i, 10, 4).to_iter_dataset() for i in range(4)
+    ]
+    interleave_ds1 = interleave.InterleaveIterDataset(ds1, cycle_length=2)
+
+    ds2 = [
+        dataset.MapDataset.range(i + 10, 20, 4).to_iter_dataset()
+        for i in range(4)
+    ]
+    interleave_ds2 = interleave.InterleaveIterDataset(ds2, cycle_length=2)
+
+    mix_ds = mix_transform.MixedIterDataset(
+        [interleave_ds1, interleave_ds2], proportions=[1, 1]
+    )
+
+    it = elastic_iterator.ElasticIterator(
+        mix_ds,
+        shard_options=sharding.ShardOptions(shard_index=0, shard_count=2),
+        global_batch_size=2,
+    )
+    actual = list(it)
+    expected = [
+        [0],
+        [10],
+        [2],
+        [12],
+        [4],
+        [14],
+        [6],
+        [16],
+        [8],
+        [18],
+    ]
+    np.testing.assert_equal(actual, expected)
+
   def test_checkpointing_no_change(self):
     ds = [
         dataset.MapDataset.range(i, 100, 25).to_iter_dataset()
@@ -668,6 +705,17 @@ class ElasticIterDatasetTest(parameterized.TestCase):
     )
     return zip_transform.ZipIterDataset([ds1, ds2])
 
+  def _create_mixed_datasource(self, cycle_length=10):
+    ds1 = self._create_sharded_datasource(cycle_length)
+    datasource_ds2 = [
+        dataset.MapDataset.range(i + 100, 200, 25).to_iter_dataset()
+        for i in range(25)
+    ]
+    ds2 = interleave.InterleaveIterDataset(
+        datasource_ds2, cycle_length=cycle_length
+    )
+    return mix_transform.MixedIterDataset([ds1, ds2], proportions=[1, 1])
+
   def _unzip_and_flatten_zipped_elements(self, actual_elements):
     flat_x = []
     flat_y = []
@@ -719,6 +767,34 @@ class ElasticIterDatasetTest(parameterized.TestCase):
     )
     batch = next(elastic_iter)
     self.assertLen(batch, 32)
+
+  def test_mix_checkpointing_with_scale_down(self):
+    global_batch_size = 10
+    temp_dir = self.create_tempdir()
+    ds = self._create_mixed_datasource()
+    elastic_iterators = self._create_iterators(ds, 10, global_batch_size)
+    all_elements = list(range(200))
+    actual_elements = self._consume_elements(elastic_iterators, 20)
+    self._save_elastic_iterators(temp_dir.full_path, elastic_iterators)
+
+    new_elastic_iterators = self._create_iterators(ds, 2, global_batch_size)
+    self._restore_elastic_iterators(temp_dir.full_path, new_elastic_iterators)
+    actual_elements.extend(self._consume_remaining(new_elastic_iterators))
+    self._flatten_and_assert_equal(actual_elements, all_elements)
+
+  def test_mix_checkpointing_with_scale_up(self):
+    global_batch_size = 10
+    temp_dir = self.create_tempdir()
+    ds = self._create_mixed_datasource()
+    elastic_iterators = self._create_iterators(ds, 5, global_batch_size)
+    all_elements = list(range(200))
+    actual_elements = self._consume_elements(elastic_iterators, 10)
+    self._save_elastic_iterators(temp_dir.full_path, elastic_iterators)
+
+    new_elastic_iterators = self._create_iterators(ds, 10, global_batch_size)
+    self._restore_elastic_iterators(temp_dir.full_path, new_elastic_iterators)
+    actual_elements.extend(self._consume_remaining(new_elastic_iterators))
+    self._flatten_and_assert_equal(actual_elements, all_elements)
 
 
 if __name__ == "__main__":

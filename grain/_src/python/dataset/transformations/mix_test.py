@@ -20,6 +20,7 @@ from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset.transformations import interleave
 from grain._src.python.dataset.transformations import mix
 import numpy as np
 
@@ -694,6 +695,60 @@ class MixedIterDatasetTest(absltest.TestCase):
     spec = dataset.get_element_spec(ds)
     self.assertEqual(spec.dtype, np.int64)
     self.assertEqual(spec.shape, ())
+
+  def test_set_slice(self):
+    ds1 = [
+        dataset.MapDataset.range(i, 10, 4).to_iter_dataset() for i in range(4)
+    ]
+    interleave_ds1 = interleave.InterleaveIterDataset(ds1, cycle_length=2)
+
+    ds2 = [
+        dataset.MapDataset.range(i + 10, 20, 4).to_iter_dataset()
+        for i in range(4)
+    ]
+    interleave_ds2 = interleave.InterleaveIterDataset(ds2, cycle_length=2)
+
+    mix_ds = mix.MixedIterDataset(
+        [interleave_ds1, interleave_ds2], proportions=[1, 1]
+    )
+    mix_ds.set_slice(slice(0, None, 2))
+
+    actual = list(mix_ds)
+    expected = [0, 10, 2, 12, 4, 14, 6, 16, 8, 18]
+    self.assertEqual(actual, expected)
+
+  def test_get_set_shard_states(self):
+    ds1 = [
+        dataset.MapDataset.range(i, 10, 4).to_iter_dataset() for i in range(4)
+    ]
+    interleave_ds1 = interleave.InterleaveIterDataset(ds1, cycle_length=2)
+
+    ds2 = [
+        dataset.MapDataset.range(i + 10, 20, 4).to_iter_dataset()
+        for i in range(4)
+    ]
+    interleave_ds2 = interleave.InterleaveIterDataset(ds2, cycle_length=2)
+
+    mix_ds = mix.MixedIterDataset(
+        [interleave_ds1, interleave_ds2], proportions=[1, 1]
+    )
+    mix_ds.set_slice(slice(0, None, 2))
+
+    it = mix_ds.__iter__()
+    self.assertEqual(next(it), 0)
+    self.assertEqual(next(it), 10)
+    self.assertEqual(next(it), 2)
+    self.assertEqual(next(it), 12)
+
+    shard_states = it.get_shard_states()  # pytype: disable=attribute-error
+    self.assertLen(shard_states, 2)
+    self.assertLen(shard_states[0]["parent_states"], 2)
+    self.assertLen(shard_states[1]["parent_states"], 2)
+
+    it2 = mix_ds.__iter__()
+    it2.set_shard_states(shard_states)  # pytype: disable=attribute-error
+    self.assertEqual(next(it2), 4)
+    self.assertEqual(next(it2), 14)
 
 
 class ConcatenateLazyMapTest(absltest.TestCase):

@@ -10,6 +10,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * `MapDataset.slice` now accepts a `Sequence[int]` (including a
     `MapDataset[int]`) in addition to a `slice` object, enabling arbitrary index
     remapping similarly to NumPy's advanced indexing.
+  * Support interleaves, mixtures, and zip datasets for `ElasticIterator`
 
 * Breaking changes:
 
