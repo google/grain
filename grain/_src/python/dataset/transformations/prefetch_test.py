@@ -14,6 +14,7 @@
 from concurrent import futures
 import dataclasses
 import platform
+import queue
 import sys
 import threading
 import time
@@ -69,6 +70,118 @@ class RepeatedIntSourceDatasetIterator(dataset.DatasetIterator[int]):
 
   def get_state(self):
     return {}
+
+
+# Timeouts for the subprocess-isolated ThreadPrefetch close lifecycle test.
+# Related to google/grain#1196 (join-before-cancel shape), not the reporter's
+# exact device_put script on CPython 3.12. The child must finish well under the
+# join budget; if close deadlocks, the parent kills the child and fails the test.
+_PREFETCH_CLOSE_JOIN_TIMEOUT_SEC = 10.0
+_PREFETCH_CLOSE_MAX_SEC = 1.0
+
+
+class _BlockingAfterIterDataset(dataset.IterDataset[int]):
+  """Yields ``block_after`` elements, then blocks in ``__next__`` until close.
+
+  Parks a thread-prefetch producer inside ``parent.__next__``. The parent only
+  unblocks when its own ``close()`` sets ``_closed``. That models real parents
+  that finish in-flight work only when cancelled, so ``ThreadPrefetch.close``
+  must request stop, close the parent chain, then join (not join first).
+  """
+
+  def __init__(self, n: int = 100, block_after: int = 1):
+    super().__init__()
+    self._n = n
+    self._block_after = block_after
+    self.entered_block = threading.Event()
+
+  def __iter__(self) -> dataset.DatasetIterator[int]:
+    return _BlockingAfterIterator(
+        self._n, self._block_after, self.entered_block
+    )
+
+
+class _BlockingAfterIterator(dataset.DatasetIterator[int]):
+
+  def __init__(
+      self, n: int, block_after: int, entered_block: threading.Event
+  ):
+    super().__init__()
+    self._n = n
+    self._block_after = block_after
+    self._entered_block = entered_block
+    self._i = 0
+
+  def __next__(self) -> int:
+    if self._i >= self._n:
+      raise StopIteration
+    if self._i >= self._block_after:
+      self._entered_block.set()
+      # Block until close() sets _closed. A stop event on the child prefetch
+      # thread does not affect this wait.
+      while not self._closed:
+        time.sleep(0.01)
+      raise StopIteration
+    value = self._i
+    self._i += 1
+    return value
+
+  def get_state(self):
+    return {'i': self._i}
+
+  def set_state(self, state):
+    self._i = state['i']
+
+
+def _close_when_producer_blocked_in_parent_worker(
+    result_queue: mp.Queue, nested: bool
+):
+  """Child process: close() while a producer is blocked in parent.__next__.
+
+  When ``nested`` is True, the pipeline matches the device_put shape
+  (ThreadPrefetch -> map -> ThreadPrefetch). When False, a single
+  ThreadPrefetch wraps the blocking source. The consumer raises after the
+  first element and keeps the iterator, then calls close once a producer is
+  known to be inside the blocking parent.
+  """
+  try:
+    source_ds = _BlockingAfterIterDataset(n=100, block_after=1)
+    ds: dataset.IterDataset[int] = prefetch.ThreadPrefetchIterDataset(
+        source_ds, prefetch_buffer_size=1
+    )
+    if nested:
+      ds = ds.map(lambda x: x)
+      ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=1)
+
+    data_iter = ds.__iter__()
+    try:
+      for _ in data_iter:
+        raise RuntimeError('consumer error')
+    except RuntimeError:
+      pass
+
+    # Ensure a prefetch producer is blocked in parent.__next__ before close.
+    if not source_ds.entered_block.wait(timeout=2.0):
+      result_queue.put({
+          'error': 'producer did not enter blocking parent.__next__',
+      })
+      return
+
+    close_start = time.time()
+    data_iter.close()
+    close_elapsed = time.time() - close_start
+
+    live_after = [
+        t.name
+        for t in threading.enumerate()
+        if t.name.startswith('grain-thread-prefetch') and t.is_alive()
+    ]
+    result_queue.put({
+        'close_elapsed': close_elapsed,
+        'live_prefetch_threads': live_after,
+    })
+  except Exception as e:  # pylint: disable=broad-exception-caught
+    result_queue.put({'error': repr(e)})
 
 
 class PrefetchIterDatasetTest(parameterized.TestCase):
@@ -771,6 +884,94 @@ class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
 
 class ThreadPrefetchIterDatasetTest(_ThreadPrefetchIterDatasetTestBase):
   """Runs tests without provided executor."""
+
+  @parameterized.parameters(0, 1, 5)
+  def test_next_after_close_raises_value_error(self, prefetch_buffer_size: int):
+    """After close(), __next__ must raise ValueError for every buffer size.
+
+    DatasetIterator.close documents that subsequent __next__ calls raise
+    ValueError. A stop sentinel left in an unbounded (maxsize=0) queue must not
+    turn that into StopIteration, which a training loop would treat as end of
+    epoch.
+    """
+    ds = dataset.MapDataset.range(20).to_iter_dataset()
+    ds = prefetch.ThreadPrefetchIterDataset(
+        ds, prefetch_buffer_size=prefetch_buffer_size
+    )
+    it = ds.__iter__()
+    _ = next(it)
+    it.close()
+    with self.assertRaisesRegex(
+        ValueError, 'Attempting to use a closed iterator'
+    ):
+      next(it)
+
+  @parameterized.parameters(False, True)
+  def test_close_does_not_hang_when_producer_blocked_in_parent(
+      self, nested: bool
+  ):
+    """close() must not hang when a producer is blocked in parent.__next__.
+
+    ThreadPrefetchDatasetIterator.close joins its producer before closing the
+    parent. A stop event does not interrupt a blocked parent.__next__, so close
+    can wait forever. This is the join-before-cancel shape related to
+    google/grain#1196. It is not the reporter's exact device_put script on
+    CPython 3.12 (that script exits there). The source blocks after the first
+    element to hold a producer in the parent. Parameterized over single-level
+    and nested ThreadPrefetch (device_put-like nesting).
+
+    A deadlock must fail this test, never hang the suite: the child runs in a
+    subprocess; the parent joins with a hard timeout and asserts exit code,
+    wall time, and absence of live ``grain-thread-prefetch`` threads.
+    """
+    ctx = mp.get_context('spawn')
+    result_queue = ctx.Queue()
+    process = ctx.Process(
+        target=_close_when_producer_blocked_in_parent_worker,
+        args=(result_queue, nested),
+        daemon=True,
+    )
+    start = time.time()
+    process.start()
+    process.join(timeout=_PREFETCH_CLOSE_JOIN_TIMEOUT_SEC)
+    wall = time.time() - start
+
+    if process.is_alive():
+      process.terminate()
+      process.join(timeout=5.0)
+      nesting = 'nested' if nested else 'single-level'
+      self.fail(
+          'Child process hung for'
+          f' >{_PREFETCH_CLOSE_JOIN_TIMEOUT_SEC}s during {nesting}'
+          ' ThreadPrefetch close while producer blocked in parent.__next__'
+          f' (related to google/grain#1196). wall={wall:.2f}s'
+          f' exitcode={process.exitcode}'
+      )
+
+    self.assertEqual(
+        process.exitcode,
+        0,
+        f'Child exited with {process.exitcode}, wall={wall:.2f}s',
+    )
+    self.assertLess(
+        wall,
+        _PREFETCH_CLOSE_JOIN_TIMEOUT_SEC,
+        f'Child wall time {wall:.2f}s exceeded join budget',
+    )
+    try:
+      result = result_queue.get(timeout=1.0)
+    except queue.Empty:
+      self.fail('Child produced no result')
+    self.assertNotIn('error', result, msg=result)
+    self.assertLess(
+        result['close_elapsed'],
+        _PREFETCH_CLOSE_MAX_SEC,
+        f"close() took {result['close_elapsed']:.2f}s",
+    )
+    self.assertEmpty(
+        result['live_prefetch_threads'],
+        f"live prefetch threads after close: {result['live_prefetch_threads']}",
+    )
 
 
 class _MpContextCheckIterDataset(dataset.IterDataset[_T]):

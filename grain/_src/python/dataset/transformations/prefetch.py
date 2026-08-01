@@ -413,6 +413,45 @@ StateT = dict[str, Any]
 BufferElementT = tuple[T, StateT, Exception | None]
 
 
+class _PrefetchStopped(Exception):
+  """Internal signal that thread prefetch was stopped and the buffer was closed.
+
+  Placed on the buffer to wake a consumer blocked in ``Queue.get`` when
+  cancellation is requested. Not meant to be raised to user code after an
+  explicit ``close()``.
+  """
+
+
+def _buffer_put(
+    buffer: queue.Queue[BufferElementT],
+    item: BufferElementT,
+    should_stop: threading.Event,
+) -> None:
+  """Puts ``item`` on ``buffer``, never blocking after a stop request.
+
+  A stop sentinel may already occupy the only free slot. Blocking put after
+  cancellation would deadlock with close(), which joins this thread.
+  """
+  if should_stop.is_set():
+    try:
+      buffer.put_nowait(item)
+    except queue.Full:
+      pass
+    return
+  while True:
+    if should_stop.is_set():
+      try:
+        buffer.put_nowait(item)
+      except queue.Full:
+        pass
+      return
+    try:
+      buffer.put(item, timeout=0.05)
+      return
+    except queue.Full:
+      continue
+
+
 def _put_iterator_elements_in_buffer(
     iterator: dataset.DatasetIterator[T],
     buffer: queue.Queue[BufferElementT],
@@ -424,9 +463,34 @@ def _put_iterator_elements_in_buffer(
     while not should_stop.is_set():
       element = stats.record_bytes_consumed(iterator.__next__())
       state = copy.deepcopy(iterator.get_state())
-      buffer.put((element, state, None))
+      # Re-check stop before a potentially blocking put so cancellation can
+      # discard the element rather than wait for buffer space.
+      if should_stop.is_set():
+        return
+      _buffer_put(buffer, (element, state, None), should_stop)
   except Exception as e:  # pylint: disable=broad-except
-    buffer.put((None, None, e))  # pyrefly: ignore[bad-argument-type]
+    _buffer_put(
+        buffer, (None, None, e), should_stop
+    )  # pyrefly: ignore[bad-argument-type]
+
+
+def _request_stop_iterator_tree(iterator: dataset.DatasetIterator) -> None:
+  """Non-blocking cancel propagation through a parent iterator chain.
+
+  ThreadPrefetch nodes get ``request_stop()``. Other nodes are traversed without
+  setting ``_closed`` on intermediate transforms, so a later ``close()`` can
+  still walk the chain and join nested prefetch threads. Leaf iterators (no
+  parents) are marked closed so a cooperative ``__next__`` can unblock.
+  """
+  if isinstance(iterator, ThreadPrefetchDatasetIterator):
+    iterator.request_stop()
+    return
+  parents = iterator._parents  # pylint: disable=protected-access
+  if not parents:
+    iterator._closed = True  # pylint: disable=protected-access
+    return
+  for parent in parents:
+    _request_stop_iterator_tree(parent)
 
 
 class CheckpointableIterator(Iterator[T], Protocol[T]):
@@ -534,6 +598,11 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       stage_category=dataset_stats.IPL_CAT_PREFETCH
   )
   def __next__(self):
+    # Check closed before any buffer read. A stop sentinel left in the queue
+    # (especially with unbounded maxsize=0) must not surface as StopIteration
+    # after close(); the documented contract is ValueError.
+    if self._closed:
+      raise ValueError("Attempting to use a closed iterator.")
 
     if self._state is None:
       self._state = self._maybe_nonnative_parent.get_state()
@@ -542,7 +611,7 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     with timer:
       if self._target_prefetch_buffer_size > 0:
         self.start_prefetch()
-        element, state, err = self._buffer.get()
+        element, state, err = self._buffer_get()
       else:
         try:
           # In case of 0 prefetch buffer size, we still try to get from the
@@ -555,6 +624,11 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
           err = None
 
     if err is not None:
+      # A stop sentinel means cancellation was already requested (possibly by a
+      # parent close). Do not join here: the closing thread owns the join, and
+      # joining from a nested producer can deadlock with close().
+      if isinstance(err, _PrefetchStopped):
+        raise StopIteration from err
       self._stop_prefetch()
       raise err
     self._state = state
@@ -564,12 +638,55 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       element = self._stats.record_bytes_produced(element)
       return self._stats.record_output_spec(element)
 
-  def close(self):
-    """Stops the iterator. No further calls to the iterator are expected."""
+  def request_stop(self) -> None:
+    """Requests cancellation without waiting for producer threads.
+
+    Marks this iterator closed, signals the local prefetch thread, wakes any
+    reader blocked on the buffer, and propagates the same non-blocking request
+    down the parent chain. Does not join. Explicit ``close()`` joins after
+    requesting stop. Safe to call from ``__del__``.
+    """
+    already_closed = self._closed
     self._closed = True
-    self._stop_prefetch()
+    self._request_stop_prefetch()
+    if already_closed:
+      return
+    parent = self._maybe_nonnative_parent
+    if isinstance(parent, dataset.DatasetIterator):
+      _request_stop_iterator_tree(parent)
+
+  def close(self):
+    """Stops the iterator. No further calls to the iterator are expected.
+
+    Cancellation is two-phase so a producer blocked in ``parent.__next__`` can
+    be woken by closing the parent before this iterator joins its thread:
+
+    1. ``request_stop()``: non-blocking cancel on this node and parents.
+    2. ``parent.close()``: blocking cleanup of the parent chain (joins nested
+       prefetch threads).
+    3. Join the local prefetch thread (skipped while the interpreter finalizes).
+    """
+    self.request_stop()
     if isinstance(self._maybe_nonnative_parent, dataset.DatasetIterator):
       self._maybe_nonnative_parent.close()
+    # Parent close may have unblocked our producer mid-put; clear again so the
+    # join cannot stall on a full buffer. Re-issue the stop sentinel afterwards
+    # and do not clear after join: a nested reader may still be blocked in
+    # buffer.get(), and a post-join clear would steal the sentinel from it.
+    self._clear_buffer()
+    self._put_stop_sentinel()
+    self._join_prefetch_thread(clear_buffer=False)
+
+  def __del__(self):
+    # Best-effort only: propagate non-blocking cancel, never join. Explicit
+    # close() is the deterministic path. Joining from a finalizer can hang if
+    # the producer is blocked in parent.__next__ or during interpreter
+    # shutdown. request_stop() still marks parents closed so a producer parked
+    # in parent.__next__ can observe cancel and drop its reference.
+    try:
+      self.request_stop()
+    except Exception:  # pylint: disable=broad-except
+      pass
 
   def _clear_buffer(self):
     while True:
@@ -578,20 +695,66 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       except queue.Empty:
         return
 
-  def _stop_prefetch(self, clear_buffer: bool = True):
-    """Stops the prefetching thread if it's currently running."""
+  def _buffer_get(self) -> BufferElementT:
+    """Gets the next buffer item, honouring cancellation.
+
+    The healthy path uses a blocking ``get`` (same as before this change) so a
+    busy producer is not paced by a poll interval. After stop is requested,
+    uses a short timeout so a nested reader can observe that this iterator was
+    closed or that its prefetch thread finished even if a stop sentinel was
+    drained by another closer. A stop sentinel still wakes a blocking get.
+    """
+    while True:
+      if self._closed or self._prefetch_should_stop.is_set():
+        try:
+          return self._buffer.get(timeout=0.05)
+        except queue.Empty:
+          if self._closed:
+            raise StopIteration
+          thread = self._prefetch_thread
+          if thread is None or not thread.is_alive():
+            raise StopIteration
+          continue
+      # Running: park until an element or a stop sentinel arrives.
+      return self._buffer.get()
+
+  def _put_stop_sentinel(self):
+    """Wakes a consumer blocked in ``buffer.get`` after a stop request."""
+    sentinel: BufferElementT = (None, None, _PrefetchStopped())
+    try:
+      self._buffer.put_nowait(sentinel)
+    except queue.Full:
+      try:
+        self._buffer.get_nowait()
+      except queue.Empty:
+        pass
+      try:
+        self._buffer.put_nowait(sentinel)
+      except queue.Full:
+        pass
+
+  def _request_stop_prefetch(self, clear_buffer: bool = True):
+    """Non-blocking cancellation request for the prefetch thread."""
     if self._prefetch_thread is None:
       return
 
     self._prefetch_should_stop.set()
     if clear_buffer:
       # Remove entries from the buffer to unblock the producer, so that it
-      # checks producer_running.is_set() and exits.
+      # checks should_stop and exits.
       self._clear_buffer()
     else:
       assert isinstance(self._buffer, variable_size_queue.VariableSizeQueue)
       # Increase the buffer size by 1 to unblock the producer.
       self._buffer.set_max_size(self._target_prefetch_buffer_size + 1)  # pytype: disable=attribute-error
+    # Wake any reader blocked in get() (for example a parent producer in a
+    # nested ThreadPrefetch pipeline).
+    self._put_stop_sentinel()
+
+  def _join_prefetch_thread(self, clear_buffer: bool = True):
+    """Waits for the prefetch thread to exit after a stop request."""
+    if self._prefetch_thread is None:
+      return
 
     if not sys.is_finalizing():
       # Joining the worker thread is not necessary when the Python interpreter
@@ -606,6 +769,11 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       # Clear the buffer again in case the prefetch loop added more elements
       # on exit.
       self._clear_buffer()
+
+  def _stop_prefetch(self, clear_buffer: bool = True):
+    """Stops the prefetching thread if it's currently running."""
+    self._request_stop_prefetch(clear_buffer=clear_buffer)
+    self._join_prefetch_thread(clear_buffer=clear_buffer)
 
   def get_state(self) -> StateT:
     if self._state is not None:
