@@ -295,12 +295,12 @@ class ZipIterDatasetTest(parameterized.TestCase):
         self._parents = [parent]
 
       def __iter__(self):
-        return WrapperDatasetIterator(self._parents[0].__iter__())
+        return WrapperDatasetIterator(self._parents[0].__iter__())  # pyrefly: ignore[missing-attribute]
 
     class WrapperDatasetIterator(dataset.DatasetIterator):
 
       def __init__(self, parent_iter):
-        self._parents = [parent_iter]
+        self._parents = [parent_iter]  # pyrefly: ignore[bad-assignment]
         self._ctx = parent_iter._ctx
 
       def __next__(self):

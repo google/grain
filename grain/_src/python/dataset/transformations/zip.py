@@ -77,7 +77,7 @@ class ZipIterDataset(dataset.IterDataset[T]):
   def set_slice(self, sl: slice, sequential_slice: bool = False) -> None:
     del sequential_slice
     for parent in self._parents:
-      dataset.set_slice(parent, sl)
+      dataset.set_slice(parent, sl)  # pyrefly: ignore[bad-argument-type]
 
   def __str__(self) -> str:
     return f"ZipIterDataset(parents={self._parents}, strict={self._strict})"

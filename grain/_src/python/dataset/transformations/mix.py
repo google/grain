@@ -356,7 +356,7 @@ class MixedIterDataset(dataset.IterDataset[T]):
 
   def set_slice(self, sl: slice, sequential_slice: bool = False) -> None:
     for parent in self._parents:
-      dataset.set_slice(parent, sl, sequential_slice)
+      dataset.set_slice(parent, sl, sequential_slice)  # pyrefly: ignore[bad-argument-type]
 
   def __str__(self) -> str:
     return (
