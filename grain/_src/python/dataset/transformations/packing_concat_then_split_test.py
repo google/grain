@@ -60,6 +60,36 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
         .to_iter_dataset()
     )
 
+  def test_example_docstring(self):
+    data = [
+        {"inputs": np.array([1, 2, 3]), "targets": np.array([10, 20])},
+        {"inputs": np.array([4, 5, 6]), "targets": np.array([30, 40])},
+    ]
+    parent_ds = dataset.MapDataset.source(data).to_iter_dataset()
+
+    packed_ds = packing_concat_then_split.ConcatThenSplitIterDataset(
+        parent=parent_ds,
+        length_struct={
+            "inputs": 4,
+            "targets": 3,
+        },
+    )
+    iterator = iter(packed_ds)
+    first_batch = next(iterator)
+
+    np.testing.assert_array_equal(
+        first_batch["inputs"],
+        np.array([1, 2, 3, 4]),
+    )
+    np.testing.assert_array_equal(
+        first_batch["inputs_segment_ids"],
+        np.array([1, 1, 1, 2]),
+    )
+    np.testing.assert_array_equal(
+        first_batch["inputs_positions"],
+        np.array([0, 1, 2, 0]),
+    )
+
   def test_meta_features_not_restricting_when_splitting_full_length_features(
       self,
   ):

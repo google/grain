@@ -602,6 +602,31 @@ class ConcatThenSplitIterDataset(dataset.IterDataset):
 
   Features can be "meta features" in which case they are never split
   and we do not create ``*_positions`` and ``*_segment_ids`` features for them.
+
+  Example:
+    Applying concat-then-split packing to a dataset with variable-length
+    sequence features::
+
+      import grain
+      import numpy as np
+
+      data = [
+          {"inputs": np.array([1, 2, 3]), "targets": np.array([10, 20])},
+          {"inputs": np.array([4, 5, 6]), "targets": np.array([30, 40])},
+      ]
+      parent_ds = grain.MapDataset.source(data).to_iter_dataset()
+
+      packed_ds = grain.experimental.ConcatThenSplitIterDataset(
+          parent=parent_ds,
+          length_struct={"inputs": 4, "targets": 3},
+      )
+
+      iterator = iter(packed_ds)
+      first_batch = next(iterator)
+
+      print(first_batch["inputs"])
+      print(first_batch["inputs_segment_ids"])
+      print(first_batch["inputs_positions"])
   """
 
   def __init__(
