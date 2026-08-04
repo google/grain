@@ -58,6 +58,7 @@ class ShuffleMapDataset(dataset.MapDataset[T]):
     return "ShuffleMapDataset"
 
   def _shuffled_index(self, index: int) -> int:
+    index = int(index)
     length = len(self._parent)
     epoch, index_in_epoch = divmod(index, length)
     # Note:
@@ -110,6 +111,7 @@ class WindowShuffleMapDataset(dataset.MapDataset[T]):
     return "WindowShuffleMapDataset"
 
   def _shuffled_index(self, index: int) -> int:
+    index = int(index)
     window_index, index_in_window = divmod(index, self._window_size)
     seed = self._seed + window_index
     shuffled_index_in_window = index_shuffle.index_shuffle(

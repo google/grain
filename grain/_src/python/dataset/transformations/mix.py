@@ -71,6 +71,7 @@ class SelectionWithProportionsMap(base.DatasetSelectionMap):
     return self._length
 
   def __getitem__(self, index: int):
+    index = int(index)
     input_index, index = _dataset_and_key_of_next_element(
         index, self._proportions  # pyrefly: ignore[bad-argument-type]
     )
@@ -132,6 +133,7 @@ class MixedMapDataset(dataset.MapDataset[T]):
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
+    index = int(index)
     with self._stats.record_self_time():
       dataset_index, index_in_dataset = self._selection_map[index]
     try:
@@ -441,6 +443,7 @@ class _ConcatSelectionMap(base.DatasetSelectionMap):
     return self._cumulative_dataset_sizes[-1]
 
   def __getitem__(self, index: int) -> tuple[int, int]:
+    index = int(index)
     epoch, index_in_epoch = divmod(index, len(self))
     dataset_index = (
         bisect.bisect_right(self._cumulative_dataset_sizes, index_in_epoch) - 1

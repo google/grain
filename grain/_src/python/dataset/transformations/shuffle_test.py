@@ -75,6 +75,14 @@ class ShuffleMapDatasetTest(parameterized.TestCase):
     self.assertEqual(spec.dtype, np.int64)
     self.assertEqual(spec.shape, ())
 
+  def test_shuffled_index_with_numpy_integer_does_not_overflow(self):
+    ds = shuffle.ShuffleMapDataset(dataset.MapDataset.range(400), seed=42)
+    # Prevents regression of xid/273443246
+    for dtype in [np.int32, np.uint32, np.int64]:
+      index = dtype(5)
+      # Should not raise OverflowError when computing modulo 2**32
+      _ = ds._shuffled_index(index)  # pytype: disable=wrong-arg-types
+
   def test_cross_version_determinism(self):
     # This test validates shuffle determinism across different versions of
     # Grain given a fixed seed. Note that we technically do not guarantee
@@ -177,6 +185,15 @@ class WindowShuffleMapDatasetTest(absltest.TestCase):
     spec = dataset.get_element_spec(ds)
     self.assertEqual(spec.dtype, np.int64)
     self.assertEqual(spec.shape, ())
+
+  def test_shuffled_index_with_numpy_integer_does_not_overflow(self):
+    ds = shuffle.WindowShuffleMapDataset(
+        dataset.MapDataset.range(400), window_size=10, seed=42
+    )
+    # Prevents regression of xid/273443246
+    for dtype in [np.int32, np.uint32, np.int64]:
+      index = dtype(5)
+      _ = ds._shuffled_index(index)  # pytype: disable=wrong-arg-types
 
 
 class WindowShuffleInterDatasetTest(absltest.TestCase):

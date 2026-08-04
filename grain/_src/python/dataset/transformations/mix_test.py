@@ -155,6 +155,24 @@ class SelectionMapTest(absltest.TestCase):
     self.assertEqual(expected_indices, indices)
     self.assertEqual(expected_dataset, unrolled_dataset)
 
+  def test_getitem_with_numpy_integer_index_does_not_overflow(self):
+    selection_map = mix.SelectionWithProportionsMap(
+        parents=[
+            dataset.MapDataset.range(0, 10, 2),
+            dataset.MapDataset.range(1, 10, 2),
+        ],
+        proportions=(10, 10),
+    )
+    for index_type in (np.int32, np.uint32, np.int64):
+      index = index_type(3)
+      # pytype: disable=wrong-arg-types
+      # pytype: disable=unsupported-operands
+      input_index, mapped_index = selection_map[index]
+      self.assertEqual(input_index, 1)
+      self.assertEqual(mapped_index, 1)
+      # pytype: enable=unsupported-operands
+      # pytype: enable=wrong-arg-types
+
 
 class MixedMapDatasetTest(parameterized.TestCase):
 
@@ -449,6 +467,14 @@ class MixedMapDatasetTest(parameterized.TestCase):
     spec = dataset.get_element_spec(ds)
     self.assertEqual(spec.dtype, np.int64)
     self.assertEqual(spec.shape, ())
+
+  def test_getitem_with_numpy_integer_index_does_not_overflow(self):
+    mixed_lzds = mix.MixedMapDataset(
+        parents=[self.even_ds, self.odd_ds], proportions=[2, 2]
+    )
+    for dtype in [np.int32, np.uint32, np.int64]:
+      index = dtype(5)
+      self.assertEqual(mixed_lzds[index], 5)  # pytype: disable=unsupported-operands,wrong-arg-types
 
 
 class MixedIterDatasetTest(absltest.TestCase):
@@ -817,6 +843,17 @@ class ConcatenateLazyMapTest(absltest.TestCase):
 
     expected_values = [0, 2, 4, 6, 8, 1, 3, 5, 7, 9]
     self.assertEqual(ds._getitems(list(range(10))), expected_values)
+
+  def test_concat_selection_map_with_numpy_integer_index_does_not_overflow(
+      self,
+  ):
+    evens = dataset.MapDataset.range(0, 4, 2)
+    odds = dataset.MapDataset.range(1, 6, 2)
+    selection_map = mix._ConcatSelectionMap([evens, odds, evens])
+    # Prevents regression of xid/273443246
+    for dtype in [np.int32, np.uint32, np.int64]:
+      index = dtype(3)
+      self.assertEqual(selection_map[index], (1, 1))  # pytype: disable=unsupported-operands,wrong-arg-types
 
 
 if __name__ == "__main__":
