@@ -17,6 +17,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 * Deprecations:
 
 * Bug fixes:
+  * Fixed int64 multiplication overflow in mixture index dataset sampler when
+    using small dataset weights over large numbers of records.
   * Fixed bug in DataLoader where sharding remainder was dropped even when ShardOptions.drop_remainder=False.
   * Fixes reference cycle in BatchMapDataset.
 
