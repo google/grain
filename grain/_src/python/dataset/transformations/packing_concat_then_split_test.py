@@ -60,6 +60,49 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
         .to_iter_dataset()
     )
 
+  def test_example_docstring(self):
+    data = [
+        {
+            "inputs": np.array([1, 2, 3], dtype=np.int32),
+            "targets": np.array([10, 20], dtype=np.int32),
+        },
+        {
+            "inputs": np.array([4, 5, 6], dtype=np.int32),
+            "targets": np.array([30, 40], dtype=np.int32),
+        },
+    ]
+    parent_ds = dataset.MapDataset.source(data).to_iter_dataset()
+    parent_ds_iterator = iter(parent_ds)
+    parent_ds_first_batch = next(parent_ds_iterator)
+
+    np.testing.assert_array_equal(
+        parent_ds_first_batch["inputs"],
+        np.array([1, 2, 3], dtype=np.int32),
+    )
+
+    packed_ds = packing_concat_then_split.ConcatThenSplitIterDataset(
+        parent=parent_ds,
+        length_struct={
+            "inputs": 4,
+            "targets": 3,
+        },
+    )
+    packed_ds_iterator = iter(packed_ds)
+    packed_ds_first_batch = next(packed_ds_iterator)
+
+    np.testing.assert_array_equal(
+        packed_ds_first_batch["inputs"],
+        np.array([1, 2, 3, 4], dtype=np.int32),
+    )
+    np.testing.assert_array_equal(
+        packed_ds_first_batch["inputs_segment_ids"],
+        np.array([1, 1, 1, 2], dtype=np.int32),
+    )
+    np.testing.assert_array_equal(
+        packed_ds_first_batch["inputs_positions"],
+        np.array([0, 1, 2, 0], dtype=np.int32),
+    )
+
   def test_meta_features_not_restricting_when_splitting_full_length_features(
       self,
   ):
