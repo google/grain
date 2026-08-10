@@ -178,6 +178,27 @@ class WindowShuffleMapDatasetTest(absltest.TestCase):
     for i in range(0, 400, 10):
       self.assertBetween(elements[i], i, i + (window_size - 1))
 
+  def test_example_docstring(self):
+    window_size = 3
+    parent_ds = dataset.MapDataset.range(12)
+
+    shuffled_ds = shuffle.WindowShuffleMapDataset(
+        parent_ds,
+        window_size=window_size,
+        seed=42,
+    )
+    parent = list(parent_ds)
+    shuffled = list(shuffled_ds)
+
+    # All elements are preserved.
+    self.assertCountEqual(shuffled, parent)
+    # Elements remain within their original window.
+    for start in range(0, len(parent), window_size):
+      self.assertCountEqual(
+          shuffled[start : start + window_size],
+          parent[start : start + window_size],
+      )
+
   def test_element_spec(self):
     ds = shuffle.WindowShuffleMapDataset(
         dataset.MapDataset.range(20), window_size=5, seed=42

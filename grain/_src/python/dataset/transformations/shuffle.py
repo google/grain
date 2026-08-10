@@ -95,11 +95,41 @@ class WindowShuffleMapDataset(dataset.MapDataset[T]):
   index corresponds to exactly one shuffled index (i.e. there is a one-to-one
   mapping and hence a guarantee that no shuffled indices are repeated within a
   given window).
+
+  Example:
+    Applying deterministic window-based shuffling to a dataset::
+
+      import grain
+
+      # Create a source dataset with consecutive elements.
+      parent_ds = grain.MapDataset.range(12)
+
+      print(list(parent_ds))
+      # [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+
+      # Shuffle elements independently within windows of size 3.
+      shuffled_ds = grain.experimental.WindowShuffleMapDataset(
+          parent_ds,
+          window_size=3,
+          seed=42,
+      )
+
+      # Shuffled dataset
+      print(list(shuffled_ds))
+      # [0, 1, 2, 5, 3, 4, 6, 7, 8, 11, 9, 10]
   """
 
   def __init__(
       self, parent: dataset.MapDataset, *, window_size: int, seed: int
   ):
+    """Initializes the WindowShuffleMapDataset.
+
+    Args:
+      parent: The parent MapDataset to shuffle.
+      window_size: The number of consecutive elements in each shuffle window.
+      seed: Seed used to deterministically shuffle the elements within each
+        window.
+    """
     super().__init__(parent)
     self._window_size = window_size
     self._seed = seed
