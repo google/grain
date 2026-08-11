@@ -177,11 +177,42 @@ class WindowShuffleIterDataset(dataset.IterDataset[T]):
   Fetches `window_size` elements from the parent iterator and returns them in
   shuffled order. Each window is shuffled with different seed derived from the
   input seed.
+
+  Example:
+    Applying window-based shuffling to an iterable dataset::
+
+      import grain
+
+      # Create a source dataset with consecutive elements.
+      parent_ds = grain.MapDataset.range(12).to_iter_dataset()
+
+      print(list(parent_ds))
+      # [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+
+      # Shuffle elements independently within windows of size 3.
+      shuffled_ds = grain.experimental.WindowShuffleIterDataset(
+          parent_ds,
+          window_size=3,
+          seed=42,
+      )
+
+      # Shuffled dataset.
+      print(list(shuffled_ds))
+      # [2, 1, 0, 4, 3, 5, 8, 7, 6, 10, 9, 11]
   """
 
   def __init__(
       self, parent: dataset.IterDataset, *, window_size: int, seed: int
   ):
+    """Initializes the WindowShuffleIterDataset.
+
+    Args:
+      parent: The parent IterDataset to shuffle.
+      window_size: The number of consecutive elements to read and shuffle in
+        each window.
+      seed: Seed used to deterministically shuffle the elements within each
+        window.
+    """
     super().__init__(parent)
     self._window_size = window_size
     self._seed = seed

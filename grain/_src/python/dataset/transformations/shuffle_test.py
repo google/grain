@@ -236,6 +236,25 @@ class WindowShuffleInterDatasetTest(absltest.TestCase):
     self.assertNotEqual(original_elements, shuffled_elements)
     self.assertCountEqual(original_elements, shuffled_elements)
 
+  def test_example_docstring(self):
+    window_size = 3
+    parent_ds = dataset.MapDataset.range(12).to_iter_dataset()
+    parent = list(parent_ds)
+    shuffled_ds = shuffle.WindowShuffleIterDataset(
+        parent_ds,
+        window_size=window_size,
+        seed=42,
+    )
+    shuffled = list(shuffled_ds)
+    # All elements are preserved.
+    self.assertCountEqual(shuffled, parent)
+    # Elements remain within their original window.
+    for start in range(0, len(parent), window_size):
+      self.assertCountEqual(
+          shuffled[start : start + window_size],
+          parent[start : start + window_size],
+      )
+
   def test_different_seeds_used_between_windows(self):
     window_size = 8
     original_ds = dataset.MapDataset.range(window_size).repeat(3)
