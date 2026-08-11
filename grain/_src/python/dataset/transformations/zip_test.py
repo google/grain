@@ -77,6 +77,13 @@ class ZipMapDatasetTest(parameterized.TestCase):
     actual_elements = ds._getitems(indices)
     self.assertEqual(expected_elements, actual_elements)
 
+  def test_example_docstring(self):
+    inputs_ds = dataset.MapDataset.source([10, 20, 30])
+    labels_ds = dataset.MapDataset.source([40, 50, 60])
+    zipped_ds = zip_ds.ZipMapDataset([inputs_ds, labels_ds])
+    self.assertEqual(zipped_ds[0], (10, 40))
+    self.assertEqual(zipped_ds[1], (20, 50))
+
   def test_element_spec(self):
     ds = zip_ds.ZipMapDataset(
         parents=[dataset.MapDataset.range(2), dataset.MapDataset.range(2)]

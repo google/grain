@@ -25,9 +25,42 @@ T = TypeVar("T")
 
 
 class ZipMapDataset(dataset.MapDataset[T]):
-  """Combines MapDatasets of the same length to return a tuple of items."""
+  """Combines MapDatasets of the same length to return a tuple of items.
+
+  At each index, returns a tuple containing the corresponding element from
+  each parent dataset. All parent datasets must have the same length;
+  otherwise, raises a ``ValueError``.
+
+  Examples:
+    Combining corresponding elements from multiple map-style datasets::
+
+      import grain
+
+      # Create two source datasets of equal length.
+      inputs_ds = grain.MapDataset.source([10, 20, 30])
+      labels_ds = grain.MapDataset.source([40, 50, 60])
+
+      # Combine corresponding elements from both datasets.
+      zipped_ds = grain.experimental.ZipMapDataset([inputs_ds, labels_ds])
+
+      print(zipped_ds[0])
+      # (10, 40)
+
+      print(zipped_ds[1])
+      # (20, 50)
+  """
 
   def __init__(self, parents: Sequence[dataset.MapDataset[T]]):
+    """Initializes the ZipMapDataset.
+
+    Args:
+      parents: A sequence of MapDatasets to combine. All parent datasets must
+        have the same length.
+
+    Raises:
+      ValueError: If no parent datasets are provided.
+      ValueError: If the parent datasets do not all have the same length.
+    """
     super().__init__(parents)
     lengths = [len(p) for p in self._parents]  # pyrefly: ignore[bad-argument-type]
     if not lengths:
