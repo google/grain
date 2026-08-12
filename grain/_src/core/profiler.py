@@ -107,9 +107,14 @@ def register_subprocess(pid: int, port: int) -> Callable[[], None]:
   )
 
 
-def get_worker_init_fn(port: int) -> Callable[[], None]:
+def get_worker_init_fn(
+    port: int, enable_profiling: bool = False
+) -> Callable[[], None]:
   """Start the profiler server in a worker process."""
-  if not is_worker_profiling_enabled():
+  profiling_enabled = (
+      enable_profiling and is_worker_profiling_supported()
+  ) or is_worker_profiling_enabled()
+  if not profiling_enabled:
     return lambda: None
 
   def _worker_init_fn() -> None:

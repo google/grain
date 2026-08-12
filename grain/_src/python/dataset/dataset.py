@@ -1394,6 +1394,7 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
         buffer_size=options.per_worker_buffer_size,
         worker_init_fn=worker_init_fn,
         sequential_slice=sequential_slice,
+        enable_profiling=options.enable_profiling,
     )
 
   def __init_subclass__(cls, **kwargs):
