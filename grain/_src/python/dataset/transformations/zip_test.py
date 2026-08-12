@@ -178,6 +178,14 @@ class ZipIterDatasetTest(parameterized.TestCase):
     for i in range(20):
       self.assertEqual(out[i], tuple(i + ds_idx for ds_idx in ds_idx_list))
 
+  def test_example_docstring(self):
+    inputs_ds = dataset.MapDataset.source([10, 20, 30]).to_iter_dataset()
+    labels_ds = dataset.MapDataset.source([40, 50, 60]).to_iter_dataset()
+    zipped_ds = zip_ds.ZipIterDataset([inputs_ds, labels_ds])
+    iterator = iter(zipped_ds)
+    self.assertEqual(next(iterator), (10, 40))
+    self.assertEqual(next(iterator), (20, 50))
+
   def test_strict_zip_shorter(self):
     ds = zip_ds.ZipIterDataset(
         parents=[
