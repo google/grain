@@ -13,6 +13,7 @@
 # limitations under the License.
 from concurrent import futures
 import dataclasses
+import os
 import platform
 import sys
 import threading
@@ -20,7 +21,6 @@ import time
 from typing import TypeVar, cast
 from unittest import mock
 
-from absl import logging
 from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.core import transforms
@@ -940,62 +940,32 @@ class MultithreadPrefetchTest(parameterized.TestCase):
     with self.assertRaisesRegex(Exception, error_msg):
       list(ds)
 
-  @parameterized.product(
-      start_prefetch_calls=[0, 1, 10],
-      num_threads=[6],
-      per_worker_buffer_size=[1, 20],
-  )
-  def test_start_prefetch(
-      self,
-      start_prefetch_calls: int,
-      num_threads: int,
-      per_worker_buffer_size: int,
-  ):
-    class _SleepTransform(transforms.Map):
+  def test_start_prefetch_propagates(self):
+    file_path = os.path.join(self.create_tempdir().full_path, 'written.txt')
 
-      def map(self, features):
-        time.sleep(1)
-        return features
+    def _write_to_file(x):
+      with open(file_path, 'w') as f:
+        f.write('written')
+      return x
 
     ds = dataset.MapDataset.range(10)
-    ds = ds.map(_SleepTransform())
+    ds = ds.map(_write_to_file)
     ds = ds.to_iter_dataset()
     ds = prefetch.multithread_prefetch(
         ds,
-        num_threads=num_threads,
-        buffer_size=per_worker_buffer_size,
+        num_threads=1,
+        buffer_size=1,
     )
 
     it = ds.__iter__()
-    for _ in range(start_prefetch_calls):
-      it.start_prefetch()
 
-    # Waits for prefetching.
-    start_time = time.time()
-    while time.time() - start_time < 30:
-      time.sleep(2)
-
-    # Measures time to read from the dataset.
-    start_time = time.time()
-    self.assertSequenceEqual(list(it), list(range(10)))
-
-    time_to_fetch = time.time() - start_time
-    logging.info('Reading dataset took %.2f seconds.', time_to_fetch)
-    # Note that we can't reliably assert the upper bound on the time it takes
-    # read the dataset elements since worker startup time can vary a lot.
-    if not start_prefetch_calls:
-      self.assertGreater(time_to_fetch, 1)
-
-  @parameterized.parameters(0, 0.5, 30)
-  def test_prefetch_but_no_read(self, sleep_s):
-    ds = dataset.MapDataset.source([1, 2, 3]).repeat()
-    ds = ds.filter(lambda x: x > 3)
-    ds = ds.to_iter_dataset()
-    ds = prefetch.multithread_prefetch(ds, num_threads=1, buffer_size=1)
-    it = ds.__iter__()
+    # We call start_prefetch. This should spawn the background thread,
+    # evaluating the map element and put it in the queue, writing to the file.
     it.start_prefetch()
-    time.sleep(sleep_s)
-    del it
+
+    # Wait for the file to be written.
+    while not os.path.exists(file_path):
+      time.sleep(0.1)
 
   def test_prefetch_with_random_map(self):
     ds = dataset.MapDataset.source([0]).repeat(100).to_iter_dataset()

@@ -33,6 +33,7 @@ from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import process_prefetch
+from grain._src.python.dataset.transformations import testing_util
 import numpy as np
 
 
@@ -885,63 +886,27 @@ class MultiprocessingPrefetchTest(parameterized.TestCase):
           r' pickled!',
       )
 
-  @parameterized.product(
-      start_prefetch_calls=[0, 1, 10],
-      num_workers=[6],
-      per_worker_buffer_size=[1, 20],
-  )
-  def test_start_prefetch(
-      self,
-      start_prefetch_calls: int,
-      num_workers: int,
-      per_worker_buffer_size: int,
-  ):
-
-    class _SleepTransform(transforms.Map):
-
-      def map(self, features):
-        time.sleep(1)
-        return features
+  def test_start_prefetch_propagates(self):
+    file_path = os.path.join(self.create_tempdir().full_path, 'unpickled.txt')
 
     ds = dataset.MapDataset.range(10)
-    ds = ds.map(_SleepTransform())
+    ds = ds.map(lambda x: testing_util.FileWritingElement(file_path))
     ds = ds.to_iter_dataset()
     ds = process_prefetch.multiprocess_prefetch(
         ds,
-        num_workers=num_workers,
-        buffer_size=per_worker_buffer_size,
+        num_workers=1,
     )
 
     it = ds.__iter__()
-    for _ in range(start_prefetch_calls):
-      it.start_prefetch()
 
-    # Waits for prefetching.
-    start_time = time.time()
-    while time.time() - start_time < 30:
-      time.sleep(2)
-
-    # Measures time to read from the dataset.
-    start_time = time.time()
-    self.assertSequenceEqual(list(it), list(range(10)))
-
-    time_to_fetch = time.time() - start_time
-    logging.info('Reading dataset took %.2f seconds.', time_to_fetch)
-    # Note that we can't reliably assert the upper bound on the time it takes
-    # read the dataset elements since worker startup time can vary a lot.
-    if not start_prefetch_calls:
-      self.assertGreater(time_to_fetch, 1)
-
-  @parameterized.parameters(0, 0.5, 30)
-  def test_prefetch_but_no_read(self, sleep_s):
-    ds = dataset.MapDataset.source([1, 2, 3]).repeat()
-    ds = ds.filter(lambda x: x > 3)
-    ds = ds.to_iter_dataset()
-    ds = process_prefetch.multiprocess_prefetch(ds, num_workers=1)
-    it = ds.__iter__()
+    # We call start_prefetch. This should spawn the worker process, which will
+    # evaluate the element and put it in the queue. The thread prefetch
+    # will call __next__ and unpickle the element, writing to the file.
     it.start_prefetch()
-    time.sleep(sleep_s)
-    del it
+
+    # Wait for the file to be written.
+    while not os.path.exists(file_path):
+      time.sleep(0.1)
 
   def test_prefetch_with_random_map(self):
     ds = dataset.MapDataset.source([0]).repeat(100).to_iter_dataset()

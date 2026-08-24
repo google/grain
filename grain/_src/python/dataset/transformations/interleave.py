@@ -386,6 +386,8 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
         iterator.close()
 
   def start_prefetch(self):
+    self._started = True
+    self._prefetch_ds_iter.start_prefetch()
     for it in self._iterators_in_use:
       if it is not None:
         it.start_prefetch()
