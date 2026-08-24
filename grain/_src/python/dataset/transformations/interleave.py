@@ -505,20 +505,32 @@ class InterleaveIterDataset(dataset.IterDataset[T]):
   behavior is similar to mixing the datasets with equal proportions. If
   `cycle_length` is 1, the datasets are chained.
 
-  Can be used with `mp_prefetch` to parallelize reading from sources that do not
-  support random access and are implemented as `IterDataset`::
+  This dataset can be combined with ``mp_prefetch`` to parallelize reads from
+  sources that do not support random access.
 
-    def make_source(filename: str) -> grain.IterDataset:
-      ...
+  Element spec inference assumes that all input datasets have the same element
+  spec.
 
-    ds = grain.MapDataset.source(filenames).shuffle(seed=42).map(make_source)
-    ds = grain.experimental.InterleaveIterDataset(ds, cycle_length=4)
-    ds = ...
-    ds = ds.mp_prefetch(ds, 2)
-    for element in ds:
-      ...
+  Example:
+    Interleaving four datasets with two active iterators::
 
-  Element spec inference assumes that input datasets have the same element spec.
+      import grain
+
+      def make_source(start):
+        return grain.MapDataset.range(start, start + 2).to_iter_dataset()
+
+      sources = grain.MapDataset.source([0, 10, 20, 30]).map(make_source)
+
+      print(list(sources[1]))
+      # [10, 11]
+
+      interleaved_ds = grain.experimental.InterleaveIterDataset(
+          sources,
+          cycle_length=2,
+      )
+
+      print(list(interleaved_ds))
+      # [0, 10, 1, 11, 20, 30, 21, 31]
   """
 
   def __init__(
