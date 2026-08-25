@@ -75,6 +75,34 @@ print(f"Number of records: {len(example_array_record_data_source)}")
 print(example_array_record_data_source[0])
 ```
 
+<!-- #region id="arrayrecord-reader-options" -->
+### Optimization Options
+
+Often times, ArrayRecord files can be heavily sharded on the order of thousands
+of files for just one dataset. These configurations can lead to a large number
+of readers and indices being kept in memory that can quickly use up memory in
+training pipelines. To specifically optimize ArrayRecord to conserve memory
+during the data processing stage, use the new `reader_options` to set the
+`index_storage_option` to `offloaded`. See the example below.
+<!-- #endregion -->
+
+```python id="opt_options_code"
+new_reader_options = {
+    "index_storage_option": "offloaded"
+}
+datasource = grain.ArrayRecordDataSource(
+    example_file_path,
+    reader_options=new_reader_options
+)
+```
+
+<!-- #region id="reader-options-summary" -->
+This option will offload readers indices when not in use and will prioritize
+memory efficiency over performance. On the other hand, the default
+`index_storage_option` is `in_memory` which will prioritize speed over
+memory.
+<!-- #endregion -->
+
 <!-- #region id="J2nXJLVUXmbu" -->
 ## Define Transformation Function
 <!-- #endregion -->
