@@ -772,6 +772,30 @@ class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
 class ThreadPrefetchIterDatasetTest(_ThreadPrefetchIterDatasetTestBase):
   """Runs tests without provided executor."""
 
+  def test_example_docstring(self):
+    parent_ds = dataset.MapDataset.range(4).to_iter_dataset()
+    self.assertEqual(list(parent_ds), [0, 1, 2, 3])
+
+    prefetched_ds = prefetch.ThreadPrefetchIterDataset(
+        parent_ds,
+        prefetch_buffer_size=2,
+    )
+    self.assertEqual(list(prefetched_ds), [0, 1, 2, 3])
+
+  def test_iterator_example_docstring(self):
+    parent_ds = dataset.MapDataset.range(4).to_iter_dataset()
+    parent_iter = iter(parent_ds)
+    ds_iter = prefetch.ThreadPrefetchDatasetIterator(
+        parent_iter,
+        prefetch_buffer_size=2,
+    )
+    self.assertEqual(next(ds_iter), 0)
+    state = ds_iter.get_state()
+    self.assertEqual(next(ds_iter), 1)
+    self.assertEqual(next(ds_iter), 2)
+    ds_iter.set_state(state)
+    self.assertEqual(next(ds_iter), 1)
+
 
 class _MpContextCheckIterDataset(dataset.IterDataset[_T]):
 

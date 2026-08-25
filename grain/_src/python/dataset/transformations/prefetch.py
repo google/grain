@@ -369,10 +369,22 @@ class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
 
   This is a thread-based alternative to `MultiprocessPrefetchIterDataset`.
 
-  Attributes:
-    parent: The parent dataset to prefetch from.
-    prefetch_buffer_size: The size of the prefetch buffer. Must be greater than
-      or equal to 0. If 0, prefetching is disabled and this is a noop.
+  Example:
+    Prefetching elements from an iterable dataset::
+
+      import grain
+
+      parent_ds = grain.MapDataset.range(4).to_iter_dataset()
+      print(list(parent_ds))
+      # [0, 1, 2, 3]
+
+      prefetched_ds = grain.experimental.ThreadPrefetchIterDataset(
+          parent_ds,
+          prefetch_buffer_size=2,
+      )
+
+      print(list(prefetched_ds))
+      # [0, 1, 2, 3]
   """
 
   def __init__(
@@ -381,6 +393,13 @@ class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
       *,
       prefetch_buffer_size: int | grain_options.AutotuneParameter,
   ):
+    """Initializes a ThreadPrefetchIterDataset.
+
+    Args:
+      parent: The parent dataset to prefetch from.
+      prefetch_buffer_size: The size of the prefetch buffer. Must be greater
+        than or equal to 0. If 0, prefetching is disabled and this is a noop.
+    """
     super().__init__(parent)
     target_prefetch_buffer_size = prefetch_buffer_size
     if target_prefetch_buffer_size < 0:
@@ -440,8 +459,44 @@ class CheckpointableIterator(Iterator[T], Protocol[T]):
 
 
 class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
-  """Iterator that performs prefetching using a synchronized queue."""
+  """Iterator that performs prefetching using a synchronized queue.
 
+  This iterator wraps a checkpointable iterator and asynchronously fetches
+  future elements using a background thread. Prefetched elements are stored in
+  an in-memory queue and returned when requested by the consumer.
+
+  The iterator preserves the parent iterator state and supports checkpointing
+  through `get_state()` and `set_state()`.
+
+  Example:
+    Demonstrating state restoration with a prefetch buffer::
+
+      import grain
+
+      parent_ds = grain.MapDataset.range(4).to_iter_dataset()
+      parent_iter = iter(parent_ds)
+
+      ds_iter = grain.experimental.ThreadPrefetchDatasetIterator(
+          parent_iter,
+          prefetch_buffer_size=2,
+      )
+
+      print(next(ds_iter))
+      # 0
+
+      state = ds_iter.get_state()
+
+      print(next(ds_iter))
+      # 1
+
+      print(next(ds_iter))
+      # 2
+
+      ds_iter.set_state(state)
+
+      print(next(ds_iter))
+      # 1
+  """
   _MUTATES_ELEMENT_SPEC = False
 
   def __init__(
@@ -449,6 +504,13 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       parent: CheckpointableIterator[T],
       prefetch_buffer_size: int | grain_options.AutotuneParameter,
   ):
+    """Initializes a ThreadPrefetchDatasetIterator.
+
+    Args:
+      parent: The checkpointable iterator to prefetch from.
+      prefetch_buffer_size: The size of the prefetch buffer. If ``0``,
+        prefetching is disabled.
+    """
     if isinstance(parent, dataset.DatasetIterator):
       super().__init__(parent)
     else:
