@@ -364,6 +364,32 @@ class RebatchIterDatasetTest(parameterized.TestCase):
     )
     assert_equal_output_after_checkpoint(ds)
 
+  def test_example_docstring(self):
+    parent_ds = dataset.MapDataset.range(1, 9).batch(2).to_iter_dataset()
+    self.assertLen(list(parent_ds), 4)
+    rebatched_ds = rebatch.RebatchIterDataset(
+        parent_ds,
+        batch_size=3,
+        drop_remainder=False,
+    )
+    np.testing.assert_equal(len(list(rebatched_ds)), 3)
+    iterator = iter(rebatched_ds)
+    batch1 = next(iterator)
+    np.testing.assert_array_equal(
+        batch1,
+        np.array([1, 2, 3]),
+    )
+    batch2 = next(iterator)
+    np.testing.assert_array_equal(
+        batch2,
+        np.array([4, 5, 6]),
+    )
+    batch3 = next(iterator)
+    np.testing.assert_array_equal(
+        batch3,
+        np.array([7, 8]),
+    )
+
   def test_stop_iteration_exhausted_not_divisible_batch_size(self):
     ds = self._get_test_dataset_ten_elements(batch_size=3, rebatch_size=4)
     ds_iter = iter(ds)
