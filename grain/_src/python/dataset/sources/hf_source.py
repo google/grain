@@ -86,7 +86,7 @@ class HFDatasetIterator(dataset.DatasetIterator[Any]):
     state = {"count_elements_read": self._count_elements_read}
     _ = self._hf_iter
     try:
-      state["hf_state_dict"] = self._hf_ds.state_dict()
+      state["hf_state_dict"] = self._hf_ds.state_dict()  # pyrefly: ignore[bad-assignment]
     except (AttributeError, NotImplementedError):
       # Catch when state_dict() is not implemented or not supported.
       pass

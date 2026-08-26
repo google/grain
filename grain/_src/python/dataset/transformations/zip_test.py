@@ -77,6 +77,13 @@ class ZipMapDatasetTest(parameterized.TestCase):
     actual_elements = ds._getitems(indices)
     self.assertEqual(expected_elements, actual_elements)
 
+  def test_example_docstring(self):
+    inputs_ds = dataset.MapDataset.source([10, 20, 30])
+    labels_ds = dataset.MapDataset.source([40, 50, 60])
+    zipped_ds = zip_ds.ZipMapDataset([inputs_ds, labels_ds])
+    self.assertEqual(zipped_ds[0], (10, 40))
+    self.assertEqual(zipped_ds[1], (20, 50))
+
   def test_element_spec(self):
     ds = zip_ds.ZipMapDataset(
         parents=[dataset.MapDataset.range(2), dataset.MapDataset.range(2)]
@@ -170,6 +177,14 @@ class ZipIterDatasetTest(parameterized.TestCase):
     out = list(ds)
     for i in range(20):
       self.assertEqual(out[i], tuple(i + ds_idx for ds_idx in ds_idx_list))
+
+  def test_example_docstring(self):
+    inputs_ds = dataset.MapDataset.source([10, 20, 30]).to_iter_dataset()
+    labels_ds = dataset.MapDataset.source([40, 50, 60]).to_iter_dataset()
+    zipped_ds = zip_ds.ZipIterDataset([inputs_ds, labels_ds])
+    iterator = iter(zipped_ds)
+    self.assertEqual(next(iterator), (10, 40))
+    self.assertEqual(next(iterator), (20, 50))
 
   def test_strict_zip_shorter(self):
     ds = zip_ds.ZipIterDataset(
@@ -295,12 +310,12 @@ class ZipIterDatasetTest(parameterized.TestCase):
         self._parents = [parent]
 
       def __iter__(self):
-        return WrapperDatasetIterator(self._parents[0].__iter__())
+        return WrapperDatasetIterator(self._parents[0].__iter__())  # pyrefly: ignore[missing-attribute]
 
     class WrapperDatasetIterator(dataset.DatasetIterator):
 
       def __init__(self, parent_iter):
-        self._parents = [parent_iter]
+        self._parents = [parent_iter]  # pyrefly: ignore[bad-assignment]
         self._ctx = parent_iter._ctx
 
       def __next__(self):

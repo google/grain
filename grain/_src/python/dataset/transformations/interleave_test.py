@@ -14,6 +14,7 @@
 
 import threading
 from typing import cast
+from unittest import mock
 
 from absl.testing import absltest
 from absl.testing import flagsaver
@@ -405,7 +406,7 @@ class _InterleaveIterDatasetTestBase(parameterized.TestCase):
     )
 
     # Verify it continues from the correct position.
-    self.assertSequenceEqual(list(it2), expected_remaining)
+    self.assertSequenceEqual(list(it2), expected_remaining)  # pyrefly: ignore[bad-argument-type]
 
   @parameterized.named_parameters(
       dict(
@@ -484,7 +485,7 @@ class _InterleaveIterDatasetTestBase(parameterized.TestCase):
     )
 
     # Check get_state() internal values.
-    state = it2.get_state()
+    state = it2.get_state()  # pyrefly: ignore[missing-attribute]
     self.assertEqual(state["next_index_in_cycle"], 0)
     self.assertEqual(
         state["next_index_in_datasets"], expected_next_index_in_datasets
@@ -520,7 +521,7 @@ class _InterleaveIterDatasetTestBase(parameterized.TestCase):
     )
 
     # Check get_state() internal values.
-    state = it.get_state()
+    state = it.get_state()  # pyrefly: ignore[missing-attribute]
     self.assertEqual(state["next_index_in_cycle"], 0)
     self.assertEqual(state["next_index_in_datasets"], 3)
     self.assertEqual(state["iterators_in_use_indices"], [2, 0])

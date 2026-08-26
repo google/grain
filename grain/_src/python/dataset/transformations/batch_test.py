@@ -588,7 +588,7 @@ class BatchMapDatasetTest(parameterized.TestCase):
 
   def test_dynamic_length_and_drop_remainder_when_source_sliced(self):
     """BatchMapDataset must update length and enforce drop_remainder when its source is sliced."""
-    ds = source.SourceMapDataset(list(range(31)))
+    ds = source.SourceMapDataset(list(range(31)))  # pyrefly: ignore[bad-argument-type]
     batched_ds = batch.BatchMapDataset(ds, batch_size=4, drop_remainder=True)
     self.assertLen(batched_ds, 7)
 
@@ -604,7 +604,7 @@ class BatchMapDatasetTest(parameterized.TestCase):
 
   def test_end_to_end_multithread_prefetch_with_sequential_slice(self):
     """End-to-end multi-worker pipelines drop remainders cleanly."""
-    ds = source.SourceMapDataset(list(range(31)))
+    ds = source.SourceMapDataset(list(range(31)))  # pyrefly: ignore[bad-argument-type]
     batched_ds = batch.BatchMapDataset(ds, batch_size=4, drop_remainder=True)
     repeated_ds = batched_ds.repeat(2)
     iter_ds = repeated_ds.to_iter_dataset()

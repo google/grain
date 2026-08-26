@@ -75,6 +75,14 @@ class ShuffleMapDatasetTest(parameterized.TestCase):
     self.assertEqual(spec.dtype, np.int64)
     self.assertEqual(spec.shape, ())
 
+  def test_shuffled_index_with_numpy_integer_does_not_overflow(self):
+    ds = shuffle.ShuffleMapDataset(dataset.MapDataset.range(400), seed=42)
+    # Prevents regression of xid/273443246
+    for dtype in [np.int32, np.uint32, np.int64]:
+      index = dtype(5)
+      # Should not raise OverflowError when computing modulo 2**32
+      _ = ds._shuffled_index(index)  # pytype: disable=wrong-arg-types
+
   def test_cross_version_determinism(self):
     # This test validates shuffle determinism across different versions of
     # Grain given a fixed seed. Note that we technically do not guarantee
@@ -170,6 +178,27 @@ class WindowShuffleMapDatasetTest(absltest.TestCase):
     for i in range(0, 400, 10):
       self.assertBetween(elements[i], i, i + (window_size - 1))
 
+  def test_example_docstring(self):
+    window_size = 3
+    parent_ds = dataset.MapDataset.range(12)
+
+    shuffled_ds = shuffle.WindowShuffleMapDataset(
+        parent_ds,
+        window_size=window_size,
+        seed=42,
+    )
+    parent = list(parent_ds)
+    shuffled = list(shuffled_ds)
+
+    # All elements are preserved.
+    self.assertCountEqual(shuffled, parent)
+    # Elements remain within their original window.
+    for start in range(0, len(parent), window_size):
+      self.assertCountEqual(
+          shuffled[start : start + window_size],
+          parent[start : start + window_size],
+      )
+
   def test_element_spec(self):
     ds = shuffle.WindowShuffleMapDataset(
         dataset.MapDataset.range(20), window_size=5, seed=42
@@ -177,6 +206,15 @@ class WindowShuffleMapDatasetTest(absltest.TestCase):
     spec = dataset.get_element_spec(ds)
     self.assertEqual(spec.dtype, np.int64)
     self.assertEqual(spec.shape, ())
+
+  def test_shuffled_index_with_numpy_integer_does_not_overflow(self):
+    ds = shuffle.WindowShuffleMapDataset(
+        dataset.MapDataset.range(400), window_size=10, seed=42
+    )
+    # Prevents regression of xid/273443246
+    for dtype in [np.int32, np.uint32, np.int64]:
+      index = dtype(5)
+      _ = ds._shuffled_index(index)  # pytype: disable=wrong-arg-types
 
 
 class WindowShuffleInterDatasetTest(absltest.TestCase):
@@ -197,6 +235,25 @@ class WindowShuffleInterDatasetTest(absltest.TestCase):
     shuffled_elements = list(ds)
     self.assertNotEqual(original_elements, shuffled_elements)
     self.assertCountEqual(original_elements, shuffled_elements)
+
+  def test_example_docstring(self):
+    window_size = 3
+    parent_ds = dataset.MapDataset.range(12).to_iter_dataset()
+    parent = list(parent_ds)
+    shuffled_ds = shuffle.WindowShuffleIterDataset(
+        parent_ds,
+        window_size=window_size,
+        seed=42,
+    )
+    shuffled = list(shuffled_ds)
+    # All elements are preserved.
+    self.assertCountEqual(shuffled, parent)
+    # Elements remain within their original window.
+    for start in range(0, len(parent), window_size):
+      self.assertCountEqual(
+          shuffled[start : start + window_size],
+          parent[start : start + window_size],
+      )
 
   def test_different_seeds_used_between_windows(self):
     window_size = 8

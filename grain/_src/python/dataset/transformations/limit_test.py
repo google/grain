@@ -23,6 +23,15 @@ import numpy as np
 
 class LimitIterDatasetTest(parameterized.TestCase):
 
+  def test_example_docstring(self):
+    parent_ds = dataset.MapDataset.range(5).to_iter_dataset()
+    self.assertEqual(list(parent_ds), [0, 1, 2, 3, 4])
+    limited_ds = limit.LimitIterDataset(
+        parent_ds,
+        count=2,
+    )
+    self.assertEqual(list(limited_ds), [0, 1])
+
   @parameterized.parameters([0, -1, -5])
   def test_non_positive_count_raises_error(self, count):
     ds = dataset.MapDataset.range(0, 10).to_iter_dataset()

@@ -98,11 +98,42 @@ class _TFRecordDatasetIterator(dataset.DatasetIterator[T]):
 
 
 class TFRecordIterDataset(dataset.IterDataset[T]):
-  """An IterDataset for a TFRecord format file."""
+  """An IterDataset for a TFRecord format file.
+
+  Iterates over a TFRecord file sequentially and yields records as raw bytes.
+
+  Example:
+    Reading and iterating over elements from a TFRecord file::
+
+      import tempfile
+      import grain
+      import tensorflow as tf
+
+      with tempfile.TemporaryDirectory() as temp_dir:
+        path = f"{temp_dir}/sample.tfrecord"
+
+        with tf.io.TFRecordWriter(path) as writer:
+          writer.write(b"record_0")
+          writer.write(b"record_1")
+
+        ds = grain.experimental.TFRecordIterDataset(path)
+        ds_iter = iter(ds)
+
+        print(next(ds_iter))
+        # b'record_0'
+        print(next(ds_iter))
+        # b'record_1'
+  """
 
   def __init__(self, path: str):
+    """Initializes the TFRecordIterDataset.
+
+    Args:
+      path: Path to the TFRecord file.
+    """
     super().__init__()
     self._path = path
 
   def __iter__(self) -> dataset.DatasetIterator[T]:
+    """Returns an iterator over the TFRecord file."""
     return _TFRecordDatasetIterator[T](self._path)

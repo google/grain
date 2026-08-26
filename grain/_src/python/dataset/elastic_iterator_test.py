@@ -616,7 +616,7 @@ class ElasticIterDatasetTest(parameterized.TestCase):
       directory: str,
       iterators: list[elastic_iterator.ElasticIterator],
   ):
-    directory = epath.Path(directory)
+    directory = epath.Path(directory)  # pyrefly: ignore[bad-assignment]
     checkpoint_handler = handler.CheckpointHandler()
     for i, iterator in enumerate(iterators):
       with mock.patch.object(
@@ -624,14 +624,14 @@ class ElasticIterDatasetTest(parameterized.TestCase):
           "get_process_index_and_count",
           return_value=(i, len(iterators)),
       ):
-        checkpoint_handler.save(directory, iterator)
+        checkpoint_handler.save(directory, iterator)  # pyrefly: ignore[bad-argument-type]
 
   def _restore_elastic_iterators(
       self,
       directory: str,
       iterators: list[elastic_iterator.ElasticIterator],
   ):
-    directory = epath.Path(directory)
+    directory = epath.Path(directory)  # pyrefly: ignore[bad-assignment]
     checkpoint_handler = handler.CheckpointHandler()
     for i, iterator in enumerate(iterators):
       with mock.patch.object(
@@ -639,7 +639,7 @@ class ElasticIterDatasetTest(parameterized.TestCase):
           "get_process_index_and_count",
           return_value=(i, len(iterators)),
       ):
-        checkpoint_handler.restore(directory, iterator)
+        checkpoint_handler.restore(directory, iterator)  # pyrefly: ignore[bad-argument-type]
 
   def test_checkpointing_with_scale_up(self):
     temp_dir = self.create_tempdir()

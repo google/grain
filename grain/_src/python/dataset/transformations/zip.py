@@ -25,9 +25,42 @@ T = TypeVar("T")
 
 
 class ZipMapDataset(dataset.MapDataset[T]):
-  """Combines MapDatasets of the same length to return a tuple of items."""
+  """Combines MapDatasets of the same length to return a tuple of items.
+
+  At each index, returns a tuple containing the corresponding element from
+  each parent dataset. All parent datasets must have the same length;
+  otherwise, raises a ``ValueError``.
+
+  Examples:
+    Combining corresponding elements from multiple map-style datasets::
+
+      import grain
+
+      # Create two source datasets of equal length.
+      inputs_ds = grain.MapDataset.source([10, 20, 30])
+      labels_ds = grain.MapDataset.source([40, 50, 60])
+
+      # Combine corresponding elements from both datasets.
+      zipped_ds = grain.experimental.ZipMapDataset([inputs_ds, labels_ds])
+
+      print(zipped_ds[0])
+      # (10, 40)
+
+      print(zipped_ds[1])
+      # (20, 50)
+  """
 
   def __init__(self, parents: Sequence[dataset.MapDataset[T]]):
+    """Initializes the ZipMapDataset.
+
+    Args:
+      parents: A sequence of MapDatasets to combine. All parent datasets must
+        have the same length.
+
+    Raises:
+      ValueError: If no parent datasets are provided.
+      ValueError: If the parent datasets do not all have the same length.
+    """
     super().__init__(parents)
     lengths = [len(p) for p in self._parents]  # pyrefly: ignore[bad-argument-type]
     if not lengths:
@@ -61,11 +94,50 @@ class ZipMapDataset(dataset.MapDataset[T]):
 
 
 class ZipIterDataset(dataset.IterDataset[T]):
-  """Combines IterDatasets of the same length to return a tuple of items."""
+  """Combines IterDatasets of the same length to return a tuple of items.
+
+  At each iteration, returns a tuple containing the next element from each
+  parent dataset. By default (``strict=True``), all parent iterators are
+  expected to produce the same number of elements; otherwise, a ``ValueError``
+  is raised during iteration. When ``strict=False``, iteration stops when the
+  shortest parent iterator is exhausted, matching the behavior of Python's
+  built-in ``zip``.
+
+  Example:
+    Iterating over corresponding elements from multiple datasets::
+
+      import grain
+
+      # Create two parent pipelines of equal length.
+      inputs_ds = grain.MapDataset.source([10, 20, 30]).to_iter_dataset()
+      labels_ds = grain.MapDataset.source([40, 50, 60]).to_iter_dataset()
+
+      # Combine corresponding elements from both pipelines.
+      zipped_ds = grain.experimental.ZipIterDataset([inputs_ds, labels_ds])
+      iterator = iter(zipped_ds)
+
+      print(next(iterator))
+      # (10, 40)
+
+      print(next(iterator))
+      # (20, 50)
+  """
 
   def __init__(
       self, parents: Sequence[dataset.IterDataset[T]], *, strict: bool = True
   ):
+    """Initializes the ZipIterDataset.
+
+    Args:
+      parents: A sequence of IterDatasets to combine.
+      strict: If ``True`` (default), raises a ``ValueError`` during iteration
+        when the parent iterators do not produce the same number of elements. If
+        ``False``, iteration stops when the shortest parent iterator is
+        exhausted.
+
+    Raises:
+      ValueError: If no parent dataset is provided.
+    """
     super().__init__(parents)
     if not self._parents:
       raise ValueError("At least one parent must be provided.")
@@ -77,7 +149,7 @@ class ZipIterDataset(dataset.IterDataset[T]):
   def set_slice(self, sl: slice, sequential_slice: bool = False) -> None:
     del sequential_slice
     for parent in self._parents:
-      dataset.set_slice(parent, sl)
+      dataset.set_slice(parent, sl)  # pyrefly: ignore[bad-argument-type]
 
   def __str__(self) -> str:
     return f"ZipIterDataset(parents={self._parents}, strict={self._strict})"

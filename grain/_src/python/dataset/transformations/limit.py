@@ -64,15 +64,26 @@ class _LimitDatasetIterator(dataset.DatasetIterator[T]):
 class LimitIterDataset(dataset.IterDataset[T]):
   """Limits the number of elements in the dataset.
 
-  Example usage:
+  Iteration stops after ``count`` elements have been produced or when the
+  parent dataset is exhausted, whichever occurs first.
 
-  ```
-  list(LimitIterDataset(MapDataset.range(5).to_iter_dataset(), 2) == [0, 1]
-  ```
+  Example:
+    Limiting a dataset to two elements::
 
-  Attributes:
-    parent: The dataset to limit.
-    count: The maximum number of elements to include in the dataset.
+      import grain
+
+      parent_ds = grain.MapDataset.range(5).to_iter_dataset()
+
+      print(list(parent_ds))
+      # [0, 1, 2, 3, 4]
+
+      limited_ds = grain.experimental.LimitIterDataset(
+          parent_ds,
+          count=2,
+      )
+
+      print(list(limited_ds))
+      # [0, 1]
   """
 
   def __init__(
@@ -80,7 +91,15 @@ class LimitIterDataset(dataset.IterDataset[T]):
       parent: dataset.IterDataset[T],
       count: int,
   ):
-    """Initializes the limit dataset."""
+    """Initializes the LimitIterDataset.
+
+    Args:
+      parent: The dataset to limit.
+      count: The maximum number of elements to include in the dataset.
+
+    Raises:
+      ValueError: If ``count`` is not positive.
+    """
     if count <= 0:
       raise ValueError(f"Count must be a non-negative integer. Got {count}")
     super().__init__(parent)

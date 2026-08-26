@@ -47,7 +47,7 @@ else:
       pass
 
     def run(self):
-      from grpc_tools import protoc  # pylint: disable=g-import-not-at-top
+      from grpc_tools import protoc  # pylint: disable=g-import-not-at-top  # pyrefly: ignore[missing-import]
 
       root_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -77,7 +77,7 @@ else:
       self.run_command("generate_protos")
       super().run()
 
-  from pybind11.setup_helpers import Pybind11Extension  # pylint: disable=g-import-not-at-top
+  from pybind11.setup_helpers import Pybind11Extension  # pylint: disable=g-import-not-at-top  # pyrefly: ignore[missing-import]
 
   ext_modules = [
       Pybind11Extension(

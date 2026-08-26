@@ -24,7 +24,55 @@ import numpy as np
 
 
 class RebatchIterDataset(dataset.IterDataset):
-  """Rebatches the input PyTree elements."""
+  """Rebatches the input PyTree elements.
+
+  This transformation takes PyTree elements with a leading batch dimension,
+  combines data across consecutive input batches as needed, and slices them to
+  produce output batches of the requested ``batch_size``.
+
+  If ``drop_remainder`` is False (default), the final batch will contain any
+  remaining elements (fewer than ``batch_size``). If ``drop_remainder`` is True,
+  the last batch is dropped if it contains fewer than ``batch_size`` elements.
+
+  Example:
+    A common pattern for changing the batch size of an existing iterable
+    dataset::
+
+      import grain
+      import numpy as np
+
+      # Create a dataset where each element is already a batch of size 2.
+      parent_ds = grain.MapDataset.range(1, 9).batch(2).to_iter_dataset()
+
+      print(list(parent_ds))
+      # [array([1, 2]), array([3, 4]), array([5, 6]), array([7, 8])]
+
+      # Rebatch the input batches to a new batch size.
+      rebatched_ds = grain.experimental.RebatchIterDataset(
+          parent_ds,
+          batch_size=3,
+          drop_remainder=False,
+      )
+
+      iterator = iter(rebatched_ds)
+
+      # The first output batch combines rows from multiple input batches to
+      # produce the requested batch size.
+      batch1 = next(iterator)
+
+      print(batch1)
+      # array([1, 2, 3])
+
+      batch2 = next(iterator)
+
+      print(batch2)
+      # array([4, 5, 6])
+
+      batch3 = next(iterator)
+
+      print(batch3)
+      # array([7, 8])
+  """
 
   def __init__(
       self,
@@ -38,7 +86,7 @@ class RebatchIterDataset(dataset.IterDataset):
       parent: The parent IterDataset whose elements are to be rebatched.
       batch_size: The number of elements to batch together.
       drop_remainder: Whether to drop the last batch if it is smaller than
-        batch_size.
+        ``batch_size``.
     """
     super().__init__(parent)
     if batch_size <= 0:

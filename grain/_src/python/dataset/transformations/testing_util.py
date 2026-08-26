@@ -15,6 +15,20 @@ from jax import numpy as jnp
 import numpy as np
 
 
+class FileWritingElement:
+
+  def __init__(self, file_path: str):
+    self._file_path = file_path
+
+  def __getstate__(self):
+    return {"file_path": self._file_path, "dummy": True}
+
+  def __setstate__(self, state):
+    self._file_path = state["file_path"]
+    with open(self._file_path, "w") as f:
+      f.write("unpickled")
+
+
 def _assert_trees_equal(actual, expected):
   def _check_equivalence(path, actual_val, expected_val):
     np.testing.assert_array_equal(
