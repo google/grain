@@ -353,6 +353,43 @@ class FirstFitPackIterDataset(PackIterDataset):
   3. Once an element doesn't fit, emits all N bins as elements.
   4. (optional) Shuffles bins.
   5. Loops back to 1 and starts with the element that didn't fit.
+
+  Example:
+    Pack variable-length sequences into fixed-length outputs::
+
+      import grain
+      import numpy as np
+
+      # Parent dataset with variable length sequences.
+      parent_ds = grain.MapDataset.source([
+          {"x": np.array([1, 2])},
+          {"x": np.array([3, 4, 5])},
+          {"x": np.array([6])},
+          {"x": np.array([7, 8])},
+      ]).to_iter_dataset()
+
+      # The first element of the parent dataset has "x" with shape (2,).
+      parent_ds_iterator = iter(parent_ds)
+      parent_ds_first_element = next(parent_ds_iterator)
+      print(parent_ds_first_element["x"])
+      # [1 2]
+
+      # Pack sequences into 2 bins with target length 4 for feature "x".
+      packed_ds = grain.experimental.FirstFitPackIterDataset(
+        parent_ds,
+        length_struct={"x": 4},
+        num_packing_bins=2,
+        shuffle_bins=False,
+      )
+
+      # Now the first and the third elements of parent dataset are packed into
+      # one bin of shape (4,)
+      packed_ds_iterator = iter(packed_ds)
+      packed_ds_first_element = next(packed_ds_iterator)
+      print(packed_ds_first_element["x"].shape)
+      # (4,)
+      print(packed_ds_first_element["x"])
+      # [1 2 6 0]
   """
 
   def __init__(
@@ -414,6 +451,43 @@ class BestFitPackIterDataset(PackIterDataset):
   smallest remaining space (i.e., the "tightest" fit). This can lead to less
   overall padding compared to the simpler first-fit approach, especially when
   element sizes vary significantly.
+
+  Example:
+    Pack variable-length sequences into fixed-length outputs::
+
+      import grain
+      import numpy as np
+
+      # Parent dataset with variable length sequences.
+      parent_ds = grain.MapDataset.source([
+          {"x": np.array([1, 2])},
+          {"x": np.array([3, 4, 5])},
+          {"x": np.array([6])},
+          {"x": np.array([7, 8])},
+      ]).to_iter_dataset()
+
+      # The first element of the parent dataset has "x" with shape (2,).
+      parent_ds_iterator = iter(parent_ds)
+      parent_ds_first_element = next(parent_ds_iterator)
+      print(parent_ds_first_element["x"])
+      # [1, 2]
+
+      # Best-fit packing with 2 bins and target length 4.
+      packed_ds = grain.experimental.BestFitPackIterDataset(
+          parent_ds,
+          length_struct={"x": 4},
+          num_packing_bins=2,
+          shuffle_bins=False,
+      )
+
+      # Now the first and the fourth elements of parent dataset are packed into
+      # one bin of shape (4,)
+      packed_ds_iterator = iter(packed_ds)
+      packed_ds_first_element = next(packed_ds_iterator)
+      print(packed_ds_first_element["x"].shape)
+      # (4,)
+      print(packed_ds_first_element["x"])
+      # [1 2 7 8]
   """
 
   def __init__(

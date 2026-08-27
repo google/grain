@@ -77,6 +77,33 @@ class FirstFitPackIterDatasetTest(
     super().setUp()
     self.kwargs = {}
 
+  def test_example_docstring(self):
+    parent_ds = source.SourceMapDataset([  # pyrefly: ignore[bad-argument-type]
+        {"x": np.array([1, 2])},
+        {"x": np.array([3, 4, 5])},
+        {"x": np.array([6])},
+        {"x": np.array([7, 8])},
+    ]).to_iter_dataset()
+    parent_ds_iterator = iter(parent_ds)
+    parent_ds_first_element = next(parent_ds_iterator)
+    np.testing.assert_array_equal(
+        parent_ds_first_element["x"],
+        np.array([1, 2]),
+    )
+    packed_ds = packing.FirstFitPackIterDataset(
+        parent_ds,
+        length_struct={"x": 4},
+        num_packing_bins=2,
+        shuffle_bins=False,
+    )
+    packed_ds_iterator = iter(packed_ds)
+    packed_ds_first_element = next(packed_ds_iterator)
+    self.assertEqual(packed_ds_first_element["x"].shape, (4,))
+    np.testing.assert_array_equal(
+        packed_ds_first_element["x"],
+        np.array([1, 2, 6, 0]),
+    )
+
 
 class BestFitPackIterDatasetTest(
     _PackedBatchSizeBytesTestMixin, testing_util.BaseBestFitPackIterDatasetTest
@@ -85,6 +112,33 @@ class BestFitPackIterDatasetTest(
   def setUp(self):
     super().setUp()
     self.kwargs = {}
+
+  def test_example_docstring(self):
+    parent_ds = source.SourceMapDataset([  # pyrefly: ignore[bad-argument-type]
+        {"x": np.array([1, 2])},
+        {"x": np.array([3, 4, 5])},
+        {"x": np.array([6])},
+        {"x": np.array([7, 8])},
+    ]).to_iter_dataset()
+    parent_ds_iterator = iter(parent_ds)
+    parent_ds_first_element = next(parent_ds_iterator)
+    np.testing.assert_array_equal(
+        parent_ds_first_element["x"],
+        np.array([1, 2]),
+    )
+    packed_ds = packing.BestFitPackIterDataset(
+        parent_ds,
+        length_struct={"x": 4},
+        num_packing_bins=2,
+        shuffle_bins=False,
+    )
+    packed_ds_iterator = iter(packed_ds)
+    packed_ds_first_element = next(packed_ds_iterator)
+    self.assertEqual(packed_ds_first_element["x"].shape, (4,))
+    np.testing.assert_array_equal(
+        packed_ds_first_element["x"],
+        np.array([1, 2, 7, 8]),
+    )
 
 if __name__ == "__main__":
   absltest.main()
