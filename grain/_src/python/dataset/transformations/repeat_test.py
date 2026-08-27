@@ -178,6 +178,28 @@ class RepeatIterDatasetTest(parameterized.TestCase):
       results.append(val)
     self.assertSequenceEqual(results, [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3])
 
+  def test_example_docstring(self):
+    parent_ds = dataset.MapDataset.range(9).batch(3).to_iter_dataset()
+    np.testing.assert_array_equal(
+        list(parent_ds),
+        [np.array([0, 1, 2]), np.array([3, 4, 5]), np.array([6, 7, 8])],
+    )
+    repeated_ds = repeat.RepeatIterDataset(
+        parent_ds,
+        num_epochs=2,
+    )
+    np.testing.assert_array_equal(
+        list(repeated_ds),
+        [
+            np.array([0, 1, 2]),
+            np.array([3, 4, 5]),
+            np.array([6, 7, 8]),
+            np.array([0, 1, 2]),
+            np.array([3, 4, 5]),
+            np.array([6, 7, 8]),
+        ],
+    )
+
   def test_setting_zero_epochs_raises_value_error(self):
     ds = dataset.MapDataset.range(6).to_iter_dataset()
     with self.assertRaises(ValueError):

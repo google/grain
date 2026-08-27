@@ -24,11 +24,14 @@ T = TypeVar("T")
 
 
 class RepeatMapDataset(dataset.MapDataset[T]):
-  """Repeats the underlying dataset for num_epochs.
+  """Repeats the underlying dataset for `num_epochs`.
 
   This effectively just changes the length, which indicates the size of a single
   epoch, of the dataset. This makes it easier to iterate for a fixed number
   of steps.
+
+  This will be invoked inside `MapDataset.repeat()` so that end-users will not
+  need to use it directly.
   """
 
   _MUTATES_ELEMENT_SPEC = False
@@ -159,6 +162,26 @@ class RepeatIterDataset(dataset.IterDataset[T]):
   If num_epochs is None, repeats indefinitely.
   Note that unlike RepeatMapDataset, RepeatIterDataset does not support
   re-seeding for each epoch. Each epoch will be identical.
+
+  Example:
+    Repeat an iterable dataset for a fixed number of epochs::
+
+      import grain
+
+      # Build a small parent pipeline with 3 elements.
+      parent_ds = grain.MapDataset.range(9).batch(3).to_iter_dataset()
+
+      print(list(parent_ds))
+      # [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8])]
+
+      # Repeat the dataset for exactly 2 epochs.
+      repeated_ds = grain.experimental.RepeatIterDataset(
+          parent_ds,
+          num_epochs=2,
+      )
+      print(list(repeated_ds))
+      # [array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8]),
+      #  array([0, 1, 2]), array([3, 4, 5]), array([6, 7, 8])]
   """
 
   def __init__(
@@ -166,6 +189,16 @@ class RepeatIterDataset(dataset.IterDataset[T]):
       parent: dataset.IterDataset[T],
       num_epochs: Optional[int] = None,
   ):
+    """Initializes the RepeatIterDataset.
+
+    Args:
+      parent: The parent dataset.
+      num_epochs: The number of times to repeat the dataset. If None, repeats
+        indefinitely.
+
+    Raises:
+      ValueError: If num_epochs is not positive.
+    """
     super().__init__(parent)
     if num_epochs is not None and num_epochs <= 0:
       raise ValueError(f"num_epochs must be positive, but got {num_epochs}.")
