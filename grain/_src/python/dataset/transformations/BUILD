@@ -211,6 +211,17 @@ py_test(
 )
 
 py_test(
+    name = "slice_repeat_shuffle_test",
+    srcs = ["slice_repeat_shuffle_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        "//grain/_src/python/dataset",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+    ],
+)
+
+py_test(
     name = "shuffle_test",
     srcs = ["shuffle_test.py"],
     shard_count = 10,

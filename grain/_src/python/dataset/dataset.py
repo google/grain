@@ -681,7 +681,11 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
     # pylint: enable=g-import-not-at-top
     return shuffle.ShuffleMapDataset(parent=self, seed=seed)
 
-  def slice(self, sl: builtins.slice | Sequence[int]) -> MapDataset[T]:
+  def slice(
+      self,
+      sl: builtins.slice | Sequence[int],
+      wrap_around: bool = False,
+  ) -> MapDataset[T]:
     """Returns a dataset containing only the elements with indices in ``sl``.
 
     For most implementations of ``MapDataset`` slicing is also available through
@@ -714,6 +718,9 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
         the slice of elements to that should constitute the returned dataset, or
         a ``Sequence[int]`` (including ``MapDataset[int]``) of indices into the
         parent dataset.
+      wrap_around: If True, indices wrap modularly within the slice range. This
+        is needed when transformations that do their own epoch math (like
+        ``shuffle`` or ``mix``) sit between the slice and a ``repeat``.
 
     Returns:
       A dataset containing only the elements with indices in ``sl``.
@@ -725,7 +732,9 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
     )
     # pylint: enable=g-import-not-at-top
     if isinstance(sl, builtins.slice):
-      return slice_dataset.SliceMapDataset(parent=self, sl=sl)
+      return slice_dataset.SliceMapDataset(
+          parent=self, sl=sl, wrap_around=wrap_around
+      )
     return slice_dataset.ReindexMapDataset(parent=self, indices=sl)
 
   def random_map(

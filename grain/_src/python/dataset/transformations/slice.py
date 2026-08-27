@@ -20,22 +20,49 @@ T = TypeVar("T")
 
 
 class SliceMapDataset(dataset.MapDataset[T]):
-  """Slices a MapDataset similar to the slicing syntax in Python."""
+  """Slices a MapDataset similar to the slicing syntax in Python.
+
+  Attributes:
+    wrap_around: If True, indices wrap modularly within the slice range
+      (pre-cl/805818068 behavior). This is needed when transformations that do
+      their own epoch math (like ``shuffle`` or ``mix``) sit between the slice
+      and a ``repeat``, because those transformations encode epoch information
+      by adding ``epoch * len(self)`` to the index, and the default
+      epoch-propagating behavior would incorrectly re-interpret that as ``epoch
+      * parent_length``, producing out-of-range parent indices. If False
+      (default), epoch information is propagated through the parent length,
+      which correctly tracks ``map_with_index`` indices across epochs.
+  """
 
   _MUTATES_ELEMENT_SPEC = False
 
-  def __init__(self, parent: dataset.MapDataset[T], sl: slice):
+  def __init__(
+      self,
+      parent: dataset.MapDataset[T],
+      sl: slice,
+      wrap_around: bool = False,
+  ):
+    """Initializes the SliceMapDataset.
+
+    Args:
+      parent: The parent dataset to slice.
+      sl: A Python slice object specifying start, stop, and step.
+      wrap_around: See class docstring.
+    """
     super().__init__(parent)
     if not isinstance(sl, slice):
       raise ValueError(f"sl is not a slice: {type(sl)}")
     self._parent_length = len(parent)
     self._start, self._stop, self._step = sl.indices(self._parent_length)
     self._length = len(range(self._start, self._stop, self._step))
+    self._wrap_around = wrap_around
 
   def __len__(self) -> int:
     return self._length
 
   def _sliced_index(self, index: int) -> int:
+    if self._wrap_around:
+      return self._start + (index % len(self)) * self._step
     parent_epoch, relative_offset = divmod(index, len(self))
     return (
         self._start
