@@ -250,6 +250,11 @@ pprint(np.shape(next(iter(ds))))
 
 +++ {"id": "8TKInCDc6GUH"}
 
+**Note**: Converting each MapDataset to an `IterDatset` with `to_iter_dataset`
+beforehand will initialize a separate thread pool for each dataset. Adjust
+`ReadOptions` appropriately or use `MapDataset.mix` whenever possible to reduce
+resource contention.
+
 ### Multi-epoch training
 
 Mixed dataset length is determined by a combination of the length of the
