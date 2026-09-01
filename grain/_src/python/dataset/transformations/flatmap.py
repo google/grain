@@ -27,13 +27,75 @@ S = TypeVar("S")
 
 
 class FlatMapMapDataset(dataset.MapDataset[T]):
-  """Flat map for one-to-many split."""
+  """Flat map for one-to-many split.
+
+  Wraps a parent `MapDataset` and applies a :py:class:`FlatMapTransform` to each
+  element. Supports random access by calculating a deterministic virtual length.
+
+  Note:
+    If the :py:class:`FlatMapTransform` returns fewer items than the specified
+    `max_fan_out`, the dataset fills the remaining slots with `None` values.
+    If the number of returned items exceeds `max_fan_out`, a `ValueError` is
+    raised. Hence the `max_fan_out` should be greater than or equal to the
+    maximum number of items returned by the :py:class:`FlatMapTransform` for
+    any element.
+
+  Example:
+    Splitting strings into words using a custom `FlatMapTransform`::
+
+      import dataclasses
+      import grain
+
+      # Custom FlatMapTransform for text splitting.
+      @dataclasses.dataclass(frozen=True)
+      class SplitWords(grain.experimental.FlatMapTransform):
+        max_fan_out: int
+
+        def flat_map(self, sentence: str) -> list[str]:
+          return sentence.split()
+
+      # Parent dataset with 2 elements
+      parent_ds = grain.MapDataset.source(["hello world", "grain"])
+
+      print(list(parent_ds))
+      # ['hello world', 'grain']
+
+      # Create a FlatMapMapDataset with max_fan_out=3
+      flatmap_map_ds = grain.experimental.FlatMapMapDataset(
+          parent_ds, SplitWords(3)
+      )
+
+      # Virtual length is len(parent_ds) * max_fan_out = 2 * 3 = 6
+      assert len(flatmap_map_ds) == 6
+
+      # Elements are split and padded with None
+      # None values are not returned when converting to a list.
+      print(list(flatmap_map_ds))
+      # ['hello', 'world', 'grain']
+
+      # Elements can be accessed randomly by index:
+      for i in range(len(flatmap_map_ds)):
+        print(f'{i=}: {flatmap_map_ds[i]}')
+      # i=0: hello
+      # i=1: world
+      # i=2: None
+      # i=3: grain
+      # i=4: None
+      # i=5: None
+  """
 
   def __init__(
       self,
       parent: dataset.MapDataset,
       transform: transforms.FlatMap,
   ):
+    """Initializes the FlatMapMapDataset.
+
+    Args:
+      parent: The parent `MapDataset` instance.
+      transform: A `FlatMapTransform` instance that must implement the
+        `max_fan_out` property.
+    """
     super().__init__(parent)
     self._transform = transform
 
@@ -142,13 +204,54 @@ class _FlatMapDatasetIterator(dataset.DatasetIterator[T]):
 
 
 class FlatMapIterDataset(dataset.IterDataset[T]):
-  """Flat map for one-to-many split."""
+  """Flat map for one-to-many split.
+
+  Wraps a parent `IterDataset` and applies a :py:class:`FlatMapTransform` to
+  each element, yielding the resulting sequence as a stream.
+
+  Example:
+    Splitting strings into words using a custom `FlatMapTransform`::
+
+      import grain
+
+      # Create a custom FlatMapTransform
+      class DuplicateString(grain.experimental.FlatMapTransform):
+
+        def flat_map(self, element: str) -> list[str]:
+          return [element, element.upper()]
+
+      # Create a parent IterDataset
+      parent_ds = grain.MapDataset.source(
+          ["hello", "grain"]
+      ).to_iter_dataset()
+
+      # Apply the FlatMapTransform to the IterDataset
+      flatmap_iter_ds = grain.experimental.FlatMapIterDataset(
+          parent_ds, DuplicateString()
+      )
+
+      # Iterating through an IterDataset yields only the actual elements.
+      iterator = iter(flatmap_iter_ds)
+      for _ in range(len(list(flatmap_iter_ds))):
+        print(next(iterator))
+      # hello
+      # HELLO
+      # grain
+      # GRAIN
+  """
 
   def __init__(
       self,
       parent: dataset.IterDataset,
       transform: transforms.FlatMap,
   ):
+    """Initializes the FlatMapIterDataset.
+
+    Args:
+      parent: The parent `IterDataset` instance.
+      transform: A `FlatMapTransform` instance that must implement the
+        `flat_map` method.
+    """
     super().__init__(parent)
     self._transform = transform
 

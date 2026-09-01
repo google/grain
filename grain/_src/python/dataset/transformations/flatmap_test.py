@@ -145,6 +145,23 @@ class FlatMapMapDatasetTest(absltest.TestCase):
     )
     self.assertEqual(list(flatmap_ds), [1, 1, 3, 3, 5, 5, 7, 7, 9, 9])
 
+  def test_example_docstring(self):
+    @dataclasses.dataclass(frozen=True)
+    class SplitWords(transforms.FlatMap):
+      max_fan_out: int  # pyrefly: ignore[bad-override]
+
+      def flat_map(self, sentence: str) -> list[str]:
+        return sentence.split()
+
+    parent_ds = dataset.MapDataset.source(["hello world", "grain"])
+    self.assertEqual(parent_ds[0], "hello world")
+    self.assertEqual(parent_ds[1], "grain")
+    flatmap_map_ds = flatmap.FlatMapMapDataset(parent_ds, SplitWords(3))
+    self.assertLen(flatmap_map_ds, 6)
+    self.assertEqual(flatmap_map_ds[0], "hello")
+    self.assertIsNone(flatmap_map_ds[2])
+    self.assertEqual(flatmap_map_ds[3], "grain")
+
 
 class Unbatch(transforms.FlatMap):
 
@@ -198,6 +215,20 @@ class FlatMapIterDatasetTest(absltest.TestCase):
       ds_iter.set_state(checkpoints[starting_step])
       for i in range(starting_step, max_steps):
         self.assertEqual(next(ds_iter), values_without_interruption[i])
+
+  def test_example_docstring(self):
+    class DuplicateString(transforms.FlatMap):
+
+      def flat_map(self, element: str) -> list[str]:
+        return [element, element.upper()]
+
+    parent_ds = dataset.MapDataset.source(["hello", "grain"]).to_iter_dataset()
+    flatmap_iter_ds = flatmap.FlatMapIterDataset(parent_ds, DuplicateString())
+    iterator = iter(flatmap_iter_ds)
+    self.assertEqual(next(iterator), "hello")
+    self.assertEqual(next(iterator), "HELLO")
+    self.assertEqual(next(iterator), "grain")
+    self.assertEqual(next(iterator), "GRAIN")
 
 
 if __name__ == "__main__":
