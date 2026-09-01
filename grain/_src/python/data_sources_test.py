@@ -152,5 +152,56 @@ class ArrayRecordDataSourceTest(DataSourceTest):
       data_sources.ArrayRecordDataSource([])
 
 
+try:
+  import bagz as _bagz
+
+  _HAS_BAGZ = True
+except ImportError:
+  _HAS_BAGZ = False
+
+
+@absltest.skipIf(not _HAS_BAGZ, "bagz is not installed or supported.")
+class BagzDataSourceTest(DataSourceTest):
+
+  def setUp(self):
+    super().setUp()
+    import os
+    self.temp_dir = self.create_tempdir("bagz_test")
+    self.bagz_path = os.path.join(self.temp_dir.full_path, "test.bagz")
+    self.num_records = 10
+    w = _bagz.Writer(self.bagz_path)
+    for i in range(self.num_records):
+      w.write(f"record_{i}".encode("utf-8"))
+    w.close()
+
+  def test_bagz_implements_random_access(self):
+    self.assertTrue(
+        issubclass(
+            data_sources.BagzDataSource, dataset_base.RandomAccessDataSource
+        )
+    )
+
+  def test_bagz_source_empty_sequence(self):
+    with self.assertRaises(ValueError):
+      data_sources.BagzDataSource([])
+
+  def test_bagz_source_random_access(self):
+    source = data_sources.BagzDataSource([self.bagz_path])
+    self.assertLen(source, self.num_records)
+    self.assertEqual(source[0], b"record_0")
+    self.assertEqual(
+        source[self.num_records - 1],
+        f"record_{self.num_records - 1}".encode("utf-8"),
+    )
+
+  def test_bagz_source_pickling(self):
+    source = data_sources.BagzDataSource(self.bagz_path)
+    _ = source[0]  # instantiate reader
+    pickled = pickle.dumps(source)
+    unpickled = pickle.loads(pickled)
+    self.assertLen(unpickled, self.num_records)
+    self.assertEqual(unpickled[5], b"record_5")
+
+
 if __name__ == "__main__":
   absltest.main()
