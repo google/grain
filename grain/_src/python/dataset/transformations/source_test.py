@@ -37,7 +37,7 @@ class _MyRandomAccessDataSource:
 
 class _MySupportsBatchedReadRandomAccessDataSource(_MyRandomAccessDataSource):
 
-  def _getitems(self, indices: Sequence[int]):
+  def __getitems__(self, indices: Sequence[int]):
     return [self._data[i] for i in indices]
 
 
@@ -134,6 +134,13 @@ class SourceMapDatasetTest(absltest.TestCase):
         indices_to_read
     )
     self.assertEqual(expected_data, actual_data)
+
+  def test_lazy_dataset_source_batched_read_preserves_duplicates(self):
+    indices_to_read = [3, 1, 3, 0]
+    actual_data = self._batched_read_lazy_dataset_source._getitems(
+        indices_to_read
+    )
+    self.assertEqual(actual_data, [4, 2, 4, 1])
 
   def test_lazy_dataset_source_batched_read_get_random_modulo(self):
     len_data_source = len(self._batched_read_lazy_dataset_source)

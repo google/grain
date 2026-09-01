@@ -14,6 +14,7 @@
 """Tests for base.py."""
 
 import platform
+from typing import Sequence
 from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.python import data_sources
@@ -52,6 +53,32 @@ class RandomAccessDataSourceTest(parameterized.TestCase):
 
     source = MyInMemorySource(["a", "b", "c"])
     self.assertIsInstance(source, base.RandomAccessDataSource)
+
+  def test_batched_read_protocol(self):
+    class MyBatchedSource:
+
+      def __init__(self, data: list[str]):
+        self._data = data
+
+      def __len__(self) -> int:
+        return len(self._data)
+
+      def __getitem__(self, index: int) -> str:
+        return self._data[index]
+
+      def __getitems__(self, indices: Sequence[int]) -> Sequence[str]:
+        return [self._data[index] for index in indices]
+
+    source = MyBatchedSource(["a", "b", "c"])
+    self.assertIsInstance(
+        source, base.SupportsBatchedReadRandomAccessDataSource
+    )
+
+  def test_array_record_supports_batched_read_protocol(self):
+    self.assertIsInstance(
+        data_sources.ArrayRecordDataSource,
+        base.SupportsBatchedReadRandomAccessDataSource,
+    )
 
 
 class DatasetSelectionMapTest(parameterized.TestCase):

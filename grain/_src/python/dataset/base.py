@@ -119,10 +119,15 @@ class RandomAccessDataSource(Protocol[T]):
 class SupportsBatchedReadRandomAccessDataSource(
     RandomAccessDataSource[T], Protocol[T]
 ):
-  """Interface for sources that support efficient random access and batched reads."""
+  """Interface for random-access sources that support efficient batched reads.
 
-  def _getitems(self, indices: Sequence[int]) -> Sequence[T]:
-    """Returns the values for the given record_keys.
+  Implementations must return one record for each requested index, preserving
+  the order and duplicates in ``indices``. Grain uses this method when a
+  ``MapDataset`` is batched before conversion to an ``IterDataset``.
+  """
+
+  def __getitems__(self, indices: Sequence[int]) -> Sequence[T]:
+    """Returns records for ``indices`` in the same order.
 
     This method must be threadsafe and deterministic.
 

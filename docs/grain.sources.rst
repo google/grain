@@ -9,6 +9,9 @@ List of Members
 .. autoclass:: RandomAccessDataSource
    :special-members: __len__, __getitem__,
 
+.. autoclass:: SupportsBatchedReadRandomAccessDataSource
+   :special-members: __len__, __getitem__, __getitems__
+
 .. autoclass:: ArrayRecordDataSource
    :special-members: __init__, __len__, __getitem__
 

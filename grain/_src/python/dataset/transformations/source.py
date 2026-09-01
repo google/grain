@@ -105,7 +105,7 @@ class SourceMapDataset(dataset.MapDataset):
       return super()._getitems(indices)
     with self._stats.record_self_time(num_elements=len(indices)):
       start_time = time.perf_counter_ns()
-      elements = self._source._getitems(  # pylint: disable=protected-access
+      elements = self._source.__getitems__(
           [self._index_mod_len(index) for index in indices]
       )
       stop_time = time.perf_counter_ns()

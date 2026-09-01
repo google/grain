@@ -6,6 +6,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features:
+  * Added source batch pushdown for `MapDataset.batch` through the public
+    `SupportsBatchedReadRandomAccessDataSource` protocol.
   * Added `HFIterDataset` to wrap Hugging Face streaming datasets, supporting sharding, slicing (`set_slice`), and state checkpointing.
   * `MapDataset.slice` now accepts a `Sequence[int]` (including a
     `MapDataset[int]`) in addition to a `slice` object, enabling arbitrary index

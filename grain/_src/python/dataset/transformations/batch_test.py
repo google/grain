@@ -77,6 +77,33 @@ class CustomBatchFn(batch.BatchFn):
     }
 
 
+class _CountingRandomAccessSource:
+  """Random-access source that records scalar reads."""
+
+  def __init__(self, values: Sequence[int]):
+    self._values = values
+    self.scalar_reads = []
+
+  def __len__(self) -> int:
+    return len(self._values)
+
+  def __getitem__(self, index: int) -> int:
+    self.scalar_reads.append(index)
+    return self._values[index]
+
+
+class _CountingBatchedReadSource(_CountingRandomAccessSource):
+  """Random-access source that records batched reads."""
+
+  def __init__(self, values: Sequence[int]):
+    super().__init__(values)
+    self.batched_reads = []
+
+  def __getitems__(self, indices: Sequence[int]) -> Sequence[int]:
+    self.batched_reads.append(tuple(indices))
+    return [self._values[index] for index in indices]
+
+
 class MakeBatchTest(absltest.TestCase):
 
   def test_batch_zero_values_error(self):
@@ -286,6 +313,44 @@ class BatchMapDatasetTest(parameterized.TestCase):
     super().tearDown()
     importlib.reload(batch.tree_lib)
     importlib.reload(batch)
+
+  def test_pushes_batches_to_source(self):
+    data_source = _CountingBatchedReadSource(list(range(10)))
+    ds = source.SourceMapDataset(data_source)
+    ds = batch.BatchMapDataset(ds, batch_size=4, batch_fn=list)
+
+    self.assertEqual(list(ds), [[0, 1, 2, 3], [4, 5, 6, 7], [8, 9]])
+    self.assertEmpty(data_source.scalar_reads)
+    self.assertCountEqual(
+        data_source.batched_reads,
+        [(0, 1, 2, 3), (4, 5, 6, 7), (8, 9)],
+    )
+
+  def test_scalar_source_fallback(self):
+    data_source = _CountingRandomAccessSource(list(range(5)))
+    ds = source.SourceMapDataset(data_source)
+    ds = batch.BatchMapDataset(ds, batch_size=3, batch_fn=list)
+
+    self.assertEqual(list(ds), [[0, 1, 2], [3, 4]])
+    self.assertEqual(data_source.scalar_reads, [0, 1, 2, 3, 4])
+
+  def test_pushdown_through_map_transformations(self):
+    def make_pipeline(ds):
+      return (
+          ds.shuffle(seed=42)
+          .map(lambda value: value * 2)
+          .repeat(2)
+          .batch(batch_size=4, batch_fn=list)
+      )
+
+    values = list(range(7))
+    expected = list(make_pipeline(source.SourceMapDataset(values)))  # pyrefly: ignore[bad-argument-type]
+    data_source = _CountingBatchedReadSource(values)
+    actual = list(make_pipeline(source.SourceMapDataset(data_source)))
+
+    self.assertEqual(actual, expected)
+    self.assertEmpty(data_source.scalar_reads)
+    self.assertNotEmpty(data_source.batched_reads)
 
   @parameterized.named_parameters(
       dict(

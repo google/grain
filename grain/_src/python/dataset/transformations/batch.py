@@ -37,11 +37,6 @@ T = TypeVar("T")
 S = TypeVar("S")
 
 
-@functools.cache
-def _is_batch_map_pushdown_experiment_enabled() -> bool:
-  return False
-
-
 def _is_parallel_batch_experiment_enabled():
   return False
 
@@ -437,11 +432,8 @@ class BatchMapDataset(dataset.MapDataset[T]):
     self._update_length()
 
   def _get_parent_items(self, items):
-    # Leverage batch pushdown API to retrieve multiple items at once if the
-    # experiment is enabled.
-    if _is_batch_map_pushdown_experiment_enabled():
-      return self._parent._getitems(list(items))  # pylint: disable=protected-access
-    return [self._parent[i] for i in items]
+    """Retrieves parent elements through the batch-aware dataset path."""
+    return self._parent._getitems(list(items))  # pylint: disable=protected-access
 
   def __len__(self):
     return self._length

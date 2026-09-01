@@ -28,4 +28,7 @@ from grain._src.python.data_sources import (
     SharedMemoryDataSource,
     RangeDataSource,
 )
-from grain._src.python.dataset.base import RandomAccessDataSource
+from grain._src.python.dataset.base import (
+    RandomAccessDataSource,
+    SupportsBatchedReadRandomAccessDataSource,
+)

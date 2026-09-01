@@ -37,6 +37,24 @@ Data sources with random access need to implement the following protocol:
         but records can be any Python object.
       """
 
+Efficient batched reads
+^^^^^^^^^^^^^^^^^^^^^^^
+
+Random-access sources can additionally implement
+``SupportsBatchedReadRandomAccessDataSource`` to retrieve a sequence of records
+in one call:
+
+.. code-block:: python
+
+  class SupportsBatchedReadRandomAccessDataSource(RandomAccessDataSource[T]):
+
+    def __getitems__(self, indices: Sequence[int]) -> Sequence[T]:
+      """Returns records in the same order as ``indices``."""
+
+The method must preserve the order and duplicates in ``indices``. Grain uses it
+when ``MapDataset.batch`` is applied before ``MapDataset.to_iter_dataset``.
+Sources that only implement ``__getitem__`` continue to use scalar reads.
+
 Supported RA formats
 ^^^^^^^^^^^^^^^^^^^^
 
@@ -104,6 +122,9 @@ defined above. In addition, you need to pay attention to the following:
     upon unpickling.
 *   If used with ``DataLoader`` sources should implement ``__repr__``. This is
     needed for ``DataLoader`` checkpoint validation.
+*   If the storage system supports reading multiple indices efficiently,
+    implement ``SupportsBatchedReadRandomAccessDataSource`` and apply
+    ``MapDataset.batch`` before converting the pipeline to ``IterDataset``.
 
 
 File systems
