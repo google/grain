@@ -90,3 +90,12 @@ try:
   )
 except ImportError:
   pass
+
+# These are executed only if Prism is present.
+try:
+  from absl import app
+  from grain._src.prism import debug_server  # pytype: disable=import-error
+
+  app.call_after_init(debug_server.start_debug_server)
+except ImportError:
+  pass
