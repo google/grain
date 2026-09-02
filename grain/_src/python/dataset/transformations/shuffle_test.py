@@ -217,7 +217,7 @@ class WindowShuffleMapDatasetTest(absltest.TestCase):
       _ = ds._shuffled_index(index)  # pytype: disable=wrong-arg-types
 
 
-class WindowShuffleInterDatasetTest(absltest.TestCase):
+class WindowShuffleInterDatasetTest(parameterized.TestCase):
   _DATASET_SIZE = 30
   _WINDOW_SIZE = 10
 
@@ -364,6 +364,248 @@ class WindowShuffleInterDatasetTest(absltest.TestCase):
             "This indicates the checkpoint was not set properly."
         ),
     )
+
+  def test_reverse_option(self):
+    ds = dataset.MapDataset.range(12)
+    using_map = shuffle.WindowShuffleMapDataset(ds, window_size=3, seed=42)
+    using_iter_default = shuffle.WindowShuffleIterDataset(
+        ds.to_iter_dataset(), window_size=3, seed=42
+    )
+    using_iter_reverse_true = shuffle.WindowShuffleIterDataset(
+        ds.to_iter_dataset(), window_size=3, seed=42, reverse=True
+    )
+    using_iter_reverse_false = shuffle.WindowShuffleIterDataset(
+        ds.to_iter_dataset(), window_size=3, seed=42, reverse=False
+    )
+
+    self.assertEqual(list(using_iter_default), list(using_iter_reverse_true))
+    self.assertEqual(list(using_map), list(using_iter_reverse_false))
+    self.assertEqual(list(using_map), [0, 1, 2, 5, 3, 4, 6, 7, 8, 11, 9, 10])
+    self.assertEqual(
+        list(using_iter_reverse_true), [2, 1, 0, 4, 3, 5, 8, 7, 6, 10, 9, 11]
+    )
+
+  def test_reverse_false_checkpoints(self):
+    ds = shuffle.WindowShuffleIterDataset(
+        self.range_iter_ds, window_size=4, seed=42, reverse=False
+    )
+    ds_iter = ds.__iter__()
+    checkpoints = []
+    checkpoints_values = []
+    for _ in range(self._DATASET_SIZE):
+      checkpoints.append(ds_iter.get_state())
+      checkpoints_values.append(next(ds_iter))
+    for i in range(len(checkpoints)):
+      ds_iter.set_state(checkpoints[i])
+      self.assertDictEqual(
+          ds_iter.get_state(),
+          checkpoints[i],
+          msg=f"Checkpoint state failed at {i}.",
+      )
+      values = list(ds_iter)
+      self.assertEqual(
+          checkpoints_values[i:],
+          values,
+          msg=f"Checkpoint values failed from checkpoint {i}.",
+      )
+
+  def test_reverse_false_checkpoint_restore_on_fresh_iterator(self):
+    window_size = 10
+    num_elements = 1000
+    seed = 42
+    num_full_windows_before_checkpoint = 5
+    num_elements_to_verify = 20
+
+    checkpoint_position = (
+        num_full_windows_before_checkpoint * window_size + window_size // 2
+    )
+
+    ds = dataset.MapDataset.range(num_elements).to_iter_dataset()
+    ds = shuffle.WindowShuffleIterDataset(
+        ds, window_size=window_size, seed=seed, reverse=False
+    )
+
+    it1 = ds.__iter__()
+    for _ in range(checkpoint_position):
+      next(it1)
+    checkpoint_state = it1.get_state()
+
+    elements_after_checkpoint_original = [
+        next(it1) for _ in range(num_elements_to_verify)
+    ]
+    state_after_verification_original = it1.get_state()
+
+    ds2 = dataset.MapDataset.range(num_elements).to_iter_dataset()
+    ds2 = shuffle.WindowShuffleIterDataset(
+        ds2, window_size=window_size, seed=seed, reverse=False
+    )
+    it2 = ds2.__iter__()
+
+    it2.set_state(checkpoint_state)
+
+    elements_after_checkpoint_restored = [
+        next(it2) for _ in range(num_elements_to_verify)
+    ]
+    state_after_verification_restored = it2.get_state()
+
+    self.assertEqual(
+        elements_after_checkpoint_original,
+        elements_after_checkpoint_restored,
+    )
+    self.assertEqual(
+        state_after_verification_original["window_index"],
+        state_after_verification_restored["window_index"],
+    )
+
+  # Tests that the checkpoint regarding reverse flag in WindowShuffleIterDataset
+  # follows the write-time configuration for backward-compatibility.
+  #
+  # Write \ Read          | Unset           | True            | False
+  # ----------------------|-----------------|-----------------|----------------
+  # Unset                 | True (Reverse)  | True (Reverse)  | Error
+  # True                  | True (Reverse)  | True (Reverse)  | Error
+  # False                 | Error           | Error           | False (Forward)
+  # Legacy (Missing Key)  | True (Reverse)  | True (Reverse)  | Error
+  @parameterized.named_parameters(
+      dict(
+          testcase_name="write_none_read_none",
+          legacy_strip_key=False,
+          write_reverse=None,
+          read_reverse=None,
+          expected_reverse=True,
+      ),
+      dict(
+          testcase_name="write_none_read_true",
+          legacy_strip_key=False,
+          write_reverse=None,
+          read_reverse=True,
+          expected_reverse=True,
+      ),
+      dict(
+          testcase_name="write_none_read_false",
+          legacy_strip_key=False,
+          write_reverse=None,
+          read_reverse=False,
+          expected_reverse=ValueError,
+      ),
+      dict(
+          testcase_name="write_true_read_none",
+          legacy_strip_key=False,
+          write_reverse=True,
+          read_reverse=None,
+          expected_reverse=True,
+      ),
+      dict(
+          testcase_name="write_true_read_true",
+          legacy_strip_key=False,
+          write_reverse=True,
+          read_reverse=True,
+          expected_reverse=True,
+      ),
+      dict(
+          testcase_name="write_true_read_false",
+          legacy_strip_key=False,
+          write_reverse=True,
+          read_reverse=False,
+          expected_reverse=ValueError,
+      ),
+      dict(
+          testcase_name="write_false_read_none",
+          legacy_strip_key=False,
+          write_reverse=False,
+          read_reverse=None,
+          expected_reverse=ValueError,
+      ),
+      dict(
+          testcase_name="write_false_read_true",
+          legacy_strip_key=False,
+          write_reverse=False,
+          read_reverse=True,
+          expected_reverse=ValueError,
+      ),
+      dict(
+          testcase_name="write_false_read_false",
+          legacy_strip_key=False,
+          write_reverse=False,
+          read_reverse=False,
+          expected_reverse=False,
+      ),
+      dict(
+          testcase_name="write_legacy_read_none",
+          legacy_strip_key=True,
+          write_reverse=None,
+          read_reverse=None,
+          expected_reverse=True,
+      ),
+      dict(
+          testcase_name="write_legacy_read_true",
+          legacy_strip_key=True,
+          write_reverse=None,
+          read_reverse=True,
+          expected_reverse=True,
+      ),
+      dict(
+          testcase_name="write_legacy_read_false",
+          legacy_strip_key=True,
+          write_reverse=None,
+          read_reverse=False,
+          expected_reverse=ValueError,
+      ),
+  )
+  def test_window_shuffle_iter_dataset_checkpoint_compatibility_matrix(
+      self,
+      legacy_strip_key: bool,
+      write_reverse: bool | None,
+      read_reverse: bool | None,
+      expected_reverse: bool | type[ValueError],
+  ):
+    window_size = 10
+    num_elements = 100
+    seed = 42
+    checkpoint_pos = 25
+
+    # 1. Write checkpoint from dataset configured with write_reverse
+    ds_write = dataset.MapDataset.range(num_elements).to_iter_dataset()
+    kwargs_write = dict(window_size=window_size, seed=seed)
+    if write_reverse is not None:
+      kwargs_write["reverse"] = write_reverse
+    ds_write = shuffle.WindowShuffleIterDataset(ds_write, **kwargs_write)
+    it_write = iter(ds_write)
+    for _ in range(checkpoint_pos):
+      next(it_write)
+    checkpoint_state = it_write.get_state()
+
+    if legacy_strip_key:
+      checkpoint_state.pop("reverse", None)
+
+    # 2. Read / restore checkpoint into dataset configured with read_reverse
+    ds_read = dataset.MapDataset.range(num_elements).to_iter_dataset()
+    kwargs_read = dict(window_size=window_size, seed=seed)
+    if read_reverse is not None:
+      kwargs_read["reverse"] = read_reverse
+    ds_read = shuffle.WindowShuffleIterDataset(ds_read, **kwargs_read)
+    it_read = iter(ds_read)
+
+    if expected_reverse is ValueError:
+      with self.assertRaisesRegex(
+          ValueError, "does not match dataset reverse configuration"
+      ):
+        it_read.set_state(checkpoint_state)
+    else:
+      assert isinstance(expected_reverse, bool)
+      # Ground truth reference iterator with expected_reverse
+      ref_ds = dataset.MapDataset.range(num_elements).to_iter_dataset()
+      ref_ds = shuffle.WindowShuffleIterDataset(
+          ref_ds, window_size=window_size, seed=seed, reverse=expected_reverse
+      )
+      ref_iter = iter(ref_ds)
+      for _ in range(checkpoint_pos):
+        next(ref_iter)
+      expected_remaining = list(ref_iter)
+
+      it_read.set_state(checkpoint_state)
+      actual_remaining = list(it_read)
+      self.assertEqual(actual_remaining, expected_remaining)
 
   def test_shuffled_raises_stop_iteration(self):
     ds = shuffle.WindowShuffleIterDataset(

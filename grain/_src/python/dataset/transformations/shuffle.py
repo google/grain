@@ -24,7 +24,6 @@ from grain._src.python.experimental.index_shuffle.python import (
     index_shuffle_module as index_shuffle,
 )
 
-
 T = TypeVar("T")
 
 
@@ -171,12 +170,37 @@ class WindowShuffleMapDataset(dataset.MapDataset[T]):
     return dataset.get_element_spec(self._parent)
 
 
+# Note for `reverse`: WindowShuffleIterDataset has been reversing the order of
+# elements within the window, implicitly, which is inconsistent with
+# `WindowShuffleMapDataset`. Since this recent change, we explicitly added
+# `reverse` (which is implicitly True when unset).
+#
+# Users are encouraged to explicitly set `reverse=False` or `True` to avoid
+# ambiguity. Checkpoints without explicit `reverse` will be treated as `True`
+# and continue to work as before.
+#
+# At some point in future, we might switch the default to `reverse=False`
+# for consistency with `WindowShuffleMapDataset`, with the announcement in the
+# "Breaking Changes" section of the release notes. But it's not planned yet.
 class WindowShuffleIterDataset(dataset.IterDataset[T]):
   """Shuffles the parent dataset within a given window.
 
   Fetches `window_size` elements from the parent iterator and returns them in
   shuffled order. Each window is shuffled with different seed derived from the
   input seed.
+
+  Note that the window sequence from this Dataset is deterministic and
+  identical to the window sequence from `WindowShuffleMapDataset` with the same
+  `seed` and `window_size`.
+  However, the order of elements within the window is reversed, compared to
+  `WindowShuffleMapDataset`. In order to match the order of elements within the
+  window in `WindowShuffleMapDataset`, set `reverse=False`.
+
+  Backward compatibility is preserved as long as `reverse` remains unset.
+  Once `reverse=False` is set, users should be careful for the following:
+    1. Reading existing checkpoints (without `reverse` set) will fail.
+    2. Rollback to the binary prior to 0.2.19 (and reading the new checkpoints
+       with older binary) will behave unexpectedly.
 
   Example:
     Applying window-based shuffling to an iterable dataset::
@@ -189,7 +213,8 @@ class WindowShuffleIterDataset(dataset.IterDataset[T]):
       print(list(parent_ds))
       # [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 
-      # Shuffle elements independently within windows of size 3.
+      # Shuffle elements independently within windows of size 3
+      # (default reverse=None; implicitly reverse=True).
       shuffled_ds = grain.experimental.WindowShuffleIterDataset(
           parent_ds,
           window_size=3,
@@ -199,10 +224,25 @@ class WindowShuffleIterDataset(dataset.IterDataset[T]):
       # Shuffled dataset.
       print(list(shuffled_ds))
       # [2, 1, 0, 4, 3, 5, 8, 7, 6, 10, 9, 11]
+
+      # Setting reverse=False matches WindowShuffleMapDataset sequence.
+      forward_ds = grain.experimental.WindowShuffleIterDataset(
+          parent_ds,
+          window_size=3,
+          seed=42,
+          reverse=False,
+      )
+      print(list(forward_ds))
+      # [0, 1, 2, 5, 3, 4, 6, 7, 8, 11, 9, 10]
   """
 
   def __init__(
-      self, parent: dataset.IterDataset, *, window_size: int, seed: int
+      self,
+      parent: dataset.IterDataset,
+      *,
+      window_size: int,
+      seed: int,
+      reverse: bool | None = None,
   ):
     """Initializes the WindowShuffleIterDataset.
 
@@ -212,15 +252,23 @@ class WindowShuffleIterDataset(dataset.IterDataset[T]):
         each window.
       seed: Seed used to deterministically shuffle the elements within each
         window.
+      reverse: If True (default) or unset, elements are yielded in reverse order
+        from each shuffled window for backward compatibility. If False, elements
+        are yielded in forward order of the shuffled window with the same
+        sequence as `WindowShuffleMapDataset`.
     """
     super().__init__(parent)
     self._window_size = window_size
     self._seed = seed
+    self._reverse = reverse
 
   def __iter__(self) -> dataset.DatasetIterator[T]:
     parent_iter = self._parent.__iter__()
     return _WindowShuffleDatasetIterator(
-        parent_iter, window_size=self._window_size, seed=self._seed
+        parent_iter,
+        window_size=self._window_size,
+        seed=self._seed,
+        reverse=self._reverse,
     )
 
   def __str__(self) -> str:
@@ -253,10 +301,12 @@ class _WindowShuffleDatasetIterator(dataset.DatasetIterator[T]):
       *,
       window_size: int,
       seed: int,
+      reverse: bool | None = None,
   ):
     super().__init__(parent)
     self._window_size = window_size
     self._global_seed = seed
+    self._reverse: bool = True if reverse is None else bool(reverse)
     self._window_index: int = 0
     self._pos_in_window = 0
     self._window: list[T] = []
@@ -279,10 +329,12 @@ class _WindowShuffleDatasetIterator(dataset.DatasetIterator[T]):
   @stats.record_next_duration_if_output
   @stats.trace_input_pipeline_next(stage_category=stats.IPL_CAT_PREPROCESSING)
   def __next__(self):
-    # Window is empty, fill up the next window.
-    if not self._window:
+    # If the current window is exhausted, fill up the next window.
+    if self._pos_in_window >= len(self._window):
       if self._parent_exhausted:
         raise StopIteration
+      if self._window:
+        self._window_index += 1
       # Checkpoints require reshuffling the window regardless the progress
       # within it. Store the parent window start.
       self._parent_window_start_iter_state = self._parent.get_state()
@@ -291,10 +343,13 @@ class _WindowShuffleDatasetIterator(dataset.DatasetIterator[T]):
     # If the window is empty after reshuffling means no elements are left.
     if not self._window:
       raise StopIteration
+    idx = (
+        len(self._window) - 1 - self._pos_in_window
+        if self._reverse
+        else self._pos_in_window
+    )
+    result = self._window[idx]
     self._pos_in_window += 1
-    result = self._window.pop()
-    if not self._window:
-      self._window_index += 1
     return result
 
   def get_state(self):
@@ -304,6 +359,7 @@ class _WindowShuffleDatasetIterator(dataset.DatasetIterator[T]):
         ),
         window_index=self._window_index,
         pos_in_window=self._pos_in_window,
+        reverse=self._reverse,
     )
 
   def set_state(self, state):
@@ -313,11 +369,14 @@ class _WindowShuffleDatasetIterator(dataset.DatasetIterator[T]):
     self._parent.set_state(self._parent_window_start_iter_state)
     self._window_index = state["window_index"]
     self._pos_in_window = state["pos_in_window"]
+    checkpoint_reverse = state.get("reverse", True)
+    if checkpoint_reverse != self._reverse:
+      raise ValueError(
+          f"Checkpoint reverse configuration ({checkpoint_reverse}) does not "
+          f"match dataset reverse configuration ({self._reverse})."
+      )
     self._parent_exhausted = False
     self._fill_and_shuffle_window()
-    # Removed previously processed elements from the window.
-    for _ in range(min(self._pos_in_window, len(self._window))):
-      self._window.pop()
 
   def __str__(self) -> str:
     return "WindowShuffleDatasetIterator"
