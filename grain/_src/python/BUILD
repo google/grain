@@ -9,9 +9,9 @@ py_library(
     ],
     srcs_version = "PY3",
     deps = [
-        "//grain/_src/core:monitoring",
         "@abseil-py//absl/logging",
         "@pypi//etils:pkg",
+        "//grain/_src/core:monitoring",
         "//grain/_src/python/dataset:stats",
     ] + select({
         "@platforms//os:windows": [],
