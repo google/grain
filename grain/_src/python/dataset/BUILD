@@ -95,6 +95,7 @@ py_test(
 py_library(
     name = "stats",
     srcs = ["stats.py"],
+    lazy_imports = True,
     srcs_version = "PY3",
     deps = [
         ":base",
@@ -111,6 +112,7 @@ py_library(
 py_library(
     name = "stats_utils",
     srcs = ["stats_utils.py"],
+    lazy_imports = True,
     srcs_version = "PY3",
     deps = [
         "//grain/_src/core:tree_lib",
