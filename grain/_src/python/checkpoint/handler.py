@@ -24,6 +24,14 @@ from grain._src.python.checkpoint import elastic_checkpoint
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import elastic_iterator
 
+try:
+  from grain._src.cpp.bindings import transformations  # pylint:disable=g-import-not-at-top
+
+  _OUTPUT_ITERATOR_TYPE = transformations.OutputIterator
+except ImportError:
+  _OUTPUT_ITERATOR_TYPE = ()
+
+
 IteratorType = TypeVar(
     "IteratorType", data_loader.DataLoaderIterator, dataset.DatasetIterator
 )
@@ -91,6 +99,22 @@ class CheckpointHandler:
       ):
         elastic_checkpoint.save_elastic_iterator(directory, item)
       state = json.dumps(item.get_state(), indent=4)
+    elif isinstance(
+        item,
+        _OUTPUT_ITERATOR_TYPE,
+    ):
+      import numpy as np  # pylint:disable=g-import-not-at-top  # pytype:disable=import-error
+
+      class NumpyEncoder(json.JSONEncoder):
+
+        def default(self, o):
+          if isinstance(o, np.ndarray):
+            return o.tolist()
+          if isinstance(o, np.generic):
+            return o.item()
+          return super().default(o)
+
+      state = json.dumps(item.get_state(), indent=4, cls=NumpyEncoder)
     else:
       state = item.get_state().decode()
     process_index, process_count = sharding.get_process_index_and_count()
@@ -159,6 +183,28 @@ class CheckpointHandler:
     state = filename.read_text()
     if isinstance(item, dataset.DatasetIterator):
       state = json.loads(state)
+    elif isinstance(item, _OUTPUT_ITERATOR_TYPE):
+      import numpy as np  # pylint:disable=g-import-not-at-top  # pytype:disable=import-error
+
+      def _json_to_numpy(state):
+        """Recursively converts primitive numbers and lists back to NumPy arrays."""
+        if isinstance(state, dict):
+          return {k: _json_to_numpy(v) for k, v in state.items()}
+        elif isinstance(state, list):
+          return [_json_to_numpy(v) for v in state]
+        elif isinstance(state, (int, float)):
+          # Convert scalar numbers back into NumPy arrays expected by PyBind11.
+          return np.asarray(state)
+        return state
+
+      # Inside CheckpointHandler.restore:
+      state_text = filename.read_text()
+      state = json.loads(state_text)
+
+      # Fix the leaves so the C++ caster accepts them
+      state = _json_to_numpy(state)
+
+      item.set_state(state)
     else:
       state = state.encode()
     item.set_state(state)  # pyrefly: ignore[bad-argument-type]
