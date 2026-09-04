@@ -509,7 +509,10 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
     # pylint: enable=g-import-not-at-top
     return filter_dataset.FilterMapDataset(parent=self, transform=transform)
 
-  def map(self, transform: transforms.Map | Callable[[T], S]) -> MapDataset[S]:
+  def map(
+      self,
+      transform: transforms.Map | Callable[[T], S],
+  ) -> MapDataset[S]:
     """Returns a dataset containing the elements transformed by ``transform``.
 
     Example usage::
@@ -532,7 +535,10 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
         map as map_dataset,
     )
     # pylint: enable=g-import-not-at-top
-    return map_dataset.MapMapDataset(parent=self, transform=transform)
+    return map_dataset.MapMapDataset(
+        parent=self,
+        transform=transform,
+    )
 
   def map_with_index(
       self,
@@ -1202,7 +1208,10 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
     # pylint: enable=g-import-not-at-top
     return filter_dataset.FilterIterDataset(parent=self, transform=transform)
 
-  def map(self, transform: transforms.Map | Callable[[T], S]) -> IterDataset[S]:
+  def map(
+      self,
+      transform: transforms.Map | Callable[[T], S],
+  ) -> IterDataset[S]:
     """Returns a dataset containing the elements transformed by ``transform``.
 
     Example usage::
@@ -1225,7 +1234,10 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
         map as map_dataset,
     )
     # pylint: enable=g-import-not-at-top
-    return map_dataset.MapIterDataset(parent=self, transform=transform)
+    return map_dataset.MapIterDataset(
+        parent=self,
+        transform=transform,
+    )
 
   def random_map(
       self,
