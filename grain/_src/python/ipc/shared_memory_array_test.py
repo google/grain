@@ -248,6 +248,19 @@ class SharedMemoryArrayTest(parameterized.TestCase):
       with self.assertRaises(FileNotFoundError):
         shared_memory.SharedMemory(name=name, create=False)
 
+  def test_advanced_indexing_returns_numpy_array(self):
+    shm_arr = SharedMemoryArray((10, 2), np.int32)
+    shm_arr.unlink_on_del()
+    # Slicing returns a view backed by shared memory:
+    sliced = shm_arr[0:2]
+    self.assertIsInstance(sliced, SharedMemoryArray)
+    self.assertIsNotNone(sliced.shm)
+
+    # Advanced indexing returns a regular NumPy array:
+    advanced = shm_arr[[0, 2]]
+    self.assertNotIsInstance(advanced, SharedMemoryArray)
+    self.assertIsInstance(advanced, np.ndarray)
+
 
 if __name__ == "__main__":
   absltest.main()
