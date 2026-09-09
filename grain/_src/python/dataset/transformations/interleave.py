@@ -49,7 +49,7 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     self._num_make_iter_threads = num_make_iter_threads
     self._make_iter_buffer_size = make_iter_buffer_size
     self._iter_buffer_size = iter_buffer_size
-    self._prefetch_ds_iter = (
+    self._prefetch_ds_iter = (  # pyrefly: ignore[invalid-type-var]
         dataset.MapDataset.source(datasets)
         .map(
             functools.partial(

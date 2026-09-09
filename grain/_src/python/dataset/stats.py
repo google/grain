@@ -1035,7 +1035,7 @@ class _MPPrefetchExecutionStats(_ExecutionStats):
     """Calculates the aggregated execution summary from all workers."""
     aggregated_summary_from_workers = execution_summary_pb2.ExecutionSummary()
     stats_in_queues = self._config.stats_in_queues
-    for worker_index, worker_queue in enumerate(stats_in_queues):  # pyrefly: ignore[bad-argument-type]
+    for worker_index, worker_queue in enumerate(stats_in_queues):  # pyrefly: ignore[bad-argument-type, not-iterable]
       try:
         summary_from_worker = worker_queue.get(
             timeout=_WORKER_QUEUE_TIMEOUT_SEC

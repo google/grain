@@ -581,7 +581,7 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._prefetch_thread = threading.Thread(
         target=functools.partial(
             _put_iterator_elements_in_buffer,
-            iterator=self._maybe_nonnative_parent,
+            iterator=self._maybe_nonnative_parent,  # pyrefly: ignore[bad-argument-type]
             buffer=self._buffer,
             should_stop=self._prefetch_should_stop,
             stats=self._stats,
