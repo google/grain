@@ -20,6 +20,9 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * Fixed bug in DataLoader where sharding remainder was dropped even when ShardOptions.drop_remainder=False.
   * Fixes reference cycle in BatchMapDataset.
   * Fixes start_prefetch not starting for sub-iterators of InterleaveDatasetIterator.
+  * `WindowShuffleIterDataset` were generating different sequence than
+    `WindowShuffleMapDataset`. Now a new option `reverse=False` allows to
+    generate an equivalent sequence (backward compatibility is preserved).
 
 ## Grain 0.2.18 (June 17, 2026)
 
