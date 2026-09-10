@@ -227,9 +227,16 @@ class MapDatasetMeta(abc.ABCMeta):
     - ``range(m, n)`` => start=m, stop=n, step=1
     - ``range(m, n, p)`` => start=m, stop=n, step=p
 
-    The produced values are consistent with the built-in `range` function::
+    Example:
+      Creating a dataset with a custom start, stop, and step::
 
-      list(MapDataset.range(...)) == list(range(...))
+        import grain
+
+        # Create a dataset containing every second integer from 2 to 8.
+        ds = grain.MapDataset.range(2, 8, 2)
+
+        print(list(ds))
+        # [2, 4, 6]
 
     Args:
       start: The start of the range.
@@ -290,6 +297,39 @@ class MapDatasetMeta(abc.ABCMeta):
     """Returns a dataset selected from the inputs accoridng to the given map.
 
     Allows more general types of dataset mixing than ``mix``.
+
+    Example:
+      Alternating elements from two datasets::
+
+        import grain
+
+        class AlternatingMap(grain.transforms.DatasetSelectionMap):
+
+          def __len__(self):
+            return 6
+
+          def __getitem__(self, index):
+            if index >= len(self):
+              raise IndexError
+            return index % 2, index // 2  # dataset index, index within dataset.
+
+        # Create two input datasets.
+        ds1 = grain.MapDataset.range(0, 3)
+        ds2 = grain.MapDataset.range(10, 13)
+
+        print(list(ds1))
+        # [0, 1, 2]
+        print(list(ds2))
+        # [10, 11, 12]
+
+        # Alternate elements from the two datasets.
+        selected_ds = grain.MapDataset.select_from_datasets(
+            [ds1, ds2],
+            AlternatingMap()
+        )
+
+        print(list(selected_ds))
+        # [0, 10, 1, 11, 2, 12]
 
     Args:
       datasets: The datasets to select from.

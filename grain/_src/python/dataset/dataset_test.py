@@ -157,6 +157,10 @@ class DatasetTest(parameterized.TestCase):
     self.assertLen(ds, len(range(start, stop, step)))
     self.assertEqual(list(ds), list(range(start, stop, step)))
 
+  def test_range_example_docstring(self):
+    ds = dataset.MapDataset.range(2, 8, 2)
+    self.assertEqual(list(ds), [2, 4, 6])
+
   def test_source_get_items_all_indices(self):
     ds = dataset.MapDataset.source(Source15IntsFrom0())
     self.assertIsInstance(ds, dataset.MapDataset)
@@ -243,6 +247,27 @@ class DatasetTest(parameterized.TestCase):
     self.assertIsInstance(ds, dataset.MapDataset)
     self.assertLen(ds, 10)
     self.assertEqual(list(ds), [100, 0, 101, 1, 102, 2, 103, 3, 104, 4])
+
+  def test_select_from_datasets_example_docstring(self):
+    class AlternatingMap(base.DatasetSelectionMap):
+
+      def __len__(self) -> int:
+        return 6
+
+      def __getitem__(self, index: int) -> tuple[int, int]:
+        if index >= len(self):
+          raise IndexError
+        return index % 2, index // 2
+
+    ds1 = dataset.MapDataset.range(0, 3)
+    ds2 = dataset.MapDataset.range(10, 13)
+    self.assertEqual(list(ds1), [0, 1, 2])
+    self.assertEqual(list(ds2), [10, 11, 12])
+    selected_ds = dataset.MapDataset.select_from_datasets(
+        [ds1, ds2],
+        AlternatingMap(),  # pyrefly: ignore[bad-arg-type]
+    )
+    self.assertEqual(list(selected_ds), [0, 10, 1, 11, 2, 12])
 
   @parameterized.parameters(
       # pyformat: disable
