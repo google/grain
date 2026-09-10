@@ -165,21 +165,30 @@ class SharedMemoryArray(np.ndarray):
     """Mark this object responsible for unlinking the shared memory."""
     self._unlink_on_del = True
 
-  def __del__(self) -> None:
-    # Ensure that this array is not a view before closing shared memory
-    if not isinstance(self.base, mmap.mmap):
+  def __del__(
+      self,
+      _mmap_type=mmap.mmap,
+      _shared_memory_type=shared_memory.SharedMemory,
+      _del_shm=_del_shm,
+  ) -> None:
+    # Ensure that this array is not a view before closing shared memory.
+    # The default arguments are bound at import time so that this method still
+    # works during interpreter shutdown, when module-level names (such as
+    # `mmap` and `shared_memory`) may have been set to None. See issue #398.
+    if not isinstance(self.base, _mmap_type):
       return
-    thread_pool = SharedMemoryArray._del_thread_pool
-    outstanding_del_requests = SharedMemoryArray._outstanding_del_requests
+    cls = type(self)
+    thread_pool = cls._del_thread_pool
+    outstanding_del_requests = cls._outstanding_del_requests
     shm = self.shm
-    assert isinstance(shm, shared_memory.SharedMemory)
+    assert isinstance(shm, _shared_memory_type)
     if thread_pool:
       assert outstanding_del_requests is not None
       # We use a semaphore to make sure that we don't accumulate too many
       # requests to close/unlink shared memory, which could lead to OOM errors.
       if outstanding_del_requests.acquire(blocking=False):
         thread_pool.apply_async(
-            SharedMemoryArray.close_shm_async, args=(shm, self._unlink_on_del)
+            cls.close_shm_async, args=(shm, self._unlink_on_del)
         )
       else:
         _del_shm(shm, unlink=self._unlink_on_del)
