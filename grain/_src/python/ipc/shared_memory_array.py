@@ -82,6 +82,13 @@ class SharedMemoryArray(np.ndarray):
       self.shm = None
     self._unlink_on_del = getattr(obj, "_unlink_on_del", False)
 
+  def __getitem__(self, index: Any) -> Any:
+    # This follows the `numpy.memmap` implementation
+    res = super().__getitem__(index)
+    if isinstance(res, SharedMemoryArray) and res.shm is None:
+      return res.view(np.ndarray)
+    return res
+
   def __array_wrap__(self, obj, context=None, return_scalar=False):  # pylint: disable=unused-argument
     # This follows the `numpy.memmap` implementation
     if self is obj or type(self) is not type(self):
