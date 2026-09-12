@@ -283,9 +283,6 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   def _set_prefetch_buffer_size(self, buffer_size: int):
     self._target_prefetch_buffer_size = buffer_size
-    # The executor is created in the constructor only if the prefetch buffer
-    # size is greater than 0. If the user changes the prefetch buffer size, we
-    # need to create or destroy the executor accordingly.
     if (
         self._target_prefetch_buffer_size > 0
         and self._target_num_threads > 0
@@ -297,14 +294,12 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
       if self._executor_wrapper:
         self._executor = self._executor_wrapper(self._executor)
     elif self._target_prefetch_buffer_size == 0 and hasattr(self, "_executor"):
-      self._executor.shutdown()
+      self._executor.shutdown(wait=False, cancel_futures=True)
       delattr(self, "_executor")
 
   def _set_num_threads(self, num_threads: int) -> None:
     self._target_num_threads = num_threads
     old_executor = None
-    # Accounts for the case where the executor does not exit. This can
-    # happen if the prefetch buffer size is set to 0.
     if hasattr(self, "_executor"):
       old_executor = self._executor
     if self._target_num_threads > 0 and self._target_prefetch_buffer_size > 0:
@@ -316,8 +311,6 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     elif hasattr(self, "_executor"):
       delattr(self, "_executor")
     if old_executor is not None:
-      # Allows the old executor to finish running the tasks it was already
-      # assigned asynchronously.
       old_executor.shutdown(wait=False)
 
   def _fill_buffer(self):
@@ -346,11 +339,18 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._closed = True
     # Shutdown the thread pool executor if it exists.
     if hasattr(self, "_executor"):
-      self._executor.shutdown(wait=False)
       # Cancel all pending futures in the buffer.
       while self._buffer:
         future = self._buffer.popleft()
         future.cancel()
+      self._executor.shutdown(wait=False, cancel_futures=True)
+      delattr(self, "_executor")
+
+  def __del__(self):
+    try:
+      self.close()
+    except Exception:  # pylint: disable=broad-except
+      pass
 
 
 def get_dataset_options(ds: dataset.IterDataset) -> base.DatasetOptions:
@@ -443,9 +443,19 @@ def _put_iterator_elements_in_buffer(
     while not should_stop.is_set():
       element = stats.record_bytes_consumed(iterator.__next__())
       state = copy.deepcopy(iterator.get_state())
-      buffer.put((element, state, None))
+      while not should_stop.is_set():
+        try:
+          buffer.put((element, state, None), timeout=0.05)
+          break
+        except queue.Full:
+          pass
   except Exception as e:  # pylint: disable=broad-except
-    buffer.put((None, None, e))  # pyrefly: ignore[bad-argument-type]
+    while not should_stop.is_set():
+      try:
+        buffer.put((None, None, e), timeout=0.05)  # pyrefly: ignore[bad-argument-type]
+        break
+      except queue.Full:
+        pass
 
 
 class CheckpointableIterator(Iterator[T], Protocol[T]):
