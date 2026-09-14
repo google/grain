@@ -103,7 +103,7 @@ class TFRecordIterDataset(dataset.IterDataset[T]):
   Iterates over a TFRecord file sequentially and yields records as raw bytes.
 
   Example:
-    Reading and iterating over elements from a TFRecord file::
+    Reading and iterating over elements from a TFRecord file:
 
       import tempfile
       import grain
