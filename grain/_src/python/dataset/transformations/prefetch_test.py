@@ -11,6 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+from __future__ import annotations
+
 from concurrent import futures
 import dataclasses
 import os
@@ -28,6 +31,7 @@ import multiprocessing as mp
 from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset.transformations import autotune
 from grain._src.python.dataset.transformations import filter as filter_lazy_dataset
 from grain._src.python.dataset.transformations import prefetch
 import numpy as np
@@ -496,6 +500,132 @@ class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
     actual = list(ds)
     expected = list(range(1, 20, 2))
     self.assertSequenceEqual(actual, expected)
+
+  @mock.patch.object(autotune, 'get_autotune_parameter')
+  def test_set_prefetch_buffer_size_0_to_positive(self, mock_get_param):
+    mock_autotune = mock.MagicMock()
+    mock_autotune.get_value.return_value = 0
+    mock_get_param.return_value = (0, mock_autotune)
+    prefetch_lazy_iter_ds = prefetch.ThreadPrefetchIterDataset(
+        self.ds, prefetch_buffer_size=0
+    )
+    ds_iter = iter(prefetch_lazy_iter_ds)
+    self.assertIsInstance(ds_iter, prefetch.ThreadPrefetchDatasetIterator)
+    ds_iter = cast(prefetch.ThreadPrefetchDatasetIterator, ds_iter)
+
+    self.assertEqual(ds_iter._target_prefetch_buffer_size, 0)
+    self.assertEqual(next(ds_iter), 1)
+
+    # Setting prefetch_buffer_size to 2.
+    mock_autotune.get_value.return_value = 2
+    ds_iter._set_prefetch_buffer_size(2)
+    self.assertEqual(ds_iter._target_prefetch_buffer_size, 2)
+    self.assertEqual(next(ds_iter), 3)
+    self.assertIsNotNone(ds_iter._prefetch_thread)
+    # the thread needs time to populate the queue
+    while ds_iter._buffer.qsize() < 2:
+      time.sleep(0.01)
+    self.assertEqual(ds_iter._buffer.qsize(), 2)
+
+  @mock.patch.object(autotune, 'get_autotune_parameter')
+  def test_set_prefetch_buffer_size_positive_to_0(self, mock_get_param):
+    mock_autotune = mock.MagicMock()
+    mock_autotune.get_value.return_value = 2
+    mock_get_param.return_value = (2, mock_autotune)
+    prefetch_lazy_iter_ds = prefetch.ThreadPrefetchIterDataset(
+        self.ds, prefetch_buffer_size=2
+    )
+    ds_iter = iter(prefetch_lazy_iter_ds)
+    self.assertIsInstance(ds_iter, prefetch.ThreadPrefetchDatasetIterator)
+    ds_iter = cast(prefetch.ThreadPrefetchDatasetIterator, ds_iter)
+
+    self.assertEqual(ds_iter._target_prefetch_buffer_size, 2)
+    self.assertEqual(next(ds_iter), 1)
+
+    # Needs to wait for the thread to prefetch next elements.
+    while ds_iter._buffer.qsize() < 2:
+      time.sleep(0.01)
+    self.assertEqual(ds_iter._buffer.qsize(), 2)
+
+    # Setting prefetch_buffer_size to 0.
+    mock_autotune.get_value.return_value = 0
+    ds_iter._set_prefetch_buffer_size(0)
+    self.assertEqual(ds_iter._target_prefetch_buffer_size, 0)
+    # Should consume buffer first. Depending on whether the producer thread
+    # fetched one extra element before noticing should_stop, qsize after
+    # consuming element 3 is either 1 or 2.
+    self.assertEqual(next(ds_iter), 3)
+    self.assertIn(ds_iter._buffer.qsize(), (1, 2))
+    self.assertEqual(next(ds_iter), 5)
+    self.assertIn(ds_iter._buffer.qsize(), (0, 1))
+    self.assertEqual(next(ds_iter), 7)
+    self.assertEqual(ds_iter._buffer.qsize(), 0)
+    # Buffer empty, should read without prefetching.
+    self.assertEqual(next(ds_iter), 9)
+    self.assertEqual(ds_iter._buffer.qsize(), 0)
+
+  @mock.patch.object(autotune, 'get_autotune_parameter')
+  def test_set_prefetch_buffer_size_increase(self, mock_get_param):
+    mock_autotune = mock.MagicMock()
+    mock_autotune.get_value.return_value = 1
+    mock_get_param.return_value = (1, mock_autotune)
+    prefetch_lazy_iter_ds = prefetch.ThreadPrefetchIterDataset(
+        self.ds, prefetch_buffer_size=1
+    )
+    ds_iter = iter(prefetch_lazy_iter_ds)
+    self.assertIsInstance(ds_iter, prefetch.ThreadPrefetchDatasetIterator)
+    ds_iter = cast(prefetch.ThreadPrefetchDatasetIterator, ds_iter)
+
+    self.assertEqual(ds_iter._target_prefetch_buffer_size, 1)
+    self.assertEqual(next(ds_iter), 1)
+
+    while ds_iter._buffer.qsize() < 1:
+      time.sleep(0.01)
+    self.assertEqual(ds_iter._buffer.qsize(), 1)
+
+    # Setting prefetch_buffer_size to 2.
+    mock_autotune.get_value.return_value = 2
+    ds_iter._set_prefetch_buffer_size(2)
+    self.assertEqual(ds_iter._target_prefetch_buffer_size, 2)
+    self.assertEqual(next(ds_iter), 3)
+    while ds_iter._buffer.qsize() < 2:
+      time.sleep(0.01)
+    self.assertEqual(ds_iter._buffer.qsize(), 2)
+    self.assertEqual(next(ds_iter), 5)
+    while ds_iter._buffer.qsize() < 2:
+      time.sleep(0.01)
+    self.assertEqual(ds_iter._buffer.qsize(), 2)
+
+  @mock.patch.object(autotune, 'get_autotune_parameter')
+  def test_set_prefetch_buffer_size_decrease(self, mock_get_param):
+    mock_autotune = mock.MagicMock()
+    mock_autotune.get_value.return_value = 2
+    mock_get_param.return_value = (2, mock_autotune)
+    prefetch_lazy_iter_ds = prefetch.ThreadPrefetchIterDataset(
+        self.ds, prefetch_buffer_size=2
+    )
+    ds_iter = iter(prefetch_lazy_iter_ds)
+    self.assertIsInstance(ds_iter, prefetch.ThreadPrefetchDatasetIterator)
+    ds_iter = cast(prefetch.ThreadPrefetchDatasetIterator, ds_iter)
+
+    self.assertEqual(ds_iter._target_prefetch_buffer_size, 2)
+    self.assertEqual(next(ds_iter), 1)
+    while ds_iter._buffer.qsize() < 2:
+      time.sleep(0.01)
+    self.assertEqual(ds_iter._buffer.qsize(), 2)
+
+    # Setting prefetch_buffer_size to 1.
+    mock_autotune.get_value.return_value = 1
+    ds_iter._set_prefetch_buffer_size(1)
+    self.assertEqual(ds_iter._target_prefetch_buffer_size, 1)
+    self.assertEqual(next(ds_iter), 3)
+    while ds_iter._buffer.qsize() < 1:
+      time.sleep(0.01)
+    self.assertEqual(ds_iter._buffer.qsize(), 1)
+    self.assertEqual(next(ds_iter), 5)
+    while ds_iter._buffer.qsize() < 1:
+      time.sleep(0.01)
+    self.assertEqual(ds_iter._buffer.qsize(), 1)
 
   @parameterized.parameters([False, True])
   def test_checkpoint(self, warm_start: bool):

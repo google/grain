@@ -39,8 +39,14 @@ py_library(
     ],
     srcs_version = "PY3",
     data = select({
-        "@platforms//os:windows": ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.pyd"],
-        "//conditions:default": ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
+        "@platforms//os:windows": [
+            "//grain/_src/python/experimental/autotune/python:bindings.pyd",
+            "//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.pyd",
+        ],
+        "//conditions:default": [
+            "//grain/_src/python/experimental/autotune/python:bindings.so",
+            "//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so",
+        ],
     }),
     deps = [
         ":base",

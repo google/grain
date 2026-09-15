@@ -17,10 +17,7 @@ from __future__ import annotations
 import dataclasses
 
 from absl import logging
-class AutotuneParameter:
-
-  def __init__(self, *args, **kwargs):
-    raise NotImplementedError
+from grain._src.python.experimental.autotune.python.bindings import AutotuneParameter
 
 
 @dataclasses.dataclass(slots=True)

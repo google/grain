@@ -10,6 +10,7 @@ function write_to_bazelrc() {
 }
 
 main() {
+  ulimit -n 10240 || true
   # Remove .bazelrc if it already exists
   [ -e .bazelrc ] && rm .bazelrc
 
@@ -31,15 +32,22 @@ main() {
   # https://github.com/bazelbuild/bazel/issues/20838.
   write_to_bazelrc "build:macos --action_env=CC=clang"
   write_to_bazelrc "build:macos --action_env=CXX=clang++"
+  write_to_bazelrc "build:macos --action_env=MACOSX_DEPLOYMENT_TARGET=11.0"
 
   write_to_bazelrc "build --@rules_python//python/config_settings:python_version=${PYTHON_VERSION}"
   # Set platform-wise file extension for extension modules.
   case "$(uname)" in
     CYGWIN*|MINGW*|MSYS_NT*)
       INCLUDE_EXT="*.pyd"
+      write_to_bazelrc "build --cxxopt=/std:c++20 --host_cxxopt=/std:c++20"
+      write_to_bazelrc "build --cxxopt=/DNOMINMAX --host_cxxopt=/DNOMINMAX"
       ;;
     *)
       INCLUDE_EXT="*.so"
+      write_to_bazelrc "build --copt=-fvisibility=hidden --host_copt=-fvisibility=hidden"
+      write_to_bazelrc "build --cxxopt=-fvisibility=hidden --host_cxxopt=-fvisibility=hidden"
+      write_to_bazelrc "build --cxxopt=-fvisibility-inlines-hidden --host_cxxopt=-fvisibility-inlines-hidden"
+      write_to_bazelrc "build --cxxopt=-std=c++17 --host_cxxopt=-std=c++17"
       # Also reduce noise during build.
       write_to_bazelrc "build --cxxopt=-Wno-deprecated-declarations --host_cxxopt=-Wno-deprecated-declarations"
       write_to_bazelrc "build --cxxopt=-Wno-parentheses --host_cxxopt=-Wno-parentheses"
@@ -66,7 +74,7 @@ main() {
   if [ "$RUN_TESTS_WITH_BAZEL" = true ] ; then
     # To update the test requirements, run 
     # bazel run //:requirements_${PYTHON_MAJOR_VERSION}_${PYTHON_MINOR_VERSION}.update
-    bazel test --verbose_failures --test_output=errors ... --action_env PYTHON_BIN_PATH="${PYTHON_BIN}"
+    bazel test --verbose_failures --test_output=errors ... --action_env PYTHON_BIN_PATH="${PYTHON_BIN}" --action_env MACOSX_DEPLOYMENT_TARGET='11.0'
   fi
 
   DEST="${OUTPUT_DIR}"'/all_dist'

@@ -279,6 +279,9 @@ class DatasetOptions:
     min_shm_size: The minimum size below which numpy arrays will copied between
       processes rather than passed via shared memory. For smaller arrays, the
       overhead of using shared memory can be higher than the cost of copying.
+    use_tunable_interleave: If `True`, `InterleaveIterDataset` will use
+      `TunableInterleaveDatasetIterator` which supports dynamic tuning of
+      cycle length, even if autotune is not enabled.
 
   Example:
     Applying custom options to dataset transformations::
@@ -302,6 +305,7 @@ class DatasetOptions:
       ExecutionTrackingMode | _Default[ExecutionTrackingMode]
   ) = _Default(ExecutionTrackingMode.DISABLED)
   min_shm_size: int | _Default[int] = _Default(0)
+  use_tunable_interleave: bool | _Default[bool] = _Default(False)
   # Internal fields.
 
   # Names of fields which were set by the user.
@@ -388,6 +392,12 @@ class IteratorContext:
   mp_context: MultiprocessingContext = MultiprocessingContext()
   # Whether this iterator is part of a DataLoader pipeline.
   is_dataloader_pipeline: bool = False
+  autotuning_enabled: bool = False
+  autotuning_allow_unknown_nodes: bool = False
+  autotuning_warmup_state: typing.Any = None
+  autotuning_model_config_args: dict[str, typing.Any] = dataclasses.field(
+      default_factory=dict
+  )
 
   def merge(self, other: IteratorContext) -> None:
     """Merges this context with the other in place."""
@@ -400,3 +410,14 @@ class IteratorContext:
     self.is_dataloader_pipeline = (
         self.is_dataloader_pipeline or other.is_dataloader_pipeline
     )
+    self.autotuning_enabled = (
+        self.autotuning_enabled or other.autotuning_enabled
+    )
+    self.autotuning_allow_unknown_nodes = (
+        self.autotuning_allow_unknown_nodes
+        or other.autotuning_allow_unknown_nodes
+    )
+    self.autotuning_warmup_state = (
+        self.autotuning_warmup_state or other.autotuning_warmup_state
+    )
+    self.autotuning_model_config_args.update(other.autotuning_model_config_args)

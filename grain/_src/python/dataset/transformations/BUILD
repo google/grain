@@ -8,6 +8,7 @@ licenses(["notice"])
 filegroup(
     name = "core_transformations",
     srcs = [
+        "autotune.py",
         "batch.py",
         "filter.py",
         "flatmap.py",
@@ -277,6 +278,7 @@ py_test(
 py_test(
     name = "interleave_test",
     srcs = ["interleave_test.py"],
+    shard_count = 20,
     srcs_version = "PY3",
     deps = [
         ":zip",
@@ -405,6 +407,30 @@ py_test(
         "@abseil-py//absl/logging",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
+        "@pypi//numpy:pkg",
+    ],
+)
+
+py_test(
+    name = "autotune_test",
+    timeout = "long",
+    srcs = ["autotune_test.py"],
+    shard_count = 10,
+    srcs_version = "PY3",
+    data = select({
+        "@platforms//os:windows": ["//grain/_src/python/experimental/autotune/python:bindings.pyd"],
+        "//conditions:default": ["//grain/_src/python/experimental/autotune/python:bindings.so"],
+    }),
+    target_compatible_with = select({
+        "@platforms//os:windows": ["@platforms//:incompatible"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        "//grain",
+        "//grain/_src/core:tree_lib",
+        "//grain/_src/python:options",
+        "//grain/_src/python/dataset",
+        "@abseil-py//absl/testing:absltest",
         "@pypi//numpy:pkg",
     ],
 )
