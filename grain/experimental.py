@@ -13,6 +13,7 @@
 # limitations under the License.
 """Experimental Grain APIs."""
 
+from __future__ import annotations
 
 # pylint: disable=g-importing-member
 # pylint: disable=g-bad-import-order
@@ -90,6 +91,16 @@ from grain._src.python.testing.experimental import (
 
 from grain._src.python.experimental.device_put.device_put import (
     device_put,
+)
+
+from grain._src.python.dataset.transformations.autotune import (
+    autotune,
+)
+from grain._src.python.experimental.autotune.python.bindings import (
+    AutotuneModelConfig,
+    AutotuneParameter,
+    BufferRegularizationMode,
+    ConcurrencyRegularizationMode,
 )
 
 from grain._src.python.dataset.transformations.prefetch_autotune import (

@@ -106,3 +106,17 @@ List of Members
 .. autofunction:: set_next_index
 
 .. autofunction:: get_next_index
+
+.. autofunction:: autotune
+
+.. autoclass:: AutotuneModelConfig
+   :members:
+
+.. autoclass:: AutotuneParameter
+   :members:
+
+.. autoclass:: BufferRegularizationMode
+   :members:
+
+.. autoclass:: ConcurrencyRegularizationMode
+   :members:

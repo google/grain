@@ -223,6 +223,10 @@ py_library(
     name = "options",
     srcs = ["options.py"],
     srcs_version = "PY3",
+    data = select({
+        "@platforms//os:windows": ["//grain/_src/python/experimental/autotune/python:bindings.pyd"],
+        "//conditions:default": ["//grain/_src/python/experimental/autotune/python:bindings.so"],
+    }),
     deps = [
         "@abseil-py//absl/logging",
     ],

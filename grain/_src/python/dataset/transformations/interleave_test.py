@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
+import sys
 import threading
 from typing import cast
 from unittest import mock
@@ -186,6 +189,8 @@ class _InterleaveIterDatasetTestBase(parameterized.TestCase):
     )
 
   def test_with_mp_prefetch(self):
+    if sys.platform == "win32":
+      self.skipTest("mp_prefetch is not supported on Windows.")
     ds = dataset.MapDataset.range(1, 6).map(
         lambda i: dataset.MapDataset.source([i]).repeat(i).to_iter_dataset()
     )
@@ -578,6 +583,282 @@ class _InterleaveIterDatasetTestBase(parameterized.TestCase):
         ValueError, r"FilterDatasetIterator.*skipped 100\.00 %"
     ):
       list(ds_with_options2)
+
+
+class InterleaveIterDatasetTest(_InterleaveIterDatasetTestBase):
+  """Runs tests without prefetch."""
+
+  def test_example_docstring(self):
+    def make_source(start):
+      return dataset.MapDataset.range(start, start + 2).to_iter_dataset()
+
+    sources = dataset.MapDataset.source([0, 10, 20, 30]).map(make_source)
+    self.assertEqual(
+        list(sources[1]),  # pyrefly: ignore[bad-argument-type]
+        [10, 11],
+    )
+    interleaved_ds = interleave.InterleaveIterDataset(
+        sources,  # pyrefly: ignore[bad-argument-type]
+        cycle_length=2,
+    )
+    self.assertEqual(
+        list(interleaved_ds),
+        [0, 10, 1, 11, 20, 30, 21, 31],
+    )
+
+  def test_use_tunable_interleave_option(self):
+    ds = dataset.MapDataset.source([1]).to_iter_dataset()
+    ds = dataset.WithOptionsIterDataset(
+        ds, base.DatasetOptions(use_tunable_interleave=True)
+    )
+    interleave_ds = interleave.InterleaveIterDataset([ds], cycle_length=1)
+    it = interleave_ds.__iter__()
+    self.assertIsInstance(it, interleave.TunableInterleaveDatasetIterator)
+
+  def test_start_prefetch_propagates(self):
+    datasets = [
+        dataset.MapDataset.source([1, 2]).to_iter_dataset(),
+        dataset.MapDataset.source([3, 4]).to_iter_dataset(),
+    ]
+    ds = self._create_dataset(datasets, cycle_length=2)
+    ds_iter = ds.__iter__()
+
+    with mock.patch.object(
+        ds_iter._prefetch_ds_iter, "start_prefetch"
+    ) as mock_start_prefetch:
+      ds_iter.start_prefetch()
+      mock_start_prefetch.assert_called_once()
+
+      # Trigger next() to populate one active sub-iterator.
+      _ = next(ds_iter)
+      mock_start_prefetch.reset_mock()
+
+      active_its = [it for it in ds_iter._iterators_in_use if it is not None]
+      self.assertLen(active_its, 1)
+
+      with mock.patch.object(
+          active_its[0], "start_prefetch"
+      ) as mock_active_start:
+        ds_iter.start_prefetch()
+
+        # Start prefetch on both _prefetch_ds_iter and the active
+        # sub-iterator.
+        mock_start_prefetch.assert_called_once()
+        mock_active_start.assert_called_once()
+
+
+class ForcedTunableInterleaveIterDataset(interleave.InterleaveIterDataset):
+  """Dataset that forces using TunableInterleaveDatasetIterator."""
+
+  def __iter__(self) -> dataset.DatasetIterator:
+    return interleave.TunableInterleaveDatasetIterator(
+        self._datasets,
+        cycle_length=self._cycle_length,
+        num_make_iter_threads=self._num_make_iter_threads,
+        make_iter_buffer_size=self._make_iter_buffer_size,
+        iter_buffer_size=self._iter_buffer_size,
+    )
+
+
+class TunableInterleaveIterDatasetTest(_InterleaveIterDatasetTestBase):
+
+  def _create_dataset(self, *args, **kwargs):
+    return ForcedTunableInterleaveIterDataset(*args, **kwargs)
+
+  def test_set_cycle_length_resize_up(self):
+    datasets = [
+        dataset.MapDataset.range(i * 10, (i + 1) * 10).to_iter_dataset()
+        for i in range(5)
+    ]
+    ds = self._create_dataset(datasets, cycle_length=2)
+    ds_iter = cast(interleave.TunableInterleaveDatasetIterator, ds.__iter__())
+    output = [next(ds_iter) for _ in range(4)]
+    self.assertEqual(output, [0, 10, 1, 11])
+
+    ds_iter._set_cycle_length(4)
+    output.extend([next(ds_iter) for _ in range(8)])
+    # next index in cycle was 0.
+    # Slots 0, 1 had datasets 0, 1. Slots 2, 3 are now None.
+    # 1. index 0 -> 2. next_index -> 1.
+    # 2. index 1 -> 12. next_index -> 2.
+    # 3. index 2 is None. Fill from new dataset 2. -> 20. next_index -> 3.
+    # 4. index 3 is None. Fill from new dataset 3. -> 30. next_index -> 0.
+    # 5. index 0 -> 3. next_index -> 1.
+    # 6. index 1 -> 13. next_index -> 2.
+    # 7. index 2 -> 21. next_index -> 3.
+    # 8. index 3 -> 31. next_index -> 0.
+    self.assertEqual(output, [0, 10, 1, 11, 2, 12, 20, 30, 3, 13, 21, 31])
+
+  def test_set_cycle_length_resize_down(self):
+    datasets = [
+        dataset.MapDataset.range(i * 10, (i + 1) * 10).to_iter_dataset()
+        for i in range(5)
+    ]
+    ds = self._create_dataset(datasets, cycle_length=4)
+    ds_iter = cast(interleave.TunableInterleaveDatasetIterator, ds.__iter__())
+    output = [next(ds_iter) for _ in range(8)]
+    self.assertEqual(output, [0, 10, 20, 30, 1, 11, 21, 31])
+
+    ds_iter._set_cycle_length(2)
+    output.extend([next(ds_iter) for _ in range(4)])
+    # next index in cycle was 0. mod 2 = 0.
+    # 1. index 0 -> 2. next_index -> 1.
+    # 2. index 1 -> 12. next_index -> 0.
+    # 3. index 0 -> 3. next_index -> 1.
+    # 4. index 1 -> 13. next_index -> 0.
+    self.assertEqual(output, [0, 10, 20, 30, 1, 11, 21, 31, 2, 12, 3, 13])
+
+  def test_set_cycle_length_resize_up_and_down(self):
+    datasets = [
+        dataset.MapDataset.range(i * 10, (i + 1) * 10).to_iter_dataset()
+        for i in range(5)
+    ]
+    ds = self._create_dataset(datasets, cycle_length=2)
+    ds_iter = cast(interleave.TunableInterleaveDatasetIterator, ds.__iter__())
+    output = [next(ds_iter) for _ in range(4)]
+    self.assertEqual(output, [0, 10, 1, 11])
+
+    ds_iter._set_cycle_length(4)
+    output.extend([next(ds_iter) for _ in range(4)])
+    # index 0 -> 2, index 1 -> 12, index 2 -> 20, index 3 -> 30.
+    self.assertEqual(output, [0, 10, 1, 11, 2, 12, 20, 30])
+
+    ds_iter._set_cycle_length(1)
+    # All except index 0 are moved to queued. (1, 2, 3)
+    output.extend([next(ds_iter) for _ in range(3)])
+    # index 0 -> 3, 4, 5.
+    self.assertEqual(output, [0, 10, 1, 11, 2, 12, 20, 30, 3, 4, 5])
+
+    ds_iter._set_cycle_length(3)
+    # Slots 0 has dataset 0. Slots 1, 2 are None.
+    # Will fill from queued: 1, 2.
+    output.extend([next(ds_iter) for _ in range(6)])
+    # next_index was 0.
+    # 1. index 0 -> 6. next -> 1.
+    # 2. index 1 (None) -> fill with 1. -> 13. next -> 2.
+    # 3. index 2 (None) -> fill with 2. -> 21. next -> 0.
+    # 4. index 0 -> 7. next -> 1.
+    # 5. index 1 -> 14. next -> 2.
+    # 6. index 2 -> 22. next -> 0.
+    self.assertEqual(
+        output, [0, 10, 1, 11, 2, 12, 20, 30, 3, 4, 5, 6, 13, 21, 7, 14, 22]
+    )
+
+  def test_set_cycle_length_with_checkpointing(self):
+    datasets = [
+        dataset.MapDataset.range(i * 10, (i + 1) * 10).to_iter_dataset()
+        for i in range(5)
+    ]
+    ds = self._create_dataset(datasets, cycle_length=2)
+    ds_iter = cast(interleave.TunableInterleaveDatasetIterator, ds.__iter__())
+    _ = [next(ds_iter) for _ in range(4)]  # [0, 10, 1, 11]
+
+    ds_iter._set_cycle_length(4)
+    _ = [next(ds_iter) for _ in range(2)]  # [2, 12] (next_index_in_cycle is 2)
+
+    state = ds_iter.get_state()
+
+    # Continue from state
+    ds_iter2 = ds.__iter__()
+    ds_iter2.set_state(state)
+
+    output = [next(ds_iter2) for _ in range(6)]
+    # index 2 -> 20, index 3 -> 30, index 0 -> 3, index 1 -> 13, index 2 -> 21,
+    # index 3 -> 31
+    self.assertEqual(output, [20, 30, 3, 13, 21, 31])
+
+  def test_set_cycle_length_data_integrity_with_checkpointing(self):
+    # Keep track of the elements before getting the checkpoint and after
+    # restoring from the checkpoint. Each element should be seen exactly once.
+    datasets = [
+        dataset.MapDataset.range(i * 10, (i + 1) * 10).to_iter_dataset()
+        for i in range(5)
+    ]
+    all_elements = list(range(50))
+    ds = self._create_dataset(datasets, cycle_length=4)
+    ds_iter = cast(interleave.TunableInterleaveDatasetIterator, ds.__iter__())
+
+    seen_elements = []
+
+    # 1. Initial iteration (length 4)
+    for _ in range(5):
+      seen_elements.append(next(ds_iter))
+
+    # 2. Resize down (4 -> 2)
+    ds_iter._set_cycle_length(2)
+
+    # 3. Iterate some more
+    for _ in range(2):
+      seen_elements.append(next(ds_iter))
+
+    # 4. Checkpoint
+    checkpoint = ds_iter.get_state()
+
+    # 5. Stop tracking and iterate more
+    for _ in range(6):
+      _ = next(ds_iter)
+
+    # 6. Resize up (2 -> 5) and iterate more
+    ds_iter._set_cycle_length(5)
+    for _ in range(5):
+      _ = next(ds_iter)
+
+    # 7. Restore from checkpoint
+    ds_iter = cast(interleave.TunableInterleaveDatasetIterator, ds.__iter__())
+    ds_iter.set_state(checkpoint)
+
+    # 8. Iterate to end and track data again
+    for element in ds_iter:
+      seen_elements.append(element)
+
+    # 9. Verify that all elements from all datasets were seen exactly once.
+    self.assertCountEqual(seen_elements, all_elements)
+
+  def test_set_shard_state_calculates_next_index_in_datasets(self):
+    datasets = [
+        dataset.MapDataset.range(i * 10, (i + 1) * 10).to_iter_dataset()
+        for i in range(5)
+    ]
+    ds = self._create_dataset(datasets, cycle_length=2)
+    if not isinstance(ds, ForcedTunableInterleaveIterDataset):
+      self.skipTest("Only for tunable interleave.")
+
+    state = [
+        {"exhausted": 1, "state": {"next_index": 0}},
+        {"exhausted": 0, "state": {"next_index": 0}},  # Active
+        {"exhausted": 1, "state": {"next_index": 0}},
+        {"exhausted": 0, "state": {"next_index": 0}},  # Active
+        {"exhausted": 0, "state": {"next_index": 0}},  # Not started
+    ]
+
+    it = cast(interleave.TunableInterleaveDatasetIterator, ds.__iter__())
+    it.set_shard_states(state)
+
+    self.assertEqual(it._next_index_in_datasets, 4)
+
+  def test_apply_autotune_updates(self):
+    datasets = [
+        dataset.MapDataset.range(i * 10, (i + 1) * 10).to_iter_dataset()
+        for i in range(5)
+    ]
+    autotune_param = options.AutotuneParameter("cycle_length", initial_value=2)
+    ds = ForcedTunableInterleaveIterDataset(
+        datasets, cycle_length=autotune_param
+    )
+    ds_iter = cast(interleave.TunableInterleaveDatasetIterator, ds.__iter__())
+
+    self.assertEqual(ds_iter._cycle_length, 2)
+
+    # Advance iterator to trigger _apply_autotune_updates_if_present
+    next(ds_iter)
+    self.assertEqual(ds_iter._cycle_length, 2)
+
+    # Manually change the autotune parameter value
+    autotune_param.set_value(4.0)
+
+    # Next call to __next__ should apply the update
+    next(ds_iter)
+    self.assertEqual(ds_iter._cycle_length, 4)
 
 
 if __name__ == "__main__":

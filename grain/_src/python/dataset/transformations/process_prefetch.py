@@ -37,6 +37,7 @@ from grain._src.python import grain_logging
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
+from grain._src.python.dataset.transformations import autotune
 from grain._src.python.dataset.transformations import interleave
 from grain._src.python.dataset.transformations import prefetch
 from grain._src.python.ipc import queue as grain_queue
@@ -211,6 +212,9 @@ def _put_dataset_elements_in_buffer(
     start_profiling_event: synchronize.Event | None,
     stop_profiling_event: synchronize.Event | None,
     debug_flags: dict[str, Any],
+    autotune_stats_queue: queues.Queue[Any] | None = None,
+    allow_unknown_nodes: bool = False,
+    autotuning_model_config_args: dict[str, Any] | None = None,
 ):
   """Prefetches elements in a separate process."""
   global _is_in_worker_process
@@ -222,6 +226,15 @@ def _put_dataset_elements_in_buffer(
     if worker_init_fn is not None:
       worker_init_fn()
     ds = cloudpickle.loads(pickled_ds)
+    if autotune_stats_queue is not None:
+      ds = autotune.AutotuneIterDataset(
+          ds,
+          model_config=autotune.AutotuneModelConfig(
+              **autotuning_model_config_args
+          ),
+          allow_unknown_nodes=allow_unknown_nodes,
+          autotune_stats_queue=autotune_stats_queue,
+      )
     if isinstance(ds, base.SupportsSharedMemoryOutput):
       ds.enable_shared_memory_output()
     it = ds.__iter__()
@@ -388,6 +401,7 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         args=(weakref.ref(self),),
         exitpriority=1,
     )
+    self._autotune_stats_queue: queues.Queue[Any] | None = None
 
   @property
   def buffer_size(self) -> int:
@@ -445,6 +459,8 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         self._iter_parent,
         options=self._ctx.dataset_options,
     )
+    if self._ctx.autotuning_enabled:
+      self._autotune_stats_queue = self._process_ctx.Queue(5)
     self._prefetch_process = self._process_ctx.Process(
         target=_put_dataset_elements_in_buffer,
         kwargs=dict(
@@ -468,6 +484,9 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
                 # then filtered at the top level.
                 grain_py_traceback_filtering="off",
             ),
+            autotune_stats_queue=self._autotune_stats_queue,
+            allow_unknown_nodes=self._ctx.autotuning_allow_unknown_nodes,
+            autotuning_model_config_args=self._ctx.autotuning_model_config_args,
         ),
         daemon=True,
         name=f"grain-process-prefetch-{self}",

@@ -82,6 +82,7 @@ autodoc_typehints = 'description'
 autodoc_mock_imports = [
     'grain.proto.execution_summary_pb2',
     'grain._src.python.experimental.index_shuffle.python.index_shuffle_module',
+    'grain._src.python.experimental.autotune.python.bindings',
     'cloudpickle',
     'numpy',
     'orbax',

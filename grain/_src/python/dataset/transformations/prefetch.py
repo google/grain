@@ -33,6 +33,7 @@ from grain._src.python import options as grain_options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
+from grain._src.python.dataset.transformations import autotune
 from grain._src.python.dataset.transformations import filter as filter_dataset
 from grain._src.python.dataset.transformations import interleave
 from grain._src.python.dataset.transformations import source
@@ -151,10 +152,14 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._lock = threading.Lock()
     self._executor_wrapper = None
 
-    assert isinstance(read_options.num_threads, int)
-    assert isinstance(read_options.prefetch_buffer_size, int)
-    self._target_num_threads = read_options.num_threads
-    self._target_prefetch_buffer_size = read_options.prefetch_buffer_size
+    # autotune_num_threads and autotune_buffer_size are None if autotuning is
+    # not enabled for the corresponding parameter.
+    self._target_num_threads, self.autotune_num_threads = (
+        autotune.get_autotune_parameter(read_options.num_threads)
+    )
+    self._target_prefetch_buffer_size, self.autotune_buffer_size = (
+        autotune.get_autotune_parameter(read_options.prefetch_buffer_size)
+    )
 
     self._allow_nones = allow_nones
     if self._target_prefetch_buffer_size > 0 and self._target_num_threads > 0:
@@ -203,6 +208,7 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
   )
   def __next__(self) -> T:
     self._assert_not_closed()
+    self._apply_autotune_updates_if_present()
     # The time recorded here is the time spent in prefetch node to return an
     # element, including the time spent in parent node.
     timer = dataset_stats.Timer()
@@ -283,9 +289,6 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   def _set_prefetch_buffer_size(self, buffer_size: int):
     self._target_prefetch_buffer_size = buffer_size
-    # The executor is created in the constructor only if the prefetch buffer
-    # size is greater than 0. If the user changes the prefetch buffer size, we
-    # need to create or destroy the executor accordingly.
     if (
         self._target_prefetch_buffer_size > 0
         and self._target_num_threads > 0
@@ -297,14 +300,12 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
       if self._executor_wrapper:
         self._executor = self._executor_wrapper(self._executor)
     elif self._target_prefetch_buffer_size == 0 and hasattr(self, "_executor"):
-      self._executor.shutdown()
+      self._executor.shutdown(wait=False, cancel_futures=True)
       delattr(self, "_executor")
 
   def _set_num_threads(self, num_threads: int) -> None:
     self._target_num_threads = num_threads
     old_executor = None
-    # Accounts for the case where the executor does not exit. This can
-    # happen if the prefetch buffer size is set to 0.
     if hasattr(self, "_executor"):
       old_executor = self._executor
     if self._target_num_threads > 0 and self._target_prefetch_buffer_size > 0:
@@ -316,9 +317,32 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     elif hasattr(self, "_executor"):
       delattr(self, "_executor")
     if old_executor is not None:
-      # Allows the old executor to finish running the tasks it was already
-      # assigned asynchronously.
       old_executor.shutdown(wait=False)
+
+  def _apply_autotune_updates_if_present(self):
+    if self.autotune_buffer_size is not None:
+      new_buffer_size = int(round(self.autotune_buffer_size.get_value()))
+      if new_buffer_size != self._target_prefetch_buffer_size:
+        logging.vlog(
+            1,
+            "Autotune updated PrefetchDatasetIterator buffer size from %d"
+            " to %d.",
+            self._target_prefetch_buffer_size,
+            new_buffer_size,
+        )
+        self._set_prefetch_buffer_size(new_buffer_size)
+
+    if self.autotune_num_threads is not None:
+      new_num_threads = int(round(self.autotune_num_threads.get_value()))
+      if new_num_threads != self._target_num_threads:
+        logging.vlog(
+            1,
+            "Autotune updated PrefetchDatasetIterator num threads from %d"
+            " to %d.",
+            self._target_num_threads,
+            new_num_threads,
+        )
+        self._set_num_threads(new_num_threads)
 
   def _fill_buffer(self):
     while (
@@ -346,11 +370,18 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._closed = True
     # Shutdown the thread pool executor if it exists.
     if hasattr(self, "_executor"):
-      self._executor.shutdown(wait=False)
       # Cancel all pending futures in the buffer.
       while self._buffer:
         future = self._buffer.popleft()
         future.cancel()
+      self._executor.shutdown(wait=False, cancel_futures=True)
+      delattr(self, "_executor")
+
+  def __del__(self):
+    try:
+      self.close()
+    except Exception:  # pylint: disable=broad-except
+      pass
 
 
 def get_dataset_options(ds: dataset.IterDataset) -> base.DatasetOptions:
@@ -401,7 +432,9 @@ class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
         than or equal to 0. If 0, prefetching is disabled and this is a noop.
     """
     super().__init__(parent)
-    target_prefetch_buffer_size = prefetch_buffer_size
+    target_prefetch_buffer_size, _ = autotune.get_autotune_parameter(
+        prefetch_buffer_size
+    )
     if target_prefetch_buffer_size < 0:
       raise ValueError(
           "`prefetch_buffer_size` must be greater than or equal to 0, got "
@@ -443,9 +476,19 @@ def _put_iterator_elements_in_buffer(
     while not should_stop.is_set():
       element = stats.record_bytes_consumed(iterator.__next__())
       state = copy.deepcopy(iterator.get_state())
-      buffer.put((element, state, None))
+      while not should_stop.is_set():
+        try:
+          buffer.put((element, state, None), timeout=0.05)
+          break
+        except queue.Full:
+          pass
   except Exception as e:  # pylint: disable=broad-except
-    buffer.put((None, None, e))  # pyrefly: ignore[bad-argument-type]
+    while not should_stop.is_set():
+      try:
+        buffer.put((None, None, e), timeout=0.05)  # pyrefly: ignore[bad-argument-type]
+        break
+      except queue.Full:
+        pass
 
 
 class CheckpointableIterator(Iterator[T], Protocol[T]):
@@ -517,8 +560,9 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       super().__init__()
     self._maybe_nonnative_parent = parent
 
-    target_prefetch_buffer_size = prefetch_buffer_size
-    autotune_buffer_size = None
+    target_prefetch_buffer_size, autotune_buffer_size = (
+        autotune.get_autotune_parameter(prefetch_buffer_size)
+    )
 
     assert target_prefetch_buffer_size >= 0, target_prefetch_buffer_size
     self._target_prefetch_buffer_size = target_prefetch_buffer_size
@@ -573,7 +617,10 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       raise ValueError("Attempting to use a closed iterator.")
     if self._state is None:
       self._state = self._maybe_nonnative_parent.get_state()
-    if self._prefetch_thread is not None:
+    if (
+        self._prefetch_thread is not None
+        or self._target_prefetch_buffer_size == 0
+    ):
       return
 
     self._prefetch_should_stop.clear()
@@ -596,6 +643,7 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       stage_category=dataset_stats.IPL_CAT_PREFETCH
   )
   def __next__(self):
+    self._apply_autotune_updates_if_present()
 
     if self._state is None:
       self._state = self._maybe_nonnative_parent.get_state()
@@ -712,6 +760,27 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     dataset.set_next_index(self._maybe_nonnative_parent, next_index)
     self._next_index = next_index
     self._state = None
+
+  def _set_prefetch_buffer_size(self, buffer_size: int):
+    if not isinstance(self._buffer, variable_size_queue.VariableSizeQueue):
+      raise ValueError("Setting buffer size is only supported for autotune.")
+    if buffer_size == 0 and self._prefetch_thread is not None:
+      self._stop_prefetch(clear_buffer=False)
+    self._target_prefetch_buffer_size = buffer_size
+    self._buffer.set_max_size(buffer_size if buffer_size > 0 else 1)
+
+  def _apply_autotune_updates_if_present(self):
+    if self.autotune_buffer_size is not None:
+      new_buffer_size = int(round(self.autotune_buffer_size.get_value()))
+      if new_buffer_size != self._target_prefetch_buffer_size:
+        logging.vlog(
+            1,
+            "Autotune updated ThreadPrefetchDatasetIterator buffer size from %d"
+            " to %d.",
+            self._target_prefetch_buffer_size,
+            new_buffer_size,
+        )
+        self._set_prefetch_buffer_size(new_buffer_size)
 
   def __str__(self) -> str:
     return (

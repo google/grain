@@ -7,6 +7,11 @@ licenses(["notice"])
 pybind_extension(
     name = "index_shuffle_module",
     srcs = ["index_shuffle_module.cc"],
+    linkopts = select({
+        "@platforms//os:osx": ["-Wl,-exported_symbol,_PyInit_index_shuffle_module"],
+        "@platforms//os:windows": [],
+        "//conditions:default": ["-Wl,--exclude-libs,ALL"],
+    }),
     deps = ["//grain/_src/python/experimental/index_shuffle"],
 )
 
