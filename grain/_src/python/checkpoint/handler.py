@@ -161,7 +161,7 @@ class CheckpointHandler:
       state = json.loads(state)
     else:
       state = state.encode()
-    item.set_state(state)  # pyrefly: ignore[bad-argument-type]
+    item.restore_state(state)  # pyrefly: ignore[bad-argument-type]
     item.start_prefetch()
     return item
 
