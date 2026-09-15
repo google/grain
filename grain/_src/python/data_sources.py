@@ -33,6 +33,7 @@ from typing import Any, Generic, Optional, SupportsIndex, TypeVar, Union
 from absl import logging
 from etils import epath
 from grain._src.core import monitoring
+from grain._src.python.dataset import base as dataset_base
 from grain._src.python.dataset import stats as dataset_stats
 
 
@@ -49,6 +50,13 @@ else:
       PathLikeOrFileInstruction,
   )
 # pylint: enable=g-import-not-at-top, g-importing-member, g-bad-import-order
+
+try:
+  import bagz as _bagz
+
+  _HAS_BAGZ = True
+except ImportError:
+  _HAS_BAGZ = False
 
 _api_usage_counter = monitoring.Counter(
     "/grain/python/data_sources/api",
@@ -103,6 +111,63 @@ class ArrayRecordDataSource(ARDataSource):
   @property
   def paths(self) -> ArrayRecordDataSourcePaths:
     return self._paths
+
+
+BagzDataSourcePaths = Union[
+    PathLikeOrFileInstruction, Sequence[PathLikeOrFileInstruction]
+]
+
+
+class BagzDataSource(dataset_base.RandomAccessDataSource):
+  """Data source for Bagz files."""
+
+  def __init__(self, paths: BagzDataSourcePaths):
+    """Creates a new BagzDataSource object.
+
+    Args:
+      paths: A single path/FileInstruction or list of paths/FileInstructions.
+    """
+    if not _HAS_BAGZ:
+      raise RuntimeError(
+          "bagz is not installed. Please install bagz to use BagzDataSource."
+      )
+    if isinstance(paths, (list, tuple)):
+      if not paths:
+        raise ValueError("paths cannot be an empty sequence.")
+      self._path = ",".join(sorted(str(epath.Path(p)) for p in paths))
+    else:
+      self._path = str(epath.Path(paths))
+    self._len = None
+    self._reader = None
+    _api_usage_counter.Increment("BagzDataSource")
+
+  @property
+  def reader(self):
+    if self._reader is None:
+      self._reader = _bagz.Reader(self._path)
+    return self._reader
+
+  def __len__(self) -> int:
+    if self._len is None:
+      self._len = len(_bagz.Reader(self._path))
+    return self._len
+
+  @dataset_stats.trace_input_pipeline(stage_category=dataset_stats.IPL_CAT_READ)
+  def __getitem__(self, record_key: SupportsIndex) -> bytes:
+    record_key = record_key.__index__()
+    return self.reader[record_key]
+
+  def __repr__(self) -> str:
+    return f"BagzDataSource(path={self._path!r})"
+
+  def __getstate__(self):
+    state = self.__dict__.copy()
+    state["_reader"] = None
+    return state
+
+  def __setstate__(self, state):
+    self.__dict__.update(state)
+    self._reader = None
 
 
 class RangeDataSource:
