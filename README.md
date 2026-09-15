@@ -49,6 +49,45 @@ within Grain will be done on the CPU by default.
 
 - [Basic `Dataset` tutorial](https://google-grain.readthedocs.io/en/latest/tutorials/dataset_basic_tutorial.html)
 
+### Dynamic Performance Autotuning
+
+Grain supports automatic runtime tuning of worker threads and prefetch buffer
+sizes to maximize pipeline throughput within specified memory and CPU budgets:
+
+```python
+import grain.python as grain
+
+# 1. Define dataset transformation pipeline
+dataset = (
+    grain.MapDataset.range(10_000)
+    .shuffle(seed=42)
+    .map(lambda x: x + 1)
+)
+
+# 2. Configure prefetch with autotuned parameters
+read_options = grain.ReadOptions(
+    prefetch_buffer_size=grain.experimental.AutotuneParameter(
+        name="buffer_size", initial_value=2, min_value=1, max_value=64
+    ),
+    num_threads=grain.experimental.AutotuneParameter(
+        name="concurrency", initial_value=1, min_value=1, max_value=16
+    ),
+)
+dataset = dataset.to_iter_dataset(read_options)
+
+# 3. Enable online autotuning (Universal Scalability Law model)
+model_config = grain.experimental.AutotuneModelConfig(
+    ram_budget_gb=8.0,
+    warmup_steps=50,
+)
+dataset = grain.experimental.autotune(dataset, model_config=model_config)
+
+# 4. Iterate normally -- Grain dynamically optimizes parameters
+for batch in dataset:
+  # Training step.
+  pass
+```
+
 ## Citing Grain
 
 To cite this repository:
