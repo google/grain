@@ -63,6 +63,7 @@ _PROMETHEUS_ALLOWED_METRICS = {
     '/grain/python/dataset/prefetch_buffer_ready_count',
     '/grain/python/data_sources/bytes_read',
     '/grain/python/dataset/source_read_time_ns',
+    '/grain/python/dataset/source_read_time_us',
     '/grain/python/data_loader/iterator_get_next',
 }
 
@@ -433,14 +434,30 @@ _source_read_time_ns = EventMetric(
     fields=[('source', str)],
 )
 
+# Same data as `_source_read_time_ns`, but in microseconds. The nanosecond
+# buckets overflow at 4^16ns (~4s), which hides the tail of extremely slow
+# (and costly) reads; the microsecond buckets reach ~1.2h.
+_source_read_time_us = EventMetric(
+    '/grain/python/dataset/source_read_time_us',
+    metadata=Metadata(
+        description='Histogram of source read time in microseconds.',
+        units=Units.MICROSECONDS,
+    ),
+    bucketer=Bucketer.PowersOf(4.0),
+    fields=[('source', str)],
+)
+
 
 def RecordBytesReadAndLatency(
     source: str, *, num_bytes: int, latency_ns: int, num_reads: int
 ) -> None:
   """Records the number of bytes read and read latency for a Grain source."""
   _bytes_read.IncrementBy(num_bytes, source)
+  latency_ns_per_read = latency_ns / num_reads
+  latency_us_per_read = latency_ns_per_read / 1e3
   for _ in range(num_reads):
-    _source_read_time_ns.Record(latency_ns / num_reads, source)
+    _source_read_time_ns.Record(latency_ns_per_read, source)
+    _source_read_time_us.Record(latency_us_per_read, source)
 
 
 record_bytes_read_and_latency = RecordBytesReadAndLatency

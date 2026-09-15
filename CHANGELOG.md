@@ -11,6 +11,10 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     `MapDataset[int]`) in addition to a `slice` object, enabling arbitrary index
     remapping similarly to NumPy's advanced indexing.
   * Support interleaves, mixtures, and zip datasets for `ElasticIterator`
+  * Added the `/grain/python/dataset/source_read_time_us` telemetry metric,
+    recording source read latency in microseconds. The existing
+    `/grain/python/dataset/source_read_time_ns` histogram overflows at ~4s,
+    which hid the tail of very slow reads.
 
 * Breaking changes:
 

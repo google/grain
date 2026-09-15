@@ -343,6 +343,15 @@ class MonitoringTest(absltest.TestCase):
         bucketer=monitoring.Bucketer.PowersOf(4.0),
         fields=[('source', str)],
     )
+    source_read_time_us = prometheus_monitoring.EventMetric(
+        '/grain/python/dataset/source_read_time_us',
+        metadata=monitoring.Metadata(
+            description='Histogram of source read time in microseconds.',
+            units=monitoring.Units.MICROSECONDS,
+        ),
+        bucketer=monitoring.Bucketer.PowersOf(4.0),
+        fields=[('source', str)],
+    )
 
     self.enter_context(
         mock.patch.object(prometheus_monitoring, '_bytes_read', bytes_read)
@@ -352,9 +361,14 @@ class MonitoringTest(absltest.TestCase):
             prometheus_monitoring, '_source_read_time_ns', source_read_time_ns
         )
     )
+    self.enter_context(
+        mock.patch.object(
+            prometheus_monitoring, '_source_read_time_us', source_read_time_us
+        )
+    )
 
     prometheus_monitoring.record_bytes_read_and_latency(
-        'source_baz', num_bytes=1000, latency_ns=8000, num_reads=2
+        'source_baz', num_bytes=1000, latency_ns=8_000_000, num_reads=2
     )
 
     with self.subTest(name='bytes_read'):
@@ -372,13 +386,31 @@ class MonitoringTest(absltest.TestCase):
               'grain_python_dataset_source_read_time_ns_sum',
               labels={'source': 'source_baz'},
           ),
-          8000,
+          8_000_000,
       )
 
     with self.subTest(name='latency_ns_count'):
       self.assertEqual(
           prometheus_client.REGISTRY.get_sample_value(
               'grain_python_dataset_source_read_time_ns_count',
+              labels={'source': 'source_baz'},
+          ),
+          2,
+      )
+
+    with self.subTest(name='latency_us_sum'):
+      self.assertEqual(
+          prometheus_client.REGISTRY.get_sample_value(
+              'grain_python_dataset_source_read_time_us_sum',
+              labels={'source': 'source_baz'},
+          ),
+          8000,
+      )
+
+    with self.subTest(name='latency_us_count'):
+      self.assertEqual(
+          prometheus_client.REGISTRY.get_sample_value(
+              'grain_python_dataset_source_read_time_us_count',
               labels={'source': 'source_baz'},
           ),
           2,
