@@ -150,4 +150,4 @@ try:
 
     _framework = "jax"
 except ImportError as e:
-  logging.warning("Failed to load jax profiler: %s", e)
+  logging.debug("Failed to load jax profiler: %s", e)
