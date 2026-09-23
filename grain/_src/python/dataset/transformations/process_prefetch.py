@@ -131,7 +131,7 @@ def _clear_queue_and_maybe_unlink_shm(q: queues.Queue[Any]) -> int:
     try:
       shared_memory_array.unlink_shm(q.get_nowait())
       count += 1
-    except queue.Empty:
+    except (queue.Empty, OSError, ValueError, EOFError):
       return count
 
 
@@ -380,13 +380,14 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._prefetch_ds_iter = None
     self._next_index: int | None = 0
     # Ensure that the iterator is closed before the multiprocessing module
-    # attempts to terminate the worker processes to prevent process hanging
-    # issues.
+    # attempts to terminate the worker processes (and before
+    # multiprocessing.Queue's exitpriority=10 finalizer closes queue handles)
+    # to prevent process hanging issues.
     util.Finalize(
         self,
         _close_if_alive,
         args=(weakref.ref(self),),
-        exitpriority=1,
+        exitpriority=20,
     )
 
   @property
@@ -563,21 +564,23 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       self._unregister_fn()
 
     self._prefetch_should_stop.set()
-    _clear_queue_and_maybe_unlink_shm(self._buffer)
-    self._clear_set_state_queue()
-
-    # Not joining here will cause the children to be zombie after they finish.
-    # Need to join or call active_children.
-    self._prefetch_process.join(timeout=_PROCESS_KILL_TIMEOUT_S)
-
-    # In case all our attempts to terminate the system fails, we forcefully
-    # kill the child processes.
-    if self._prefetch_process.is_alive():
-      self._prefetch_process.kill()
-    else:
+    try:
       _clear_queue_and_maybe_unlink_shm(self._buffer)
-    self._prefetch_process = None
-    self._set_state_count = 0
+      self._clear_set_state_queue()
+    finally:
+      # Not joining here will cause the children to be zombie after they finish.
+      # Need to join or call active_children.
+      self._prefetch_process.join(timeout=_PROCESS_KILL_TIMEOUT_S)
+
+      # In case all our attempts to terminate the system fails, we forcefully
+      # kill the child processes.
+      if self._prefetch_process.is_alive():
+        self._prefetch_process.kill()
+        self._prefetch_process.join()
+      else:
+        _clear_queue_and_maybe_unlink_shm(self._buffer)
+      self._prefetch_process = None
+      self._set_state_count = 0
 
   def get_state(self) -> StateT:
     if self._state is not None:
