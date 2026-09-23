@@ -59,6 +59,26 @@ class VariableSizeUncappedSplitWithNoTransform(transforms.FlatMap):
     return [element] * element
 
 
+@dataclasses.dataclass(frozen=True)
+class SplitSentence(transforms.FlatMap):
+  """Splits a sentence into its words.
+
+  The transforms above emit indistinguishable copies of the parent element, so
+  they cannot tell "split 1 of element 3" apart from "split 0 of element 3".
+  Words are distinct, which is what makes a shuffle over the flattened index
+  space observable.
+
+  The fan-out is controlled by the input rather than by the transform: a
+  sentence with fewer than `max_fan_out` words leaves the remaining slots as
+  `None`.
+  """
+
+  max_fan_out: int  # pyrefly: ignore[bad-override]
+
+  def flat_map(self, sentence: str) -> list[str]:
+    return sentence.split()
+
+
 class FlatMapMapDatasetTest(absltest.TestCase):
 
   def setUp(self):
@@ -161,6 +181,82 @@ class FlatMapMapDatasetTest(absltest.TestCase):
     self.assertEqual(flatmap_map_ds[0], "hello")
     self.assertIsNone(flatmap_map_ds[2])
     self.assertEqual(flatmap_map_ds[3], "grain")
+
+  def test_random_access_flatmap_then_shuffle(self):
+    # Every sentence has exactly 2 words, so the fan-out is full and no slot is
+    # padded with `None`.
+    parent_ds = dataset.MapDataset.source(["a0 a1", "b0 b1", "c0 c1", "d0 d1"])
+    flatmap_ds = flatmap.FlatMapMapDataset(parent_ds, SplitSentence(2))
+    self.assertEqual(
+        [flatmap_ds[i] for i in range(len(flatmap_ds))],
+        ["a0", "a1", "b0", "b1", "c0", "c1", "d0", "d1"],
+    )
+
+    # The shuffle permutes the 8 flattened words rather than the 4 parent
+    # sentences: the two words of "a0 a1" end up at positions 4 and 6, and
+    # every word is still visited exactly once. The sentences are visited in
+    # the order c, d, d, b, a, c, a, b, which is the same permutation asserted
+    # by FlatMapIndexMapperTest.FlatMapThenShuffle in the C++ backend.
+    shuffled_ds = flatmap_ds.shuffle(seed=42)
+    self.assertEqual(
+        [shuffled_ds[i] for i in range(len(shuffled_ds))],
+        ["c0", "d0", "d1", "b1", "a0", "c1", "a1", "b0"],
+    )
+
+  def test_random_access_flatmap_then_shuffle_keeps_nones(self):
+    # The word count of each sentence drives the fan-out, so sentences shorter
+    # than `max_fan_out` leave the remaining slots as `None`.
+    flatmap_ds = flatmap.FlatMapMapDataset(
+        dataset.MapDataset.source(["", "b0", "c0 c1", "d0 d1 d2"]),
+        SplitSentence(3),
+    )
+    self.assertEqual(
+        [flatmap_ds[i] for i in range(len(flatmap_ds))],
+        [
+            None,
+            None,
+            None,  # "" -> no words
+            "b0",
+            None,
+            None,  # 1 word
+            "c0",
+            "c1",
+            None,  # 2 words
+            "d0",
+            "d1",
+            "d2",  # 3 words
+        ],
+    )
+
+    # The `None` padding is shuffled along with the real words, so the misses
+    # are spread through the epoch instead of clustering after each sentence.
+    shuffled_ds = flatmap_ds.shuffle(seed=42)
+    self.assertEqual(
+        [shuffled_ds[i] for i in range(len(shuffled_ds))],
+        [
+            None,
+            "c0",
+            "c1",
+            "d0",
+            None,
+            None,
+            None,
+            None,
+            None,
+            "d1",
+            "d2",
+            "b0",
+        ],
+    )
+    # Note that batch is only allowed on sequential datasets, so we call
+    # `to_iter_dataset` first. Iterating drops the `None` padding, so only the
+    # 6 real words survive and they batch evenly into 3 pairs. `batch` stacks
+    # each pair into a numpy array, hence the `tolist()`.
+    batched_ds = shuffled_ds.to_iter_dataset().batch(2)
+    self.assertEqual(
+        [batch.tolist() for batch in batched_ds],
+        [["c0", "c1"], ["d0", "d1"], ["d2", "b0"]],
+    )
 
 
 class Unbatch(transforms.FlatMap):
