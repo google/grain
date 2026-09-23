@@ -258,6 +258,104 @@ class FlatMapMapDatasetTest(absltest.TestCase):
         [["c0", "c1"], ["d0", "d1"], ["d2", "b0"]],
     )
 
+  def test_random_access_flatmap_then_shuffle_then_slice(self):
+    flatmap_ds = flatmap.FlatMapMapDataset(
+        dataset.MapDataset.source(["a0 a1", "b0 b1", "c0 c1", "d0 d1"]),
+        SplitSentence(2),
+    )
+    # The slice is applied on top of the shuffle, so it selects positions
+    # within the shuffled stream
+    #   ["c0", "d0", "d1", "b1", "a0", "c1", "a1", "b0"]
+    # rather than within the unshuffled one. These are positions 1, 2 and 3.
+    sliced_ds = flatmap_ds.shuffle(seed=42)[1:4]
+    self.assertEqual(
+        [sliced_ds[i] for i in range(len(sliced_ds))],
+        ["d0", "d1", "b1"],
+    )
+
+  def test_random_access_flatmap_then_shuffle_then_strided_slice(self):
+    flatmap_ds = flatmap.FlatMapMapDataset(
+        dataset.MapDataset.source(["a0 a1", "b0 b1", "c0 c1", "d0 d1"]),
+        SplitSentence(2),
+    )
+    # Positions 2, 4 and 6 of the shuffled stream.
+    sliced_ds = flatmap_ds.shuffle(seed=42)[2::2]
+    self.assertEqual(
+        [sliced_ds[i] for i in range(len(sliced_ds))],
+        ["d1", "a0", "a1"],
+    )
+
+  def test_random_access_flatmap_then_shuffle_then_shard(self):
+    # Sharding is a strided slice, so shuffling before sharding must still hand
+    # every word to exactly one shard. Because the shuffle permutes the
+    # flattened index space, the two words of a sentence can land in different
+    # shards: "d0" goes to shard 1 while "d1" goes to shard 0.
+    flatmap_ds = flatmap.FlatMapMapDataset(
+        dataset.MapDataset.source(["a0 a1", "b0 b1", "c0 c1", "d0 d1"]),
+        SplitSentence(2),
+    )
+    shuffled_ds = flatmap_ds.shuffle(seed=42)
+
+    shard_0 = shuffled_ds[0::2]
+    self.assertEqual(
+        [shard_0[i] for i in range(len(shard_0))],
+        ["c0", "d1", "a0", "a1"],
+    )
+
+    shard_1 = shuffled_ds[1::2]
+    self.assertEqual(
+        [shard_1[i] for i in range(len(shard_1))],
+        ["d0", "b1", "c1", "b0"],
+    )
+
+    # Together the shards cover the epoch exactly once: no word is dropped and
+    # none is served twice.
+    self.assertCountEqual(
+        list(shard_0) + list(shard_1),
+        ["a0", "a1", "b0", "b1", "c0", "c1", "d0", "d1"],
+    )
+
+  def test_random_access_slice_then_flatmap_then_shuffle(self):
+    # Here the slice is applied to the *sentences*, before the flat map, so the
+    # flattened index space only spans the sentences that survived the slice.
+    parent_ds = dataset.MapDataset.source(
+        ["z0 z1", "a0 a1", "b0 b1", "c0 c1", "d0 d1"]
+    )[1:]
+    flatmap_ds = flatmap.FlatMapMapDataset(parent_ds, SplitSentence(2))
+    self.assertLen(flatmap_ds, 8)
+
+    # Dropping the leading sentence leaves exactly the four sentences used by
+    # `test_random_access_flatmap_then_shuffle`, so the shuffled order is
+    # identical to that test: a slice below the flat map is invisible to the
+    # shuffle above it.
+    shuffled_ds = flatmap_ds.shuffle(seed=42)
+    self.assertEqual(
+        [shuffled_ds[i] for i in range(len(shuffled_ds))],
+        ["c0", "d0", "d1", "b1", "a0", "c1", "a1", "b0"],
+    )
+
+  def test_random_access_strided_slice_then_flatmap_then_shuffle(self):
+    # A strided slice of the sentences halves the flattened index space, so the
+    # shuffle permutes 4 words rather than 8.
+    parent_ds = dataset.MapDataset.source(["a0 a1", "b0 b1", "c0 c1", "d0 d1"])[
+        ::2
+    ]
+    flatmap_ds = flatmap.FlatMapMapDataset(parent_ds, SplitSentence(2))
+    self.assertEqual(
+        [flatmap_ds[i] for i in range(len(flatmap_ds))],
+        ["a0", "a1", "c0", "c1"],
+    )
+
+    # Note this uses a different seed from the tests above: over a 4-element
+    # index space `seed=42` happens to be the identity permutation, which would
+    # make for a misleading test. `seed=1` is a derangement, so every word
+    # visibly moves and the two words of a sentence are pulled apart.
+    shuffled_ds = flatmap_ds.shuffle(seed=1)
+    self.assertEqual(
+        [shuffled_ds[i] for i in range(len(shuffled_ds))],
+        ["a1", "c0", "c1", "a0"],
+    )
+
 
 class Unbatch(transforms.FlatMap):
 
