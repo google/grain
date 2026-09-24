@@ -104,6 +104,20 @@ class ShuffleMapDatasetTest(parameterized.TestCase):
     # 0 -> "c", 1 -> "d", 2 -> "e", 3 -> "b".
     self.assertEqual(list(shuffled_ds), ["c", "d", "e", "b"])
 
+  def test_slice_then_shuffle_by_index(self):
+    # Slice first to restrict elements to ["b", "c", "d", "e"], then shuffle
+    # the 4-element sliced dataset.
+    ds = dataset.MapDataset.source(["a", "b", "c", "d", "e", "f"])[1:5]
+    self.assertEqual(list(ds), ["b", "c", "d", "e"])
+    shuffled_ds = ds.shuffle(seed=1)
+    self.assertLen(shuffled_ds, 4)
+    # Seed 1 permutes 4 elements as [1, 2, 3, 0], mapping indices to:
+    # 0 -> "c", 1 -> "d", 2 -> "e", 3 -> "b".
+    self.assertEqual(shuffled_ds[0], "c")
+    self.assertEqual(shuffled_ds[1], "d")
+    self.assertEqual(shuffled_ds[2], "e")
+    self.assertEqual(shuffled_ds[3], "b")
+
 
 class WindowShuffleMapDatasetTest(absltest.TestCase):
 
