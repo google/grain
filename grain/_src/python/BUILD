@@ -36,6 +36,7 @@ py_test(
     }),
     deps = [
         ":data_sources",
+        "//grain/_src/python/dataset",
         "//grain/_src/python/dataset:base",
         "@abseil-py//absl/flags",
         "@abseil-py//absl/testing:absltest",

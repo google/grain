@@ -29,6 +29,7 @@ from etils import epath
 import multiprocessing as grain_multiprocessing
 from grain._src.python import data_sources
 from grain._src.python.dataset import base as dataset_base
+from grain._src.python.dataset import dataset
 
 FLAGS = flags.FLAGS
 
@@ -135,6 +136,18 @@ class InMemoryDataSourceTest(DataSourceTest):
 
     in_memory_ds.close()
     in_memory_ds.unlink()
+
+  def test_example_docstring(self):
+    data = [10, 20, 30, 40]
+    source = data_sources.SharedMemoryDataSource(data)
+    ds = (
+        dataset.MapDataset.source(source)  # pyrefly: ignore[bad-argument-type]
+        .map(lambda x: x * 2)
+        .to_iter_dataset()
+    )
+    self.assertEqual(list(ds), [20, 40, 60, 80])
+    source.close()
+    source.unlink()
 
 
 @absltest.skipIf(

@@ -65,7 +65,35 @@ ArrayRecordReaderOptions = dict[str, str] | None
 
 
 class ArrayRecordDataSource(ARDataSource):
-  """Data source for ArrayRecord files."""
+  """Data source for ArrayRecord files.
+
+  Reads serialized byte records from one or more ArrayRecord files or file
+  instructions with random access indexing support.
+
+  Example:
+    Writing to and reading records from an ArrayRecord file using MapDataset::
+
+      from array_record.python import array_record.python.array_record_data_source as array_record_module
+      import grain
+
+      # Write records to an ArrayRecord file.
+      writer = array_record_module.ArrayRecordWriter(
+          "/tmp/data.array_record", "group_size:1"
+      )
+      writer.write(b"example_byte_record_1")
+      writer.write(b"example_byte_record_2")
+      writer.close()
+
+      # Load the ArrayRecord file using ArrayRecordDataSource.
+      source = grain.sources.ArrayRecordDataSource(
+          ["/tmp/data.array_record"]
+      )
+      parent_ds = grain.MapDataset.source(source)
+      print(len(parent_ds))
+      # 2
+      print(parent_ds[0])
+      # b'example_byte_record_1'
+  """
 
   def __init__(
       self,
@@ -82,6 +110,10 @@ class ArrayRecordDataSource(ARDataSource):
         example, {index_storage_option:"in_memory"} stores the reader indices in
         memory versus {index_storage_option:"offloaded"} stores the indices on
         disk to save memory usage.
+
+    Raises:
+      ValueError: If `reader_options` is provided but not supported by the
+        underlying `ArrayRecord` reader version.
     """
     array_record_signature = inspect.signature(ARDataSource.__init__)
     if "reader_options" in array_record_signature.parameters:
@@ -106,9 +138,43 @@ class ArrayRecordDataSource(ARDataSource):
 
 
 class RangeDataSource:
-  """Range data source, similar to python range() function."""
+  """Range data source, similar to python range() function.
+
+  Produces a sequence of integers from `start` to `stop` with a given `step`,
+  supporting efficient indexing and length lookup without loading data into
+  memory.
+
+  Example:
+    Creating a range data source and accessing elements::
+
+      import grain
+
+      # Create a range data source
+      source = grain.sources.RangeDataSource(start=0, stop=10, step=2)
+
+      # Create a MapDataset from the source
+      ds = grain.MapDataset.source(source)
+
+      # Print the length of the dataset
+      print(len(ds))
+      # 5
+
+      # Print all elements in the dataset
+      print(list(ds))
+      # [0, 2, 4, 6, 8]
+  """
 
   def __init__(self, start: int, stop: int, step: int):
+    """Initializes the RangeDataSource.
+
+    Args:
+      start: The start value of the range sequence.
+      stop: The stop boundary of the range sequence (exclusive).
+      step: The step increment between consecutive elements. Must not be 0.
+
+    Raises:
+      AssertionError: If `step` is 0 or if computed length is negative.
+    """
     assert step != 0, "step can't be zero."
     self._start = start
     self._stop = stop
@@ -142,6 +208,32 @@ class SharedMemoryDataSource(shared_memory.ShareableList):
     10M bytes each), bytes (less than 10M bytes each), and None built-in data
     types. It also notably differs from the built-in list type in that these
     lists can not change their overall length (i.e. no append, insert, etc.)
+
+  Example:
+    Sharing an in-memory sequence across multiple worker processes without
+    duplicating memory::
+
+      import grain
+
+      # Store the sequence in OS shared memory. Unlike a standard Python list
+      # that is copied into every worker process when pickled, only a
+      # lightweight shared memory reference is sent to each worker.
+      data = [10, 20, 30, 40]
+      source = grain.sources.SharedMemoryDataSource(data)
+
+      # Read and transform elements across 2 worker processes.
+      ds = (
+          grain.MapDataset.source(source)
+          .map(lambda x: x * 2)
+          .to_iter_dataset()
+      )
+
+      print(list(ds))
+      # [20, 40, 60, 80]
+
+      # Clean up the shared memory block when done.
+      source.close()
+      source.unlink()
   """
 
   def __init__(
@@ -155,6 +247,9 @@ class SharedMemoryDataSource(shared_memory.ShareableList):
     Args:
       elements: The elements for the sharable list.
       name: The name of the datasource.
+
+    Raises:
+      ValueError: If neither `elements` nor `name` is provided.
     """
     if elements is not None:
       logging.info(
