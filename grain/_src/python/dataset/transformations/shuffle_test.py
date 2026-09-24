@@ -118,6 +118,17 @@ class ShuffleMapDatasetTest(parameterized.TestCase):
     self.assertEqual(shuffled_ds[2], "e")
     self.assertEqual(shuffled_ds[3], "b")
 
+  def test_slice_then_shuffle_twice(self):
+    # Slice first to restrict elements to ["b", "c", "d", "e"], then shuffle
+    # the 4-element sliced dataset.
+    ds = dataset.MapDataset.source(["a", "b", "c", "d", "e", "f"])[1:5]
+    self.assertEqual(list(ds), ["b", "c", "d", "e"])
+    shuffled_ds = ds.shuffle(seed=1)
+    shuffled_ds = shuffled_ds.shuffle(seed=10)
+    self.assertLen(shuffled_ds, 4)
+    self.assertEqual(shuffled_ds[0], "e")
+    self.assertEqual(shuffled_ds[3], "b")
+
 
 class WindowShuffleMapDatasetTest(absltest.TestCase):
 
