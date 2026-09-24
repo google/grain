@@ -29,6 +29,7 @@ py_test(
     srcs = ["batch_test.py"],
     srcs_version = "PY3",
     deps = [
+        "//grain/_src/core:config",
         "//grain/_src/core:sharding",
         "//grain/_src/core:transforms",
         "//grain/_src/core:tree_lib",

@@ -36,26 +36,24 @@ import numpy as np
 T = TypeVar("T")
 S = TypeVar("S")
 
-
-@functools.cache
-def _is_batch_map_pushdown_experiment_enabled() -> bool:
-  return False
+_BATCH_MAP_PUSHDOWN_EXPERIMENT = "EXP_batch_map_pushdown"
+_PARALLEL_BATCH_EXPERIMENT = "EXP_parallel_batch"
 
 
-def _is_parallel_batch_experiment_enabled():
+def _is_experiment_enrolled(experiment_name: str) -> bool:
   return False
 
 
 # The threshold (in bytes) for falling back to the serial `np.stack`  batching
 # implementation. If the batch has a smaller size than this threshold, the
 # serial `np.stack` implementation will be used instead even if the parallel
-# batching experiment is enabled.
+# batching experiment is enrolled.
 _PARALLEL_BATCHING_MIN_TOTAL_BYTES = 4 * 1024 * 1024
 
 # The threshold (in elements) for falling back to the serial `np.stack` batching
 # implementation. If the number of elements to be batched is smaller than this
 # threshold, the serial `np.stack` implementation will be used instead even if
-# the parallel batching experiment is enabled.
+# the parallel batching experiment is enrolled.
 _PARALLEL_BATCHING_MIN_BATCH_SIZE = 4
 
 
@@ -78,7 +76,7 @@ class _MakeBatchParallel:
   arbitrarily nested data structures.
 
   Note: This is an experimental feature and is only active when the
-   'EXP_parallel_batch' experiment is enabled in the Grain configuration.
+   'EXP_parallel_batch' experiment is enrolled in the Grain configuration.
   """
 
   def __init__(self):
@@ -438,8 +436,8 @@ class BatchMapDataset(dataset.MapDataset[T]):
 
   def _get_parent_items(self, items):
     # Leverage batch pushdown API to retrieve multiple items at once if the
-    # experiment is enabled.
-    if _is_batch_map_pushdown_experiment_enabled():
+    # experiment is enrolled.
+    if _is_experiment_enrolled(_BATCH_MAP_PUSHDOWN_EXPERIMENT):
       return self._parent._getitems(list(items))  # pylint: disable=protected-access
     return [self._parent[i] for i in items]
 
@@ -523,10 +521,15 @@ class BatchIterDataset(dataset.IterDataset[T]):
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
     self._batch_fn = make_batch if batch_fn is None else batch_fn  # pyrefly: ignore[invalid-type-var]
+    # `_is_experiment_enrolled()` also records the eligibility signal for
+    # `EXP_parallel_batch`, so it must stay last in this short-circuited chain:
+    # only pipelines that pass the eligibility checks (batch_fn is None,
+    # batch_size >= _PARALLEL_BATCHING_MIN_BATCH_SIZE) can be affected by the
+    # experiment and should be counted.
     if (
-        _is_parallel_batch_experiment_enabled()
-        and batch_fn is None
+        batch_fn is None
         and batch_size >= _PARALLEL_BATCHING_MIN_BATCH_SIZE
+        and _is_experiment_enrolled(_PARALLEL_BATCH_EXPERIMENT)
     ):
       self._batch_fn = _MakeBatchParallel()
 

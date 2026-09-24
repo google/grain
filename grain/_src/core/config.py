@@ -18,6 +18,7 @@ Config options can be set via flags starting with '--grain_' or by calling
 """
 
 import functools
+import threading
 from typing import Any
 
 from absl import flags
