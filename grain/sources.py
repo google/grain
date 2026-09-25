@@ -25,6 +25,7 @@
 #    all supported format dependencies.
 from grain._src.python.data_sources import (
     ArrayRecordDataSource,
+    BagzDataSource,
     SharedMemoryDataSource,
     RangeDataSource,
 )
