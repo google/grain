@@ -61,11 +61,40 @@ class MapWithIndex(abc.ABC):
 
   Implementations should be threadsafe since they are often executed in
   parallel.
+
+  Example:
+    Applying a transformation that pairs each element with its index::
+
+      import grain
+
+      # Define a custom transform that inherits from MapWithIndex and implements
+      # the map_with_index method.
+      class AddIndex(grain.transforms.MapWithIndex):
+        def map_with_index(self, index: int, element: int) -> tuple[int, int]:
+          return index + element * 10
+
+      # Create a parent dataset.
+      parent_ds = grain.MapDataset.range(3)
+      print(list(parent_ds))
+      # [0, 1, 2]
+
+      # Apply the MapWithIndex transformation to the parent dataset.
+      transformed_ds = parent_ds.map_with_index(AddIndex())
+      print(list(transformed_ds))
+      # [0, 11, 22]
   """
 
   @abc.abstractmethod
   def map_with_index(self, index: int, element):
-    """Maps a single element with its index."""
+    """Maps a single element with its index.
+
+    Args:
+      index: The zero-based index of the element within the dataset.
+      element: The input element to transform.
+
+    Returns:
+      The transformed output element.
+    """
 
 
 class TfRandomMap(abc.ABC):
@@ -84,11 +113,38 @@ class Filter(abc.ABC):
 
   Implementations should be threadsafe since they are often executed in
   parallel.
+
+  Example:
+    Filtering out odd numbers from a dataset::
+
+      import grain
+
+      # Define a filter class that keeps only even numbers.
+      class KeepEven(grain.transforms.Filter):
+        def filter(self, element: int) -> bool:
+          return element % 2 == 0
+
+      # Create a parent dataset.
+      parent_ds = grain.MapDataset.range(10)
+      print(list(parent_ds))
+      # [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+      # Apply the filter transform.
+      transformed_ds = parent_ds.filter(KeepEven())
+      print(list(transformed_ds))
+      # [0, 2, 4, 6, 8]
   """
 
   @abc.abstractmethod
   def filter(self, element) -> bool:
-    """Filters a single element; returns True if the element should be kept."""
+    """Filters a single element; returns True if the element should be kept.
+
+    Args:
+      element: The input element to evaluate.
+
+    Returns:
+      `True` if the element should be kept in the pipeline, `False` otherwise.
+    """
 
 
 class FlatMap(abc.ABC):
@@ -117,6 +173,11 @@ class FlatMap(abc.ABC):
 
 @dataclasses.dataclass(frozen=True)
 class Batch:
+  """Transformation that groups consecutive elements into batches.
+
+  Refer to :func:`grain.MapDataset.batch` or :func:`grain.IterDataset.batch`
+  documentation for more details.
+  """
   batch_size: int
   drop_remainder: bool = False
   batch_fn: Callable[[Sequence[Any]], Any] | None = None

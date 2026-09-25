@@ -17,6 +17,7 @@ import platform
 from absl.testing import absltest
 from absl.testing import parameterized
 from grain._src.core import transforms
+from grain._src.python.dataset import dataset
 
 
 class _TestFilter(transforms.Filter):
@@ -78,6 +79,34 @@ class GetPrettyTransformNameTest(parameterized.TestCase):
     self.assertIn(
         expected_substring, transforms.get_pretty_transform_name(transform)
     )
+
+
+class MapwithIndexTest(parameterized.TestCase):
+
+  def test_docstring_example(self):
+    class AddIndex(transforms.MapWithIndex):
+
+      def map_with_index(self, index: int, element: int) -> int:
+        return index + element * 10
+
+    parent_ds = dataset.MapDataset.range(3)
+    self.assertEqual(list(parent_ds), [0, 1, 2])
+    transformed_ds = parent_ds.map_with_index(AddIndex())
+    self.assertEqual(list(transformed_ds), [0, 11, 22])
+
+
+class FilterTest(parameterized.TestCase):
+
+  def test_docstring_example(self):
+    class KeepEven(transforms.Filter):
+
+      def filter(self, element: int) -> bool:
+        return element % 2 == 0
+
+    parent_ds = dataset.MapDataset.range(10)
+    self.assertEqual(list(parent_ds), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+    transformed_ds = parent_ds.filter(KeepEven())
+    self.assertEqual(list(transformed_ds), [0, 2, 4, 6, 8])
 
 
 if __name__ == "__main__":
