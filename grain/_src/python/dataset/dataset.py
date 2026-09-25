@@ -1796,8 +1796,8 @@ def traceback_filter_mode() -> str:
   return grain_config.config.get_or_default("py_traceback_filtering")
 
 
-def is_thread_prefetch_injection_enabled() -> bool:
-  """Returns whether thread prefetch injection experiment is enabled."""
+def is_thread_prefetch_injection_enrolled() -> bool:
+  """Returns whether thread prefetch injection experiment is enrolled."""
   return False
 
 
@@ -1814,12 +1814,21 @@ class _OutputIterDataset(IterDataset[T]):
     from grain._src.python.dataset.transformations import process_prefetch
     # pylint: enable=g-import-not-at-top
     iterator = self._parent.__iter__()
+    is_dataloader_pipeline = getattr(
+        getattr(iterator, "_ctx", None), "is_dataloader_pipeline", False
+    )  # pylint: disable=protected-access
     if (
-        is_thread_prefetch_injection_enabled()
-        and not iterator._ctx.is_dataloader_pipeline  # pylint: disable=protected-access
+        not is_dataloader_pipeline
         and not process_prefetch.is_in_worker_process()
     ):
-      if not prefetch.is_prefetch_iterator(iterator):
+      # `is_thread_prefetch_injection_enrolled()` also records the eligibility
+      # signal for `EXP_thread_prefetch_injection`, so it must stay last in this
+      # conditional chain: only pipelines that pass the eligibility checks can
+      # be affected by the experiment and should be counted.
+      if (
+          not prefetch.is_prefetch_iterator(iterator)
+          and is_thread_prefetch_injection_enrolled()
+      ):
         try:
           iterator = prefetch.ThreadPrefetchDatasetIterator(iterator, 1)
         except AttributeError:
