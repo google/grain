@@ -37,11 +37,38 @@ class Map(abc.ABC):
 
   Implementations should be threadsafe since they are often executed in
   parallel.
+
+  Example:
+    Applying a custom map transformation to increment each element::
+
+      import grain
+
+      # Define a custom map transformation to add one to each element.
+      class AddOne(grain.transforms.Map):
+        def map(self, element: int) -> int:
+          return element + 1
+
+      # Create a parent dataset.
+      parent_ds = grain.MapDataset.range(5)
+      print(list(parent_ds))
+      # [0, 1, 2, 3, 4]
+
+      # Apply the map transformation.
+      transformed_ds = parent_ds.map(AddOne())
+      print(list(transformed_ds))
+      # [1, 2, 3, 4, 5]
   """
 
   @abc.abstractmethod
   def map(self, element):
-    """Maps a single element."""
+    """Maps a single element.
+
+    Args:
+      element: The input element to transform.
+
+    Returns:
+      The transformed output element.
+    """
 
 
 class RandomMap(abc.ABC):
@@ -49,11 +76,41 @@ class RandomMap(abc.ABC):
 
   Implementations should be threadsafe since they are often executed in
   parallel.
+
+  Example:
+    Applying a random map transformation to add noise::
+
+      import grain
+      import numpy as np
+
+      # Define a custom random map transformation to add random offset.
+      class AddRandomOffset(grain.transforms.RandomMap):
+        def random_map(self, element: int, rng: np.random.Generator) -> int:
+          return element + int(rng.integers(0, 10))
+
+      # Create a parent dataset and seed it for deterministic results.
+      parent_ds = grain.MapDataset.range(5).seed(42)
+      print(list(parent_ds))
+      # [0, 1, 2, 3, 4]
+
+      # Apply the random map transformation.
+      transformed_ds = parent_ds.random_map(AddRandomOffset())
+      print(list(transformed_ds))
+      # [2, 5, 5, 4, 9]
   """
 
   @abc.abstractmethod
   def random_map(self, element, rng: np.random.Generator):
-    """Maps a single element."""
+    """Maps a single element using a random number generator.
+
+    Args:
+      element: The input element to transform.
+      rng: A NumPy random generator initialized deterministically for this
+        element.
+
+    Returns:
+      The randomly transformed output element.
+    """
 
 
 class MapWithIndex(abc.ABC):

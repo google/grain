@@ -109,5 +109,31 @@ class FilterTest(parameterized.TestCase):
     self.assertEqual(list(transformed_ds), [0, 2, 4, 6, 8])
 
 
+class MapandRandomMapTest(parameterized.TestCase):
+
+  def test_map_docstring_example(self):
+
+    class AddOne(transforms.Map):
+
+      def map(self, element: int) -> int:
+        return element + 1
+
+    parent_ds = dataset.MapDataset.range(5)
+    self.assertEqual(list(parent_ds), [0, 1, 2, 3, 4])
+    transformed_ds = parent_ds.map(AddOne())
+    self.assertEqual(list(transformed_ds), [1, 2, 3, 4, 5])
+
+  def test_random_map_docstring_example(self):
+    class AddRandomOffset(transforms.RandomMap):
+
+      def random_map(self, element: int, rng) -> int:
+        return element + int(rng.integers(0, 10))
+
+    parent_ds = dataset.MapDataset.range(5).seed(42)
+    self.assertEqual(list(parent_ds), [0, 1, 2, 3, 4])
+    transformed_ds = parent_ds.random_map(AddRandomOffset())
+    self.assertEqual(list(transformed_ds), [2, 5, 5, 4, 9])
+
+
 if __name__ == "__main__":
   absltest.main()
