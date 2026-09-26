@@ -142,6 +142,23 @@ class SharedMemoryArrayTest(parameterized.TestCase):
     with self.assertRaises(FileNotFoundError):
       _ = shared_memory.SharedMemory(name=metadata.name, create=False)
 
+  def test_del_after_module_globals_cleared(self):
+    # During interpreter shutdown, module-level names may be set to None.
+    # `__del__` must not depend on them, otherwise it raises a spurious
+    # AttributeError that clutters the shutdown logs. See issue #398.
+    SharedMemoryArray._disable_async_del()
+    data = np.array([[1, 2], [3, 4]], dtype=np.int32)
+    shm_array = SharedMemoryArray(data.shape, data.dtype)
+    shm_array.unlink_on_del()
+    metadata = shm_array.metadata
+    with mock.patch.object(shared_memory_array, "mmap", None):
+      with mock.patch.object(shared_memory_array, "shared_memory", None):
+        with mock.patch.object(shared_memory_array, "SharedMemoryArray", None):
+          with mock.patch.object(shared_memory_array, "_del_shm", None):
+            del shm_array
+    with self.assertRaises(FileNotFoundError):
+      _ = shared_memory.SharedMemory(name=metadata.name, create=False)
+
   def test_del_many_async(self):
     SharedMemoryArray._disable_async_del()
     SharedMemoryArray.enable_async_del(
