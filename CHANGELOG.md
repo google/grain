@@ -25,6 +25,9 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * Fixes reference cycle in BatchMapDataset.
   * Fixes start_prefetch not starting for sub-iterators of InterleaveDatasetIterator.
   * Logs missing optional profiler dependencies at DEBUG instead of WARNING to avoid unnecessary stderr warnings.
+  * `WindowShuffleIterDataset` were generating different sequence than
+    `WindowShuffleMapDataset`. Now a new option `reverse=False` allows to
+    generate an equivalent sequence (backward compatibility is preserved).
 
 ## Grain 0.2.18 (June 17, 2026)
 
