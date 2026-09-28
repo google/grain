@@ -1186,6 +1186,17 @@ class DatasetTest(parameterized.TestCase):
     ds = ds.to_iter_dataset()
     test_util.assert_equal_output_after_checkpoint(ds)
 
+  def test_dataset_iterator_example_docstring(self):
+    iter_ds = dataset.MapDataset.range(10).batch(2).to_iter_dataset()
+    ds_iter = iter(iter_ds)
+    self.assertIsInstance(ds_iter, dataset.DatasetIterator)
+    np.testing.assert_array_equal(next(ds_iter), [0, 1])
+    save_state = ds_iter.get_state()
+    np.testing.assert_array_equal(next(ds_iter), [2, 3])
+    np.testing.assert_array_equal(next(ds_iter), [4, 5])
+    ds_iter.set_state(save_state)
+    np.testing.assert_array_equal(next(ds_iter), [2, 3])
+
   def test_pipe(self):
     ds = dataset.MapDataset.range(10)
     outputs = ds.pipe(lambda self, *args, **kwargs: (args, kwargs), 1, 2, x=3)

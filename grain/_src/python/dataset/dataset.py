@@ -1455,10 +1455,46 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
 
 
 class DatasetIterator(Iterator[T], abc.ABC):
-  """``IterDataset`` iterator.
+  """Stateful iterator over an ``IterDataset``.
+
+  A ``DatasetIterator`` is typically obtained by calling ``iter()`` on an
+  ``IterDataset``. Its state can be saved and restored to support
+  checkpointing.
 
   NOTE: The methods are assumed to be thread-unsafe. Please ensure only a single
   thread can access a ``DatasetIterator`` instance.
+
+  Example:
+    Iterating through a pipeline, checkpointing mid-stream state, and cleaning
+    up resources::
+
+      import grain
+
+      # 1. Build an IterDataset pipeline and create a DatasetIterator
+      iter_ds = grain.MapDataset.range(10).batch(2).to_iter_dataset()
+      ds_iter = iter(iter_ds)
+      assert isinstance(ds_iter, grain.DatasetIterator)
+
+      # 2. Consume the first batch and snapshot the iterator state
+      print(f"Batch 0: {next(ds_iter)}")
+      # Batch 0: [0 1]
+      saved_state = ds_iter.get_state()
+
+      # 3. Advance the iterator further
+      print(f"Batch 1: {next(ds_iter)}")
+      # Batch 1: [2 3]
+
+      # 4. Advance the iterator further
+      print(f"Batch 2: {next(ds_iter)})
+      # Batch 2: [4 5]
+
+      # 5. Restore the saved state to replay from Batch 1
+      ds_iter.set_state(saved_state)
+      print(f"Replayed Batch 1: {next(ds_iter)}")
+      # Replayed Batch 1: [2 3]
+
+      # 5. Explicitly close the iterator when done
+      ds_iter.close()
   """
 
   # Whether this transformation mutates parent elements. This does not affect
@@ -1469,6 +1505,11 @@ class DatasetIterator(Iterator[T], abc.ABC):
       self,
       parents: DatasetIterator | Sequence[DatasetIterator] = (),
   ):
+    """Initializes a DatasetIterator.
+
+    Args:
+        parents: The parent iterator or sequence of parent iterators.
+    """
     super().__init__()
     if isinstance(parents, DatasetIterator):
       self._parents = (parents,)
@@ -1495,6 +1536,7 @@ class DatasetIterator(Iterator[T], abc.ABC):
     return self._parents[0]
 
   def __iter__(self) -> DatasetIterator[T]:
+    """Returns the iterator instance itself."""
     return self
 
   # __next__ abstract method since we inherit from Iterator[T].
@@ -1514,11 +1556,28 @@ class DatasetIterator(Iterator[T], abc.ABC):
     produce state values that support shapes and types, e.g. using ``np.int64``
     instead of ``int``. The standard library iterators are not currently
     compliant with this recommendation.
+
+    Users can also use :py:class:`grain.checkpoint.CheckpointSave` (which
+    calls this function) to save the model and the iterator in a bundle when
+    using Orbax.
     """
 
   @abc.abstractmethod
   def set_state(self, state: dict[str, Any]) -> None:
-    """Sets the current state of the iterator."""
+    """Sets the current state of the iterator.
+
+    Restores the internal execution state of this iterator and its parent
+    iterators in-place, allowing iteration to resume from the exact step where
+    ``get_state()`` was called without re-creating the iterator.
+
+    Users can also use :py:class:`grain.checkpoint.CheckpointRestore` (which
+    calls this function) to restore the model and the iterator in a bundle when
+    using Orbax.
+
+    Args:
+      state: A dictionary containing the serialized iterator state previously
+        produced by ``get_state()``.
+    """
 
   ### BEGIN Orbax checkpointing API.
   # See orbax.checkpoint.v1.handlers.StatefulCheckpointable for more details.
