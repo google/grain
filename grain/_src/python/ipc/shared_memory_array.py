@@ -24,6 +24,7 @@ from multiprocessing import shared_memory
 import threading
 from typing import Any, Iterable
 
+from absl import logging
 from grain._src.core import tree_lib
 import numpy as np
 import numpy.typing as npt
@@ -31,21 +32,41 @@ import numpy.typing as npt
 
 @dataclasses.dataclass(slots=True, frozen=True)
 class SharedMemoryArrayMetadata:
+  """Metadata for a SharedMemoryArray."""
+
   name: str
   shape: Iterable[int]
   dtype: npt.DTypeLike
 
   def close_and_unlink_shm(self) -> None:
-    """Closes and unlinks the shared memory referred to by this instance."""
-    shm = shared_memory.SharedMemory(self.name)
-    shm.close()
-    shm.unlink()
+    """Closes and unlinks the shared memory. No-op if already unlinked."""
+    try:
+      shm = shared_memory.SharedMemory(self.name)
+    except FileNotFoundError:
+      # Each block has a single owner, so this signals an anomaly; don't fail
+      # cleanup over it.
+      logging.log_first_n(
+          logging.WARNING,
+          "Shared memory %s was already unlinked.",
+          5,
+          self.name,
+      )
+      return
+    _del_shm(shm, unlink=True)
 
 
 def _del_shm(shm: shared_memory.SharedMemory, unlink: bool) -> None:
   shm.close()
   if unlink:
-    shm.unlink()
+    try:
+      shm.unlink()
+    except FileNotFoundError:
+      logging.log_first_n(
+          logging.WARNING,
+          "Shared memory %s was already unlinked.",
+          5,
+          shm.name,
+      )
 
 
 class SharedMemoryArray(np.ndarray):
@@ -53,11 +74,16 @@ class SharedMemoryArray(np.ndarray):
 
   This should be used in combination with Python multiprocessing.
   Compared with the normal NumPy ndarray it avoids expensive serialization
-  when sending the array to another Python process (on the same machine).
-  It also doesn't require a copy on the receiving side.
+  when sending a root array to another Python process (on the same machine).
+  It also doesn't require a copy on the receiving side. Views/slices of a
+  SharedMemoryArray do not carry offset or stride metadata and are therefore
+  serialized by value as standard NumPy ndarrays (or copied to a new shared
+  memory block by `copy_to_shm`).
 
-  The last processes using the array must call unlink_on_del()! Otherwise
-  the memory will not be freed.
+  Exactly one owning process (typically the consumer opening the array via
+  `open_from_shm`) must call `unlink_on_del()` on the root array, or call
+  `metadata.close_and_unlink_shm()`. Otherwise the shared memory block will not
+  be freed.
   """
 
   _lock: threading.Lock = threading.Lock()
@@ -125,6 +151,10 @@ class SharedMemoryArray(np.ndarray):
     return obj
 
   def __reduce_ex__(self, protocol):
+    if not isinstance(self.base, mmap.mmap):
+      # A view (slice) of a shared memory array does not carry offset/strides in
+      # `(shm, shape, dtype)`. Pickle it by value as a plain ndarray instead.
+      return self.view(np.ndarray).__reduce_ex__(protocol)
     # For out-of-band pickling we don't need a PickleBuffer because the
     # `SharedMemory` class automatically pickles itself using only its name
     return self.from_shared_memory, (self.shm, self.shape, self.dtype)
@@ -164,9 +194,11 @@ class SharedMemoryArray(np.ndarray):
       shm: shared_memory.SharedMemory,
       unlink: bool,
   ) -> None:
-    _del_shm(shm, unlink)
-    assert cls._outstanding_del_requests is not None
-    cls._outstanding_del_requests.release()
+    try:
+      _del_shm(shm, unlink)
+    finally:
+      assert cls._outstanding_del_requests is not None
+      cls._outstanding_del_requests.release()
 
   def unlink_on_del(self) -> None:
     """Mark this object responsible for unlinking the shared memory."""
@@ -196,16 +228,27 @@ class SharedMemoryArray(np.ndarray):
 
 def _copy_leaf_to_shm(leaf: Any, min_size: int = 0) -> Any:
   """Copies `leaf` to shared memory if it's a big enough numpy array."""
-  if isinstance(leaf, SharedMemoryArray):
-    return leaf.metadata
+  if not isinstance(leaf, np.ndarray):
+    return leaf
+
+  # Root SharedMemoryArrays have leaf.base == mmap.mmap, whereas views/slices
+  # have leaf.base pointing to the parent ndarray.
   if (
-      not isinstance(leaf, np.ndarray)
-      or leaf.dtype.hasobject
+      isinstance(leaf, SharedMemoryArray)
+      and isinstance(leaf.base, mmap.mmap)
+      and not leaf._unlink_on_del  # pylint: disable=protected-access
+  ):
+    return leaf.metadata
+
+  if (
+      leaf.dtype.hasobject
       or not leaf.flags.c_contiguous
-      or math.prod(leaf.shape) == 0
+      or leaf.nbytes == 0
       or leaf.nbytes < min_size
   ):
-    return leaf
+    return (
+        leaf.view(np.ndarray) if isinstance(leaf, SharedMemoryArray) else leaf
+    )
 
   shared_memory_arr = SharedMemoryArray(leaf.shape, leaf.dtype)
   np.copyto(shared_memory_arr, leaf, casting="no")
@@ -213,7 +256,21 @@ def _copy_leaf_to_shm(leaf: Any, min_size: int = 0) -> Any:
 
 
 def copy_to_shm(struct: Any, min_size: int = 0) -> Any:
-  """Copies leaf ndarrays of the structure to shared memory."""
+  """Copies leaf ndarrays of the structure to shared memory.
+
+  Root `SharedMemoryArray` leaves not marked with `unlink_on_del()` are handed
+  over without a copy, and the caller must not modify them afterwards. Arrays
+  marked with `unlink_on_del()` remain owned by the caller and are copied.
+
+  Args:
+    struct: The structure whose leaf ndarrays to copy.
+    min_size: Arrays smaller than this many bytes are not copied.
+
+  Returns:
+    The structure with leaf ndarrays in shared memory replaced by their
+    `SharedMemoryArrayMetadata`. It must be passed to `open_from_shm` or
+    `unlink_shm` to free the shared memory.
+  """
   return tree_lib.map_structure(
       functools.partial(_copy_leaf_to_shm, min_size=min_size), struct
   )
