@@ -15,7 +15,7 @@ import portpicker
 def _worker_main(worker_init_fn: bytes):
   """Helper function to start a profiler server in a subprocess."""
   worker_init_fn = cloudpickle.loads(worker_init_fn)
-  worker_init_fn()
+  worker_init_fn()  # pyrefly: ignore[not-callable]
   time.sleep(10)
 
 

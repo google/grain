@@ -572,8 +572,8 @@ class DataLoaderIterator(collections.abc.Iterator[_T]):
     """
     state = json.loads(state.decode())
     if self._validate_state:
-      self._data_loader._validate_state(state)  # pylint: disable=protected-access
-    self._iterator.set_state(state)
+      self._data_loader._validate_state(state)  # pylint: disable=protected-access  # pyrefly: ignore[bad-argument-type]
+    self._iterator.set_state(state)  # pyrefly: ignore[bad-argument-type]
 
   def start_prefetch(self):
     """Starts processing elements asynchronously in the background.
