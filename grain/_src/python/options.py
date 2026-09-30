@@ -30,9 +30,28 @@ class ReadOptions:
   These settings configure a single Python process. Each process uses separate
   threads and buffer for reading and processing data.
 
-  Example: With ReadOptions.num_threads=8 and
-  MultiprocessingOptions.num_workers=10 there will be 80 threads reading the
-  data (8 threads in each of 10 Python processes).
+  Example:
+    With `ReadOptions.num_threads=8`, there will be 8 threads reading the data::
+
+      import grain
+
+      # Create a source with 4 elements.
+      source = grain.sources.RangeDataSource(0, 4, 1)
+
+      # Configure reading options for each Python process.
+      read_options = grain.ReadOptions(
+          num_threads=8,
+          prefetch_buffer_size=100,
+      )
+
+      # Use the read options to create an iterator dataset.
+      ds = (
+          grain.MapDataset.source(source)
+          .to_iter_dataset(read_options=read_options)
+          .batch(2)
+      )
+      print(list(ds))
+      # [array([0, 1]), array([2, 3])]
 
   Attributes:
     num_threads: Number of threads reading from the DataSource in parallel. If
@@ -85,6 +104,31 @@ class ReadOptions:
 @dataclasses.dataclass(slots=True)
 class MultiprocessingOptions:
   """Options for using Python multiprocessing.
+
+  Example:
+    With `MultiprocessingOptions.num_workers=2`, there will be 2 worker
+    processes::
+
+      import grain
+
+      # Create a source with 4 elements.
+      source = grain.sources.RangeDataSource(0, 4, 1)
+
+      # Configure multiprocessing options.
+      multiprocessing_options = grain.MultiprocessingOptions(
+          num_workers=2,
+          per_worker_buffer_size=10,
+      )
+
+      # Use the multiprocessing options to create an iterator dataset.
+      ds = (
+          grain.MapDataset.source(source)
+          .to_iter_dataset()
+          .batch(2)
+          .mp_prefetch(multiprocessing_options)
+      )
+      print(list(ds))
+      # [SharedMemoryArray([0, 2]), SharedMemoryArray([1, 3])]
 
   Attributes:
     num_workers: Number of Python worker processes. More processes can speed up
