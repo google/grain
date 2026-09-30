@@ -29,7 +29,7 @@ single_version_override(
     version = "28.3",
 )
 
-bazel_dep(name = "rules_cc", version = "0.1.5")
+bazel_dep(name = "rules_cc", version = "0.2.17")
 bazel_dep(name = "pybind11_bazel", version = "2.12.0")
 bazel_dep(name = "abseil-py", version = "2.1.0")
 bazel_dep(name = "abseil-cpp", version = "20240722.0")
