@@ -132,6 +132,21 @@ class ArrayRecordDataSource(ARDataSource):
   def __getitem__(self, record_key: SupportsIndex) -> bytes:
     return super().__getitem__(record_key)
 
+  # IMPORTANT: Do not remove `_getitems` (batched read pushdown via
+  # `SupportsBatchedReadRandomAccessDataSource`) while GCS readahead
+  # (`--array_record_gcs_readahead_buffer_size_bytes`) is enabled in
+  # `ARDataSource`. On workloads with large shards (shard_size > readahead
+  # buffer size), multi-threaded prefetching without batched read pushdown
+  # calls `__getitem__` one record at a time, causing concurrent threads reading
+  # different batch offsets from the same shard to evict each other's readahead
+  # buffer in `_BoundedReaderPool`. Batched read pushdown ensures a single
+  # `super().__getitems__(record_keys)` call holds the pooled reader across the
+  # entire batch of records for a shard and consumes the readahead buffer before
+  # returning the reader to the pool.
+  @dataset_stats.trace_input_pipeline(stage_category=dataset_stats.IPL_CAT_READ)
+  def _getitems(self, record_keys: Sequence[SupportsIndex]) -> Sequence[bytes]:
+    return super().__getitems__(record_keys)
+
   @property
   def paths(self) -> ArrayRecordDataSourcePaths:
     return self._paths

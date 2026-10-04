@@ -116,6 +116,7 @@ class RandomAccessDataSource(Protocol[T]):
     """
 
 
+@typing.runtime_checkable
 class SupportsBatchedReadRandomAccessDataSource(
     RandomAccessDataSource[T], Protocol[T]
 ):

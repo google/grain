@@ -34,6 +34,17 @@ from grain._src.python.dataset import dataset
 FLAGS = flags.FLAGS
 
 
+def setup_module():
+  # Set the path to test data when run via pytest.
+  # When run via bazel, FLAGS.test_srcdir is set from the
+  # BUILD file, see args = ["--test_srcdir=grain/_src/python"]
+  # in grain/_src/python/BUILD
+  import grain  # pylint: disable=g-import-not-at-top
+
+  srcdir = pathlib.Path(grain.__file__).parents[0] / "_src" / "python"
+  FLAGS["test_srcdir"].parse(str(srcdir))
+
+
 @dataclasses.dataclass
 class DummyFileInstruction:
   filename: str
@@ -47,6 +58,7 @@ class DataSourceTest(parameterized.TestCase):
   def setUp(self):
     super().setUp()
     self.testdata_dir = pathlib.Path(FLAGS.test_srcdir)
+    self.testdata_dir /= "testdata"
 
 
 class RangeDataSourceTest(DataSourceTest):
@@ -159,6 +171,17 @@ class ArrayRecordDataSourceTest(DataSourceTest):
     assert issubclass(
         data_sources.ArrayRecordDataSource, dataset_base.RandomAccessDataSource
     )
+
+  def test_array_record_supports_batched_read_protocol(self):
+    paths = [
+        str(self.testdata_dir / "digits.array_record-00000-of-00002"),
+        str(self.testdata_dir / "digits.array_record-00001-of-00002"),
+    ]
+    source = data_sources.ArrayRecordDataSource(paths)
+    self.assertIsInstance(
+        source, dataset_base.SupportsBatchedReadRandomAccessDataSource
+    )
+    self.assertEqual(source._getitems([0, 2, 5, 9]), [b"0", b"2", b"5", b"9"])
 
   def test_array_record_source_empty_sequence(self):
     with self.assertRaises(ValueError):
