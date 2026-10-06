@@ -1,3 +1,4 @@
+import platform
 from unittest import mock
 
 from absl import logging
@@ -59,6 +60,7 @@ class ReadOptionsTest(absltest.TestCase):
       mock_warning.assert_not_called()
 
 
+@absltest.skipIf(platform.system() == "Windows", "Timeouts on Windows.")
 class MultiprocessingOptionsTest(absltest.TestCase):
 
   def test_example_docstring(self):
