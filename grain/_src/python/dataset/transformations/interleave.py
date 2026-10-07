@@ -100,6 +100,9 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     self._started = True
     timer = stats.Timer()
     _ = self._stats  # eagerly initialize stats
+    # Snapshots and restores can materialize children without starting them.
+    # Start all active children before waiting for the selected child.
+    self.start_prefetch()
     while True:
       if iterator_to_use := self._iterators_in_use[self._next_index_in_cycle]:
         try:
