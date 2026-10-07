@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import threading
 from typing import cast
 from absl.testing import absltest
 from absl.testing import flagsaver
@@ -95,6 +96,74 @@ class _IteratorIdIterDataset(dataset.IterDataset):
 
   def __iter__(self) -> dataset.DatasetIterator:
     return _IteratorIdDatasetIterator(self._parent.__iter__())
+
+
+class InterleavePrefetchStartupTest(parameterized.TestCase):
+  """Snapshot and restore must preserve concurrent lane startup and order."""
+
+  @parameterized.product(
+      debug=(False, True),
+      resume=("snapshot", "zero_buffer", "live", "fresh"),
+  )
+  def test_starts_all_lanes_before_waiting(self, debug, resume):
+    started = [threading.Event() for _ in range(3)]
+    for event in started:
+      event.set()
+
+    def read(value):
+      started[value // 100].set()
+      for event in started:
+        self.assertTrue(
+            event.wait(timeout=5),
+            "interleave waited for one lane before starting all lanes",
+        )
+      return value
+
+    def make_iterator():
+      shards = [
+          dataset.MapDataset.range(lane * 100, lane * 100 + 20)
+          .to_iter_dataset(
+              options.ReadOptions(num_threads=0, prefetch_buffer_size=0)
+          )
+          .map(read)
+          for lane in range(3)
+      ]
+      ds = interleave.InterleaveIterDataset(
+          shards,
+          cycle_length=3,
+          num_make_iter_threads=3,
+          make_iter_buffer_size=3,
+          iter_buffer_size=2,
+      )
+      if resume == "zero_buffer":
+        ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=0)
+      return iter(ds)
+
+    expected = [lane * 100 + offset for offset in range(20) for lane in range(3)]
+    with flagsaver.flagsaver(grain_py_debug_mode=debug):
+      iterator = make_iterator()
+      try:
+        offset = 0
+        if resume in ("live", "fresh"):
+          offset = 5
+          for _ in range(offset):
+            next(iterator)
+          state = iterator.get_state()
+          if resume == "fresh":
+            iterator.close()
+            iterator = make_iterator()
+          iterator.set_state(state)
+        else:
+          iterator.get_state()
+        for event in started:
+          event.clear()
+        self.assertEqual(
+            [next(iterator) for _ in range(12)], expected[offset : offset + 12]
+        )
+      finally:
+        for event in started:
+          event.set()
+        iterator.close()
 
 
 @absltest.skipThisClass("Base class")
