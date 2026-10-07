@@ -402,9 +402,11 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
   @stats.record_next_duration_if_output
   @stats.trace_input_pipeline_next(stage_category=stats.IPL_CAT_PREPROCESSING)
   def __next__(self):
+    timer = stats.Timer()
     if self._packed_elements:
       self._state.elements_from_buffer_after_checkpoint += 1
-      return self._stats.record_output_spec(self._packed_elements.popleft())
+      with self._stats.record_self_time(offset_ns=timer.value()):
+        return self._stats.record_output_spec(self._packed_elements.popleft())
     if self._stop_iteration:
       raise StopIteration()
 
@@ -480,7 +482,8 @@ class _ConcatThenSplitDatasetIterator(dataset.DatasetIterator):
 
     if self._packed_elements:
       self._state.elements_from_buffer_after_checkpoint += 1
-      return self._stats.record_output_spec(self._packed_elements.popleft())
+      with self._stats.record_self_time(offset_ns=timer.value()):
+        return self._stats.record_output_spec(self._packed_elements.popleft())
 
     # Buffers are empty. Good time to checkpoint again.
     self._state = self._checkpoint()
