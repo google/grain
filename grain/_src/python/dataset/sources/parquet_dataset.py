@@ -22,7 +22,7 @@ from grain._src.python.dataset.transformations import interleave
 
 # lazy import for pyarrow
 with epy.lazy_imports():
-  import pyarrow.parquet as pq  # pylint: disable=g-import-not-at-top
+  import pyarrow.parquet as pq  # pylint: disable=g-import-not-at-top  # pyrefly: ignore[missing-import]
 
 
 T = TypeVar("T")
