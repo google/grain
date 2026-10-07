@@ -165,13 +165,9 @@ class SelectionMapTest(absltest.TestCase):
     )
     for index_type in (np.int32, np.uint32, np.int64):
       index = index_type(3)
-      # pytype: disable=wrong-arg-types
-      # pytype: disable=unsupported-operands
-      input_index, mapped_index = selection_map[index]
+      input_index, mapped_index = selection_map[index]  # pyrefly: ignore[bad-index]
       self.assertEqual(input_index, 1)
       self.assertEqual(mapped_index, 1)
-      # pytype: enable=unsupported-operands
-      # pytype: enable=wrong-arg-types
 
 
 class MixedMapDatasetTest(parameterized.TestCase):
@@ -474,7 +470,7 @@ class MixedMapDatasetTest(parameterized.TestCase):
     )
     for dtype in [np.int32, np.uint32, np.int64]:
       index = dtype(5)
-      self.assertEqual(mixed_lzds[index], 5)  # pytype: disable=unsupported-operands,wrong-arg-types
+      self.assertEqual(mixed_lzds[index], 5)
 
 
 class MixedIterDatasetTest(absltest.TestCase):
@@ -608,11 +604,11 @@ class MixedIterDatasetTest(absltest.TestCase):
     checkpoints = []
 
     for _ in range(max_steps):
-      checkpoints.append(ds_iter.get_state())  # pytype: disable=attribute-error
+      checkpoints.append(ds_iter.get_state())
       values_without_interruption.append(next(ds_iter))
 
     for starting_step in [0, 1, 5, 8]:
-      ds_iter.set_state(checkpoints[starting_step])  # pytype: disable=attribute-error
+      ds_iter.set_state(checkpoints[starting_step])
       for i in range(starting_step, max_steps):
         np.testing.assert_array_equal(
             next(ds_iter), values_without_interruption[i]
@@ -766,13 +762,13 @@ class MixedIterDatasetTest(absltest.TestCase):
     self.assertEqual(next(it), 2)
     self.assertEqual(next(it), 12)
 
-    shard_states = it.get_shard_states()  # pytype: disable=attribute-error
+    shard_states = it.get_shard_states()  # pyrefly: ignore[missing-attribute]
     self.assertLen(shard_states, 2)
     self.assertLen(shard_states[0]["parent_states"], 2)
     self.assertLen(shard_states[1]["parent_states"], 2)
 
     it2 = mix_ds.__iter__()
-    it2.set_shard_states(shard_states)  # pytype: disable=attribute-error
+    it2.set_shard_states(shard_states)  # pyrefly: ignore[missing-attribute]
     self.assertEqual(next(it2), 4)
     self.assertEqual(next(it2), 14)
 
@@ -853,7 +849,7 @@ class ConcatenateLazyMapTest(absltest.TestCase):
     # Prevents regression of xid/273443246
     for dtype in [np.int32, np.uint32, np.int64]:
       index = dtype(3)
-      self.assertEqual(selection_map[index], (1, 1))  # pytype: disable=unsupported-operands,wrong-arg-types
+      self.assertEqual(selection_map[index], (1, 1))  # pyrefly: ignore[bad-index]
 
 
 if __name__ == "__main__":

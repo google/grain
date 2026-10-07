@@ -81,7 +81,7 @@ class ShuffleMapDatasetTest(parameterized.TestCase):
     for dtype in [np.int32, np.uint32, np.int64]:
       index = dtype(5)
       # Should not raise OverflowError when computing modulo 2**32
-      _ = ds._shuffled_index(index)  # pytype: disable=wrong-arg-types
+      _ = ds._shuffled_index(index)  # pyrefly: ignore[bad-argument-type]
 
   def test_cross_version_determinism(self):
     # This test validates shuffle determinism across different versions of
@@ -250,7 +250,7 @@ class WindowShuffleMapDatasetTest(absltest.TestCase):
     # Prevents regression of xid/273443246
     for dtype in [np.int32, np.uint32, np.int64]:
       index = dtype(5)
-      _ = ds._shuffled_index(index)  # pytype: disable=wrong-arg-types
+      _ = ds._shuffled_index(index)  # pyrefly: ignore[bad-argument-type]
 
 
 class WindowShuffleInterDatasetTest(parameterized.TestCase):

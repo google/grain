@@ -539,7 +539,6 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
           variable_size_queue.VariableSizeQueue | queue.Queue[BufferElementT]
       ) = queue.Queue(maxsize=self._target_prefetch_buffer_size)
 
-  # pytype: disable=attribute-error
   # pylint: disable=protected-access
 
   def _initialize_stats(
@@ -557,10 +556,9 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   @functools.cached_property
   def _stats(self):
     return self._initialize_stats(
-        self._ctx.dataset_options.execution_tracking_mode
+        self._ctx.dataset_options.execution_tracking_mode  # pyrefly: ignore[bad-argument-type]
     )
 
-  # pytype: enable=attribute-error
   # pylint: enable=protected-access
 
   def start_prefetch(self):
@@ -653,7 +651,7 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     else:
       assert isinstance(self._buffer, variable_size_queue.VariableSizeQueue)
       # Increase the buffer size by 1 to unblock the producer.
-      self._buffer.set_max_size(self._target_prefetch_buffer_size + 1)  # pytype: disable=attribute-error
+      self._buffer.set_max_size(self._target_prefetch_buffer_size + 1)
 
     if not sys.is_finalizing():
       # Joining the worker thread is not necessary when the Python interpreter

@@ -241,11 +241,11 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
     values_without_interruption = []
     checkpoints = []
     for _ in range(max_steps):
-      checkpoints.append(ds_iter.get_state())  # pytype: disable=attribute-error
+      checkpoints.append(ds_iter.get_state())
       values_without_interruption.append(next(ds_iter))
 
     for starting_step in [0, 1, 5, 12, 18]:
-      ds_iter.set_state(checkpoints[starting_step])  # pytype: disable=attribute-error
+      ds_iter.set_state(checkpoints[starting_step])
       for i in range(starting_step, max_steps):
         value = next(ds_iter)
         self.assertEqual(value, values_without_interruption[i])
@@ -258,7 +258,7 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
         f'Checkpoint `next_index` {next_index} is out of range for dataset of'
         ' length 20.',
     ):
-      ds_iter.set_state({'next_index': next_index})  # pytype: disable=attribute-error
+      ds_iter.set_state({'next_index': next_index})
 
   def test_filter_all_elements_warns(self):
     ds = (
@@ -405,7 +405,7 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
       it.start_prefetch()
     # Check that the buffer was filled before we start processing elements.
     if num_threads > 0:
-      self.assertNotEmpty(it._buffer)  # pytype: disable=attribute-error
+      self.assertNotEmpty(it._buffer)  # pyrefly: ignore[missing-attribute]
 
     self.assertEqual(list(it), list(range(10)))
 
@@ -677,7 +677,7 @@ class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
       for _ in range(5):
         _ = next(it)
       if close:
-        it.close()  # pytype: disable=attribute-error
+        it.close()
 
   @absltest.skipIf(platform.system() == 'Darwin', 'Fails on macos-14 runner.')
   @parameterized.parameters([True, False])

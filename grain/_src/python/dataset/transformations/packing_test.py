@@ -49,7 +49,7 @@ class _PackedBatchSizeBytesTestMixin:
       iterator = iterator._parent
     # 2*10*8 (values) + 2*10*4 (segment_ids) + 2*10*4 (positions) + 2*8
     # (first_free_cell) = 160 + 80 + 80 + 16 = 336
-    self.assertEqual(iterator.get_packed_batch_size_bytes(), 336)  # pytype: disable=attribute-error
+    self.assertEqual(iterator.get_packed_batch_size_bytes(), 336)  # pyrefly: ignore[missing-attribute]
 
   def test_get_packed_batch_size_bytes_before_next(self):
     ds = source.SourceMapDataset([  # pyrefly: ignore[bad-argument-type]
@@ -66,7 +66,7 @@ class _PackedBatchSizeBytesTestMixin:
     while not isinstance(iterator, packing.PackingDatasetIterator):
       iterator = iterator._parent
     # Check size before calling next()
-    self.assertRaises(ValueError, iterator.get_packed_batch_size_bytes)  # pytype: disable=attribute-error
+    self.assertRaises(ValueError, iterator.get_packed_batch_size_bytes)  # pyrefly: ignore[missing-attribute]
 
 
 class FirstFitPackIterDatasetTest(

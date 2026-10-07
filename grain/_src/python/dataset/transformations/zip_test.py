@@ -296,11 +296,11 @@ class ZipIterDatasetTest(parameterized.TestCase):
     self.assertEqual(next(it), (0, 10))
     self.assertEqual(next(it), (2, 12))
 
-    shard_states = it.get_shard_states()  # pytype: disable=attribute-error
+    shard_states = it.get_shard_states()  # pyrefly: ignore[missing-attribute]
     self.assertLen(shard_states, 2)
 
     it2 = zipped_ds.__iter__()
-    it2.set_shard_states(shard_states)  # pytype: disable=attribute-error
+    it2.set_shard_states(shard_states)  # pyrefly: ignore[missing-attribute]
     self.assertEqual(next(it2), (4, 14))
 
   def test_get_set_shard_states_nested(self):
@@ -348,11 +348,11 @@ class ZipIterDatasetTest(parameterized.TestCase):
     self.assertEqual(next(it), (0, 10))
     self.assertEqual(next(it), (2, 12))
 
-    shard_states = it.get_shard_states()  # pytype: disable=attribute-error
+    shard_states = it.get_shard_states()  # pyrefly: ignore[missing-attribute]
     self.assertLen(shard_states, 2)
 
     it2 = zipped_ds.__iter__()
-    it2.set_shard_states(shard_states)  # pytype: disable=attribute-error
+    it2.set_shard_states(shard_states)  # pyrefly: ignore[missing-attribute]
     self.assertEqual(next(it2), (4, 14))
 
   def test_empty_parents(self):
@@ -385,7 +385,7 @@ class ZipIterDatasetTest(parameterized.TestCase):
     with self.assertRaisesRegex(
         ValueError, "does not support elastic resizing"
     ):
-      it.get_shard_states()  # pytype: disable=attribute-error
+      it.get_shard_states()  # pyrefly: ignore[missing-attribute]
 
   def test_get_shard_states_mismatched_shard_counts(self):
     class DummyElasticDataset(dataset.IterDataset):
@@ -425,7 +425,7 @@ class ZipIterDatasetTest(parameterized.TestCase):
     with self.assertRaisesWithLiteralMatch(
         ValueError, "All parents must have the same number of shards."
     ):
-      it.get_shard_states()  # pytype: disable=attribute-error
+      it.get_shard_states()  # pyrefly: ignore[missing-attribute]
 
   def test_set_shard_states_empty(self):
     ds1 = [
@@ -434,7 +434,7 @@ class ZipIterDatasetTest(parameterized.TestCase):
     interleave_ds1 = interleave.InterleaveIterDataset(ds1, cycle_length=2)
     zipped_ds = zip_ds.ZipIterDataset([interleave_ds1, interleave_ds1])
     it = iter(zipped_ds)
-    it.set_shard_states([])  # pytype: disable=attribute-error
+    it.set_shard_states([])  # pyrefly: ignore[missing-attribute]
 
   def test_str(self):
     ds = zip_ds.ZipIterDataset(

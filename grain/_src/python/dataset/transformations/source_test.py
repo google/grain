@@ -59,10 +59,8 @@ class SourceMapDatasetTest(absltest.TestCase):
     self._batched_read_data_source = (
         _MySupportsBatchedReadRandomAccessDataSource([1, 2, 3, 4, 5])
     )
-    self._lazy_dataset_source = source.SourceMapDataset(  # pytype: disable=wrong-arg-types
-        self._data_source
-    )
-    self._batched_read_lazy_dataset_source = source.SourceMapDataset(  # pytype: disable=wrong-arg-types
+    self._lazy_dataset_source = source.SourceMapDataset(self._data_source)
+    self._batched_read_lazy_dataset_source = source.SourceMapDataset(
         self._batched_read_data_source
     )
 

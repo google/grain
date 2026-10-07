@@ -246,7 +246,7 @@ def _put_dataset_elements_in_buffer(
             new_state_or_index = set_state_queue.get()
             parent_exhausted = False
         if new_state_or_index is not None:
-          if not grain_queue.add_element_to_queue(  # pytype: disable=wrong-arg-types
+          if not grain_queue.add_element_to_queue(
               (_SetStateIsDone(), None, None, None, None),
               buffer,  # pyrefly: ignore[bad-argument-type]
               should_stop.is_set,
@@ -266,7 +266,7 @@ def _put_dataset_elements_in_buffer(
       try:
         element = next(it)
       except Exception as e:  # pylint: disable=broad-except
-        grain_queue.add_element_to_queue(  # pytype: disable=wrong-arg-types
+        grain_queue.add_element_to_queue(
             (
                 None,
                 None,
@@ -289,7 +289,7 @@ def _put_dataset_elements_in_buffer(
         it._stats.record_bytes_produced(element)  # pylint: disable=protected-access
       if next_index is not None:
         next_index += 1
-      if not grain_queue.add_element_to_queue(  # pytype: disable=wrong-arg-types
+      if not grain_queue.add_element_to_queue(
           (element, it.get_state(), next_index, None, None),
           buffer,  # pyrefly: ignore[bad-argument-type]
           should_stop.is_set,
@@ -301,7 +301,7 @@ def _put_dataset_elements_in_buffer(
   except Exception as e:  # pylint: disable=broad-except
     _clear_queue_and_maybe_unlink_shm(buffer)
     _clear_queue_and_maybe_unlink_shm(set_state_queue)
-    grain_queue.add_element_to_queue(  # pytype: disable=wrong-arg-types
+    grain_queue.add_element_to_queue(
         (
             None,
             None,
@@ -401,7 +401,6 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   def buffer_size(self) -> int:
     return self._buffer_size
 
-  # pytype: disable=attribute-error
   # pylint: disable=protected-access
   def _initialize_stats(
       self, execution_tracking_mode: base.ExecutionTrackingMode
@@ -431,10 +430,9 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
   @functools.cached_property
   def _stats(self):
     return self._initialize_stats(
-        self._ctx.dataset_options.execution_tracking_mode
+        self._ctx.dataset_options.execution_tracking_mode  # pyrefly: ignore[bad-argument-type]
     )
 
-  # pytype: enable=attribute-error
   # pylint: disable=protected-access
 
   def start_prefetch(self) -> None:
@@ -675,7 +673,7 @@ class _LazyWorkerSliceIterDataset(dataset.IterDataset[T]):
   def __iter__(self) -> dataset.DatasetIterator[T]:
     if not _is_in_worker_process:
       return self._parent.__iter__()
-    dataset.set_slice(self._parent, self._slice, self._sequential_slice)  # pyrefly: ignore[bad-argument-type]
+    dataset.set_slice(self._parent, self._slice, self._sequential_slice)
     return self._parent.__iter__()
 
   @property
