@@ -105,7 +105,7 @@ def even_split(num_examples: int, options: ShardOptions) -> tuple[int, int]:
 
 def get_process_index_and_count():
   try:
-    import jax  # pylint:disable=g-import-not-at-top  # pyrefly: ignore[missing-import]
+    import jax  # pylint:disable=g-import-not-at-top  # pytype:disable=import-error
 
     return jax.process_index(), jax.process_count()
   except ImportError:

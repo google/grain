@@ -451,7 +451,7 @@ class DataLoader:
   @functools.cached_property
   def _global_num_workers(self):
     """Returns the number of workers across all data shards."""
-    return self._local_num_workers * self._shard_options.shard_count  # pyrefly: ignore[missing-attribute]
+    return self._local_num_workers * self._shard_options.shard_count  # pytype: disable=attribute-error
 
   def _create_dataset(self) -> dataset.IterDataset:
     """Returns the dataset for this data loader."""

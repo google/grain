@@ -37,16 +37,20 @@ class VariableSizeMultiprocessingQueue(queues.Queue):
     self._pending_shrink = ctx.Value("i", 0, lock=False)
 
   def __getstate__(self):
+    # pytype: disable=attribute-error
     context.assert_spawning(self)
     return cast(tuple, queues.Queue.__getstate__(self)) + (  # pylint: disable=g-bare-generic
         self._resize_lock,
         self._max_size_val,
         self._pending_shrink,
     )
+    # pytype: enable=attribute-error
 
   def __setstate__(self, state):
+    # pytype: disable=attribute-error
     queues.Queue.__setstate__(self, state[:-3])
     self._resize_lock, self._max_size_val, self._pending_shrink = state[-3:]
+    # pytype: enable=attribute-error
 
   def set_max_size(self, max_size: int):
     """Sets the maximum size of the queue.
@@ -78,26 +82,28 @@ class VariableSizeMultiprocessingQueue(queues.Queue):
 
   def get(self, block: bool = True, timeout: float | None = None):
     """Gets an item from the queue, similar to `queue.Queue.get`."""
-    if self._closed:  # pyrefly: ignore[missing-attribute]
+    # pytype: disable=attribute-error
+    if self._closed:
       raise ValueError(f"Queue {self!r} is closed")
     if block and timeout is None:
-      with self._rlock:  # pyrefly: ignore[missing-attribute]
-        res = self._recv_bytes()  # pyrefly: ignore[missing-attribute]
+      with self._rlock:
+        res = self._recv_bytes()
     else:
       if block:
-        deadline = time.time() + timeout  # pyrefly: ignore[unsupported-operation]
-      if not self._rlock.acquire(block, timeout):  # pyrefly: ignore[missing-attribute]
+        deadline = time.time() + timeout
+      if not self._rlock.acquire(block, timeout):
         raise queue.Empty
       try:
         if block:
-          timeout = deadline - time.time()  # pyrefly: ignore[unbound-name]
-          if not self._poll(timeout):  # pyrefly: ignore[missing-attribute]
+          timeout = deadline - time.time()
+          if not self._poll(timeout):
             raise queue.Empty
-        elif not self._poll():  # pyrefly: ignore[missing-attribute]
+        elif not self._poll():
           raise queue.Empty
-        res = self._recv_bytes()  # pyrefly: ignore[missing-attribute]
+        res = self._recv_bytes()
       finally:
-        self._rlock.release()  # pyrefly: ignore[missing-attribute]
+        self._rlock.release()
+    # pytype: enable=attribute-error
     with self._resize_lock:
       if self._pending_shrink.value > 0:
         self._pending_shrink.value -= 1
