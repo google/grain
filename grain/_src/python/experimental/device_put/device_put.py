@@ -42,7 +42,7 @@ def device_put(
   """
   ds = ThreadPrefetchIterDataset(ds, prefetch_buffer_size=cpu_buffer_size)
   # May raise ImportError if jax is not linked.
-  import jax  # pylint:disable=g-import-not-at-top  # pytype:disable=import-error
+  import jax  # pylint:disable=g-import-not-at-top  # pyrefly: ignore[missing-import]
 
   ds = ds.map(lambda x: jax.device_put(x, device))
   ds = ThreadPrefetchIterDataset(ds, prefetch_buffer_size=device_buffer_size)

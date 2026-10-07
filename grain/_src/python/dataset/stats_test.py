@@ -300,9 +300,9 @@ class DebugModeStatsTest(absltest.TestCase):
     reported_self_time = 0
 
     def mock_report(node):
-      while node._self_times_buffer:  # pytype: disable=attribute-error
+      while node._self_times_buffer:
         nonlocal reported_self_time
-        reported_self_time += node._self_times_buffer.pop().duration_ns  # pytype: disable=attribute-error
+        reported_self_time += node._self_times_buffer.pop().duration_ns
       for p in node._parents:
         p.report()
 
@@ -543,7 +543,7 @@ class GraphModeStatsTest(absltest.TestCase):
     )
 
   def _assert_visualization(self, ds, expected):
-    result = ds._stats._visualize_dataset_graph()  # pytype: disable=attribute-error
+    result = ds._stats._visualize_dataset_graph()
     # Remove line number from the result to make test less brittle.
     result = re.sub(r".py:\d+", ".py:XXX", result)
     self.assertStartsWith(result, expected)

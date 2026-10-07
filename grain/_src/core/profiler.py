@@ -123,8 +123,8 @@ def get_worker_init_fn(port: int) -> Callable[[], None]:
 
 try:
   if _framework == _NO_FRAMEWORK:
-    from jax import profiler  # pylint: disable=g-import-not-at-top  # pytype: disable=import-error
-    from jax._src.lib import jaxlib_extension_version  # pylint: disable=g-import-not-at-top  # pytype: disable=import-error
+    from jax import profiler  # pylint: disable=g-import-not-at-top  # pyrefly: ignore[missing-import]
+    from jax._src.lib import jaxlib_extension_version  # pylint: disable=g-import-not-at-top  # pyrefly: ignore[missing-import]
 
     TraceAnnotation = profiler.TraceAnnotation
     is_enabled = profiler.TraceAnnotation.is_enabled

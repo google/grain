@@ -265,7 +265,7 @@ class DatasetTest(parameterized.TestCase):
     self.assertEqual(list(ds2), [10, 11, 12])
     selected_ds = dataset.MapDataset.select_from_datasets(
         [ds1, ds2],
-        AlternatingMap(),  # pyrefly: ignore[bad-arg-type]
+        AlternatingMap(),
     )
     self.assertEqual(list(selected_ds), [0, 10, 1, 11, 2, 12])
 
@@ -932,9 +932,9 @@ class DatasetTest(parameterized.TestCase):
         .seed(seed)
         .random_map(AddRandomInteger())
     )
-    map_seed1 = ds._seed  # pytype: disable=attribute-error
+    map_seed1 = ds._seed  # pyrefly: ignore[missing-attribute]
     ds = ds.random_map(AddRandomInteger())
-    map_seed2 = ds._seed  # pytype: disable=attribute-error
+    map_seed2 = ds._seed  # pyrefly: ignore[missing-attribute]
     self.assertNotEqual(map_seed1, map_seed2)
 
   def test_seed_with_shuffle_and_map(self):

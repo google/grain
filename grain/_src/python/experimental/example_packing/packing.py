@@ -216,7 +216,7 @@ class PackAndBatchOperation(Generic[_T]):
   ) -> Iterator[record.Record[tuple[_T, _T, _T]]]:
     for element in input_iterator:
       # Use `element` to set dtypes + trailing dimensions.
-      if self._cur_batch is None:  # pytype: disable=attribute-error
+      if self._cur_batch is None:
         self._cur_batch = _PackedBatch(
             element.data,
             self.batch_size,

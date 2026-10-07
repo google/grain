@@ -45,7 +45,7 @@ def common_test_body(
       length_struct=length_struct,
       max_sequences_per_bin=max_sequences_per_bin,
   )
-  packed_dataset = pack_op(input_dataset)  # pytype: disable=wrong-arg-types
+  packed_dataset = pack_op(input_dataset)
   actual_packed_dataset = list(packed_dataset)
   np.testing.assert_equal(
       len(actual_packed_dataset), len(expected_packed_dataset)

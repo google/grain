@@ -78,7 +78,7 @@ class CheckpointHandler:
         if `item` is None. Note that the newest Orbax V1 API does not use `args`
         and instead operates on checkpointables directly.
     """
-    item = item or args.item  # pytype:disable=attribute-error
+    item = item or args.item
     if isinstance(item, dataset.DatasetIterator):
       # ElasticIterDatasetIterator uses a custom checkpointing mechanism which
       # saves multiple files in the checkpoint directory. We should save the
@@ -137,7 +137,7 @@ class CheckpointHandler:
       ValueError: If the required process-specific checkpoint file does not
         exist.
     """
-    item = item or args.item  # pytype:disable=attribute-error
+    item = item or args.item
     process_index, process_count = sharding.get_process_index_and_count()
     if isinstance(
         item,
@@ -190,9 +190,9 @@ class CheckpointHandler:
 try:
   # Register the handler to be used with the Orbax v0 CheckpointManager API if
   # Orbax is present.
-  import orbax.checkpoint as ocp  # v0 API; pylint:disable=g-import-not-at-top # pytype:disable=import-error
+  import orbax.checkpoint as ocp  # v0 API; pylint:disable=g-import-not-at-top  # pyrefly: ignore[missing-import]
 
-  @ocp.args.register_with_handler(CheckpointHandler, for_save=True)  # pytype:disable=wrong-arg-types
+  @ocp.args.register_with_handler(CheckpointHandler, for_save=True)
   @dataclasses.dataclass
   class CheckpointSave(ocp.args.CheckpointArgs):
     """Arguments for saving a PyGrain iterator via Orbax.
@@ -236,7 +236,7 @@ try:
     """
     item: Any
 
-  @ocp.args.register_with_handler(CheckpointHandler, for_restore=True)  # pytype:disable=wrong-arg-types
+  @ocp.args.register_with_handler(CheckpointHandler, for_restore=True)
   @dataclasses.dataclass
   class CheckpointRestore(ocp.args.CheckpointArgs):
     """Arguments for restoring a PyGrain iterator via Orbax.

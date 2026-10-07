@@ -39,8 +39,8 @@ _prometheus_multiproc_dir = None
 
 try:
   # pylint: disable=g-import-not-at-top
-  import prometheus_client  # pytype: disable=import-error
-  from prometheus_client import multiprocess  # pytype: disable=import-error
+  import prometheus_client  # pyrefly: ignore[missing-import]
+  from prometheus_client import multiprocess  # pyrefly: ignore[missing-import]
 
   prometheus_client = cast(Any, prometheus_client)
   multiprocess = cast(Any, multiprocess)

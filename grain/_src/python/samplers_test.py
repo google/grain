@@ -179,7 +179,7 @@ class IndexSamplerTest(absltest.TestCase):
           shard_options=sharding.NoSharding(),
           shuffle=True,
           num_epochs=2,
-          seed=(3, 4),  # pytype: disable=wrong-arg-types
+          seed=(3, 4),  # pyrefly: ignore[bad-argument-type]
       )
 
   def test_invalid_non_int32_seed(self):

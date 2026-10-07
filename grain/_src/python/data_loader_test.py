@@ -423,7 +423,7 @@ class DataLoaderTest(absl_parameterized.TestCase):
     )
     with self.assertRaises(Exception) as e:
       list(data_loader)
-      assert "ZeroDivisionError: division by zero" in e.__cause__._traceback  # pytype: disable=attribute-error
+      assert "ZeroDivisionError: division by zero" in e.__cause__._traceback  # pyrefly: ignore[missing-attribute]
 
   def test_data_loader_with_used_array_record_data_source(
       self,

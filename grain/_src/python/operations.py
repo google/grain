@@ -145,7 +145,7 @@ class BatchOperation(Generic[_IN, _OUT]):
   def __call__(
       self, input_iterator: Iterator[record.Record[_IN]]
   ) -> Iterator[record.Record[_OUT]]:
-    if self._display_deprecation_message:  # pytype: disable=attribute-error
+    if self._display_deprecation_message:
       logging.error(
           "Applying deprecated PyGrain BatchOperation. Please use the"
           " grain.python.Batch transformation."
@@ -161,7 +161,7 @@ class BatchOperation(Generic[_IN, _OUT]):
         yield record.Record(last_record_metadata.remove_record_key(), batch)
     if records_to_batch and not self.drop_remainder:
       yield record.Record(
-          last_record_metadata.remove_record_key(),  # pytype: disable=attribute-error
+          last_record_metadata.remove_record_key(),  # pyrefly: ignore[missing-attribute]
           self.batch_fn(records_to_batch),  # pyrefly: ignore[not-callable]
       )
 

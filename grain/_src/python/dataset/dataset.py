@@ -914,7 +914,6 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
   def __iter__(self) -> DatasetIterator[T]:
     return self.to_iter_dataset().__iter__()
 
-  # pytype: disable=attribute-error
   # pylint: disable=protected-access
 
   def _initialize_stats(
@@ -940,7 +939,7 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
     parents_stats = []
     if hasattr(self, "_parents"):
       for p in self._parents:
-        parents_stats.append(p._initialize_stats(execution_tracking_mode))
+        parents_stats.append(p._initialize_stats(execution_tracking_mode))  # pyrefly: ignore[missing-attribute]
     config = dataset_stats.StatsConfig(
         name=str(self),
         transform_mutates_spec=self._MUTATES_ELEMENT_SPEC,
@@ -967,7 +966,6 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
     """Returns the Stats object for recording statistics about this dataset."""
     return self._initialize_stats(base.ExecutionTrackingMode.DISABLED)
 
-  # pytype: enable=attribute-error
   # pylint: enable=protected-access
 
 
@@ -1662,7 +1660,6 @@ class DatasetIterator(Iterator[T], abc.ABC):
     if self._closed:
       raise ValueError(f"Trying to advance a closed iterator: '{self}'.")
 
-  # pytype: disable=attribute-error
   # pylint: disable=protected-access
 
   def _initialize_stats(
@@ -1711,7 +1708,7 @@ class DatasetIterator(Iterator[T], abc.ABC):
   def _stats(self) -> dataset_stats.Stats:
     """Returns the Stats object for recording statistics about this dataset."""
     return self._initialize_stats(
-        self._ctx.dataset_options.execution_tracking_mode
+        self._ctx.dataset_options.execution_tracking_mode  # pyrefly: ignore[bad-argument-type]
     )
 
   def _set_next_index(self, index: int) -> None:
@@ -1740,7 +1737,6 @@ class DatasetIterator(Iterator[T], abc.ABC):
 
     raise NotImplementedError
 
-  # pytype: enable=attribute-error
   # pylint: enable=protected-access
 
   def __del__(self):
