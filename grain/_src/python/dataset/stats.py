@@ -129,11 +129,11 @@ def _get_nodes_before_prefetch(
   nodes_to_visit = [node]
   while nodes_to_visit:
     node_id = nodes_to_visit.pop()
-    node = summary.nodes[node_id]  # pyrefly: ignore[bad-assignment]
+    node = summary.nodes[node_id]
     child_nodes.append(node_id)
-    if node.is_prefetch:  # pyrefly: ignore[missing-attribute]
+    if node.is_prefetch:
       continue  # Skip adding inputs for the prefetch node
-    nodes_to_visit.extend(node.inputs)  # pyrefly: ignore[missing-attribute]
+    nodes_to_visit.extend(node.inputs)
   return child_nodes
 
 
@@ -175,7 +175,7 @@ def _compute_wait_time_ratio(
     # ratio attributed to the prefetch node is distributed among these nodes
     # proportionally to their total processing time.
     if node.is_prefetch:
-      prefetch_factor = node.wait_time_ratio  # pyrefly: ignore[bad-assignment]
+      prefetch_factor = node.wait_time_ratio
       prefetch_child_nodes = _get_nodes_before_prefetch(input_node_id, summary)
       aggregated_wait_time_ns = _find_aggregated_processing_time(
           summary, prefetch_child_nodes
@@ -764,7 +764,7 @@ def _running_in_colab() -> bool:
 class _DefaultStats(Stats):
   """Default implementation for statistics collection that does nothing."""
 
-  def record_self_time(self, *, num_elements: int = 1, offset_ns: int = 0):  # pyrefly: ignore[bad-override]
+  def record_self_time(self, *, num_elements: int = 1, offset_ns: int = 0):
     return contextlib.nullcontext()
 
   def record_output_spec(self, element: T) -> T:
@@ -792,7 +792,7 @@ class _VisualizationStats(Stats):
     return _VisualizationStats, (self._config.name, self._parents)
 
   @contextlib.contextmanager
-  def record_self_time(self, *, num_elements: int = 1, offset_ns: int = 0):  # pyrefly: ignore[bad-override]
+  def record_self_time(self, *, num_elements: int = 1, offset_ns: int = 0):
     yield
 
   def record_output_spec(self, element: T) -> T:
@@ -894,7 +894,7 @@ class _ExecutionStats(_VisualizationStats):
       if not self._is_output:
         return
       if self._last_update_time > self._last_report_time:
-        self._last_report_time = time.time()  # pyrefly: ignore[bad-assignment]
+        self._last_report_time = time.time()
         summary = self._get_execution_summary()
         summary = stats_utils.sort_nodes_by_wait_time_ratio(summary)
         msg = (
@@ -931,7 +931,9 @@ class _ExecutionStats(_VisualizationStats):
     for p in self._parents:
       node_id += 1
       execution_summary.nodes[current_node_id].inputs.append(node_id)
-      _, node_id = p._build_execution_summary(execution_summary, node_id)  # pylint: disable=protected-access  # pyrefly: ignore[missing-attribute]
+      # pytype: disable=attribute-error
+      _, node_id = p._build_execution_summary(execution_summary, node_id)  # pylint: disable=protected-access
+      # pytype: enable=attribute-error
     return execution_summary, node_id
 
   def _get_execution_summary(self) -> execution_summary_pb2.ExecutionSummary:
@@ -1033,7 +1035,7 @@ class _MPPrefetchExecutionStats(_ExecutionStats):
     """Calculates the aggregated execution summary from all workers."""
     aggregated_summary_from_workers = execution_summary_pb2.ExecutionSummary()
     stats_in_queues = self._config.stats_in_queues
-    for worker_index, worker_queue in enumerate(stats_in_queues):  # pyrefly: ignore[not-iterable]
+    for worker_index, worker_queue in enumerate(stats_in_queues):  # pyrefly: ignore[bad-argument-type, not-iterable]
       try:
         summary_from_worker = worker_queue.get(
             timeout=_WORKER_QUEUE_TIMEOUT_SEC

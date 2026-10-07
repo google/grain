@@ -182,7 +182,7 @@ class HFIterDatasetTest(parameterized.TestCase):
         return iter(self.data)
 
     dummy_ds = UnshardableDataset(list(range(5)))
-    grain_ds = hf_source.HFIterDataset(dummy_ds)  # pyrefly: ignore[bad-argument-type]
+    grain_ds = hf_source.HFIterDataset(dummy_ds)  # pytype: disable=wrong-arg-types
     # Should not raise AttributeError when set_slice is called.
     grain_ds.set_slice(slice(1, None, 2))
     self.assertEqual(list(grain_ds), list(range(5)))

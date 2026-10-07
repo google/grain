@@ -60,7 +60,7 @@ except ImportError:
 
 
 try:
-  from jax import tree_util  # pylint: disable=g-import-not-at-top  # pyrefly: ignore[missing-import]
+  from jax import tree_util  # pylint: disable=g-import-not-at-top  # pytype: disable=import-error
 
   map_structure = tree_util.tree_map
   map_structure_with_path = tree_util.tree_map_with_path
@@ -107,7 +107,7 @@ except ImportError:
         new_tree.update(new_items)
         return new_tree
       else:
-        return type(a)(new_items)  # pyrefly: ignore[bad-argument-count]
+        return type(a)(new_items)  # pyrefly: ignore[bad-argument-count, bad-instantiation]
     else:  # leaf
       return f(*trees)
 
@@ -143,7 +143,7 @@ except ImportError:
         new_tree.update(new_items)
         return new_tree
       else:
-        return type(structure)(new_items)  # pyrefly: ignore[bad-argument-count]
+        return type(structure)(new_items)  # pyrefly: ignore[bad-argument-count, bad-instantiation]
     else:  # leaf
       return next(flat_iter)
 
@@ -232,7 +232,7 @@ except ImportError:
         new_tree.update(new_items)
         return new_tree
       else:
-        return type(a)(new_items)  # pyrefly: ignore[bad-argument-count]
+        return type(a)(new_items)  # pyrefly: ignore[bad-argument-count, bad-instantiation]
     else:  # leaf
       return f(prefix, *trees)
 
@@ -258,7 +258,7 @@ def map_structure_up_to(shallow_structure, f, structure):
       new_tree.update(new_items)
       return new_tree
     else:
-      return type(shallow_structure)(new_items)  # pyrefly: ignore[bad-argument-count]
+      return type(shallow_structure)(new_items)  # pyrefly: ignore[bad-argument-count, bad-instantiation]
   else:  # leaf
     return f(structure)
 
