@@ -48,6 +48,25 @@ def _del_shm(shm: shared_memory.SharedMemory, unlink: bool) -> None:
     shm.unlink()
 
 
+class _SharedMemory(shared_memory.SharedMemory):
+  """A `SharedMemory` whose close can be handed over to a delete thread.
+
+  `SharedMemory.__del__` closes the shared memory. When the cyclic garbage
+  collector frees a `SharedMemoryArray` together with its `SharedMemory`, it
+  calls both finalizers in the same pass. If `SharedMemoryArray.__del__` has
+  handed the close to a delete thread, `SharedMemory.close()` then runs in two
+  threads at once and both can call `os.close` on the same file descriptor;
+  the second call closes whatever file reused that descriptor number in
+  between. Once the close is handed over, the delete thread is its only owner.
+  """
+
+  close_handed_over: bool = False
+
+  def __del__(self) -> None:
+    if not self.close_handed_over:
+      super().__del__()
+
+
 class SharedMemoryArray(np.ndarray):
   """A NumPy array subclass which is backed by shared memory.
 
@@ -71,7 +90,7 @@ class SharedMemoryArray(np.ndarray):
   ):
     # See https://numpy.org/doc/stable/user/basics.subclassing.html
     size = math.prod(shape) * np.dtype(dtype).itemsize
-    shm = shared_memory.SharedMemory(create=True, size=size)
+    shm = _SharedMemory(create=True, size=size)
     return cls.from_shared_memory(shm, shape, dtype)
 
   def __array_finalize__(self, obj):
@@ -101,7 +120,7 @@ class SharedMemoryArray(np.ndarray):
   def from_metadata(
       cls, metadata: SharedMemoryArrayMetadata
   ) -> SharedMemoryArray:
-    shm = shared_memory.SharedMemory(metadata.name)
+    shm = _SharedMemory(metadata.name)
     return cls.from_shared_memory(shm, metadata.shape, metadata.dtype)
 
   @property
@@ -180,11 +199,15 @@ class SharedMemoryArray(np.ndarray):
     outstanding_del_requests = SharedMemoryArray._outstanding_del_requests
     shm = self.shm
     assert isinstance(shm, shared_memory.SharedMemory)
-    if thread_pool:
+    # Only a `_SharedMemory` can hand its close over to a delete thread. Any
+    # other `SharedMemory` closes itself in its own `__del__`, which may run
+    # concurrently with the delete thread, so it is closed here.
+    if thread_pool and isinstance(shm, _SharedMemory):
       assert outstanding_del_requests is not None
       # We use a semaphore to make sure that we don't accumulate too many
       # requests to close/unlink shared memory, which could lead to OOM errors.
       if outstanding_del_requests.acquire(blocking=False):
+        shm.close_handed_over = True
         thread_pool.apply_async(
             SharedMemoryArray.close_shm_async, args=(shm, self._unlink_on_del)
         )

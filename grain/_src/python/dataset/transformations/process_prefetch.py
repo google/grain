@@ -536,13 +536,17 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         ):
           self._stop_prefetch()
         self._exhausted = True
-        if isinstance(err, StopIteration):
-          raise err
-        if err_traceback is not None:
+        if not isinstance(err, StopIteration) and err_traceback is not None:
           err = err.with_traceback(
               traceback_util.reconstruct_traceback(err_traceback)
           )
-        raise err
+        try:
+          raise err
+        finally:
+          # The traceback of `err` references this frame. Drop the local to
+          # break the reference cycle, which would otherwise keep the exception
+          # and this iterator alive until the cyclic garbage collector runs.
+          del err
       self._state = state
       self._next_index = next_index
     with self._stats.record_self_time(offset_ns=timer.value()):
