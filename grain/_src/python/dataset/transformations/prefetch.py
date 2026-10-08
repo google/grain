@@ -444,6 +444,10 @@ def _put_iterator_elements_in_buffer(
       element = stats.record_bytes_consumed(iterator.__next__())
       state = copy.deepcopy(iterator.get_state())
       buffer.put((element, state, None))
+      # The consumer owns the element now. Drop the reference so that the
+      # traceback of an exception raised by the next `__next__` call, which
+      # references this frame, does not keep the element alive.
+      del element, state
   except Exception as e:  # pylint: disable=broad-except
     buffer.put((None, None, e))  # pyrefly: ignore[bad-argument-type]
 
@@ -616,7 +620,14 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
     if err is not None:
       self._stop_prefetch()
-      raise err
+      try:
+        raise err
+      finally:
+        # The traceback of `err` references this frame. Drop the local to break
+        # the reference cycle, which would otherwise keep the exception, the
+        # producer frame and the parent iterator alive until the cyclic garbage
+        # collector runs.
+        del err
     self._state = state
     if self._next_index is not None:
       self._next_index += 1
