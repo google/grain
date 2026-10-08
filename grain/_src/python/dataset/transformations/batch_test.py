@@ -1099,6 +1099,61 @@ class MakeBatchParallelTest(absltest.TestCase):
     self.assertIsInstance(batched_values, np.ndarray)
 
 
+class SharedMemoryOutputTest(parameterized.TestCase):
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name="make_batch",
+          parallel=False,
+          values=[np.arange(3), np.arange(3, 6)],
+      ),
+      dict(
+          testcase_name="make_batch_strings",
+          parallel=False,
+          values=[np.asarray("a"), np.asarray("bc")],
+      ),
+      dict(
+          testcase_name="parallel_batch_serial_path",
+          parallel=True,
+          values=[np.arange(3), np.arange(3, 6)],
+      ),
+      dict(
+          testcase_name="parallel_batch_parallel_path",
+          parallel=True,
+          values=[np.arange(3), np.arange(3, 6)],
+          min_parallel_bytes=0,
+      ),
+      dict(
+          testcase_name="parallel_batch_strings",
+          parallel=True,
+          values=[np.asarray("a"), np.asarray("bc")],
+      ),
+  )
+  def test_copy_to_shm_hands_over_batch_without_copy(
+      self,
+      parallel: bool,
+      values: Sequence[np.ndarray],
+      min_parallel_bytes: int = batch._PARALLEL_BATCHING_MIN_TOTAL_BYTES,
+  ):
+    if parallel:
+      batch_fn = batch._MakeBatchParallel()
+      batch_fn.enable_shared_memory_output()
+    else:
+      batch_fn = functools.partial(
+          batch.make_batch, output_to_shared_memory=True
+      )
+    with mock.patch.object(
+        batch, "_PARALLEL_BATCHING_MIN_TOTAL_BYTES", min_parallel_bytes
+    ):
+      batched = batch_fn(values)
+    self.assertIsInstance(batched, shared_memory_array.SharedMemoryArray)
+
+    # The batch's shared memory block is handed over instead of being copied.
+    shm_metadata = shared_memory_array.copy_to_shm(batched)
+    self.assertEqual(shm_metadata.name, batched.metadata.name)
+    shared_memory_array.unlink_shm(shm_metadata)
+
+
 class StringTruncationTest(absltest.TestCase):
   """Tests exposing silent string truncation when batching variable-length strings via shared memory."""
 
