@@ -6,6 +6,9 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features:
+  * Added the `py_permanently_disable_stats` config option
+    (`--grain_py_permanently_disable_stats`) to permanently disable dataset
+    stats collection and avoid stats tree initialization overhead.
   * Added `HFIterDataset` to wrap Hugging Face streaming datasets, supporting sharding, slicing (`set_slice`), and state checkpointing.
   * `MapDataset.slice` now accepts a `Sequence[int]` (including a
     `MapDataset[int]`) in addition to a `slice` object, enabling arbitrary index

@@ -130,6 +130,15 @@ _TRACEBACK_FILTERING = flags.DEFINE_enum(
     "How Grain filters internal stack frames from the traceback upon errors.",
 )
 
+_PERMANENTLY_DISABLE_STATS = flags.DEFINE_bool(
+    "grain_py_permanently_disable_stats",
+    False,
+    (
+        "If True, permanently disables Grain dataset statistics collection and"
+        " on-demand profiling to avoid initialization overhead."
+    ),
+)
+
 _GRAIN_FLAGS = (
     _INTERLEAVED_SHUFFLE,
     _INTERLEAVED_SHUFFLE_BLOCK_SIZE,
@@ -143,6 +152,7 @@ _GRAIN_FLAGS = (
     _DATASET_VISUALIZATION_OUTPUT_DIR,
     _RELAY_SIGTERM_TO_MAIN,
     _TRACEBACK_FILTERING,
+    _PERMANENTLY_DISABLE_STATS,
 )
 
 _grain_experiment_metric = monitoring.Metric(
