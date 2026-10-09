@@ -761,11 +761,14 @@ def _running_in_colab() -> bool:
   return "google.colab" in sys.modules
 
 
+_NULL_CONTEXT = contextlib.nullcontext()
+
+
 class _DefaultStats(Stats):
   """Default implementation for statistics collection that does nothing."""
 
   def record_self_time(self, *, num_elements: int = 1, offset_ns: int = 0):  # pyrefly: ignore[bad-override]
-    return contextlib.nullcontext()
+    return _NULL_CONTEXT
 
   def record_output_spec(self, element: T) -> T:
     return element
@@ -778,6 +781,19 @@ class _DefaultStats(Stats):
 
   def record_bytes_produced(self, element: Any) -> Any:
     return element
+
+
+class _NullStats(_DefaultStats):
+  """Singleton no-op stats object used when stats are permanently disabled."""
+
+  def __init__(self):  # pylint: disable=super-init-not-called
+    self._config = StatsConfig(name="")
+    self._self_output_spec = None
+    self._parents = ()
+    self._is_output = False
+
+
+_NULL_STATS = _NullStats()
 
 
 class _VisualizationStats(Stats):
@@ -1145,6 +1161,13 @@ class _InterleaveExecutionStats(_ExecutionStats):
     return execution_summary, node_id
 
 
+def stats_are_permanently_disabled() -> bool:
+  """Returns whether dataset statistics collection is permanently disabled."""
+  return bool(
+      grain_config.config.get_or_default("py_permanently_disable_stats")
+  )
+
+
 def make_stats(
     config: StatsConfig,
     parents: Sequence[Stats],
@@ -1153,6 +1176,8 @@ def make_stats(
     ),
 ) -> Stats:
   """Produces statistics instance according to the current execution mode."""
+  if stats_are_permanently_disabled():
+    return _NULL_STATS
   vis_output_dir = grain_config.config.get_or_default(
       "py_dataset_visualization_output_dir"
   )
