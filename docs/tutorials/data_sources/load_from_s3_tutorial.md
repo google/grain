@@ -36,7 +36,6 @@ This document outlines how to read data from an Amazon S3 bucket and construct a
 <!-- #endregion -->
 
 ```python id="8fhEOwxcWlWf"
-!pip install aws configure
 !pip install awscli
 ```
 
