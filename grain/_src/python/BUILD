@@ -234,12 +234,9 @@ py_test(
     srcs = ["options_test.py"],
     srcs_version = "PY3",
     deps = [
-        ":data_sources",
         ":options",
-        "//grain/_src/python/dataset",
         "@abseil-py//absl/logging",
         "@abseil-py//absl/testing:absltest",
-        "@pypi//numpy:pkg",
     ],
 )
 
