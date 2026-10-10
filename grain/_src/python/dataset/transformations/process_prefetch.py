@@ -18,6 +18,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 import functools
 from multiprocessing import queues
+from multiprocessing import reduction
 from multiprocessing import sharedctypes
 from multiprocessing import synchronize
 from multiprocessing import util
@@ -198,6 +199,18 @@ class ProcessPrefetchIterDataset(dataset.IterDataset[T]):
     return dataset.get_element_spec(self._parent)
 
 
+class _SerializedElement:
+  """Pickles eagerly so failures are raised in the worker loop."""
+
+  def __init__(self, element):
+    self._data = bytes(reduction.ForkingPickler.dumps(element))
+
+  def __reduce__(self):
+    # The queue's feeder only serializes these bytes, not the element again.
+    # Queue readers still receive the original tuple, including during cleanup.
+    return reduction.ForkingPickler.loads, (self._data,)
+
+
 def _put_dataset_elements_in_buffer(
     pickled_parse_debug_flags_fn: bytes,
     pickled_worker_init_fn: bytes,
@@ -289,8 +302,29 @@ def _put_dataset_elements_in_buffer(
         it._stats.record_bytes_produced(element)  # pylint: disable=protected-access
       if next_index is not None:
         next_index += 1
+      try:
+        buffered_element = _SerializedElement(
+            (element, it.get_state(), next_index, None, None)
+        )
+      except Exception as e:  # pylint: disable=broad-except
+        shared_memory_array.unlink_shm(element)
+        grain_queue.add_element_to_queue(
+            (
+                None,
+                None,
+                None,
+                e,
+                traceback_util.PicklableTraceback.from_traceback(
+                    e.__traceback__
+                ),
+            ),
+            buffer,  # pyrefly: ignore[bad-argument-type]
+            should_stop.is_set,
+        )
+        parent_exhausted = True
+        continue
       if not grain_queue.add_element_to_queue(
-          (element, it.get_state(), next_index, None, None),
+          buffered_element,
           buffer,  # pyrefly: ignore[bad-argument-type]
           should_stop.is_set,
       ):
