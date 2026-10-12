@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+import subprocess
+import sys
+import textwrap
 import threading
 from typing import cast
 from unittest import mock
@@ -99,6 +103,112 @@ class _IteratorIdIterDataset(dataset.IterDataset):
 
   def __iter__(self) -> dataset.DatasetIterator:
     return _IteratorIdDatasetIterator(self._parent.__iter__())
+
+
+class InterleaveCloseTest(parameterized.TestCase):
+
+  def _make_iterator(self, children):
+    iterator = interleave.InterleaveDatasetIterator([], cycle_length=0)
+    # pylint: disable=protected-access
+    iterator._prefetch_ds_iter = mock.Mock()
+    iterator._iterators_in_use = children
+    # pylint: enable=protected-access
+    return iterator
+
+  @parameterized.parameters(2, 4, 8)
+  def test_close_starts_all_children_before_waiting(self, num_children):
+    barrier = threading.Barrier(num_children, timeout=5)
+    children = [mock.Mock() for _ in range(num_children)]
+    for child in children:
+      child.close.side_effect = barrier.wait
+    iterator = self._make_iterator(children)
+
+    iterator.close()
+
+    for child in children:
+      child.close.assert_called_once_with()
+
+  @parameterized.named_parameters(
+      dict(testcase_name="empty", slots=[]),
+      dict(testcase_name="uninitialized", slots=[None]),
+      dict(testcase_name="partial", slots=[mock.sentinel.child, None]),
+  )
+  def test_close_handles_empty_slots_and_is_idempotent(self, slots):
+    child = mock.Mock()
+    children = [child if slot is not None else None for slot in slots]
+    iterator = self._make_iterator(children)
+
+    iterator.close()
+    iterator.close()
+
+    iterator._prefetch_ds_iter.close.assert_called_once_with()  # pylint: disable=protected-access
+    if mock.sentinel.child in slots:
+      child.close.assert_called_once_with()
+    else:
+      child.close.assert_not_called()
+    with self.assertRaisesRegex(ValueError, "closed iterator"):
+      next(iterator)
+
+  @parameterized.parameters(ValueError, RuntimeError)
+  def test_close_waits_for_all_children_before_propagating_error(self, error):
+    children = [mock.Mock() for _ in range(3)]
+    children[0].close.side_effect = error("close failed")
+    release = threading.Event()
+    finished = threading.Event()
+
+    def slow_close():
+      self.assertTrue(release.wait(timeout=5))
+      finished.set()
+
+    children[1].close.side_effect = slow_close
+    children[2].close.side_effect = release.set
+    iterator = self._make_iterator(children)
+
+    with self.assertRaisesRegex(error, "close failed"):
+      iterator.close()
+
+    for child in children:
+      child.close.assert_called_once_with()
+    self.assertTrue(finished.is_set())
+
+  def test_close_when_threads_cannot_start(self):
+    children = [mock.Mock() for _ in range(2)]
+    iterator = self._make_iterator(children)
+    with mock.patch.object(
+        threading.Thread,
+        "start",
+        side_effect=RuntimeError("cannot start thread"),
+    ):
+      iterator.close()
+    for child in children:
+      child.close.assert_called_once_with()
+
+  def test_close_at_interpreter_exit(self):
+    code = textwrap.dedent("""\
+        import atexit
+        from unittest import mock
+        from grain._src.python.dataset.transformations import interleave
+
+        iterator = interleave.InterleaveDatasetIterator([], cycle_length=0)
+        children = [mock.Mock(), mock.Mock()]
+        iterator._iterators_in_use = children
+
+        def close():
+          iterator.close()
+          print("CLOSED", *(child.close.call_count for child in children))
+
+        atexit.register(close)
+        """)
+    completed = subprocess.run(
+        [sys.executable, "-c", code],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env={**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)},
+    )
+    self.assertEqual(completed.stdout.strip(), "CLOSED 1 1")
+    self.assertNotIn("Exception ignored", completed.stderr)
 
 
 @absltest.skipThisClass("Base class")

@@ -17,6 +17,7 @@ import collections
 from collections.abc import Sequence
 import copy
 import functools
+import threading
 from typing import Any, TypeVar, cast
 import weakref
 
@@ -381,9 +382,44 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
       return
     self._closed = True
     self._prefetch_ds_iter.close()
-    for iterator in self._iterators_in_use:
-      if iterator is not None:
+    iterators = [it for it in self._iterators_in_use if it is not None]
+    if len(iterators) < 2:
+      for iterator in iterators:
         iterator.close()
+      return
+
+    def close_iterator(iterator, result):
+      try:
+        iterator.close()
+      except BaseException as error:
+        result.set_exception(error)
+      else:
+        result.set_result(None)
+
+    threads = []
+    results = []
+    for iterator in iterators:
+      result = futures.Future()
+      thread = threading.Thread(
+          target=close_iterator,
+          args=(iterator, result),
+          name="grain-interleave-close",
+          daemon=False,
+      )
+      try:
+        thread.start()
+      except RuntimeError:
+        # Interpreter shutdown may no longer allow starting threads. Unlike
+        # executor submission, a failed start cannot leave queued cleanup work.
+        close_iterator(iterator, result)
+      else:
+        threads.append(thread)
+      results.append(result)
+    # Start every close before waiting, so per-worker exit delays overlap.
+    for thread in threads:
+      thread.join()
+    for result in results:
+      result.result()
 
   def start_prefetch(self):
     self._started = True
