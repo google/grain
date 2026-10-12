@@ -15,6 +15,7 @@
 import collections
 import contextlib
 import functools
+import gc
 import platform
 import re
 import sys
@@ -637,6 +638,58 @@ class GraphModeStatsTest(absltest.TestCase):
   def test_dataset_visualization_with_output_dir_none(self):
     s = stats.make_stats(stats.StatsConfig(name="test_stats"), ())
     self.assertIsInstance(s, stats._DefaultStats)
+
+
+class IterWeakRefRegistryTest(absltest.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    stats._iter_weakref_registry.clear()
+
+  def tearDown(self):
+    stats._iter_weakref_registry.clear()
+    super().tearDown()
+
+  def test_drops_collected_iterators(self):
+    # Dead refs must not stay in the registry. CPython reuses addresses, so a
+    # stale ref compares equal to a new iterator and set.add skips it.
+    ds = (
+        dataset.MapDataset.range(8)
+        .map(lambda i: np.full(2, i))
+        .batch(4)
+        .to_iter_dataset(
+            options.ReadOptions(num_threads=0, prefetch_buffer_size=0)
+        )
+    )
+    iterator = None
+    for _ in range(100):
+      if iterator is not None:
+        del iterator
+        gc.collect()
+      iterator = iter(ds)
+      self.assertNotEmpty(list(iterator))
+      self.assertTrue(
+          any(
+              ref() is iterator
+              for ref in stats._iter_weakref_registry
+              if ref is not None
+          )
+      )
+
+    gc.collect()
+    dead_refs = [
+        ref
+        for ref in stats._iter_weakref_registry
+        if isinstance(ref, stats.HashableWeakRef) and ref() is None
+    ]
+    self.assertEmpty(dead_refs)
+    self.assertTrue(
+        any(
+            ref() is iterator
+            for ref in stats._iter_weakref_registry
+            if ref is not None
+        )
+    )
 
 
 if __name__ == "__main__":
