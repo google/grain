@@ -183,22 +183,66 @@ class InterleaveCloseTest(parameterized.TestCase):
     for child in children:
       child.close.assert_called_once_with()
 
-  def test_close_at_interpreter_exit(self):
+  def test_close_does_not_start_threads_during_finalization(self):
+    children = [mock.Mock() for _ in range(2)]
+    iterator = self._make_iterator(children)
+    with (
+        mock.patch.object(sys, "is_finalizing", return_value=True),
+        mock.patch.object(threading.Thread, "start") as start,
+    ):
+      iterator.close()
+    start.assert_not_called()
+    for child in children:
+      child.close.assert_called_once_with()
+
+  @parameterized.named_parameters(
+      dict(testcase_name="atexit", final_gc=False),
+      dict(testcase_name="final_gc", final_gc=True),
+  )
+  def test_close_at_interpreter_exit(self, final_gc):
     code = textwrap.dedent("""\
         import atexit
-        from unittest import mock
+        import gc
+        import os
+        import sys
         from grain._src.python.dataset.transformations import interleave
 
-        iterator = interleave.InterleaveDatasetIterator([], cycle_length=0)
-        children = [mock.Mock(), mock.Mock()]
-        iterator._iterators_in_use = children
+        class Child:
+          def __init__(self):
+            self.count = 0
 
-        def close():
-          iterator.close()
-          print("CLOSED", *(child.close.call_count for child in children))
+          def close(self):
+            self.count += 1
 
-        atexit.register(close)
-        """)
+        class Holder:
+          def __init__(self):
+            self.final_gc = USE_FINAL_GC
+            self.iterator = interleave.InterleaveDatasetIterator([], 0)
+            self.iterator._prefetch_ds_iter = Child()
+            self.children = [Child(), Child()]
+            self.iterator._iterators_in_use = self.children
+            self.write = os.write
+            self.is_finalizing = sys.is_finalizing
+
+          def close(self):
+            self.iterator.close()
+            counts = " ".join(str(child.count) for child in self.children)
+            self.write(1, ("CLOSED " + counts + "\\n").encode())
+
+          def __del__(self):
+            if self.final_gc:
+              phase = str(self.is_finalizing()).encode()
+              self.write(1, b"FINAL_GC=" + phase + b"\\n")
+              self.close()
+
+        holder = Holder()
+        if USE_FINAL_GC:
+          holder.cycle = holder
+          gc.disable()
+          del holder
+        else:
+          atexit.register(holder.close)
+        """).replace("USE_FINAL_GC", repr(final_gc))
     completed = subprocess.run(
         [sys.executable, "-c", code],
         check=True,
@@ -207,7 +251,8 @@ class InterleaveCloseTest(parameterized.TestCase):
         timeout=30,
         env={**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)},
     )
-    self.assertEqual(completed.stdout.strip(), "CLOSED 1 1")
+    expected = "FINAL_GC=True\nCLOSED 1 1" if final_gc else "CLOSED 1 1"
+    self.assertEqual(completed.stdout.strip(), expected, msg=completed.stderr)
     self.assertNotIn("Exception ignored", completed.stderr)
 
 

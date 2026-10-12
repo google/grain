@@ -17,6 +17,7 @@ import collections
 from collections.abc import Sequence
 import copy
 import functools
+import sys
 import threading
 from typing import Any, TypeVar, cast
 import weakref
@@ -383,7 +384,8 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     self._closed = True
     self._prefetch_ds_iter.close()
     iterators = [it for it in self._iterators_in_use if it is not None]
-    if len(iterators) < 2:
+    # Python 3.11 can hang in Thread.start() during final garbage collection.
+    if len(iterators) < 2 or sys.is_finalizing():
       for iterator in iterators:
         iterator.close()
       return
