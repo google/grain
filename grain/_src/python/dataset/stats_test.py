@@ -254,6 +254,15 @@ class DefaultStatsTest(absltest.TestCase):
     s = s._parents[0]
     s.report()
 
+  @flagsaver.flagsaver(grain_py_permanently_disable_stats=True)
+  def test_permanently_disable_stats(self):
+    ds = dataset.MapDataset.range(5).map(_identity)
+    it = ds.to_iter_dataset().batch(2).__iter__()
+    self.assertEqual([list(x) for x in it], [[0, 1], [2, 3], [4]])
+    self.assertIs(ds._stats, stats._NULL_STATS)
+    self.assertIs(it._stats, stats._NULL_STATS)
+    self.assertEmpty(stats._iter_weakref_registry)
+
 
 class DebugModeStatsTest(absltest.TestCase):
 

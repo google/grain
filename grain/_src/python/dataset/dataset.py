@@ -934,6 +934,9 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
     Returns:
       The initialized stats object.
     """
+    if dataset_stats.stats_are_permanently_disabled():
+      self._stats = dataset_stats._NULL_STATS
+      return self._stats
     # There may be parent `MapDataset` nodes introduced by users that did not
     # call super init and thus don't have `_parents`.
     parents_stats = []
@@ -1680,6 +1683,9 @@ class DatasetIterator(Iterator[T], abc.ABC):
     Returns:
       The initialized stats object.
     """
+    if dataset_stats.stats_are_permanently_disabled():
+      self._stats = dataset_stats._NULL_STATS
+      return self._stats
     parent_stats = [
         p._initialize_stats(execution_tracking_mode) for p in self._parents
     ]
