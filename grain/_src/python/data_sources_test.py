@@ -14,6 +14,7 @@
 """Tests for data sources."""
 
 from collections.abc import Sequence
+import copy
 import dataclasses
 import pathlib
 import pickle
