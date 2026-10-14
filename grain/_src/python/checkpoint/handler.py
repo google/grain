@@ -79,6 +79,8 @@ class CheckpointHandler:
         and instead operates on checkpointables directly.
     """
     item = item or args.item
+    process_index, process_count = sharding.get_process_index_and_count()
+    filename = directory / f"process_{process_index}-of-{process_count}.json"
     if isinstance(item, dataset.DatasetIterator):
       # ElasticIterDatasetIterator uses a custom checkpointing mechanism which
       # saves multiple files in the checkpoint directory. We should save the
@@ -93,8 +95,6 @@ class CheckpointHandler:
       state = json.dumps(item.get_state(), indent=4)
     else:
       state = item.get_state().decode()
-    process_index, process_count = sharding.get_process_index_and_count()
-    filename = directory / f"process_{process_index}-of-{process_count}.json"
     filename.write_text(state)
 
   def restore(
