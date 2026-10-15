@@ -403,9 +403,11 @@ py_test(
         "//grain/_src/python:options",
         "//grain/_src/python/dataset",
         "//grain/_src/python/dataset:base",
+        "//grain/_src/python/ipc:shared_memory_array",
         "@abseil-py//absl/logging",
         "@abseil-py//absl/testing:absltest",
         "@abseil-py//absl/testing:parameterized",
+        "@pypi//cloudpickle:pkg",
         "@pypi//numpy:pkg",
     ],
 )
