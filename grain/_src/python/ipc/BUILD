@@ -28,6 +28,7 @@ py_library(
     srcs_version = "PY3",
     deps = [
         "//grain/_src/core:tree_lib",
+        "@abseil-py//absl/logging",
         "@pypi//numpy:pkg",
     ],
 )

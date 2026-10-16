@@ -29,7 +29,6 @@ from etils import epath
 from grain._src.core import monitoring
 from grain._src.core import sharding
 from grain._src.core import transforms
-from grain._src.core import tree_lib
 from grain._src.python import operations as ops
 from grain._src.python import options
 from grain._src.python import record
@@ -96,21 +95,7 @@ class CopyNumPyArrayToSharedMemory(transforms.Map):
   """If `element` contains NumPy array copy it to SharedMemoryArray."""
 
   def map(self, element: Any) -> Any:
-    def copy_if_applied(element: Any) -> Any:
-      if (
-          not isinstance(element, np.ndarray)
-          or element.dtype.hasobject
-          or not element.flags.c_contiguous
-      ):
-        return element
-
-      shared_memory_arr = shared_memory_array.SharedMemoryArray(
-          element.shape, element.dtype
-      )
-      np.copyto(shared_memory_arr, element, casting="no")
-      return shared_memory_arr.metadata
-
-    return tree_lib.map_structure(copy_if_applied, element)
+    return shared_memory_array.copy_to_shm(element)
 
 
 class _SamplerMapDataset(dataset.MapDataset[record.Record]):
