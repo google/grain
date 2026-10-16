@@ -46,9 +46,62 @@ def _reset_rng_state(
 
 
 class RngPool:
-  """RNG pool."""
+  """Thread-safe pool of reusable per-index random number generators.
+
+  Manages a cache of ``np.random.Generator`` (Philox) instances to avoid the
+  overhead of constructing a new generator on every element access. Each
+  acquired generator's state is deterministically reset based on the pool seed,
+  element ``index``, and ``op_seed``.
+
+  For standard element-wise random transformations, prefer
+  ``MapDataset.random_map``, which manages an ``RngPool`` internally. Use
+  ``grain.experimental.RngPool`` directly when implementing custom
+  ``grain.MapDataset`` subclasses that require deterministic, index-based
+  randomness inside ``__getitem__`` (such as randomly sampling other indices
+  from the parent dataset to pair or mix with the current element).
+
+  Example:
+    Implementing a custom ``MapDataset`` that deterministically pairs each
+    element with a randomly sampled other element from the parent dataset::
+
+      import grain
+
+      class ContrastiveMapDataset(grain.MapDataset):
+
+        def __init__(self, parent: grain.MapDataset, seed: int):
+          super().__init__(parent)
+          self._rng_pool = grain.experimental.RngPool(seed)
+
+        def __len__(self) -> int:
+          return len(self._parent)
+
+        def __getitem__(self, index):
+          if isinstance(index, slice):
+            return self.slice(index)
+          rng = self._rng_pool.acquire_rng(index)
+          other_index = int(rng.integers(0, len(self._parent) - 1))
+          if other_index >= index:
+            other_index += 1
+          self._rng_pool.release_rng(rng)
+          return (self._parent[index], self._parent[other_index])
+
+      parent_ds = grain.MapDataset.source([10, 20, 30, 40, 50, 60, 70])
+      paired_ds = ContrastiveMapDataset(parent_ds, seed=42)
+
+      print(list(paired_ds))
+      # [(10, 70), (20, 30), (30, 40), (40, 60), (50, 10), (60, 20), (70, 30)]
+
+      # Accessing the same index always produces the same random pair.
+      print(paired_ds[2])
+      # (30, 40)
+  """
 
   def __init__(self, seed: int):
+    """Initializes the RngPool.
+
+    Args:
+      seed: Base seed used to initialize random number generators in the pool.
+    """
     self._seed = seed
     self._generator_cache = []
     self._lock = threading.Lock()
@@ -57,7 +110,21 @@ class RngPool:
     return (RngPool, (self._seed,))
 
   def acquire_rng(self, index: int, *, op_seed: int = 0) -> np.random.Generator:
-    """Acquire RNG."""
+    """Acquires a random number generator with state reset for the given index.
+
+    Reuses a cached generator from the pool if available, or creates a new
+    Philox-backed ``np.random.Generator``, and resets its state using the pool
+    seed, ``index``, and ``op_seed``.
+
+    Args:
+      index: Element index used to deterministically set the generator state.
+      op_seed: Optional operation-specific seed used to distinguish multiple
+        random operations at the same index.
+
+    Returns:
+      A ``np.random.Generator`` with deterministic state for ``(index,
+      op_seed)``.
+    """
     with self._lock:
       if self._generator_cache:
         rng = self._generator_cache.pop()
@@ -67,6 +134,11 @@ class RngPool:
     return rng
 
   def release_rng(self, rng: np.random.Generator):
+    """Returns a random number generator to the pool for reuse.
+
+    Args:
+      rng: The random number generator to return to the pool.
+    """
     with self._lock:
       self._generator_cache.append(rng)
 

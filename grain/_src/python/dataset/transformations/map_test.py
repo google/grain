@@ -39,6 +39,35 @@ class RngPoolTest(absltest.TestCase):
     map_ds._reset_rng_state(rng, 0, 0)
     np.testing.assert_equal(rng.bit_generator.state, old_state)
 
+  def test_example_docstring(self):
+    class ContrastiveMapDataset(dataset.MapDataset):
+
+      def __init__(self, parent: dataset.MapDataset, seed: int):
+        super().__init__(parent)
+        self._rng_pool = map_ds.RngPool(seed)
+
+      def __len__(self) -> int:
+        return len(self._parent)
+
+      def __getitem__(self, index):
+        if isinstance(index, slice):
+          return self.slice(index)
+        rng = self._rng_pool.acquire_rng(index)
+        other_index = int(rng.integers(0, len(self._parent) - 1))
+        if other_index >= index:
+          other_index += 1
+        self._rng_pool.release_rng(rng)
+        return (self._parent[index], self._parent[other_index])
+
+    parent_ds = dataset.MapDataset.source([10, 20, 30, 40, 50, 60, 70])
+    paired_ds = ContrastiveMapDataset(parent_ds, seed=42)
+
+    self.assertEqual(
+        list(paired_ds),
+        [(10, 70), (20, 30), (30, 40), (40, 60), (50, 10), (60, 20), (70, 30)],
+    )
+    self.assertEqual(paired_ds[2], (30, 40))
+
 
 @dataclasses.dataclass(frozen=True)
 class MapWithNoTransform(transforms.Map):
