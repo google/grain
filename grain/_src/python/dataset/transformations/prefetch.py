@@ -757,12 +757,51 @@ def multithread_prefetch(
   interleaving them. Each shard is read by a separate thread inside
   `InterleaveIterDataset`.
 
+  Example:
+    Prefetching elements across multiple threads using
+    `grain.experimental.multithread_prefetch`::
+
+      import grain
+
+      # Create a sample dataset.
+      ds = grain.MapDataset.range(6).to_iter_dataset()
+      print(list(ds))
+      # [0, 1, 2, 3, 4, 5]
+
+      # Explicitly use thread-based sharded prefetching.
+      prefetched_ds = grain.experimental.multithread_prefetch(
+          ds,
+          num_threads=2,
+          buffer_size=2,
+      )
+      print(list(prefetched_ds))
+      # Thread 0 reads elements at indices [0, 2, 4, ...]
+      # Thread 1 reads elements at indices [1, 3, 5, ...]
+      # Then the prefetch will interleave the results back into the original
+      # sequence.
+      # [0, 1, 2, 3, 4, 5]
+
+      # Use thread-based sharded prefetching with sequential slicing.
+      prefetched_ds2 = grain.experimental.multithread_prefetch(
+          ds,
+          num_threads=2,
+          buffer_size=2,
+          sequential_slice=True,
+      )
+      print(list(prefetched_ds2))
+      # Thread 0 reads elements at indices [0, 1, 2, ...]
+      # Thread 1 reads elements at indices [N/2, N/2+1, N/2+2, ...]
+      # Then the prefetch will interleave the results across the shards.
+      # [0, 3, 1, 4, 2, 5]
+
   Args:
     ds: The parent dataset to prefetch from.
     num_threads: The number of threads to use for prefetching. If 0, prefetching
       is disabled and this is a no-op.
     buffer_size: The size of the prefetch buffer for each thread.
-    sequential_slice: Whether to use sequential slicing.
+    sequential_slice: Set True to use sequential slicing that slices the input
+      into N consecutive sequences to process. Doesn't work if the parent is a
+      pure `IterDataset` (sources with no random access).
 
   Returns:
     An `IterDataset` that prefetches elements from `ds` using multiple threads.

@@ -1166,6 +1166,25 @@ class MultithreadPrefetchTest(parameterized.TestCase):
       self.assertEqual(context.process_index, i % num_threads)
       self.assertEqual(context.process_count, num_threads)
 
+  def test_example_docstring(self):
+    ds = dataset.MapDataset.range(6).to_iter_dataset()
+    self.assertEqual(list(ds), [0, 1, 2, 3, 4, 5])
+
+    prefetched_ds = prefetch.multithread_prefetch(
+        ds,
+        num_threads=2,
+        buffer_size=2,
+    )
+    self.assertEqual(list(prefetched_ds), [0, 1, 2, 3, 4, 5])
+
+    prefetched_ds2 = prefetch.multithread_prefetch(
+        ds,
+        num_threads=2,
+        buffer_size=2,
+        sequential_slice=True,
+    )
+    self.assertEqual(list(prefetched_ds2), [0, 3, 1, 4, 2, 5])
+
 
 if __name__ == '__main__':
   absltest.main()
