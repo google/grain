@@ -1984,8 +1984,31 @@ def get_element_spec(
 
   Does not instantiate iterator, perform any data reads or transformations.
 
+  Example:
+    Inspecting the element spec of a dataset before and after batching::
+
+      import grain
+
+      ds = grain.MapDataset.range(6)
+      spec = grain.experimental.get_element_spec(ds)
+      print(spec.shape)
+      # ()
+      print(spec.dtype)
+      # <class 'numpy.int64'>
+
+      batched_ds = ds.batch(batch_size=2, drop_remainder=True)
+      batched_spec = grain.experimental.get_element_spec(batched_ds)
+      print(batched_spec.shape)
+      # (2,)
+      print(batched_spec.dtype)
+      # <class 'numpy.int64'>
+
   Args:
     ds: `MapDataset` or `IterDataset` to get the element spec from.
+
+  Returns:
+    A PyTree of `ShapeDtypeStruct` describing the shape and dtype of elements
+    produced by the dataset.
   """
   return ds._element_spec  # pylint: disable=protected-access
 

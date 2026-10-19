@@ -1467,6 +1467,17 @@ class GetElementSpecTest(parameterized.TestCase):
     self.assertEqual(spec.shape, ())
     self.assertEqual(spec.dtype, np.int64)
 
+  def test_example_docstring(self):
+    ds = dataset.MapDataset.range(6)
+    spec = dataset.get_element_spec(ds)
+    self.assertEqual(spec.shape, ())
+    self.assertEqual(spec.dtype, np.int64)
+
+    batched_ds = ds.batch(batch_size=2, drop_remainder=True)
+    batched_spec = dataset.get_element_spec(batched_ds)
+    self.assertEqual(batched_spec.shape, (2,))
+    self.assertEqual(batched_spec.dtype, np.int64)
+
 
 def _find_shortest_cycle_recursive(
     path: list[Any],
