@@ -13,6 +13,7 @@
 # limitations under the License.
 from concurrent import futures
 import dataclasses
+import gc
 import os
 import platform
 import sys
@@ -20,9 +21,11 @@ import threading
 import time
 from typing import TypeVar, cast
 from unittest import mock
+import weakref
 
 from absl.testing import absltest
 from absl.testing import parameterized
+from grain._src.core import config
 from grain._src.core import transforms
 import multiprocessing as mp
 from grain._src.python import options
@@ -448,6 +451,10 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
       self.assertEqual(next(ds_iter), i)
 
 
+class _WeakReferenceableElement:
+  pass
+
+
 @absltest.skipThisClass('Base class')
 class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
 
@@ -715,6 +722,91 @@ class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
       self.assertGreater(count, 0)
       time.sleep(1)
       self.assertGreater(count, 8)
+
+  @parameterized.named_parameters(
+      dict(
+          testcase_name='stop_iteration',
+          fail_at=None,
+          traceback_filtering_mode='auto',
+      ),
+      dict(
+          testcase_name='error',
+          fail_at=3,
+          traceback_filtering_mode='auto',
+      ),
+      dict(
+          testcase_name='error_without_traceback_filtering',
+          fail_at=3,
+          traceback_filtering_mode='off',
+      ),
+  )
+  def test_finished_iterator_is_freed_without_cyclic_gc(
+      self, fail_at, traceback_filtering_mode
+  ):
+    self.addCleanup(
+        config.config.update,
+        'py_traceback_filtering',
+        config.config.get_or_default('py_traceback_filtering'),
+    )
+    config.config.update('py_traceback_filtering', traceback_filtering_mode)
+
+    def _make_element(index):
+      if index == fail_at:
+        raise ValueError('Test error.')
+      return _WeakReferenceableElement()
+
+    ds = (
+        dataset.MapDataset.range(5)
+        .map(_make_element)
+        .to_iter_dataset(options.ReadOptions(prefetch_buffer_size=0))
+    )
+    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=2)
+    gc.disable()
+    self.addCleanup(gc.enable)
+    ds_iter = ds.__iter__()
+    parent = weakref.ref(ds_iter._maybe_nonnative_parent)
+    last_element = None
+    try:
+      for element in ds_iter:
+        last_element = weakref.ref(element)
+        del element
+    except ValueError:
+      pass
+    ds_iter.close()
+    del ds_iter
+    self.assertIsNotNone(last_element)
+    self.assertIsNone(last_element())
+    self.assertIsNone(parent())
+
+  def test_raised_error_does_not_keep_last_element_alive(self):
+
+    def _make_element(index):
+      if index == 3:
+        raise ValueError('Test error.')
+      return _WeakReferenceableElement()
+
+    ds = (
+        dataset.MapDataset.range(5)
+        .map(_make_element)
+        .to_iter_dataset(options.ReadOptions(prefetch_buffer_size=0))
+    )
+    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=2)
+    gc.disable()
+    self.addCleanup(gc.enable)
+    ds_iter = ds.__iter__()
+    last_element = None
+    error = None
+    try:
+      for element in ds_iter:
+        last_element = weakref.ref(element)
+        del element
+    except ValueError as e:
+      error = e
+    ds_iter.close()
+    del ds_iter
+    self.assertIsInstance(error, ValueError)
+    self.assertIsNotNone(last_element)
+    self.assertIsNone(last_element())
 
   def test_element_spec(self):
     ds = dataset.MapDataset.range(2).to_iter_dataset()
