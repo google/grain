@@ -13,6 +13,7 @@
 # limitations under the License.
 """Unit tests for ConcatThenSplitIterDataset."""
 
+import json
 from typing import Any
 
 from absl.testing import absltest
@@ -349,9 +350,13 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
   @parameterized.product(
       checkpoint_steps=[{}, {2}, {0, 3}, {0, 1, 2, 3, 4, 5}],
       split_full_length_features=[True, False],
+      through_json=[False, True],
   )
   def test_checkpointing(
-      self, checkpoint_steps: set[int], split_full_length_features: bool
+      self,
+      checkpoint_steps: set[int],
+      split_full_length_features: bool,
+      through_json: bool,
   ):
     def _create_iter(state: dict[str, Any] | None):
       ds = packing_concat_then_split.ConcatThenSplitIterDataset(
@@ -362,6 +367,8 @@ class ConcatThenSplitIterDatasetTest(parameterized.TestCase):
       )
       ds_iter = ds.__iter__()
       if state is not None:
+        if through_json:
+          state = json.loads(json.dumps(state))
         ds_iter.set_state(state)
       return ds_iter
 
