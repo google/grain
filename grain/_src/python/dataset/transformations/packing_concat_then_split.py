@@ -209,6 +209,13 @@ class _CtsState:
   remainder_slices: Mapping[str, tuple[int, int]]
   elements_from_buffer_after_checkpoint: int
 
+  def __post_init__(self):
+    # A state read back from JSON holds lists where the slices were tuples,
+    # and a list never equals `_EMPTY_SLICE`.
+    self.remainder_slices = {
+        key: tuple(sl) for key, sl in self.remainder_slices.items()
+    }
+
   @property
   def has_remainder(self) -> bool:
     """Whether there is a remainder element."""
