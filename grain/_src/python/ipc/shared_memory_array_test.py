@@ -14,6 +14,7 @@
 """Tests for shared memory array."""
 
 from multiprocessing import shared_memory
+import pickle
 import platform
 import threading
 import time
@@ -260,6 +261,184 @@ class SharedMemoryArrayTest(parameterized.TestCase):
     advanced = shm_arr[[0, 2]]
     self.assertNotIsInstance(advanced, SharedMemoryArray)
     self.assertIsInstance(advanced, np.ndarray)
+
+  def test_close_and_unlink_shm_already_unlinked_logs_warning(self):
+    shm_meta = copy_to_shm(np.arange(10, dtype=np.int32))
+    shm_meta.close_and_unlink_shm()
+    with self.assertLogs(level="WARNING") as logs:
+      shm_meta.close_and_unlink_shm()
+    self.assertTrue(any("was already unlinked" in log for log in logs.output))
+
+  def test_re_copy_opened_shm_allocates_new_block(self):
+    SharedMemoryArray._disable_async_del()
+    arr = np.arange(10, dtype=np.int32)
+    shm_meta_1 = copy_to_shm(arr)
+    opened_1 = open_from_shm(shm_meta_1)
+    self.assertTrue(opened_1._unlink_on_del)
+
+    shm_meta_2 = copy_to_shm(opened_1)
+    self.assertTrue(opened_1._unlink_on_del)
+    self.assertNotEqual(shm_meta_1.name, shm_meta_2.name)
+
+    del opened_1
+    with self.assertRaises(FileNotFoundError):
+      shared_memory.SharedMemory(name=shm_meta_1.name, create=False)
+    shm_2 = shared_memory.SharedMemory(name=shm_meta_2.name, create=False)
+    shm_2.close()
+
+    opened_2 = open_from_shm(shm_meta_2)
+    np.testing.assert_array_equal(opened_2, arr)
+
+    del opened_2
+    with self.assertRaises(FileNotFoundError):
+      shared_memory.SharedMemory(name=shm_meta_2.name, create=False)
+
+  def test_copy_to_shm_with_shared_memory_array_slices(self):
+    SharedMemoryArray._disable_async_del()
+    shm_arr = SharedMemoryArray((8,), dtype=np.int32)
+    shm_arr[:] = np.arange(8, dtype=np.int32)
+    shm_arr.unlink_on_del()
+    orig_name = shm_arr.metadata.name
+
+    shm_meta_dict = copy_to_shm({"first": shm_arr[:4], "second": shm_arr[4:]})
+    first_name = shm_meta_dict["first"].name
+    second_name = shm_meta_dict["second"].name
+    self.assertNotEqual(first_name, orig_name)
+    self.assertNotEqual(second_name, orig_name)
+    self.assertNotEqual(first_name, second_name)
+
+    del shm_arr
+    with self.assertRaises(FileNotFoundError):
+      shared_memory.SharedMemory(name=orig_name, create=False)
+
+    opened = open_from_shm(shm_meta_dict)
+    np.testing.assert_array_equal(opened["first"], np.arange(4, dtype=np.int32))
+    np.testing.assert_array_equal(
+        opened["second"], np.arange(4, 8, dtype=np.int32)
+    )
+
+    del opened
+    with self.assertRaises(FileNotFoundError):
+      shared_memory.SharedMemory(name=first_name, create=False)
+    with self.assertRaises(FileNotFoundError):
+      shared_memory.SharedMemory(name=second_name, create=False)
+
+  def test_aliased_shared_memory_array_in_pytree(self):
+    SharedMemoryArray._disable_async_del()
+    shm_arr = SharedMemoryArray((4,), dtype=np.int32)
+    shm_arr[:] = np.arange(4, dtype=np.int32)
+    orig_name = shm_arr.metadata.name
+
+    shm_meta_dict = copy_to_shm({"a": shm_arr, "b": shm_arr})
+    self.assertEqual(shm_meta_dict["a"].name, orig_name)
+    self.assertEqual(shm_meta_dict["b"].name, orig_name)
+
+    del shm_arr
+    shm = shared_memory.SharedMemory(name=orig_name, create=False)
+    shm.close()
+
+    opened = open_from_shm(shm_meta_dict)
+    np.testing.assert_array_equal(opened["a"], np.arange(4, dtype=np.int32))
+    np.testing.assert_array_equal(opened["b"], np.arange(4, dtype=np.int32))
+
+    del opened
+    with self.assertRaises(FileNotFoundError):
+      shared_memory.SharedMemory(name=orig_name, create=False)
+
+  def test_copy_to_shm_fallback_converts_shared_memory_array_to_ndarray(self):
+    # pylint: disable=g-unsafe-pickle-load
+    SharedMemoryArray._disable_async_del()
+    shm_arr = SharedMemoryArray((6,), dtype=np.int32)
+    shm_arr[:] = np.arange(6, dtype=np.int32)
+    shm_arr.unlink_on_del()
+    orig_name = shm_arr.metadata.name
+
+    res = copy_to_shm(
+        {"strided": shm_arr[::2], "empty": shm_arr[:0], "small": shm_arr},
+        min_size=100,
+    )
+    self.assertIs(type(res["strided"]), np.ndarray)
+    self.assertIs(type(res["empty"]), np.ndarray)
+    self.assertIs(type(res["small"]), np.ndarray)
+
+    unpickled = pickle.loads(pickle.dumps(res))
+    self.assertIs(type(unpickled["strided"]), np.ndarray)
+    self.assertIs(type(unpickled["empty"]), np.ndarray)
+    self.assertIs(type(unpickled["small"]), np.ndarray)
+    np.testing.assert_array_equal(unpickled["strided"], [0, 2, 4])
+    np.testing.assert_array_equal(unpickled["empty"], [])
+    np.testing.assert_array_equal(unpickled["small"], [0, 1, 2, 3, 4, 5])
+
+    del shm_arr, res, unpickled
+    with self.assertRaises(FileNotFoundError):
+      shared_memory.SharedMemory(name=orig_name, create=False)
+
+  def test_unlink_shm_with_duplicate_metadata(self):
+    shm_meta = copy_to_shm(np.arange(10, dtype=np.int32))
+    name = shm_meta.name
+    shm = shared_memory.SharedMemory(name=name, create=False)
+    shm.close()
+
+    with self.assertLogs(level="WARNING") as logs:
+      unlink_shm({"a": shm_meta, "b": shm_meta})
+    self.assertTrue(any("was already unlinked" in log for log in logs.output))
+    with self.assertRaises(FileNotFoundError):
+      shared_memory.SharedMemory(name=name, create=False)
+
+  def test_view_is_pickled_by_value(self):
+    # pylint: disable=g-unsafe-pickle-load
+    SharedMemoryArray._disable_async_del()
+    shm_arr = SharedMemoryArray((8,), dtype=np.int32)
+    shm_arr[:] = np.arange(8, dtype=np.int32)
+    shm_arr.unlink_on_del()
+
+    for view, expected in (
+        (shm_arr[4:], np.arange(4, 8, dtype=np.int32)),
+        (shm_arr[::2], np.arange(0, 8, 2, dtype=np.int32)),
+    ):
+      self.assertIsInstance(view, SharedMemoryArray)
+      unpickled = pickle.loads(pickle.dumps(view))
+      self.assertNotIsInstance(unpickled, SharedMemoryArray)
+      np.testing.assert_array_equal(unpickled, expected)
+
+    # A whole array still pickles by reference to the shared memory block.
+    unpickled = pickle.loads(pickle.dumps(shm_arr))
+    self.assertIsInstance(unpickled, SharedMemoryArray)
+    self.assertEqual(unpickled.metadata.name, shm_arr.metadata.name)
+    np.testing.assert_array_equal(unpickled, np.arange(8, dtype=np.int32))
+
+  def test_async_del_failure_releases_semaphore(self):
+    SharedMemoryArray._disable_async_del()
+    SharedMemoryArray.enable_async_del(
+        num_threads=1, max_outstanding_requests=1
+    )
+    semaphore = SharedMemoryArray._outstanding_del_requests
+    assert semaphore is not None
+    original_del_shm = shared_memory_array._del_shm
+    shm_arr = SharedMemoryArray((4,), dtype=np.int32)
+    shm_arr.unlink_on_del()
+    shm = shm_arr.shm
+    assert isinstance(shm, shared_memory.SharedMemory)
+
+    with mock.patch.object(
+        shared_memory_array, "_del_shm", side_effect=RuntimeError("boom")
+    ) as mock_del_shm:
+      del shm_arr
+      deadline = time.time() + 30
+      while mock_del_shm.call_count == 0 and time.time() < deadline:
+        time.sleep(0.01)
+      self.assertEqual(mock_del_shm.call_count, 1)
+      deadline = time.time() + 30
+      while not semaphore.acquire(blocking=False):
+        self.assertLess(time.time(), deadline, "semaphore slot leaked")
+        time.sleep(0.01)
+      semaphore.release()
+    original_del_shm(shm, unlink=True)
+
+  def test_zero_itemsize_dtype_not_copied_to_shm(self):
+    arr = np.zeros((4,), dtype="V0")
+    res = copy_to_shm(arr)
+    self.assertIs(res, arr)
 
 
 if __name__ == "__main__":
