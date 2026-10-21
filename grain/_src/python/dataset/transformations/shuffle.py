@@ -93,7 +93,8 @@ class WindowShuffleMapDataset(dataset.MapDataset[T]):
   Shuffles the retrieval index within a range, given by window_size. Each unique
   index corresponds to exactly one shuffled index (i.e. there is a one-to-one
   mapping and hence a guarantee that no shuffled indices are repeated within a
-  given window).
+  given window). Windows restart at each parent epoch; the last window may be
+  smaller than `window_size`.
 
   Example:
     Applying deterministic window-based shuffling to a dataset::
@@ -141,15 +142,20 @@ class WindowShuffleMapDataset(dataset.MapDataset[T]):
 
   def _shuffled_index(self, index: int) -> int:
     index = int(index)
-    window_index, index_in_window = divmod(index, self._window_size)
-    seed = self._seed + window_index
+    length = len(self._parent)
+    epoch, index_in_epoch = divmod(index, length)
+    window_index, index_in_window = divmod(index_in_epoch, self._window_size)
+    window_start = window_index * self._window_size
+    window_size = min(self._window_size, length - window_start)
+    windows_per_epoch = (length + self._window_size - 1) // self._window_size
+    seed = self._seed + epoch * windows_per_epoch + window_index
     shuffled_index_in_window = index_shuffle.index_shuffle(
         index_in_window,
-        max_index=self._window_size - 1,
+        max_index=window_size - 1,
         seed=seed,
         rounds=4,
     )
-    return shuffled_index_in_window + window_index * self._window_size
+    return epoch * length + window_start + shuffled_index_in_window
 
   def __getitem__(self, index):
     if isinstance(index, slice):
