@@ -24,6 +24,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 * Deprecations:
 
 * Bug fixes:
+  * Fixes Python `bool`/scalar itemsize validation and `PackedBatch` row
+    byte-stride calculation in C++ `FirstFitPackIterDataset`.
   * Fixes an issue where interpreter shutdown stops responding in `ProcessPrefetchDatasetIterator` after `set_state()` is called.
   * Fixed bug in DataLoader where sharding remainder was dropped even when ShardOptions.drop_remainder=False.
   * Fixes reference cycle in BatchMapDataset.
