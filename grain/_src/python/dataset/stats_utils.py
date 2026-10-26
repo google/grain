@@ -227,6 +227,12 @@ def _record_leaf_size(element: Any, memory_buffer: list[int]) -> Any:
 
 def record_size(element: Any, memory_buffer: list[int]) -> Any:
   """Records the size of the element in the memory buffer."""
+  if isinstance(element, (bytes, str)):
+    memory_buffer.append(len(element))
+    return element
+  if isinstance(element, np.ndarray):
+    memory_buffer.append(element.nbytes)
+    return element
   return tree_lib.map_structure(
       functools.partial(_record_leaf_size, memory_buffer=memory_buffer),
       element,
