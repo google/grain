@@ -24,6 +24,7 @@ import enum
 import functools
 import html
 from multiprocessing import queues
+import os
 import pprint
 import queue
 import sys
@@ -318,6 +319,8 @@ def record_next_duration_if_output(next_fn):
 
   @functools.wraps(next_fn)
   def wrapper(iterator, *args, **kwargs):
+    if not iterator._stats._is_output:  # pylint:disable=protected-access
+      return next_fn(iterator, *args, **kwargs)
     start_time = time.perf_counter_ns()
     result = next_fn(iterator, *args, **kwargs)
     if iterator._stats._is_output:  # pylint:disable=protected-access
@@ -847,6 +850,32 @@ _RecordedSelfTime = collections.namedtuple(
 )
 
 
+class _SelfTimeContext:
+  """Lightweight context manager avoiding @contextlib.contextmanager generator overhead."""
+
+  __slots__ = ("_stats", "num_elements", "_offset_ns", "duration_ns")
+
+  def __init__(self, stats: _ExecutionStats, num_elements: int, offset_ns: int):
+    self._stats = stats
+    self.num_elements = num_elements
+    self._offset_ns = offset_ns
+    self.duration_ns = 0
+
+  def __enter__(self):
+    self.duration_ns = time.perf_counter_ns()
+    return self
+
+  def __exit__(self, exc_type, exc_val, exc_tb):
+    self.duration_ns = (
+        time.perf_counter_ns() - self.duration_ns + self._offset_ns
+    )
+    stats = self._stats
+    stats._self_times_buffer.append(self)  # pylint: disable=protected-access
+    if stats._is_output:  # pylint: disable=protected-access
+      stats._notify_output_updated()  # pylint: disable=protected-access
+    return False
+
+
 class _ExecutionStats(_VisualizationStats):
   """Execution time statistics for transformations."""
 
@@ -863,6 +892,9 @@ class _ExecutionStats(_VisualizationStats):
     self._reporting_thread = None
     self._summary_dispatcher_thread = None
     self._reporting_thread_init_lock = threading.Lock()
+    self._fast_self_time_ctx = (
+        os.environ.get("GRAIN_FAST_SELF_TIME_CTX", "1") != "0"
+    )
     self._summary_dispatcher_thread_init_lock = threading.Lock()
     self._summary = execution_summary_pb2.ExecutionSummary.Node(
         min_processing_time_ns=sys.maxsize,
@@ -962,48 +994,61 @@ class _ExecutionStats(_VisualizationStats):
     _populate_wait_time_ratio(result)
     return result
 
+  def _notify_output_updated(self) -> None:
+    """Records an output update and lazily starts the reporting threads."""
+    # We avoid acquiring `_reporting_thread_init_lock` here to avoid lock
+    # contention.
+    self._last_update_time = time.time()  # pyrefly: ignore[bad-assignment]
+    if self._reporting_thread is None:
+      with self._reporting_thread_init_lock:
+        # Check above together with update would not be atomic -- another
+        # thread may have started the reporting thread.
+        if self._reporting_thread is None:
+          self._reporting_thread = threading.Thread(
+              target=self._reporting_loop, daemon=True
+          )
+          self._reporting_thread.start()
+    if self._summary_dispatcher_thread is None and (
+        self._config.stats_out_queue or self._config.log_summary
+    ):
+      with self._summary_dispatcher_thread_init_lock:
+        # Check above together with update would not be atomic -- another
+        # thread may have started the logging thread.
+        if self._summary_dispatcher_thread is None:
+          self._summary_dispatcher = (
+              self._send_stats_to_main_process_loop
+              if self._config.stats_out_queue
+              else self._logging_execution_summary_loop
+          )
+          self._summary_dispatcher_thread = threading.Thread(
+              target=self._summary_dispatcher, daemon=True
+          )
+          self._summary_dispatcher_thread.start()
+
+  def _finish_self_time(self, duration_ns: int, num_elements: int) -> None:
+    self._self_times_buffer.append(_RecordedSelfTime(duration_ns, num_elements))
+    if self._is_output:
+      self._notify_output_updated()
+
   @contextlib.contextmanager
-  def record_self_time(self, num_elements: int = 1, offset_ns: int = 0):
+  def _record_self_time_gen(self, num_elements: int = 1, offset_ns: int = 0):
     start_time = time.perf_counter_ns()
     try:
       yield
     finally:
-      self._self_times_buffer.append(
-          _RecordedSelfTime(
-              (time.perf_counter_ns() - start_time + offset_ns), num_elements
-          )
+      self._finish_self_time(
+          time.perf_counter_ns() - start_time + offset_ns, num_elements
       )
-      if self._is_output:
-        # We avoid acquiring `_reporting_thread_init_lock` here to avoid lock
-        # contention.
-        self._last_update_time = time.time()  # pyrefly: ignore[bad-assignment]
-        if self._reporting_thread is None:
-          with self._reporting_thread_init_lock:
-            # Check above together with update would not be atomic -- another
-            # thread may have started the reporting thread.
-            if self._reporting_thread is None:
-              self._reporting_thread = threading.Thread(
-                  target=self._reporting_loop, daemon=True
-              )
-              self._reporting_thread.start()
-        if self._summary_dispatcher_thread is None and (
-            self._config.stats_out_queue or self._config.log_summary
-        ):
-          with self._summary_dispatcher_thread_init_lock:
-            # Check above together with update would not be atomic -- another
-            # thread may have started the logging thread.
-            if self._summary_dispatcher_thread is None:
-              self._summary_dispatcher = (
-                  self._send_stats_to_main_process_loop
-                  if self._config.stats_out_queue
-                  else self._logging_execution_summary_loop
-              )
-              self._summary_dispatcher_thread = threading.Thread(
-                  target=self._summary_dispatcher, daemon=True
-              )
-              self._summary_dispatcher_thread.start()
+
+  def record_self_time(self, num_elements: int = 1, offset_ns: int = 0):
+    if self._fast_self_time_ctx:
+      return _SelfTimeContext(self, num_elements, offset_ns)
+    return self._record_self_time_gen(num_elements, offset_ns)
 
   def report(self):
+    batch_hist = os.environ.get("GRAIN_BATCH_SELF_TIME_HISTOGRAM", "1") != "0"
+    interval_duration_ns = 0
+    interval_elements = 0
     while self._self_times_buffer:
       recorded_self_time = self._self_times_buffer.pop()
       if recorded_self_time.num_elements <= 0:
@@ -1011,6 +1056,8 @@ class _ExecutionStats(_VisualizationStats):
 
       self._summary.num_produced_elements += recorded_self_time.num_elements
       self._summary.total_processing_time_ns += recorded_self_time.duration_ns
+      interval_elements += recorded_self_time.num_elements
+      interval_duration_ns += recorded_self_time.duration_ns
       per_element_duration_ns = (
           recorded_self_time.duration_ns // recorded_self_time.num_elements
       )
@@ -1020,7 +1067,14 @@ class _ExecutionStats(_VisualizationStats):
       self._summary.max_processing_time_ns = max(
           self._summary.max_processing_time_ns, per_element_duration_ns
       )
-      _self_time_ns_histogram.Record(per_element_duration_ns, self._config.name)
+      if not batch_hist:
+        _self_time_ns_histogram.Record(
+            per_element_duration_ns, self._config.name
+        )
+    if batch_hist and interval_elements > 0:
+      _self_time_ns_histogram.Record(
+          interval_duration_ns // interval_elements, self._config.name
+      )
     while self._consumed_memory_buffer:
       self._summary.bytes_consumed += self._consumed_memory_buffer.pop()
     while self._produced_memory_buffer:
@@ -1030,10 +1084,16 @@ class _ExecutionStats(_VisualizationStats):
 
   def record_bytes_consumed(self, element: Any) -> Any:
     """Records the memory usage of the element."""
+    if type(element) is bytes:  # pylint: disable=unidiomatic-typecheck
+      self._consumed_memory_buffer.append(len(element))
+      return element
     return stats_utils.record_size(element, self._consumed_memory_buffer)
 
   def record_bytes_produced(self, element: Any) -> Any:
     """Records the memory usage of the element."""
+    if type(element) is bytes:  # pylint: disable=unidiomatic-typecheck
+      self._produced_memory_buffer.append(len(element))
+      return element
     return stats_utils.record_size(element, self._produced_memory_buffer)
 
 

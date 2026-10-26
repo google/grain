@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import contextlib  # pylint: disable=unused-import
 import functools
+import os
 import time
 from typing import Any, Sequence, Union
 
@@ -57,16 +58,30 @@ class SourceMapDataset(dataset.MapDataset):
       self._record_metrics = not _has_source_parent(source)
     else:
       self._record_metrics = True
+    self._fast_source_getitem = (
+        os.environ.get("GRAIN_FAST_SOURCE_GETITEM", "1") != "0"
+    )
+    self._cached_len: int | None = None
+    self._direct_read_one: Any = None
 
   def __len__(self) -> int:
+    if self._fast_source_getitem:
+      if self._cached_len is None:
+        self._cached_len = len(self._source)
+      return self._cached_len
     return len(self._source)
 
   def _index_mod_len(self, index: int) -> int:
     # Legacy source implementations sometimes return None for source length.
     # We'll let this case fail if the length is requested, but let the pipeline
     # read from the source by index without mod.
+    if self._fast_source_getitem and self._cached_len is not None:
+      return index % self._cached_len
     try:
-      return index % len(self._source)
+      n = len(self._source)
+      if self._fast_source_getitem:
+        self._cached_len = n
+      return index % n
     except TypeError:
       return index
 
@@ -81,6 +96,38 @@ class SourceMapDataset(dataset.MapDataset):
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
+    if self._fast_source_getitem:
+      with self._stats.record_self_time():
+        start_time = time.perf_counter_ns()
+        read_one = self._direct_read_one
+        if read_one is not None and type(index) is int:  # pylint: disable=unidiomatic-typecheck
+          n = self._cached_len
+          raw = read_one(index if 0 <= index < n else index % n)  # pyrefly: ignore[unsupported-operation]
+        else:
+          raw = self._source[self._index_mod_len(index)]
+          if (
+              read_one is None
+              and self._cached_len is not None
+              and getattr(self._source, "_single_start", -1) == 0
+          ):
+            self._direct_read_one = getattr(
+                self._source, "_single_read_one", None
+            )
+        result = self._stats.record_output_spec(raw)
+        if self._record_metrics:
+          stop_time = time.perf_counter_ns()
+          num_bytes = (
+              len(result)
+              if type(result) is bytes  # pylint: disable=unidiomatic-typecheck
+              else tree_lib.estimate_byte_size(result)
+          )
+          grain_monitoring.record_bytes_read_and_latency(
+              self._source_name,
+              num_bytes=num_bytes,
+              latency_ns=stop_time - start_time,
+              num_reads=1,
+          )
+        return result
     tagging_ctx = contextlib.nullcontext()
     with tagging_ctx:
       with self._stats.record_self_time():
@@ -136,6 +183,8 @@ class SourceMapDataset(dataset.MapDataset):
       self._original_source_map_dataset = SourceMapDataset(self._source)
     new_slice = self._get_sequential_slice(sl)
     self._source = self._original_source_map_dataset.slice(new_slice)
+    self._cached_len = None
+    self._direct_read_one = None
 
   def log_lineage(self):
     pass

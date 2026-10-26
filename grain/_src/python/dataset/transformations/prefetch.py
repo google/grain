@@ -17,12 +17,15 @@ from __future__ import annotations
 
 import collections
 from collections.abc import Iterator, Sequence
+import concurrent.futures as stdlib_futures
 import copy
 import functools
 from multiprocessing import queues
+import os
 import queue
 import sys
 import threading
+import time
 import typing
 from typing import Any, Optional, Protocol, TypeVar
 
@@ -157,10 +160,28 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._target_prefetch_buffer_size = read_options.prefetch_buffer_size
 
     self._allow_nones = allow_nones
+    self._use_stdlib_threadpool = (
+        os.environ.get("GRAIN_USE_STDLIB_THREADPOOL", "1") != "0"
+    )
+    if self._use_stdlib_threadpool:
+      if (
+          hasattr(stdlib_futures, "thread")
+          and hasattr(stdlib_futures.thread, "set_task_hooks")
+          and os.environ.get("GRAIN_DISABLE_FUTURES_TASK_HOOKS", "1") != "0"
+      ):
+        stdlib_futures.thread.set_task_hooks(None, None, None)
     if self._target_prefetch_buffer_size > 0 and self._target_num_threads > 0:
-      self._executor = futures.ThreadPoolExecutor(
+      pool_cls = (
+          stdlib_futures.ThreadPoolExecutor
+          if self._use_stdlib_threadpool
+          else futures.ThreadPoolExecutor
+      )
+      self._executor = pool_cls(
           self._target_num_threads, thread_name_prefix="grain-prefetch"
       )
+    self._depth_sample_interval = int(
+        os.environ.get("GRAIN_PREFETCH_DEPTH_SAMPLE_INTERVAL", "32") or "1"
+    )
 
   def _initialize_stats(
       self, execution_tracking_mode: base.ExecutionTrackingMode
@@ -189,6 +210,11 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     )
 
   def _measure_prefetch_depth(self):
+    if (
+        self._depth_sample_interval > 1
+        and (self._next_returned_index % self._depth_sample_interval) != 0
+    ):
+      return
     ready_count = 0
     for future in self._buffer:
       if future.done():
@@ -205,13 +231,14 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._assert_not_closed()
     # The time recorded here is the time spent in prefetch node to return an
     # element, including the time spent in parent node.
-    timer = dataset_stats.Timer()
+    wait_duration_ns = 0
     # We loop here to skip all None elements (in case the underlying dataset
     # is sparse), if self._allow_nones = False, else we return Nones too.
     while True:
       if self._next_returned_index == self._dataset_length:
         break
-      with self._lock, timer:
+      start_time_ns = time.perf_counter_ns()
+      with self._lock:
         if (
             self._target_prefetch_buffer_size > 0
             and self._target_num_threads > 0
@@ -235,10 +262,11 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
             )
             self._next_buffered_index += 1
         self._next_returned_index += 1
+      wait_duration_ns += time.perf_counter_ns() - start_time_ns
       return_element = self._allow_nones or element is not None
       self._threshold_checker.check(return_element)
       if return_element:
-        with self._stats.record_self_time(offset_ns=timer.value()):
+        with self._stats.record_self_time(offset_ns=wait_duration_ns):
           element = self._stats.record_bytes_produced(element)
           return self._stats.record_output_spec(element)
     raise StopIteration
@@ -321,19 +349,33 @@ class PrefetchDatasetIterator(dataset.DatasetIterator[T]):
       old_executor.shutdown(wait=False)
 
   def _fill_buffer(self):
-    while (
+    if (
         len(self._buffer) < self._target_prefetch_buffer_size
         and self._next_buffered_index < self._dataset_length
     ):
-      # Note that we trigger creation of `_stats` in this (single) thread, it is
-      # important because the stats initialization is not thread-safe.
-      self._buffer.append(
-          self._executor.submit(
-              functools.partial(_getitem, self._stats, self._map_parent),
-              self._next_buffered_index,
+      if not hasattr(self, "_getitem_fn"):
+        if os.environ.get("GRAIN_CACHE_GETITEM_PARTIAL", "1") != "0":
+          self._getitem_fn = functools.partial(
+              _getitem, self._stats, self._map_parent
           )
-      )
-      self._next_buffered_index += 1
+        else:
+          self._getitem_fn = None
+      fn = self._getitem_fn
+      while (
+          len(self._buffer) < self._target_prefetch_buffer_size
+          and self._next_buffered_index < self._dataset_length
+      ):
+        # Note that we trigger creation of `_stats` in this (single) thread, it
+        # is important because the stats initialization is not thread-safe.
+        self._buffer.append(
+            self._executor.submit(
+                fn
+                if fn is not None
+                else functools.partial(_getitem, self._stats, self._map_parent),
+                self._next_buffered_index,
+            )
+        )
+        self._next_buffered_index += 1
 
   def start_prefetch(self):
     if self._target_prefetch_buffer_size > 0 and self._target_num_threads > 0:
@@ -442,10 +484,21 @@ def _put_iterator_elements_in_buffer(
   try:
     while not should_stop.is_set():
       element = stats.record_bytes_consumed(iterator.__next__())
-      state = copy.deepcopy(iterator.get_state())
+      if should_stop.is_set():
+        break
+      raw_state = iterator.get_state()
+      if (
+          type(raw_state) is dict  # pylint: disable=unidiomatic-typecheck
+          and len(raw_state) == 1
+          and type(next(iter(raw_state.values()))) is int  # pylint: disable=unidiomatic-typecheck
+      ):
+        state = raw_state.copy()
+      else:
+        state = copy.deepcopy(raw_state)
       buffer.put((element, state, None))
   except Exception as e:  # pylint: disable=broad-except
-    buffer.put((None, None, e))  # pyrefly: ignore[bad-argument-type]
+    if not should_stop.is_set():
+      buffer.put((None, None, e))  # pyrefly: ignore[bad-argument-type]
 
 
 class CheckpointableIterator(Iterator[T], Protocol[T]):
@@ -598,21 +651,22 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     if self._state is None:
       self._state = self._maybe_nonnative_parent.get_state()
 
-    timer = dataset_stats.Timer()
-    with timer:
-      if self._target_prefetch_buffer_size > 0:
+    start_time_ns = time.perf_counter_ns()
+    if self._target_prefetch_buffer_size > 0:
+      if self._prefetch_thread is None:
         self.start_prefetch()
-        element, state, err = self._buffer.get()
-      else:
-        try:
-          # In case of 0 prefetch buffer size, we still try to get from the
-          # buffer as it could have been populated when the prefetch buffer size
-          # was greater than 0.
-          element, state, err = self._buffer.get_nowait()
-        except queue.Empty:
-          element = self._maybe_nonnative_parent.__next__()
-          state = copy.deepcopy(self._maybe_nonnative_parent.get_state())
-          err = None
+      element, state, err = self._buffer.get()
+    else:
+      try:
+        # In case of 0 prefetch buffer size, we still try to get from the
+        # buffer as it could have been populated when the prefetch buffer size
+        # was greater than 0.
+        element, state, err = self._buffer.get_nowait()
+      except queue.Empty:
+        element = self._maybe_nonnative_parent.__next__()
+        state = copy.deepcopy(self._maybe_nonnative_parent.get_state())
+        err = None
+    wait_duration_ns = time.perf_counter_ns() - start_time_ns
 
     if err is not None:
       self._stop_prefetch()
@@ -620,13 +674,20 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     self._state = state
     if self._next_index is not None:
       self._next_index += 1
-    with self._stats.record_self_time(offset_ns=timer.value()):
+    with self._stats.record_self_time(offset_ns=wait_duration_ns):
       element = self._stats.record_bytes_produced(element)
       return self._stats.record_output_spec(element)
 
   def close(self):
     """Stops the iterator. No further calls to the iterator are expected."""
     self._closed = True
+    if os.environ.get("GRAIN_FAST_CLOSE", "0") != "0":
+      self._prefetch_should_stop.set()
+      self._clear_buffer()
+      if isinstance(self._maybe_nonnative_parent, dataset.DatasetIterator):
+        self._maybe_nonnative_parent.close()
+      self._prefetch_thread = None
+      return
     self._stop_prefetch()
     if isinstance(self._maybe_nonnative_parent, dataset.DatasetIterator):
       self._maybe_nonnative_parent.close()
