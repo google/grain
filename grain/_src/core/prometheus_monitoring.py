@@ -37,22 +37,57 @@ _DEFAULT_PROMETHEUS_PORT = 9431
 # exits.
 _prometheus_multiproc_dir = None
 
-try:
-  # pylint: disable=g-import-not-at-top
-  import prometheus_client  # pyrefly: ignore[missing-import]
-  from prometheus_client import multiprocess  # pyrefly: ignore[missing-import]
+prometheus_client: Any = None
+multiprocess: Any = None
+_prom_counter: Any = None
+_prom_gauge: Any = None
+_prom_histogram: Any = None
 
-  prometheus_client = cast(Any, prometheus_client)
-  multiprocess = cast(Any, multiprocess)
 
-  _prom_counter = prometheus_client.Counter
-  _prom_gauge = prometheus_client.Gauge
-  _prom_histogram = prometheus_client.Histogram
-except (ImportError, AttributeError):
-  prometheus_client = None
-  _prom_counter = None
-  _prom_gauge = None
-  _prom_histogram = None
+def _IsTelemetryEnabled() -> bool:
+  """Returns whether Prometheus telemetry is enabled."""
+  return (
+      os.environ.get('ENABLE_PYGRAIN_PROMETHEUS_TELEMETRY', 'false').lower()
+      == 'true'
+  )
+
+
+def _EnsurePrometheusMultiprocDir() -> None:
+  """Sets `PROMETHEUS_MULTIPROC_DIR` to a temporary directory if unset."""
+  global _prometheus_multiproc_dir
+  if 'PROMETHEUS_MULTIPROC_DIR' in os.environ:
+    return
+  multiproc_dir = tempfile.mkdtemp(prefix='prometheus_multiproc_')
+  _prometheus_multiproc_dir = multiproc_dir
+  os.environ['PROMETHEUS_MULTIPROC_DIR'] = multiproc_dir
+  creator_pid = os.getpid()
+
+  def _Cleanup():
+    if os.getpid() == creator_pid:
+      shutil.rmtree(multiproc_dir, ignore_errors=True)
+
+  atexit.register(_Cleanup)
+
+
+# `prometheus_client` selects its storage backend on first import, so the
+# multiprocess directory must be configured before it is imported.
+if _IsTelemetryEnabled():
+  _EnsurePrometheusMultiprocDir()
+  try:
+    # pylint: disable=g-import-not-at-top
+    import prometheus_client.multiprocess  # pyrefly: ignore[missing-import]
+    # pylint: enable=g-import-not-at-top
+
+    prometheus_client = cast(Any, prometheus_client)
+    multiprocess = cast(Any, prometheus_client.multiprocess)
+    _prom_counter = prometheus_client.Counter
+    _prom_gauge = prometheus_client.Gauge
+    _prom_histogram = prometheus_client.Histogram
+  except (ImportError, AttributeError):
+    prometheus_client = None
+    _prom_counter = None
+    _prom_gauge = None
+    _prom_histogram = None
 
 _initialized = False
 _prometheus_metrics = {}  # Maps metric names to their Prometheus objects.
@@ -388,26 +423,7 @@ def Initialize(port=None):
 
 def SetupTelemetry():
   """Autostarts Prometheus metrics server if enabled via environment variable."""
-  enable_telemetry = os.environ.get(
-      'ENABLE_PYGRAIN_PROMETHEUS_TELEMETRY', 'false'
-  )
-  if enable_telemetry.lower() == 'true':
-    global _prometheus_multiproc_dir
-
-    if 'PROMETHEUS_MULTIPROC_DIR' not in os.environ:
-      # Create a directory for prometheus multiprocessing.
-      _prometheus_multiproc_dir = tempfile.mkdtemp(
-          prefix='prometheus_multiproc_'
-      )
-      os.environ['PROMETHEUS_MULTIPROC_DIR'] = _prometheus_multiproc_dir
-      _creator_pid = os.getpid()
-
-      def _Cleanup():
-        if os.getpid() == _creator_pid:
-          shutil.rmtree(_prometheus_multiproc_dir, ignore_errors=True)
-
-      atexit.register(_Cleanup)
-
+  if _IsTelemetryEnabled():
     if multiprocessing.current_process().name == 'MainProcess':
       Initialize(port=9431)
     else:

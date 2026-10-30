@@ -13,7 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import errno
+import importlib
 import os
+import shutil
+import sys
 import tempfile
 from unittest import mock
 
@@ -25,8 +28,14 @@ from grain._src.core import prometheus_monitoring
 # pylint: disable=g-import-not-at-top
 try:
   import prometheus_client
+  from prometheus_client import multiprocess
 except ImportError:
   prometheus_client = None
+  multiprocess = None
+
+
+def _is_prometheus_client_module(name: str) -> bool:
+  return name == 'prometheus_client' or name.startswith('prometheus_client.')
 
 
 class MonitoringTest(absltest.TestCase):
@@ -41,12 +50,107 @@ class MonitoringTest(absltest.TestCase):
     )
 
     if prometheus_client:
+      # Telemetry is disabled at import time, so bind the client explicitly.
+      for name, value in (
+          ('prometheus_client', prometheus_client),
+          ('multiprocess', multiprocess),
+          ('_prom_counter', prometheus_client.Counter),
+          ('_prom_gauge', prometheus_client.Gauge),
+          ('_prom_histogram', prometheus_client.Histogram),
+      ):
+        self.enter_context(
+            mock.patch.object(prometheus_monitoring, name, value)
+        )
+
       # Clear registry for hermetic tests.
       registry = prometheus_client.REGISTRY
       collector_to_names = getattr(registry, '_collector_to_names', None)
       if collector_to_names:
         for collector in list(collector_to_names):
           registry.unregister(collector)
+
+  def _reimport_with_fresh_prometheus_client(self, env: dict[str, str]) -> None:
+    """Reloads the module with `prometheus_client` unloaded and `env` set."""
+    saved_modules = {
+        name: module
+        for name, module in sys.modules.items()
+        if _is_prometheus_client_module(name)
+    }
+    for name in saved_modules:
+      del sys.modules[name]
+
+    def _restore():
+      for name in [n for n in sys.modules if _is_prometheus_client_module(n)]:
+        del sys.modules[name]
+      sys.modules.update(saved_modules)
+      importlib.reload(prometheus_monitoring)
+
+    # Restore the module after the environment patch below is undone.
+    self.addCleanup(_restore)
+    self.enter_context(mock.patch.dict(os.environ))
+    os.environ.pop('PROMETHEUS_MULTIPROC_DIR', None)
+    os.environ.pop('ENABLE_PYGRAIN_PROMETHEUS_TELEMETRY', None)
+    os.environ.update(env)
+    importlib.reload(prometheus_monitoring)
+
+  def test_import_with_telemetry_disabled_does_not_import_prometheus_client(
+      self,
+  ):
+    if prometheus_client is None:
+      self.skipTest('prometheus-client not installed')
+
+    self._reimport_with_fresh_prometheus_client(env={})
+
+    self.assertNotIn('prometheus_client', sys.modules)
+    self.assertNotIn('PROMETHEUS_MULTIPROC_DIR', os.environ)
+    self.assertIsNone(prometheus_monitoring.prometheus_client)
+    self.assertIsNone(prometheus_monitoring._prom_counter)
+    self.assertIsNone(prometheus_monitoring._prom_gauge)
+    self.assertIsNone(prometheus_monitoring._prom_histogram)
+
+  def test_import_with_telemetry_enabled_exports_multiprocess_metrics(self):
+    if prometheus_client is None:
+      self.skipTest('prometheus-client not installed')
+
+    self._reimport_with_fresh_prometheus_client(
+        env={'ENABLE_PYGRAIN_PROMETHEUS_TELEMETRY': 'true'}
+    )
+
+    multiproc_dir = os.environ.get('PROMETHEUS_MULTIPROC_DIR')
+    self.assertIsNotNone(multiproc_dir)
+    self.addCleanup(shutil.rmtree, multiproc_dir, ignore_errors=True)
+    client = prometheus_monitoring.prometheus_client
+    self.assertIsNotNone(client)
+    self.assertIsNot(client.values.ValueClass, client.values.MutexValue)
+
+    prometheus_monitoring.record_bytes_read_and_latency(
+        'source_foo', num_bytes=123, latency_ns=1000, num_reads=1
+    )
+
+    registry = client.CollectorRegistry()
+    prometheus_monitoring.multiprocess.MultiProcessCollector(registry)
+    self.assertEqual(
+        registry.get_sample_value(
+            'grain_python_data_sources_bytes_read_total',
+            labels={'source': 'source_foo'},
+        ),
+        123,
+    )
+
+  def test_import_with_telemetry_enabled_keeps_existing_multiproc_dir(self):
+    if prometheus_client is None:
+      self.skipTest('prometheus-client not installed')
+
+    existing_dir = self.create_tempdir().full_path
+    self._reimport_with_fresh_prometheus_client(
+        env={
+            'ENABLE_PYGRAIN_PROMETHEUS_TELEMETRY': 'true',
+            'PROMETHEUS_MULTIPROC_DIR': existing_dir,
+        }
+    )
+
+    self.assertEqual(os.environ['PROMETHEUS_MULTIPROC_DIR'], existing_dir)
+    self.assertIsNone(prometheus_monitoring._prometheus_multiproc_dir)
 
   def test_initialize_prometheus_server_called_once(self):
     if prometheus_client is None:

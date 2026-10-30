@@ -32,6 +32,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * `WindowShuffleIterDataset` were generating different sequence than
     `WindowShuffleMapDataset`. Now a new option `reverse=False` allows to
     generate an equivalent sequence (backward compatibility is preserved).
+  * Fixes Grain Prometheus telemetry metrics not being exported when
+    `PROMETHEUS_MULTIPROC_DIR` is not set before import.
 
 ## Grain 0.2.18 (June 17, 2026)
 
