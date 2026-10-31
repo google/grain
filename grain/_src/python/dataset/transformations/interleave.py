@@ -97,7 +97,8 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
   @stats.trace_input_pipeline_next(stage_category=stats.IPL_CAT_PREPROCESSING)
   def __next__(self) -> T:
     self._assert_not_closed()
-    self._started = True
+    if not self._started:
+      self.start_prefetch()
     timer = stats.Timer()
     _ = self._stats  # eagerly initialize stats
     while True:
@@ -296,6 +297,7 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     self._next_index_in_datasets = state["next_index_in_datasets"]
     self._iterators_in_use_indices = state["iterators_in_use_indices"]
     self._future_states = cast(dict[int, Any], state.get("future_states", {}))
+    self._started = False
 
   def set_shard_states(self, shard_states: Sequence[Any]) -> None:
     active_states = []

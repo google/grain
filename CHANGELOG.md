@@ -24,6 +24,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 * Deprecations:
 
 * Bug fixes:
+  * Fixes `InterleaveDatasetIterator` not calling `start_prefetch()` on first
+    `__next__()` or after `set_state()`.
   * Added exponential bucketer for `/grain/python/data_loader/iterator_get_next`
     and `/grain/python/dataset/prefetch_buffer_ready_count` metrics so that
     histograms capture values properly instead of overflowing or using defaults.
