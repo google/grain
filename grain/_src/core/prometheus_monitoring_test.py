@@ -425,6 +425,67 @@ class MonitoringTest(absltest.TestCase):
           self.assertIn(2.0, upper_bounds)
           self.assertIn(4.0, upper_bounds)
 
+  def test_iterator_get_next_nanoseconds_bucketer_upper_bounds(self):
+    if prometheus_client is None:
+      self.skipTest('prometheus-client not installed')
+
+    with mock.patch.object(
+        prometheus_monitoring,
+        '_PROMETHEUS_ALLOWED_METRICS',
+        {'/grain/python/data_loader/iterator_get_next'},
+    ):
+      bucketer = monitoring.Bucketer.PowersOf(2.0)
+      h = prometheus_monitoring.EventMetric(
+          '/grain/python/data_loader/iterator_get_next',
+          metadata=monitoring.Metadata(
+              description=(
+                  'Histogram for DataLoaderIterator.__next__() latency.'
+              ),
+              units=monitoring.Units.NANOSECONDS,
+          ),
+          bucketer=bucketer,
+      )
+      prometheus_metric = getattr(h, '_metric', None)
+      if prometheus_metric:
+        upper_bounds = getattr(prometheus_metric, '_upper_bounds', None)
+        if upper_bounds:
+          self.assertIn(1.0, upper_bounds)
+          self.assertIn(2.0, upper_bounds)
+          self.assertIn(4.0, upper_bounds)
+          # Nanosecond buckets should extend up to hours (> 1e9 ns).
+          self.assertTrue(
+              any(b >= 1e9 for b in upper_bounds if b != float('inf'))
+          )
+
+  def test_prefetch_buffer_ready_count_bucketer_upper_bounds(self):
+    if prometheus_client is None:
+      self.skipTest('prometheus-client not installed')
+
+    with mock.patch.object(
+        prometheus_monitoring,
+        '_PROMETHEUS_ALLOWED_METRICS',
+        {'/grain/python/dataset/prefetch_buffer_ready_count'},
+    ):
+      bucketer = monitoring.Bucketer.PowersOf(2.0)
+      h = prometheus_monitoring.EventMetric(
+          '/grain/python/dataset/prefetch_buffer_ready_count',
+          metadata=monitoring.Metadata(
+              description=(
+                  'Distribution of the number of consecutive elements from the'
+                  ' front of the prefetch buffer that are ready for'
+                  ' consumption.'
+              ),
+          ),
+          bucketer=bucketer,
+      )
+      prometheus_metric = getattr(h, '_metric', None)
+      if prometheus_metric:
+        upper_bounds = getattr(prometheus_metric, '_upper_bounds', None)
+        if upper_bounds:
+          self.assertIn(1.0, upper_bounds)
+          self.assertIn(2.0, upper_bounds)
+          self.assertIn(4.0, upper_bounds)
+
   def test_record_bytes_read_and_latency(self):
     if prometheus_client is None:
       self.skipTest('prometheus-client not installed')

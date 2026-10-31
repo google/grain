@@ -51,9 +51,10 @@ _api_usage_counter = monitoring.Counter(
 _iterator_get_next_metric = monitoring.EventMetric(
     "/grain/python/data_loader/iterator_get_next",
     monitoring.Metadata(
-        description="Gauge for DataLoaderIterator.__next__() latency.",
+        description="Histogram for DataLoaderIterator.__next__() latency.",
         units=monitoring.Units.NANOSECONDS,
     ),
+    bucketer=monitoring.Bucketer.PowersOf(2.0),
 )
 
 _T = TypeVar("_T")

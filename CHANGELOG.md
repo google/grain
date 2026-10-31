@@ -24,6 +24,9 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 * Deprecations:
 
 * Bug fixes:
+  * Added exponential bucketer for `/grain/python/data_loader/iterator_get_next`
+    and `/grain/python/dataset/prefetch_buffer_ready_count` metrics so that
+    histograms capture values properly instead of overflowing or using defaults.
   * Fixes an issue where interpreter shutdown stops responding in `ProcessPrefetchDatasetIterator` after `set_state()` is called.
   * Fixed bug in DataLoader where sharding remainder was dropped even when ShardOptions.drop_remainder=False.
   * Fixes reference cycle in BatchMapDataset.

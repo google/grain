@@ -47,6 +47,7 @@ _prefetch_ready_elements = grain_monitoring.EventMetric(
             " Low values indicate a possible IO bottleneck."
         ),
     ),
+    bucketer=grain_monitoring.Bucketer.PowersOf(2.0),
 )
 
 T = TypeVar("T")
