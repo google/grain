@@ -1287,5 +1287,62 @@ class StringTruncationTest(absltest.TestCase):
     )
 
 
+class BatchDtypePromotionTest(parameterized.TestCase):
+
+  @parameterized.product(
+      iter_dataset=[False, True],
+      reverse=[False, True],
+      dtype_pair=[
+          (np.int8, np.int64, 1, 300),
+          (np.uint8, np.uint64, 1, 1000),
+          (np.bool_, np.int64, True, 300),
+          (np.int8, np.float64, 1, 1.5),
+          (np.float16, np.float64, 1, 1 + 2**-40),
+          (np.complex64, np.complex128, 1j, 1 + (1 + 2**-40) * 1j),
+      ],
+  )
+  def test_shared_memory_preserves_batch_dtype(
+      self, iter_dataset, reverse, dtype_pair
+  ):
+    narrow_dtype, wide_dtype, first, second = dtype_pair
+    values = [
+        np.array([first], dtype=narrow_dtype),
+        np.array([second], dtype=wide_dtype),
+    ]
+    if reverse:
+      values.reverse()
+    ds = dataset.MapDataset.source(values)
+    if iter_dataset:
+      ds = ds.to_iter_dataset()
+    ds = ds.batch(2)
+    expected = next(iter(ds))
+    self.assertEqual(expected.dtype, np.dtype(wide_dtype))
+    expected_values = [[second], [first]] if reverse else [[first], [second]]
+    np.testing.assert_array_equal(expected, expected_values)
+    ds.enable_shared_memory_output()
+    actual = next(iter(ds))
+    self.addCleanup(actual.shm.unlink)
+    self.assertEqual(actual.dtype, expected.dtype)
+    np.testing.assert_array_equal(actual, expected)
+
+  @parameterized.product(shared_memory=[False, True], parallel=[False, True])
+  def test_parallel_batch_preserves_batch_dtype(self, shared_memory, parallel):
+    values = [
+        np.array([1], dtype=np.int8),
+        np.array([300], dtype=np.int64),
+    ]
+    make_batch = batch._MakeBatchParallel()
+    self.addCleanup(make_batch._parallel_batch_executor.shutdown)
+    if shared_memory:
+      make_batch.enable_shared_memory_output()
+    threshold = 0 if parallel else sys.maxsize
+    with mock.patch.object(batch, "_PARALLEL_BATCHING_MIN_TOTAL_BYTES", threshold):
+      actual = make_batch(values)
+    if shared_memory:
+      self.addCleanup(actual.shm.unlink)
+    self.assertEqual(actual.dtype, np.dtype(np.int64))
+    np.testing.assert_array_equal(actual, [[1], [300]])
+
+
 if __name__ == "__main__":
   absltest.main()
