@@ -125,6 +125,45 @@ def _get_buffer_size(
 
 @dataclasses.dataclass(slots=True)
 class PerformanceConfig:
+  """Configuration holding multiprocessing and read options for data pipelines.
+
+  Bundles `MultiprocessingOptions` for worker-process parallelism (applied via
+  `IterDataset.mp_prefetch`) and `ReadOptions` for per-process multithreaded
+  reading and buffering (applied via `MapDataset.to_iter_dataset`).
+
+  Example:
+    With `ReadOptions.num_threads=8` and `MultiprocessingOptions.num_workers=2`,
+    there will be 16 threads reading the data (8 threads in each of 2 Python
+    processes)::
+
+      import grain
+
+      config = grain.experimental.PerformanceConfig(
+          multiprocessing_options=grain.MultiprocessingOptions(
+              num_workers=2,
+              per_worker_buffer_size=10,
+          ),
+          read_options=grain.ReadOptions(
+              num_threads=8,
+              prefetch_buffer_size=10,
+          ),
+      )
+      ds = (
+          grain.MapDataset.range(4)
+          .to_iter_dataset(read_options=config.read_options)
+          .batch(2)
+          .mp_prefetch(config.multiprocessing_options)
+      )
+      print(list(ds))
+      # [SharedMemoryArray([0, 2]), SharedMemoryArray([1, 3])]
+
+  Attributes:
+    multiprocessing_options: Options for configuring Python worker processes, or
+      `None` if unset.
+    read_options: Options for configuring multithreaded reading and prefetch
+      buffer size per process, or `None` if unset.
+  """
+
   multiprocessing_options: grain_options.MultiprocessingOptions | None = None
   read_options: grain_options.ReadOptions | None = None
 
@@ -137,7 +176,43 @@ def pick_performance_config(
     max_buffer_size: int | None,
     samples_to_check: int = 5,
 ) -> PerformanceConfig:
-  """Analyzes element size to choose an optimal number of workers for a MultiprocessPrefetchIterDataset.
+  """Samples dataset elements to choose optimal multiprocessing and read options.
+
+  Samples up to `samples_to_check` elements from `ds` and its unbatched
+  `PrefetchIterDataset` parents to estimate average element sizes in RAM, then
+  computes the number of worker processes (`MultiprocessingOptions.num_workers`)
+  and per-process prefetch buffer size (`ReadOptions.prefetch_buffer_size`) that
+  fit within `ram_budget_mb`.
+
+  Example:
+    Autotuning worker count and prefetch buffer size for a batched dataset
+    pipeline::
+
+      import grain
+
+      element = np.zeros(100 * 1024 * 1024, dtype=np.uint8)
+      map_ds = grain.MapDataset.source([element] * 10)
+      config = grain.experimental.pick_performance_config(
+          ds=map_ds.to_iter_dataset().batch(2),
+          ram_budget_mb=1024,
+          max_workers=8,
+          max_buffer_size=None,  # set None or you can just remove this line
+          samples_to_check=2,
+      )
+      print(config.multiprocessing_options.num_workers)
+      # 5; calculated from ram budget and average element size, and capped by
+      # max_workers.
+      print(config.read_options.prefetch_buffer_size)
+      # 10; calculated from ram budget and average element size, and capped by
+      # max_buffer_size.
+      print(config.read_options.num_threads)
+      # 16
+
+      ds = (
+          map_ds.to_iter_dataset(read_options=config.read_options)
+          .batch(2)
+          .mp_prefetch(config.multiprocessing_options)
+      )
 
   Args:
     ds: The input dataset.
@@ -147,7 +222,7 @@ def pick_performance_config(
     samples_to_check: The number of samples to check to estimate element size.
 
   Returns:
-    A PerformanceConfig object containing the optimal number of workers.
+    A `PerformanceConfig` object containing the optimal number of workers.
   """
 
   num_workers = _get_num_workers(

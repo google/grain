@@ -2,6 +2,8 @@ import sys
 from unittest import mock
 
 from absl.testing import absltest
+import multiprocessing as mp
+from grain._src.python import options as grain_options
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import prefetch_autotune
 from grain._src.python.dataset.transformations.map import MapMapDataset
@@ -12,7 +14,50 @@ from absl.testing import absltest
 PerformanceConfig = prefetch_autotune.PerformanceConfig
 
 
+class PerformanceConfigTest(absltest.TestCase):
+
+  def test_example_docstring(self):
+    config = prefetch_autotune.PerformanceConfig(
+        multiprocessing_options=grain_options.MultiprocessingOptions(
+            num_workers=2,
+            per_worker_buffer_size=10,
+        ),
+        read_options=grain_options.ReadOptions(
+            num_threads=8,
+            prefetch_buffer_size=10,
+        ),
+    )
+    ds = (
+        dataset.MapDataset.range(4)
+        .to_iter_dataset(read_options=config.read_options)
+        .batch(2)
+        .mp_prefetch(config.multiprocessing_options)
+    )
+    np.testing.assert_equal(
+        list(ds),
+        [
+            np.array([0, 2]),
+            np.array([1, 3]),
+        ],
+    )
+
+
 class PrefetchAutotuneTest(absltest.TestCase):
+
+  def test_example_docstring(self):
+    element = np.zeros(100 * 1024 * 1024, dtype=np.uint8)
+    map_ds = dataset.MapDataset.source([element] * 10)
+    config = prefetch_autotune.pick_performance_config(
+        ds=map_ds.to_iter_dataset().batch(2),
+        ram_budget_mb=1024,
+        max_workers=8,
+        max_buffer_size=None,
+        samples_to_check=2,
+    )
+    # options calculated from average element size, ram budget, and limits
+    self.assertEqual(config.multiprocessing_options.num_workers, 5)
+    self.assertEqual(config.read_options.prefetch_buffer_size, 10)
+    self.assertEqual(config.read_options.num_threads, 16)
 
   def test_get_element_size_numpy(self):
     element = np.zeros((10, 20), dtype=np.int32)
