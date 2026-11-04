@@ -16,6 +16,7 @@ filegroup(
         "mix.py",
         "prefetch.py",
         "process_prefetch.py",
+        "random_map.py",
         "rebatch.py",
         "repeat.py",
         "shuffle.py",
@@ -131,6 +132,22 @@ py_test(
 py_test(
     name = "map_test",
     srcs = ["map_test.py"],
+    srcs_version = "PY3",
+    deps = [
+        "//grain/_src/core:transforms",
+        "//grain/_src/python/dataset",
+        "//grain/_src/python/dataset:base",
+        "//grain/_src/python/testing:experimental",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+        "@pypi//cloudpickle:pkg",
+        "@pypi//numpy:pkg",
+    ],
+)
+
+py_test(
+    name = "random_map_test",
+    srcs = ["random_map_test.py"],
     srcs_version = "PY3",
     deps = [
         "//grain/_src/core:transforms",

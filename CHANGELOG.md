@@ -18,6 +18,9 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     recording source read latency in microseconds. The existing
     `/grain/python/dataset/source_read_time_ns` histogram overflows at ~4s,
     which hid the tail of very slow reads.
+  * Added experimental `grain.experimental.TorchRandomMapMapDataset`, which
+    passes a deterministic per-element stateless PyTorch PRNG key
+    (`torch.func._random`) to random transforms.
 
 * Breaking changes:
 
