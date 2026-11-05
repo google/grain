@@ -32,7 +32,7 @@ This tutorial provides an example of how to retrieve records from ArrayRecord
 ```python id="8NF4E-cCbyjV"
 import pickle
 import grain
-import tensorflow_datasets as tfds
+from datasets import load_dataset
 from array_record.python import array_record_module
 ```
 
@@ -41,8 +41,13 @@ from array_record.python import array_record_module
 <!-- #endregion -->
 
 ```python id="WrCQ-jH53t-K"
-# Load a public tensorflow dataset.
-test_tfds = tfds.data_source("bool_q", split="train")
+# Load the public BoolQ dataset from Hugging Face. Text fields are encoded
+# to bytes so they match the record format used in the rest of the tutorial.
+hf_ds = load_dataset("google/boolq", split="train")
+test_tfds = [
+    {k: (v.encode("utf-8") if isinstance(v, str) else v) for k, v in ex.items()}
+    for ex in hf_ds
+]
 ```
 
 ```python id="_0yBaN7hXmbu"
@@ -90,7 +95,7 @@ during the data processing stage, use the new `reader_options` to set the
 new_reader_options = {
     "index_storage_option": "offloaded"
 }
-datasource = grain.ArrayRecordDataSource(
+datasource = grain.sources.ArrayRecordDataSource(
     example_file_path,
     reader_options=new_reader_options
 )
