@@ -129,16 +129,27 @@ main() {
   printf '%s : "=== Output wheel file is in: %s\n' "$(date)" "${DEST}"
 
   if [ "$RUN_TESTS_WITH_BAZEL" = false ] ; then
-    $PYTHON_BIN -m pip install --force ${OUTPUT_DIR}/all_dist/grain*.whl
-    $PYTHON_BIN -m pip install -r test_requirements.in  --only-binary pyarrow
-    # TF does not have Python 3.14 support yet.
-    if (( "${PYTHON_MINOR_VERSION}" < 14 )); then
-      $PYTHON_BIN -m pip install tensorflow  --only-binary h5py
+    "$PYTHON_BIN" -m pip install --force-reinstall "${OUTPUT_DIR}"/all_dist/grain*.whl
+    "$PYTHON_BIN" -m pip install -r test_requirements.in --only-binary pyarrow
+    # TF does not have Python 3.14 support yet, and TF >= 2.21 requires
+    # protobuf >= 5.28.3 which conflicts with MODULE.bazel's protobuf 28.3 pin.
+    if [ "${PYTHON_MINOR_VERSION}" -lt 14 ]; then
+      "$PYTHON_BIN" -m pip install "tensorflow<2.21" --only-binary h5py
     fi
 
-    pushd "${OUTPUT_DIR}/all_dist"
-    $PYTHON_BIN -m pytest --pyargs grain
-    popd
+    (
+      cd "${OUTPUT_DIR}/all_dist" &&
+      "$PYTHON_BIN" -m pytest \
+        -o consider_namespace_packages=true \
+        --import-mode=importlib \
+        --pyargs \
+        grain._src.core.jax_import_smoke_test \
+        grain._src.core.tf_import_smoke_test \
+        grain._src.core.tree_lib_jax_test \
+        grain._src.python.dataset.transformations.packing_test \
+        grain._src.python.experimental.example_packing.pack_and_batch_test \
+        grain._src.python.ipc.shared_memory_array_test
+    )
   fi
 }
 
