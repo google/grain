@@ -13,15 +13,15 @@
 # limitations under the License.
 """Checks that OSS Grain Package works end-to-end with TF."""
 
-import os
+import sys
 
 from absl.testing import absltest
 import grain
 
 
 @absltest.skipIf(
-    os.getenv("PYTHON_MINOR_VERSION") >= "13",
-    "TF is not available on Python 3.13 and above.",
+    sys.version_info >= (3, 14),
+    "TF is not available on Python 3.14 and above.",
 )
 class TFImportTest(absltest.TestCase):
 

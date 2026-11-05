@@ -25,7 +25,7 @@ from grain._src.python.ipc import variable_size_queue
 
 def _consumer_function_for_test(q, result):
   time.sleep(0.1)
-  result.append(q.get())
+  result.append(q.get(timeout=10.0))
 
 
 def _increase_max_size_function_for_test(q):
@@ -257,9 +257,15 @@ class VariableSizeMultiprocessingQueueTest(absltest.TestCase):
 
       p = ctx.Process(target=_consumer_function_for_test, args=(q, result_list))
       p.start()
-      q.put(2)  # This should block until consumer gets item 1.
-      self.assertEqual(q.get(), 2)
-      p.join()
+      try:
+        q.put(2, timeout=10.0)  # This should block until consumer gets item 1.
+        self.assertEqual(q.get(timeout=10.0), 2)
+      finally:
+        p.join(timeout=10.0)
+        if p.is_alive():
+          p.kill()
+          p.join()
+      self.assertEqual(p.exitcode, 0)
       self.assertEqual(list(result_list), [1])
 
   def test_put_blocks_until_max_size_increases_from_process(self):
@@ -269,11 +275,17 @@ class VariableSizeMultiprocessingQueueTest(absltest.TestCase):
 
     p = ctx.Process(target=_increase_max_size_function_for_test, args=(q,))
     p.start()
-    # This should block until max_size is increased in the other process.
-    q.put(2)
-    self.assertEqual(q.get(), 1)
-    self.assertEqual(q.get(), 2)
-    p.join()
+    try:
+      # This should block until max_size is increased in the other process.
+      q.put(2, timeout=10.0)
+      self.assertEqual(q.get(timeout=10.0), 1)
+      self.assertEqual(q.get(timeout=10.0), 2)
+    finally:
+      p.join(timeout=10.0)
+      if p.is_alive():
+        p.kill()
+        p.join()
+    self.assertEqual(p.exitcode, 0)
 
   def test_empty(self):
     q = variable_size_queue.VariableSizeMultiprocessingQueue(
