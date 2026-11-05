@@ -52,7 +52,6 @@ from grain._src.python.dataset.transformations.interleave import (
     InterleaveIterDataset,
 )
 from grain._src.python.dataset.transformations.limit import LimitIterDataset
-from grain._src.python.dataset.transformations.map import RngPool
 from grain._src.python.dataset.transformations.packing import (
     FirstFitPackIterDataset,
     BestFitPackIterDataset,
@@ -66,6 +65,7 @@ from grain._src.python.dataset.transformations.prefetch import (
     ThreadPrefetchIterDataset,
     ThreadPrefetchDatasetIterator,
 )
+from grain._src.python.dataset.transformations.random_map import RngPool
 from grain._src.python.dataset.transformations.rebatch import RebatchIterDataset
 from grain._src.python.dataset.transformations.repeat import RepeatIterDataset
 from grain._src.python.dataset.transformations.shuffle import (

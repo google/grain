@@ -818,13 +818,13 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
       A dataset containing the elements of the original dataset transformed by
       ``transform``.
     """
-    # Loaded lazily due to a circular dependency (dataset <-> map).
+    # Loaded lazily due to a circular dependency (dataset <-> random_map).
     # pylint: disable=g-import-not-at-top
     from grain._src.python.dataset.transformations import (
-        map as map_dataset,
+        random_map as random_map_dataset,
     )
     # pylint: enable=g-import-not-at-top
-    return map_dataset.RandomMapMapDataset(
+    return random_map_dataset.RandomMapMapDataset(
         parent=self, transform=transform, seed=seed
     )
 
@@ -1310,13 +1310,13 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
       A dataset containing the elements of the original dataset transformed by
       ``transform``.
     """
-    # Loaded lazily due to a circular dependency (dataset <-> map).
+    # Loaded lazily due to a circular dependency (dataset <-> random_map).
     # pylint: disable=g-import-not-at-top
     from grain._src.python.dataset.transformations import (
-        map as map_dataset,
+        random_map as random_map_dataset,
     )
     # pylint: enable=g-import-not-at-top
-    return map_dataset.RandomMapIterDataset(
+    return random_map_dataset.RandomMapIterDataset(
         parent=self, transform=transform, seed=seed
     )
 
