@@ -92,6 +92,60 @@ jobs:
           export IS_NIGHTLY=${{ inputs.is_nightly }}
           . "${SOURCE_DIR}"'/grain/oss/runner_common.sh'
           build_and_test_grain
+      - name: Smoke test built wheel
+        if: ${{ (inputs.is_ci_tests == 'false' || inputs.is_ci_tests == false) && (inputs.run_tests_with_bazel == 'true' || inputs.run_tests_with_bazel == true) }}
+        env:
+          IS_NIGHTLY: ${{ inputs.is_nightly }}
+        run: |
+          set -xe
+          SMOKE_DIR="${RUNNER_TEMP}/grain_wheel_smoke_test"
+          rm -rf "${SMOKE_DIR}"
+          mkdir -p "${SMOKE_DIR}"
+          python -m venv "${SMOKE_DIR}/venv"
+          if [ -x "${SMOKE_DIR}/venv/bin/python" ]; then
+            VENV_PYTHON="${SMOKE_DIR}/venv/bin/python"
+          else
+            VENV_PYTHON="${SMOKE_DIR}/venv/Scripts/python.exe"
+          fi
+          "${VENV_PYTHON}" -m pip install "${WHL_DIR}"/all_dist/grain*.whl
+          cd "${SMOKE_DIR}"
+          "${VENV_PYTHON}" - <<'EOF'
+          import importlib.metadata
+          import os
+          import pathlib
+          import grain
+          from grain.proto import execution_summary_pb2
+
+          wheel_path = pathlib.Path(grain.__file__).resolve()
+          assert any(p.lower() == "site-packages" for p in wheel_path.parts), (
+              f"Expected grain imported from site-packages, got {wheel_path}"
+          )
+
+          expected_dist = (
+              "grain-nightly"
+              if os.environ.get("IS_NIGHTLY", "").lower() == "true"
+              else "grain"
+          )
+          dist = importlib.metadata.distribution(expected_dist)
+          if expected_dist == "grain-nightly":
+            assert ".dev" in dist.version, (
+                f"Expected .dev version for grain-nightly, got {dist.version}"
+            )
+
+          assert execution_summary_pb2.ExecutionSummary() is not None
+          shuffled = grain.experimental.index_shuffle(
+              index=0, max_index=9, seed=42, rounds=4
+          )
+          assert 0 <= shuffled <= 9
+
+          ds = (
+              grain.MapDataset.range(10)
+              .shuffle(seed=42)
+              .map(lambda x: x + 1)
+              .to_iter_dataset()
+          )
+          assert sorted(list(ds)) == list(range(1, 11))
+          EOF
       - name: Upload Grain artifacts
         if: ${{ inputs.is_ci_tests == 'false' || inputs.is_ci_tests == false }}
         uses: actions/upload-artifact@v6
