@@ -19,10 +19,10 @@ This tutorial gives an overview of integrating [Bagz](https://github.com/google-
 
 ## Setup
 
-To start we need to make sure we have all required packages. We pin JAX's version as the latest Apache Beam doesn't support NumPy 2.0 yet.
+To start we need to make sure we have all required packages.
 
 ```{code-cell} ipython3
-%pip install grain bagz apache-beam jax==0.4.38
+%pip install grain bagz apache-beam
 ```
 
 ```{code-cell} ipython3
@@ -33,10 +33,6 @@ import numpy as np
 import pathlib
 import random
 import apache_beam as beam
-```
-
-```{code-cell} ipython3
-assert np.__version__[0] == "1", "Apache Beam requires NumPy<2"
 ```
 
 ## Apache Beam
