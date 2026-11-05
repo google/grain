@@ -130,7 +130,55 @@ class ShuffleMapDatasetTest(parameterized.TestCase):
     self.assertEqual(shuffled_ds[3], "b")
 
 
-class WindowShuffleMapDatasetTest(absltest.TestCase):
+class WindowShuffleMapDatasetTest(parameterized.TestCase):
+
+  @parameterized.product(length=[1, 3, 5, 6, 7, 12, 1003], batched=[False, True])
+  def test_partial_windows_preserve_each_epoch(self, length, batched):
+    window_size = 1000 if length == 1003 else 4
+    ds = shuffle.WindowShuffleMapDataset(
+        dataset.MapDataset.range(length), window_size=window_size, seed=42
+    )
+    for epoch in range(3):
+      indices = range(epoch * length, (epoch + 1) * length)
+      actual = ds._getitems(indices) if batched else [ds[i] for i in indices]
+      self.assertCountEqual(actual, range(length))
+      for start in range(0, length, window_size):
+        self.assertCountEqual(
+            actual[start : start + window_size],
+            range(start, min(start + window_size, length)),
+        )
+
+  @parameterized.parameters(1, 3, 5, 6, 7, 12)
+  def test_partial_windows_match_iter_dataset(self, length):
+    parent = dataset.MapDataset.range(length)
+    mapped = shuffle.WindowShuffleMapDataset(parent, window_size=4, seed=42)
+    streamed = shuffle.WindowShuffleIterDataset(
+        parent.to_iter_dataset(), window_size=4, seed=42, reverse=False
+    )
+    self.assertEqual(list(mapped), list(streamed))
+
+  def test_partial_windows_repeat_and_restore(self):
+    ds = shuffle.WindowShuffleMapDataset(
+        dataset.MapDataset.range(7), window_size=4, seed=42
+    ).repeat(3)
+    expected = list(ds)
+    for start in range(0, len(expected), 7):
+      self.assertCountEqual(expected[start : start + 7], range(7))
+    iterator = iter(ds)
+    prefix = [next(iterator) for _ in range(6)]
+    state = iterator.get_state()
+    remainder = list(iterator)
+    restored = iter(ds)
+    restored.set_state(state)
+    self.assertEqual(list(restored), remainder)
+    self.assertEqual(prefix + remainder, expected)
+
+  def test_empty_window_shuffle(self):
+    ds = shuffle.WindowShuffleMapDataset(
+        dataset.MapDataset.range(0), window_size=4, seed=42
+    )
+    self.assertEmpty(list(ds))
+    self.assertEmpty(ds._getitems([]))
 
   def test_len(self):
     ds = shuffle.WindowShuffleMapDataset(
