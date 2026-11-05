@@ -39,6 +39,7 @@ from grain._src.python.dataset import base as dataset_base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import batch as batch_ds
 from grain._src.python.dataset.transformations import flatmap
+from grain._src.python.dataset.transformations import source as source_ds
 from grain._src.python.ipc import shared_memory_array
 import numpy as np
 

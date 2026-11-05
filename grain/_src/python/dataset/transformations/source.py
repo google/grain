@@ -17,10 +17,12 @@ from __future__ import annotations
 
 import contextlib  # pylint: disable=unused-import
 import functools
+import os
 import time
-from typing import Any, Sequence, Union
+from typing import Any, Protocol, Sequence, Union, runtime_checkable
 
 from absl import logging
+from etils import epath
 
 from grain._src.core import monitoring as grain_monitoring
 from grain._src.core import sharding
@@ -30,6 +32,25 @@ from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
 import numpy as np
+
+
+@runtime_checkable
+class FileBasedSource(Protocol):
+  """Protocol for data sources or datasets backed by files."""
+
+  @property
+  def paths(self) -> epath.PathLike | Sequence[epath.PathLike]:
+    """Returns file path(s) read by this source."""
+    ...
+
+
+def normalize_paths(
+    paths: epath.PathLike | Sequence[epath.PathLike],
+) -> list[str]:
+  """Normalizes a single path or sequence of paths into a list of strings."""
+  if isinstance(paths, (str, os.PathLike)):
+    return [os.fsdecode(paths)]
+  return [os.fsdecode(p) for p in paths]
 
 
 def _has_source_parent(ds: dataset.MapDataset) -> bool:
@@ -141,9 +162,8 @@ class SourceMapDataset(dataset.MapDataset):
     pass
 
   @property
-  def paths(self) -> str | Sequence[str]:
-    if hasattr(self._source, "paths"):
-      assert isinstance(self._source, base.RandomAccessDataSource)
+  def paths(self) -> epath.PathLike | Sequence[epath.PathLike]:
+    if isinstance(self._source, FileBasedSource):
       return self._source.paths
     else:
       return []
