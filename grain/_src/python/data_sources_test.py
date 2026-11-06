@@ -16,6 +16,7 @@
 from collections.abc import Sequence
 import copy
 import dataclasses
+import os
 import pathlib
 import pickle
 import platform
