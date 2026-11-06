@@ -441,7 +441,16 @@ class HashableWeakRef:
 
   def __init__(self, obj):
     self._obj_id = id(obj)
-    self._weakref = weakref.ref(obj)
+    # Drop the registry entry when the referent is collected so a later
+    # iterator that reuses this address is not treated as already present.
+    self._weakref = weakref.ref(obj, self._remove_from_registry)
+
+  def _remove_from_registry(self, _ref):
+    # discard is a no-op if a child node already removed this ref. At
+    # interpreter shutdown the module global may already have been cleared.
+    registry = _iter_weakref_registry
+    if registry is not None:
+      registry.discard(self)
 
   def __call__(self):
     return self._weakref()
@@ -452,7 +461,12 @@ class HashableWeakRef:
   def __eq__(self, other):
     if not isinstance(other, HashableWeakRef):
       return False
-    return self._obj_id == other._obj_id
+    if self is other:
+      return True
+    if self._obj_id != other._obj_id:
+      return False
+    # Dead and live refs that share an address are different objects.
+    return self() is not None and other() is not None
 
 
 class _Table:
