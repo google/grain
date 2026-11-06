@@ -92,6 +92,10 @@ from grain._src.python.experimental.device_put.device_put import (
     device_put,
 )
 
+from grain._src.python.experimental.torch_random_map.torch_random_map import (
+    TorchRandomMapMapDataset,
+)
+
 from grain._src.python.dataset.transformations.prefetch_autotune import (
     pick_performance_config,
     PerformanceConfig,
