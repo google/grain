@@ -6,6 +6,9 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features:
+  * (Internal) `BagDataSource` and `TfExampleBagDataSource` accept
+    `resolve_smartrefs` to dereference SmartRef URLs in `tf.Example` records,
+    optionally limited to a set of features.
   * Added the `py_permanently_disable_stats` config option
     (`--grain_py_permanently_disable_stats`) to permanently disable dataset
     stats collection and avoid stats tree initialization overhead.
