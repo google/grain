@@ -17,6 +17,7 @@ import collections
 from collections.abc import Sequence
 import copy
 import functools
+import os
 from typing import Any, TypeVar, cast
 import weakref
 
@@ -46,6 +47,27 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     # passing it as `parents` to not trigger evaluation early.
     super().__init__()
     self._datasets = datasets
+    self._cycle_length: int = min(cycle_length, len(datasets))
+    self._standby_buffer_size: int | None = None
+    if (
+        num_make_iter_threads == 1
+        and make_iter_buffer_size == 1
+        and self._cycle_length > 1
+        and isinstance(datasets, dataset.MapDataset)
+        and len(datasets) >= 16
+        and os.environ.get("GRAIN_INTERLEAVE_PARALLEL_INIT", "1") != "0"
+    ):
+      num_make_iter_threads = min(self._cycle_length, 8)
+      make_iter_buffer_size = self._cycle_length
+      self._standby_buffer_size = 0
+    if env_threads := os.environ.get("GRAIN_INTERLEAVE_MAKE_ITER_THREADS"):
+      num_make_iter_threads = int(env_threads)
+    if env_buf := os.environ.get("GRAIN_INTERLEAVE_MAKE_ITER_BUFFER_SIZE"):
+      make_iter_buffer_size = int(env_buf)
+    if env_standby := os.environ.get("GRAIN_INTERLEAVE_STANDBY_BUFFER_SIZE"):
+      self._standby_buffer_size = int(env_standby)
+    if env_iter_buf := os.environ.get("GRAIN_INTERLEAVE_ITER_BUFFER_SIZE"):
+      iter_buffer_size = int(env_iter_buf)
     self._num_make_iter_threads = num_make_iter_threads
     self._make_iter_buffer_size = make_iter_buffer_size
     self._iter_buffer_size = iter_buffer_size
@@ -73,7 +95,6 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
         )
         .__iter__()
     )
-    self._cycle_length: int = min(cycle_length, len(datasets))
     self._next_index_in_cycle: int = 0
     self._next_index_in_datasets: int = 0
     self._iterators_in_use_indices: list[int] = list(range(self._cycle_length))
@@ -98,7 +119,7 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
   def __next__(self) -> T:
     self._assert_not_closed()
     self._started = True
-    timer = stats.Timer()
+    timer: stats.Timer | None = None
     _ = self._stats  # eagerly initialize stats
     while True:
       if iterator_to_use := self._iterators_in_use[self._next_index_in_cycle]:
@@ -106,12 +127,15 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
           result = iterator_to_use.__next__()
           # Get the stats object of the iterator that is being used.
           # pylint: disable=protected-access
-          with self._stats.record_self_time(offset_ns=timer.value()):
+          with self._stats.record_self_time(
+              offset_ns=0 if timer is None else timer.value()
+          ):
             if (
                 self._parent_stats[self._next_index_in_cycle] is None
                 or self._parent_stats[self._next_index_in_cycle]
                 is not iterator_to_use._stats
             ):
+              iterator_to_use._stats._is_output = False
               self._parent_stats[self._next_index_in_cycle] = (
                   iterator_to_use._stats
               )
@@ -125,6 +149,8 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
             result = self._stats.record_bytes_produced(result)
             return self._stats.record_output_spec(result)
         except StopIteration:
+          if timer is None:
+            timer = stats.Timer()
           with timer:
             self._exhausted_iterator_state[self._next_index_in_cycle] = (
                 iterator_to_use.get_state()
@@ -139,11 +165,22 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
                 self._next_index_in_cycle + 1
             ) % self._cycle_length
             continue
+      if timer is None:
+        timer = stats.Timer()
       with timer:
         if self._next_index_in_datasets < len(self._datasets):
-          self._iterators_in_use[self._next_index_in_cycle] = next(
-              self._prefetch_ds_iter
-          )
+          if self._next_index_in_datasets == 0:
+            self._prefetch_ds_iter._stats._is_output = False  # pylint: disable=protected-access
+            if self._standby_buffer_size is not None:
+              self._prefetch_ds_iter.start_prefetch()
+              setattr(
+                  self._prefetch_ds_iter,
+                  "_target_prefetch_buffer_size",
+                  self._standby_buffer_size,
+              )
+          new_it = next(self._prefetch_ds_iter)
+          new_it._stats._is_output = False  # pylint: disable=protected-access
+          self._iterators_in_use[self._next_index_in_cycle] = new_it
           self._exhausted_iterator_state[self._next_index_in_cycle] = None
           self._iterators_in_use_indices[self._next_index_in_cycle] = (
               self._next_index_in_datasets
@@ -388,6 +425,12 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
   def start_prefetch(self):
     self._started = True
     self._prefetch_ds_iter.start_prefetch()
+    if self._standby_buffer_size is not None:
+      setattr(
+          self._prefetch_ds_iter,
+          "_target_prefetch_buffer_size",
+          self._standby_buffer_size,
+      )
     for it in self._iterators_in_use:
       if it is not None:
         it.start_prefetch()
@@ -472,6 +515,10 @@ def _add_prefetch_and_make_iterator(
     raise RuntimeError("InterleaveDatasetIterator has been garbage collected.")
   iter_buffer_size = interleave_iterator_obj._iter_buffer_size
   ctx = interleave_iterator_obj._ctx
+  is_map_datasets = (
+      isinstance(interleave_iterator_obj._datasets, dataset.MapDataset)
+      and len(interleave_iterator_obj._datasets) >= 16
+  )
   # Release the strong reference before potentially slow iterator creation.
   # This prevents the worker thread from triggering parent destruction.
   del interleave_iterator_obj
@@ -479,6 +526,14 @@ def _add_prefetch_and_make_iterator(
   if isinstance(ds, dataset.MapDataset):
     # Prefetch is automatically added in `MapDataset.__iter__`.
     iter_dataset = ds.to_iter_dataset()
+  elif (
+      isinstance(ds, prefetch.PrefetchIterDataset)
+      # `executors` only exists in the internal IteratorContext.
+      and not getattr(ctx, "executors", None)
+      and is_map_datasets
+      and os.environ.get("GRAIN_SKIP_REDUNDANT_THREAD_PREFETCH", "1") != "0"
+  ):
+    iter_dataset = ds
   else:
     iter_dataset = prefetch.ThreadPrefetchIterDataset(
         ds, prefetch_buffer_size=iter_buffer_size
