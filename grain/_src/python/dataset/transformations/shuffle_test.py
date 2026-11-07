@@ -129,6 +129,15 @@ class ShuffleMapDatasetTest(parameterized.TestCase):
     self.assertEqual(shuffled_ds[0], "e")
     self.assertEqual(shuffled_ds[3], "b")
 
+  def test_even_power_of_two_and_large_max_index_bijection(self):
+    ds = shuffle.ShuffleMapDataset(dataset.MapDataset.range(2**16 + 1), seed=42)
+    self.assertEqual(set(ds._getitems(range(2**16 + 1))), set(range(2**16 + 1)))
+    large_ds = shuffle.ShuffleMapDataset(
+        dataset.MapDataset.range((1 << 54) + 2), seed=42
+    )
+    self.assertNotEqual(large_ds[0], large_ds[1 << 54])
+    self.assertNotEqual(large_ds[1], large_ds[(1 << 54) + 1])
+
 
 class WindowShuffleMapDatasetTest(absltest.TestCase):
 

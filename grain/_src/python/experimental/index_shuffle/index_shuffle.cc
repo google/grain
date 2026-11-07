@@ -33,9 +33,7 @@ limitations under the License.
 
 #include <assert.h>
 
-#include <algorithm>
 #include <bitset>
-#include <cmath>
 #include <cstdint>
 #include <random>
 #include <vector>
@@ -115,8 +113,10 @@ uint64_t index_shuffle(const uint64_t index, const uint64_t max_index,
   // Block size must be large enough to represent max_index and even (since
   // word size is half of it). We force at least 16 bits as minimum block size
   // since we observed pattern in the permutations below.
-  int block_size = static_cast<int>(std::ceil(std::log2(max_index)));
-  block_size = std::max(block_size + block_size % 2, kMinBlockSize);
+  int block_size = kMinBlockSize;
+  while (block_size < 64 && (max_index >> block_size) != 0) {
+    block_size += 2;
+  }
   assert(block_size > 0 && block_size % 2 == 0 && block_size <= 64);
   // rounds should be in [4, 1024] and number of rounds must be even.
   assert(rounds >= 4 && rounds <= 1024 && rounds % 2 == 0);
