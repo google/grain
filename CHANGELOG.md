@@ -37,6 +37,10 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     generate an equivalent sequence (backward compatibility is preserved).
   * Fixes Grain Prometheus telemetry metrics not being exported when
     `PROMETHEUS_MULTIPROC_DIR` is not set before import.
+  * Fixes `InterleaveDatasetIterator.set_state()` keeping references to the
+    passed-in state and later modifying it, which made `RepeatIterDataset`
+    over an interleave with more datasets than `cycle_length` produce wrong
+    elements from the third epoch on.
 
 ## Grain 0.2.18 (June 17, 2026)
 
