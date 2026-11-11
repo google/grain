@@ -22,7 +22,7 @@ py_library(
         "_src/__init__.py",
         "checkpoint.py",
         "constants.py",
-        "experimental.py",
+        "experimental/__init__.py",
         "multiprocessing.py",
         "python/__init__.py",
         "python/experimental.py",
