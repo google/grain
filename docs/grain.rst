@@ -19,6 +19,7 @@ Subpackages
    grain.checkpoint
    grain.constants
    grain.experimental
+   grain.experimental.torch
    grain.multiprocessing
    grain.samplers
    grain.sharding

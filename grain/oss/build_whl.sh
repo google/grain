@@ -145,6 +145,7 @@ main() {
         --pyargs \
         grain._src.core.jax_import_smoke_test \
         grain._src.core.tf_import_smoke_test \
+        grain._src.core.transforms_jax_test \
         grain._src.core.tree_lib_jax_test \
         grain._src.python.dataset.transformations.packing_test \
         grain._src.python.experimental.example_packing.pack_and_batch_test \
