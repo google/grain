@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import collections
 from collections.abc import Iterator, Sequence
+import contextlib
 import copy
 import functools
 from multiprocessing import queues
@@ -431,6 +432,7 @@ class ThreadPrefetchIterDataset(dataset.IterDataset[T]):
 StateT = dict[str, Any]
 # Type for the buffer elements.
 BufferElementT = tuple[T, StateT, Exception | None]
+_CLOSED_ERROR = ValueError("Iterator has been closed.")
 
 
 def _put_iterator_elements_in_buffer(
@@ -438,11 +440,14 @@ def _put_iterator_elements_in_buffer(
     buffer: queue.Queue[BufferElementT],
     should_stop: threading.Event,
     stats: dataset_stats.Stats,
+    closed: threading.Event,
 ):
   """Fetches elements from the iterator and puts them in the buffer."""
   try:
     while not should_stop.is_set():
       element = stats.record_bytes_consumed(iterator.__next__())
+      if closed.is_set():
+        return
       state = copy.deepcopy(iterator.get_state())
       buffer.put((element, state, None))
   except Exception as e:  # pylint: disable=broad-except
@@ -529,6 +534,7 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
     self._prefetch_thread: threading.Thread | None = None
     self._prefetch_should_stop: threading.Event = threading.Event()
+    self._closed_event: threading.Event = threading.Event()
     if self.autotune_buffer_size is not None:
       self._buffer: (
           variable_size_queue.VariableSizeQueue | queue.Queue[BufferElementT]
@@ -584,6 +590,7 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
             buffer=self._buffer,
             should_stop=self._prefetch_should_stop,
             stats=self._stats,
+            closed=self._closed_event,
         ),
         daemon=True,
         name=f"grain-thread-prefetch-{str(self)}",
@@ -595,6 +602,7 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       stage_category=dataset_stats.IPL_CAT_PREFETCH
   )
   def __next__(self):
+    self._assert_not_closed()
 
     if self._state is None:
       self._state = self._maybe_nonnative_parent.get_state()
@@ -615,6 +623,10 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
           state = copy.deepcopy(self._maybe_nonnative_parent.get_state())
           err = None
 
+    if self._closed:
+      with contextlib.suppress(queue.Full):
+        self._buffer.put_nowait((None, None, _CLOSED_ERROR))  # pyrefly: ignore[bad-argument-type]
+      self._assert_not_closed()
     if err is not None:
       self._stop_prefetch()
       raise err
@@ -627,10 +639,17 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   def close(self):
     """Stops the iterator. No further calls to the iterator are expected."""
+    if self._closed:
+      return
     self._closed = True
-    self._stop_prefetch()
+    self._closed_event.set()
+    self._prefetch_should_stop.set()
+    self._clear_buffer()
     if isinstance(self._maybe_nonnative_parent, dataset.DatasetIterator):
       self._maybe_nonnative_parent.close()
+    self._stop_prefetch()
+    with contextlib.suppress(queue.Full):
+      self._buffer.put_nowait((None, None, _CLOSED_ERROR))  # pyrefly: ignore[bad-argument-type]
 
   def _clear_buffer(self):
     while True:

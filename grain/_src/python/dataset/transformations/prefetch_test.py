@@ -608,6 +608,200 @@ class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
     _ = list(it)
     self.assertEmpty(list(it))
 
+  @parameterized.parameters([True, False])
+  def test_close_unblocks_producer_waiting_in_parent_next(
+      self, raise_on_close: bool
+  ):
+    entered_next = threading.Event()
+    parent_closed = threading.Event()
+    producer_finished = threading.Event()
+    parent_close_count = 0
+    get_state_called_after_close = False
+
+    class BlockingIterator(dataset.DatasetIterator[int]):
+
+      def __next__(self) -> int:
+        entered_next.set()
+        parent_closed.wait()
+        time.sleep(0.02)
+        try:
+          if raise_on_close:
+            self._assert_not_closed()
+          return 0
+        finally:
+          producer_finished.set()
+
+      def close(self) -> None:
+        nonlocal parent_close_count
+        parent_close_count += 1
+        super().close()
+        parent_closed.set()
+
+      def get_state(self):
+        nonlocal get_state_called_after_close
+        if self._closed:
+          get_state_called_after_close = True
+        return {}
+
+      def set_state(self, state):
+        pass
+
+    class BlockingDataset(dataset.IterDataset[int]):
+
+      def __iter__(self) -> dataset.DatasetIterator[int]:
+        return BlockingIterator()
+
+    it = prefetch.ThreadPrefetchIterDataset(
+        BlockingDataset(), prefetch_buffer_size=2
+    ).__iter__()
+    it.start_prefetch()
+    self.assertTrue(entered_next.wait(timeout=5.0))
+
+    closed_done = threading.Event()
+    producer_finished_on_first_close = False
+
+    def close_iter():
+      nonlocal producer_finished_on_first_close
+      it.close()
+      producer_finished_on_first_close = producer_finished.is_set()
+      it.close()
+      closed_done.set()
+
+    closer = threading.Thread(target=close_iter, daemon=True)
+    closer.start()
+    self.assertTrue(closed_done.wait(timeout=5.0))
+    closer.join(timeout=1.0)
+    self.assertTrue(parent_closed.is_set())
+    self.assertEqual(parent_close_count, 1)
+    self.assertTrue(producer_finished_on_first_close)
+    self.assertFalse(get_state_called_after_close)
+
+  def test_close_clears_buffer_and_stops_producer_before_closing_parent(self):
+    second_fetched = threading.Event()
+    producer_thread: threading.Thread | None = None
+    producer_exited_before_parent_close = False
+    calls = 0
+
+    class FullBufferIterator(dataset.DatasetIterator[int]):
+
+      def __next__(self) -> int:
+        nonlocal calls, producer_thread
+        calls += 1
+        if calls == 1:
+          producer_thread = threading.current_thread()
+        elif calls == 2:
+          second_fetched.set()
+        return calls
+
+      def close(self) -> None:
+        nonlocal producer_exited_before_parent_close
+        if producer_thread is not None:
+          producer_thread.join(timeout=0.5)
+          producer_exited_before_parent_close = not producer_thread.is_alive()
+        time.sleep(0.02)
+        super().close()
+
+      def get_state(self):
+        return {}
+
+      def set_state(self, state):
+        pass
+
+    it = prefetch.ThreadPrefetchDatasetIterator(
+        FullBufferIterator(), prefetch_buffer_size=1
+    )
+    it.start_prefetch()
+    self.assertTrue(second_fetched.wait(timeout=5.0))
+    time.sleep(0.02)
+    it.close()
+    self.assertTrue(producer_exited_before_parent_close)
+    self.assertEqual(calls, 2)
+
+  @parameterized.parameters([0, 2])
+  def test_next_after_close_raises_without_querying_parent(
+      self, prefetch_buffer_size: int
+  ):
+
+    class StrictParentIterator(dataset.DatasetIterator[int]):
+
+      def __next__(self) -> int:
+        self._assert_not_closed()
+        return 0
+
+      def get_state(self):
+        if self._closed:
+          raise RuntimeError('get_state called after close')
+        return {}
+
+      def set_state(self, state):
+        pass
+
+    it = prefetch.ThreadPrefetchDatasetIterator(
+        StrictParentIterator(), prefetch_buffer_size=prefetch_buffer_size
+    )
+    it.close()
+    for _ in range(2):
+      with self.assertRaisesRegex(
+          ValueError, 'Trying to advance a closed iterator'
+      ):
+        next(it)
+
+  def test_close_unblocks_waiting_consumers(self):
+    entered_next = threading.Event()
+    parent_closed = threading.Event()
+
+    class BlockingIterator(dataset.DatasetIterator[int]):
+
+      def __next__(self) -> int:
+        entered_next.set()
+        parent_closed.wait()
+        self._assert_not_closed()
+        return 0
+
+      def close(self) -> None:
+        super().close()
+        parent_closed.set()
+
+      def get_state(self):
+        return {}
+
+      def set_state(self, state):
+        pass
+
+    class BlockingDataset(dataset.IterDataset[int]):
+
+      def __iter__(self) -> dataset.DatasetIterator[int]:
+        return BlockingIterator()
+
+    it = prefetch.ThreadPrefetchIterDataset(
+        BlockingDataset(), prefetch_buffer_size=2
+    ).__iter__()
+    it.start_prefetch()
+    self.assertTrue(entered_next.wait(timeout=5.0))
+
+    c1_started = threading.Event()
+    c2_started = threading.Event()
+
+    def consume(started: threading.Event):
+      started.set()
+      return next(it)
+
+    with futures.ThreadPoolExecutor(max_workers=2) as pool:
+      f1 = pool.submit(consume, c1_started)
+      f2 = pool.submit(consume, c2_started)
+      self.assertTrue(c1_started.wait(timeout=5.0))
+      self.assertTrue(c2_started.wait(timeout=5.0))
+      time.sleep(0.05)
+      it.close()
+      with self.assertRaisesRegex(
+          ValueError, 'Trying to advance a closed iterator'
+      ):
+        f1.result(timeout=5.0)
+      with self.assertRaisesRegex(
+          ValueError, 'Trying to advance a closed iterator'
+      ):
+        f2.result(timeout=5.0)
+
   def test_nonnative_iterator(self):
 
     class TestIterator:
