@@ -54,19 +54,21 @@ jobs:
       USE_BAZEL_VERSION: "7.2.1"
     steps:
       - name: Set up Bazel
-        uses: bazel-contrib/setup-bazel@0.15.0
+        uses: bazel-contrib/setup-bazel@4fd964a13a440a8aeb0be47350db2fc640f19ca8 # 0.15.0
       - name: Check Bazel installation
         run: |
           which bazel
           bazel version
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install rsync for Windows
         if: runner.os == 'Windows'
         run: choco install --no-progress rsync
-      - uses: "actions/checkout@v6"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
       - name: Create directory and set TEMP_DIR
         if: runner.os == 'Linux' || runner.os == 'macOS'
         run: |
@@ -148,7 +150,7 @@ jobs:
           EOF
       - name: Upload Grain artifacts
         if: ${{ inputs.is_ci_tests == 'false' || inputs.is_ci_tests == false }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: built-grain-wheels-${{ matrix.os }}-${{ matrix.python-version }}
           path: "${{ env.WHL_DIR }}/all_dist/*.whl"
@@ -164,13 +166,13 @@ jobs:
       url: ${{ inputs.pypi_project_url }}
     steps:
       - name: Download Grain artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           pattern: built-grain-wheels-*
           path: dist/
           merge-multiple: true
       - name: Publish package distributions to PyPI
-        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e # release/v1.13
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
           attestations: false
           skip-existing: ${{ inputs.is_nightly }}
