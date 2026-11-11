@@ -2,18 +2,34 @@
 name: "RTD preview"
 
 on:
-  pull_request_target:
+  # `pull_request` (not `pull_request_target`) is used on purpose: PRs from forks
+  # only get a read-only token, so this workflow never runs with write access on
+  # behalf of untrusted PRs. The job below is skipped for fork PRs; their preview
+  # is still linked from the `docs/readthedocs.org:google-grain` status check.
+  pull_request:
+    # `synchronize` and `edited` restore the link when the PR description is
+    # rewritten (e.g. when Copybara updates an export PR). Edits made by this
+    # workflow's own token do not trigger new runs, so this does not loop.
     types:
       - opened
+      - synchronize
+      - edited
 
-permissions:
-  pull-requests: write
+permissions: {}
 
 jobs:
   documentation-links:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
-      - uses: readthedocs/actions/preview@v1
+      # TODO: Consider inlining the description-editing script instead of using
+      # this action. The commit hash only pins the action's wrapper: at run time
+      # it checks out `readthedocs/actions` at the movable `v1` tag and runs the
+      # script from there, so the code that runs is not guaranteed to be the
+      # pinned version.
+      - uses: readthedocs/actions/preview@b8bba1484329bda1a3abe986df7ebc80a8950333 # v1.5
         with:
           project-slug: "google-grain"
           single-version: true
