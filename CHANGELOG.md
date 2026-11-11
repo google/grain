@@ -6,6 +6,11 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features:
+  * Added `MapDataset.stateless_random_map` and
+    `IterDataset.stateless_random_map`, which pass a deterministic per-element
+    stateless PRNG key to the transform, along with the
+    `grain.transforms.StatelessRandomMap` protocol and
+    `grain.transforms.JaxStatelessRandomMap` (the default for plain callables).
 
 * Breaking changes:
 
