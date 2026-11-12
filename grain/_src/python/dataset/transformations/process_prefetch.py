@@ -451,7 +451,10 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         self._iter_parent,
         options=self._ctx.dataset_options,
     )
-    self._prefetch_process = self._process_ctx.Process(
+    # Don't attach the process until start() returns. A failed start has
+    # no _popen, so close() can't join it, and the next next() would see
+    # a process already sitting here and never try again.
+    prefetch_process = self._process_ctx.Process(
         target=_put_dataset_elements_in_buffer,
         kwargs=dict(
             pickled_parse_debug_flags_fn=cloudpickle.dumps(_parse_debug_flags),
@@ -478,7 +481,8 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
         daemon=True,
         name=f"grain-process-prefetch-{self}",
     )
-    self._prefetch_process.start()
+    prefetch_process.start()
+    self._prefetch_process = prefetch_process
     shared_memory_array.SharedMemoryArray.enable_async_del(1)
     if (
         self._prefetch_process.is_alive()

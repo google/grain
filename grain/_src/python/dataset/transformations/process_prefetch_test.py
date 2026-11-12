@@ -17,6 +17,7 @@ import dataclasses
 import logging as std_logging
 import os
 import sys
+import threading
 import time
 import traceback
 import types
@@ -411,6 +412,56 @@ class ProcessPrefetchIterDatasetTest(parameterized.TestCase):
     self.assertEqual(next(ds_iter), 1)
     self.assertEqual(next(ds_iter), 2)
     ds_iter.close()
+
+  def test_process_start_failure(self):
+    spawn_process = mp.get_context('spawn').Process
+    real_start = spawn_process.start
+    # First start() on each iterator fails once.
+    fails_left = 2
+
+    def flaky_start(process):
+      nonlocal fails_left
+      if fails_left:
+        fails_left -= 1
+        raise OSError(24, 'Too many open files')
+      return real_start(process)
+
+    ds = process_prefetch.ProcessPrefetchIterDataset(
+        dataset.MapDataset.range(4).to_iter_dataset(),
+        buffer_size=1,
+    )
+    spawn_process.start = flaky_start
+    try:
+      it = ds.__iter__()
+      with self.assertRaises(OSError) as raised:
+        next(it)
+      self.assertEqual(raised.exception.errno, 24)
+      it.close()
+
+      it = ds.__iter__()
+      try:
+        with self.assertRaises(OSError):
+          next(it)
+        outcome = {}
+
+        def read_one():
+          try:
+            outcome['value'] = next(it)
+          except Exception as e:  # pylint: disable=broad-except
+            outcome['error'] = e
+
+        reader = threading.Thread(target=read_one, daemon=True)
+        reader.start()
+        reader.join(30)
+        if reader.is_alive():
+          self.fail('next() hung after the worker failed to start')
+        if 'error' in outcome:
+          raise outcome['error']
+        self.assertEqual(outcome['value'], 0)
+      finally:
+        it.close()
+    finally:
+      spawn_process.start = real_start
 
   def test_get_next_index(self):
     ds = process_prefetch.ProcessPrefetchIterDataset(
