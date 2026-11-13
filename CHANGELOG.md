@@ -6,6 +6,16 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features:
+
+* Breaking changes:
+
+* Deprecations:
+
+* Bug fixes:
+
+## Grain 0.2.19 (November 13, 2026)
+
+* New features:
   * Added the `py_permanently_disable_stats` config option
     (`--grain_py_permanently_disable_stats`) to permanently disable dataset
     stats collection and avoid stats tree initialization overhead.
@@ -13,15 +23,13 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * `MapDataset.slice` now accepts a `Sequence[int]` (including a
     `MapDataset[int]`) in addition to a `slice` object, enabling arbitrary index
     remapping similarly to NumPy's advanced indexing.
-  * Support interleaves, mixtures, and zip datasets for `ElasticIterator`
+  * Added `ElasticIterDatasetIterator` (and Orbax `CheckpointHandler` support)
+    for scaling the number of shards up and down between checkpoints, with
+    support for interleaves, mixtures, and zip datasets in `ElasticIterator`.
   * Added the `/grain/python/dataset/source_read_time_us` telemetry metric,
     recording source read latency in microseconds. The existing
     `/grain/python/dataset/source_read_time_ns` histogram overflows at ~4s,
     which hid the tail of very slow reads.
-
-* Breaking changes:
-
-* Deprecations:
 
 * Bug fixes:
   * Added exponential bucketer for `/grain/python/data_loader/iterator_get_next`
@@ -92,7 +100,6 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * Exposes `SharedMemoryArrayMetadata` in a public API as a metadata descriptor
     for `SharedMemoryArray`.
   * `ParquetIterDataset` can read from multiple string paths interleaving reads.
-  * Add `ElasticIterDatasetIterator` for scaling up and down the number of shards between checkpoints.
 
 * Breaking changes:
   * Custom implementations of `RandomAccessDataSource` should accept `int`
