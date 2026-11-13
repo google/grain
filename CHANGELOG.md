@@ -12,6 +12,9 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 * Deprecations:
 
 * Bug fixes:
+  * Fixes closing a `ProcessPrefetchDatasetIterator` taking 25 seconds per
+    worker when the worker had more buffered output than fits in a pipe. The
+    worker could not exit and was killed after a timeout.
 
 ## Grain 0.2.19 (November 13, 2026)
 

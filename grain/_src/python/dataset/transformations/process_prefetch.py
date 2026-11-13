@@ -51,6 +51,9 @@ StateT = dict[str, Any]
 
 # Timeout for killing worker processes on iterator close.
 _PROCESS_KILL_TIMEOUT_S = 25
+# Interval at which the buffer is drained while waiting for the worker process
+# to exit on iterator close.
+_STOP_DRAIN_INTERVAL_S = 0.05
 # Interval to wait in the worker process when the parent iterator is exhausted
 # to avoid busy-waiting.
 _PARENT_EXHAUSTED_WAIT_S = 0.5
@@ -139,7 +142,13 @@ def _clear_queue_and_maybe_unlink_shm(q: queues.Queue[Any]) -> int:
     ):
       return count
     count += 1
-    shared_memory_array.unlink_shm(elem)
+    try:
+      shared_memory_array.unlink_shm(elem)
+    except Exception:  # pylint: disable=broad-except
+      # Keep draining. Stopping here would leave the shared memory of the
+      # remaining elements behind, and the worker process cannot exit while its
+      # elements are not read.
+      logging.exception("Failed to unlink shared memory of a drained element.")
 
 
 class ProcessPrefetchIterDataset(dataset.IterDataset[T]):
@@ -565,6 +574,7 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
     if self._prefetch_process is None:
       return
 
+    deadline = time.monotonic() + _PROCESS_KILL_TIMEOUT_S
     try:
       if self._unregister_fn is not None:
         self._unregister_fn()
@@ -572,11 +582,19 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       self._prefetch_should_stop.set()
       _clear_queue_and_maybe_unlink_shm(self._buffer)
       self._clear_set_state_queue()
+      # Keep draining the buffer until the worker exits. The worker cannot exit
+      # before everything it has queued is written to the pipe behind the
+      # buffer, and that write blocks once the pipe is full. The worker checks
+      # the stop event before every element, so this only reads what is already
+      # queued, plus at most one element that the worker was already adding.
+      while self._prefetch_process.is_alive() and time.monotonic() < deadline:
+        if not _clear_queue_and_maybe_unlink_shm(self._buffer):
+          self._prefetch_process.join(timeout=_STOP_DRAIN_INTERVAL_S)
     finally:
       self._prefetch_should_stop.set()
       # Not joining here will cause the children to be zombie after they finish.
       # Need to join or call active_children.
-      self._prefetch_process.join(timeout=_PROCESS_KILL_TIMEOUT_S)
+      self._prefetch_process.join(timeout=max(0.0, deadline - time.monotonic()))
 
       # In case all our attempts to terminate the system fails, we forcefully
       # kill the child processes.
@@ -585,6 +603,9 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
           self._prefetch_process.kill()
           self._prefetch_process.join(timeout=_PROCESS_KILL_TIMEOUT_S)
         else:
+          # Only drain the buffer if the worker exited. Killing a worker in the
+          # middle of a `queue.put` can leave a partial element in the pipe,
+          # which makes `get_nowait()` block.
           _clear_queue_and_maybe_unlink_shm(self._buffer)
       finally:
         self._prefetch_process = None

@@ -185,6 +185,24 @@ class SharedMemoryArrayTest(parameterized.TestCase):
             2 * max_outstanding_requests, mock_close_shm_async.call_count
         )
 
+  def test_failed_async_del_releases_its_slot(self):
+    SharedMemoryArray._disable_async_del()
+    SharedMemoryArray.enable_async_del(max_outstanding_requests=1)
+    self.addCleanup(SharedMemoryArray._disable_async_del)
+    outstanding_del_requests = SharedMemoryArray._outstanding_del_requests
+    assert outstanding_del_requests is not None
+    # `__del__` takes a slot before it schedules the deletion.
+    self.assertTrue(outstanding_del_requests.acquire(blocking=False))
+    shm = mock.create_autospec(shared_memory.SharedMemory, instance=True)
+
+    with mock.patch.object(
+        shared_memory_array, "_del_shm", side_effect=RuntimeError("del failed")
+    ):
+      with self.assertRaisesRegex(RuntimeError, "del failed"):
+        SharedMemoryArray.close_shm_async(shm, unlink=True)
+
+    self.assertTrue(outstanding_del_requests.acquire(blocking=False))
+
   def test_copy_and_open_shm_single_array(self):
     arr = np.arange(10).astype(np.int32)
     shm_struct = copy_to_shm(arr)

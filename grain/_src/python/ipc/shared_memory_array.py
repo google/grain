@@ -164,9 +164,11 @@ class SharedMemoryArray(np.ndarray):
       shm: shared_memory.SharedMemory,
       unlink: bool,
   ) -> None:
-    _del_shm(shm, unlink)
-    assert cls._outstanding_del_requests is not None
-    cls._outstanding_del_requests.release()
+    try:
+      _del_shm(shm, unlink)
+    finally:
+      assert cls._outstanding_del_requests is not None
+      cls._outstanding_del_requests.release()
 
   def unlink_on_del(self) -> None:
     """Mark this object responsible for unlinking the shared memory."""
