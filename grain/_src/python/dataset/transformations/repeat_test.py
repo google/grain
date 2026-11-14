@@ -215,6 +215,23 @@ class RepeatIterDatasetTest(parameterized.TestCase):
     ds = repeat.RepeatIterDataset(ds, num_epochs=2)
     self.assertEmpty(list(ds))
 
+  @parameterized.product(num_epochs=[2, None], filtered=[False, True])
+  def test_empty_epochs_stop_and_restore(self, num_epochs, filtered):
+    parent = dataset.MapDataset.range(4 if filtered else 0).to_iter_dataset()
+    if filtered:
+      parent = parent.filter(lambda _: False)
+    ds = repeat.RepeatIterDataset(parent, num_epochs=num_epochs)
+    iterator = iter(ds)
+    initial_state = iterator.get_state()
+    self.assertEmpty(list(iterator))
+    exhausted_state = iterator.get_state()
+    for state in [initial_state, exhausted_state]:
+      for restored_iterator in [iterator, iter(ds)]:
+        restored_iterator.set_state(state)
+        self.assertEmpty(list(restored_iterator))
+        with self.assertRaises(StopIteration):
+          next(restored_iterator)
+
   @parameterized.parameters(1, 2, 5)
   def test_checkpointing(self, num_epochs):
     ds = dataset.MapDataset.range(3).to_iter_dataset()

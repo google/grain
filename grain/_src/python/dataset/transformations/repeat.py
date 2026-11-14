@@ -129,18 +129,18 @@ class _RepeatDatasetIterator(dataset.DatasetIterator[T]):
     if self._parent_starting_state is None:
       self._parent_starting_state = self._parent.get_state()
       self._ensure_keep_alive_flags()
-    while True:
-      try:
-        elem = next(self._parent)
-        with self._stats.record_self_time(offset_ns=timer.value()):
-          return self._stats.record_output_spec(elem)
-      except StopIteration as exc:
-        with timer:
-          self._epoch += 1
-          if self._num_epochs is not None and self._epoch == self._num_epochs:
-            raise StopIteration from exc
-          else:
-            self._parent.set_state(self._parent_starting_state)
+    try:
+      elem = next(self._parent)
+    except StopIteration as exc:
+      with timer:
+        self._epoch += 1
+        if self._num_epochs is not None and self._epoch == self._num_epochs:
+          raise StopIteration from exc
+        self._parent.set_state(self._parent_starting_state)
+      # Each epoch is identical, so an empty new epoch ends the iteration.
+      elem = next(self._parent)
+    with self._stats.record_self_time(offset_ns=timer.value()):
+      return self._stats.record_output_spec(elem)
 
   def get_state(self):
     return {"parent": self._parent.get_state(), "epoch": self._epoch}
