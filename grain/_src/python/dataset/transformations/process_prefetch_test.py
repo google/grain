@@ -15,7 +15,10 @@ from collections.abc import Sequence
 from concurrent import futures
 import dataclasses
 import logging as std_logging
+from multiprocessing import queues
+from multiprocessing import shared_memory
 import os
+import queue
 import sys
 import time
 import traceback
@@ -34,6 +37,7 @@ from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import process_prefetch
 from grain._src.python.dataset.transformations import testing_util
+from grain._src.python.ipc import shared_memory_array
 import numpy as np
 
 
@@ -50,6 +54,31 @@ class FilterKeepingOddElementsOnly(transforms.Filter):
 
   def filter(self, element: int) -> bool:
     return bool(element % 2)
+
+
+class _SlowLargePickle:
+  """Pickles slowly, into more bytes than fit in a pipe buffer."""
+
+  def __reduce__(self):
+    time.sleep(0.1)
+    return bytes, (bytes(200_000),)
+
+
+class ClearQueueAndMaybeUnlinkShmTest(absltest.TestCase):
+
+  def test_keeps_draining_after_unlink_failure(self):
+    already_unlinked = shared_memory_array.copy_to_shm(np.arange(4))
+    already_unlinked.close_and_unlink_shm()
+    still_linked = shared_memory_array.copy_to_shm(np.arange(4))
+    q = mock.create_autospec(queues.Queue, instance=True)
+    q.get_nowait.side_effect = [already_unlinked, still_linked, queue.Empty()]
+
+    with self.assertLogs(level='ERROR'):
+      count = process_prefetch._clear_queue_and_maybe_unlink_shm(q)
+
+    self.assertEqual(count, 2)
+    with self.assertRaises(FileNotFoundError):
+      shared_memory.SharedMemory(name=still_linked.name, create=False)
 
 
 class ProcessPrefetchIterDatasetTest(parameterized.TestCase):
@@ -1096,6 +1125,24 @@ class MultiprocessingPrefetchTest(parameterized.TestCase):
     spec = dataset.get_element_spec(ds)
     self.assertEqual(spec.dtype, np.int64)
     self.assertEqual(spec.shape, ())
+
+  def test_close_drains_buffer_until_worker_exits(self):
+    ds = dataset.MapDataset.range(1000).repeat().to_iter_dataset()
+    ds = ds.map(lambda _: _SlowLargePickle())
+    ds = process_prefetch.multiprocess_prefetch(
+        ds, num_workers=1, buffer_size=4
+    )
+    ds_iter = ds.__iter__()
+    for _ in range(3):
+      next(ds_iter)
+    shard_it = getattr(ds_iter, '_iterators_in_use')[0]
+    worker = shard_it._parent._prefetch_process
+
+    ds_iter.close()
+
+    # The worker exits on its own. If it could not write out what it had queued,
+    # it would be killed after the timeout and have a negative exit code.
+    self.assertEqual(worker.exitcode, 0)
 
 
 if __name__ == '__main__':
