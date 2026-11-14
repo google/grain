@@ -125,6 +125,24 @@ py_test(
     ],
 )
 
+py_test(
+    name = "transforms_jax_test",
+    srcs = ["transforms_jax_test.py"],
+    srcs_version = "PY3",
+    # Skip bazel test due to JAX installation issue. This is tested with pytest instead.
+    target_compatible_with = select({
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    deps = [
+        ":transforms",
+        "//grain",
+        "//grain/_src/python/dataset",
+        "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
+        "@pypi//jax:pkg",
+    ],
+)
+
 py_library(
     name = "tree_lib",
     srcs = [
