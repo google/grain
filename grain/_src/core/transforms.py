@@ -27,7 +27,7 @@ import abc
 from collections.abc import Callable, Sequence
 import dataclasses
 import inspect
-from typing import Any, Union
+from typing import Any, Protocol, Union, runtime_checkable
 
 import numpy as np
 
@@ -162,6 +162,89 @@ class TfRandomMap(abc.ABC):
     """Maps a single element."""
 
 
+@runtime_checkable
+class StatelessRandomMap(Protocol):
+  """Protocol for stateless key-based random 1:1 transformations.
+
+  Implementations must be pure and thread-safe because transformations execute
+  concurrently across prefetch threads and worker processes. Different backends
+  (such as JAX, PyTorch, TensorFlow, or custom PRNGs) implement this protocol
+  without requiring framework imports inside Grain core.
+  """
+
+  def make_key_for_index(self, seed: int) -> Callable[[int], Any]:
+    """Returns a pure function ``(index: int) -> key`` derived from ``seed``."""
+    ...
+
+  def stateless_random_map(self, element: Any, key: Any) -> Any:
+    """Maps ``element`` deterministically using an immutable ``key``."""
+    ...
+
+
+def _split_uint64(value: int) -> tuple[np.uint32, np.uint32]:
+  """Returns the (low, high) uint32 words of the low 64 bits of `value`."""
+  return np.uint32(value & 0xFFFFFFFF), np.uint32((value >> 32) & 0xFFFFFFFF)
+
+
+class JaxStatelessRandomMap:
+  """Stateless JAX random map implementing ``StatelessRandomMap``.
+
+  Can be used in two ways:
+  1. Wrapping a callable ``fn(element, key)``: ``JaxStatelessRandomMap(fn)``
+     (used by default when passing a plain callable to
+     ``ds.stateless_random_map(fn)``).
+  2. Subclassing and overriding ``stateless_random_map(self, element, key)``.
+
+  Each element receives an immutable JAX PRNG key derived lazily via
+  ``jax.random.key`` and ``jax.random.fold_in``.
+  """
+
+  def __init__(self, fn: Callable[[Any, Any], Any] | None = None):
+    if fn is not None:
+      if isinstance(fn, RandomMap) or not callable(fn):
+        raise TypeError(
+            "`JaxStatelessRandomMap` expects a callable"
+            f" `transform(element, key)`, got {type(fn).__name__}."
+        )
+    self._wrapped_fn = fn
+
+  def make_key_for_index(self, seed: int) -> Callable[[int], Any]:
+    """Returns ``index -> key`` closure derived lazily via ``jax.random``."""
+    # May raise ImportError if JAX is not linked.
+    import jax  # pylint: disable=g-import-not-at-top  # pyrefly: ignore[missing-import]
+
+    # Fold in `seed` once for dataset, then `index` for each element.
+    # Note, `jax.random.fold_in` only consumes 32 bits of data, and 64-bit seeds
+    # and indices are not preserved when `jax_enable_x64=False`. So here,
+    # 64-bit seeds and indices are folded in as two uint32 words, low word
+    # first. This is a Grain convention, not a JAX standard.
+    seed_lo, seed_hi = _split_uint64(seed)
+    base_key = jax.random.key(seed_lo)
+    if seed_hi:
+      # The high word is skipped when zero, so that values < 2**32 give exactly
+      # `fold_in(key(seed), index)` at the cost of a single `fold_in` per
+      # element.
+      base_key = jax.random.fold_in(base_key, seed_hi)
+
+    def _key_for_index(index: int) -> Any:
+      lo, hi = _split_uint64(index)
+      key = jax.random.fold_in(base_key, lo)
+      if hi:
+        key = jax.random.fold_in(key, hi)
+      return key
+
+    return _key_for_index
+
+  def stateless_random_map(self, element: Any, key: Any) -> Any:
+    """Applies the wrapped callable or subclass override with ``key``."""
+    if self._wrapped_fn is None:
+      raise NotImplementedError(
+          "Subclasses of `JaxStatelessRandomMap` must override"
+          " `stateless_random_map` or pass `fn` to `__init__`."
+      )
+    return self._wrapped_fn(element, key)
+
+
 class Filter(abc.ABC):
   """Abstract base class for filter transformations for individual elements.
 
@@ -244,6 +327,7 @@ Transformation = Union[
     Batch,
     Map,
     RandomMap,
+    StatelessRandomMap,
     TfRandomMap,
     Filter,
     FlatMap,
@@ -270,6 +354,7 @@ def get_pretty_transform_name(
           Batch,
           Map,
           RandomMap,
+          StatelessRandomMap,
           TfRandomMap,
           Filter,
           FlatMap,

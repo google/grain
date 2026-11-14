@@ -6,6 +6,19 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features:
+  * Added `MapDataset.stateless_random_map` and
+    `IterDataset.stateless_random_map`, which pass a deterministic per-element
+    stateless PRNG key to the transform, along with the
+    `grain.transforms.StatelessRandomMap` protocol and
+    `grain.transforms.JaxStatelessRandomMap` (the default for plain callables).
+  * Added the experimental `grain.experimental.torch` module for PyTorch
+    pipelines:
+    - `TorchStatelessRandomMap`, a `StatelessRandomMap` that passes a
+      deterministic per-element stateless PyTorch PRNG key
+      (`torch.func._random`) to the transform.
+    - `get_process_index_and_count`, which returns the process rank and count
+      from `torch.distributed`, and `IteratorState`, which saves and restores
+      iterator state per rank with `torch.distributed.checkpoint`.
 
 * Breaking changes:
 
