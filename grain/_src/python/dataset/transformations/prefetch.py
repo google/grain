@@ -572,7 +572,10 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       raise ValueError("Attempting to use a closed iterator.")
     if self._state is None:
       self._state = self._maybe_nonnative_parent.get_state()
-    if self._prefetch_thread is not None:
+    if (
+        self._prefetch_thread is not None
+        or self._target_prefetch_buffer_size == 0
+    ):
       return
 
     self._prefetch_should_stop.clear()
