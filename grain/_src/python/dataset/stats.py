@@ -439,6 +439,8 @@ def trace_input_pipeline_next(stage_category: str = IPL_CAT_PREFETCH):
 class HashableWeakRef:
   """A weak reference that is hashable, using the object's ID."""
 
+  __slots__ = ("_obj_id", "_weakref")
+
   def __init__(self, obj):
     self._obj_id = id(obj)
     self._weakref = weakref.ref(obj)
@@ -528,6 +530,8 @@ class Timer:
   ```
   """
 
+  __slots__ = ("_accumulator", "_last")
+
   def __init__(self):
     self._accumulator = 0
     self._last = 0
@@ -601,10 +605,13 @@ class Stats(abc.ABC):
     # Mark parent nodes as non-outputs. Nodes that are not updated are the
     # output nodes.
     self._is_output = True
-    _iter_weakref_registry.add(config.iter_weakref)
+    if config.iter_weakref is not None:
+      _iter_weakref_registry.add(config.iter_weakref)
     for p in parents:
-      p._is_output = False
-      _iter_weakref_registry.discard(p._config.iter_weakref)
+      if p._is_output:
+        p._is_output = False
+        if p._config.iter_weakref is not None:
+          _iter_weakref_registry.discard(p._config.iter_weakref)
 
   @property
   def output_spec(self) -> Any:
@@ -1166,11 +1173,79 @@ class _InterleaveExecutionStats(_ExecutionStats):
     return execution_summary, node_id
 
 
+_FLAGS = grain_config.flags.FLAGS
+_DISABLE_STATS_FLAG = _FLAGS["grain_py_permanently_disable_stats"]
+_VIS_OUTPUT_DIR_FLAG = _FLAGS["grain_py_dataset_visualization_output_dir"]
+_DEBUG_MODE_FLAG = _FLAGS["grain_py_debug_mode"]
+_ORIG_CONFIG = grain_config.config
+_ORIG_CONFIG_GET_OR_DEFAULT = grain_config.Config.get_or_default
+_last_disable_stats_state: tuple[bool, Any] | None = None
+_last_vis_debug_state: tuple[bool, Any, bool, Any] | None = None
+
+
 def stats_are_permanently_disabled() -> bool:
   """Returns whether dataset statistics collection is permanently disabled."""
+  global _last_disable_stats_state
+  if (
+      grain_config.config is _ORIG_CONFIG
+      and grain_config.Config.get_or_default is _ORIG_CONFIG_GET_OR_DEFAULT
+      and "get_or_default" not in grain_config.config.__dict__
+  ):
+    is_ready = _FLAGS.is_parsed() or bool(_DISABLE_STATS_FLAG.present)
+    val = _DISABLE_STATS_FLAG.value if is_ready else _DISABLE_STATS_FLAG.default
+    state = (is_ready, val)
+    if state == _last_disable_stats_state:
+      return bool(val)
+    result = bool(
+        grain_config.config.get_or_default("py_permanently_disable_stats")
+    )
+    _last_disable_stats_state = state
+    return result
   return bool(
       grain_config.config.get_or_default("py_permanently_disable_stats")
   )
+
+
+def _get_vis_and_debug_mode() -> tuple[str | None, bool]:
+  """Returns `(vis_output_dir, debug_mode)` while preserving Streamz updates."""
+  global _last_vis_debug_state
+  if (
+      grain_config.config is _ORIG_CONFIG
+      and grain_config.Config.get_or_default is _ORIG_CONFIG_GET_OR_DEFAULT
+      and "get_or_default" not in grain_config.config.__dict__
+  ):
+    is_parsed = _FLAGS.is_parsed()
+    vis_ready = is_parsed or bool(_VIS_OUTPUT_DIR_FLAG.present)
+    vis_val = (
+        _VIS_OUTPUT_DIR_FLAG.value
+        if vis_ready
+        else _VIS_OUTPUT_DIR_FLAG.default
+    )
+    if vis_val:
+      # Preserve exact HEAD short-circuit before reading `py_debug_mode`.
+      return (
+          grain_config.config.get_or_default(
+              "py_dataset_visualization_output_dir"
+          ),
+          False,
+      )
+    dbg_ready = is_parsed or bool(_DEBUG_MODE_FLAG.present)
+    dbg_val = _DEBUG_MODE_FLAG.value if dbg_ready else _DEBUG_MODE_FLAG.default
+    state = (vis_ready, vis_val, dbg_ready, dbg_val)
+    if state == _last_vis_debug_state:
+      return vis_val, bool(dbg_val)
+    vis_res = grain_config.config.get_or_default(
+        "py_dataset_visualization_output_dir"
+    )
+    dbg_res = bool(grain_config.config.get_or_default("py_debug_mode"))
+    _last_vis_debug_state = state
+    return vis_res, dbg_res
+  vis_res = grain_config.config.get_or_default(
+      "py_dataset_visualization_output_dir"
+  )
+  if vis_res:
+    return vis_res, False
+  return vis_res, bool(grain_config.config.get_or_default("py_debug_mode"))
 
 
 def make_stats(
@@ -1183,9 +1258,7 @@ def make_stats(
   """Produces statistics instance according to the current execution mode."""
   if stats_are_permanently_disabled():
     return _NULL_STATS
-  vis_output_dir = grain_config.config.get_or_default(
-      "py_dataset_visualization_output_dir"
-  )
+  vis_output_dir, debug_mode = _get_vis_and_debug_mode()
   # Only None and "" are supported.
   if vis_output_dir:
     raise NotImplementedError(
@@ -1193,7 +1266,7 @@ def make_stats(
         " `grain_py_dataset_visualization_output_dir` to empty string to"
         " produce visualization in the logs."
     )
-  if grain_config.config.get_or_default("py_debug_mode"):
+  if debug_mode:
     # In debug mode, we always log the execution summary.
     config = dataclasses.replace(config, log_summary=True)
     if config.stats_in_queues:

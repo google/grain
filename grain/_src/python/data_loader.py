@@ -212,6 +212,136 @@ class _OperationDatasetIterator(dataset.DatasetIterator[_T]):
     self._parent.set_state(state)
 
 
+_STR_ONLY_TYPES = frozenset((str,))
+
+
+def _is_canonical_data_sources_module(mod: str) -> bool:
+  return mod == "grain._src.python.data_sources" or mod.endswith(
+      ".grain._src.python.data_sources"
+  )
+
+
+def _is_canonical_array_record_module(mod: str) -> bool:
+  return (
+      _is_canonical_data_sources_module(mod)
+      or mod == "array_record.python.array_record_data_source"
+      or mod.endswith(".array_record.python.array_record_data_source")
+  )
+
+
+@dataclasses.dataclass(slots=True)
+class _StateReprCache:
+  """Caches checkpoint reprs strictly for built-in sources and samplers."""
+
+  _sampler_entry: tuple[Any, str] | None = None
+  _data_source_entry: tuple[Any, int, Any, str] | None = None
+
+  def get_sampler_repr(self, sampler: samplers.Sampler) -> str:
+    """Returns cached or freshly computed `repr(sampler)`."""
+    cls = sampler.__class__
+    # Exact class match only (rejects custom samplers and subclasses).
+    # pylint: disable=protected-access
+    if cls is samplers.IndexSampler:
+      s: Any = sampler
+      so = s._shard_options
+      so_cls = so.__class__
+      if so_cls is sharding.ShardOptions or so_cls is sharding.NoSharding:
+        key: Any = (
+            cls,
+            s._num_records,
+            so_cls,
+            so.shard_index,
+            so.shard_count,
+            so.drop_remainder,
+            s._shuffle,
+            s._num_epochs,
+            s._seed,
+        )
+        entry = self._sampler_entry
+        if entry is not None and entry[0] == key:
+          return entry[1]
+        repr_str = repr(sampler)
+        self._sampler_entry = (key, repr_str)
+        return repr_str
+    elif cls is samplers.SequentialSampler:
+      s_seq: Any = sampler
+      so = s_seq._shard_options
+      so_cls = so.__class__
+      if so_cls is sharding.ShardOptions or so_cls is sharding.NoSharding:
+        key = (
+            cls,
+            s_seq._num_records,
+            so_cls,
+            so.shard_index,
+            so.shard_count,
+            so.drop_remainder,
+        )
+        entry = self._sampler_entry
+        if entry is not None and entry[0] == key:
+          return entry[1]
+        repr_str = repr(sampler)
+        self._sampler_entry = (key, repr_str)
+        return repr_str
+    # pylint: enable=protected-access
+    return repr(sampler)
+
+  def get_data_source_repr(
+      self, data_source: dataset_base.RandomAccessDataSource
+  ) -> str:
+    """Returns cached or freshly computed `_source_repr(data_source)`."""
+    cls = data_source.__class__
+    entry = self._data_source_entry
+    if entry is not None and entry[0] is cls:
+      kind = entry[1]
+      if kind == 0:
+        return entry[3]
+      if kind == 1:
+        ds_any: Any = data_source
+        # pylint: disable=protected-access
+        if (ds_any._start, ds_any._stop, ds_any._step) == entry[2]:
+          return entry[3]
+        # pylint: enable=protected-access
+      else:
+        paths = getattr(data_source, "_paths", None)
+        if paths.__class__ in (list, tuple):
+          paths_tuple = tuple(paths)
+          if (
+              paths_tuple == entry[2]
+              and set(map(type, paths_tuple)) <= _STR_ONLY_TYPES
+          ):
+            return entry[3]
+
+    if cls in (list, tuple, np.ndarray):
+      repr_str = str(cls)
+      self._data_source_entry = (cls, 0, None, repr_str)
+      return repr_str
+    mod = cls.__module__
+    if cls.__name__ == "RangeDataSource" and _is_canonical_data_sources_module(
+        mod
+    ):
+      key = (
+          getattr(data_source, "_start", None),
+          getattr(data_source, "_stop", None),
+          getattr(data_source, "_step", None),
+      )
+      repr_str = _source_repr(data_source)
+      self._data_source_entry = (cls, 1, key, repr_str)
+      return repr_str
+    if (
+        cls.__name__ == "ArrayRecordDataSource"
+        and _is_canonical_array_record_module(mod)
+    ):
+      paths = getattr(data_source, "_paths", None)
+      if paths.__class__ in (list, tuple) and (
+          set(map(type, paths)) <= _STR_ONLY_TYPES
+      ):
+        paths_tuple = tuple(paths)
+        repr_str = _source_repr(data_source)
+        self._data_source_entry = (cls, 2, paths_tuple, repr_str)
+        return repr_str
+    return _source_repr(data_source)
+
+
 class _DataLoaderStateIterDataset(dataset.IterDataset[_T]):
   """IterDataset that converts between dataset and data loader state."""
 
@@ -222,12 +352,16 @@ class _DataLoaderStateIterDataset(dataset.IterDataset[_T]):
       worker_count: int,
       sampler: samplers.Sampler,
       data_source: dataset_base.RandomAccessDataSource,
+      repr_cache: _StateReprCache | None = None,
   ):
     super().__init__(parent)
     self._shard_options = shard_options
     self._worker_count = worker_count
     self._sampler = sampler
     self._data_source = data_source
+    self._repr_cache = (
+        repr_cache if repr_cache is not None else _StateReprCache()
+    )
 
   def __iter__(self) -> dataset.DatasetIterator[_T]:
     return _DataLoaderStateDatasetIterator(
@@ -236,6 +370,7 @@ class _DataLoaderStateIterDataset(dataset.IterDataset[_T]):
         self._worker_count,
         self._sampler,
         self._data_source,
+        self._repr_cache,
     )
 
 
@@ -249,12 +384,21 @@ class _DataLoaderStateDatasetIterator(dataset.DatasetIterator[_T]):
       worker_count: int,
       sampler: samplers.Sampler,
       data_source: dataset_base.RandomAccessDataSource,
+      repr_cache: _StateReprCache | None = None,
   ):
     super().__init__(parent)
     self._shard_options = shard_options
     self._worker_count = worker_count
     self._sampler = sampler
     self._data_source = data_source
+    self._repr_cache = (
+        repr_cache if repr_cache is not None else _StateReprCache()
+    )
+    self._shard_index = shard_options.shard_index if shard_options else 0
+    self._shard_count = shard_options.shard_count if shard_options else 1
+    self._global_worker_count = worker_count * self._shard_count
+    self._local_offset = self._shard_index - self._global_worker_count
+    self._worker_index_keys = tuple(str(i) for i in range(worker_count))
 
   def __next__(self) -> _T:
     return next(self._parent)
@@ -264,64 +408,81 @@ class _DataLoaderStateDatasetIterator(dataset.DatasetIterator[_T]):
     # structure and switch to native dataset checkpointing. This class can be
     # removed afterwards.
     dataset_state = self._parent.get_state()
+    shard_index = self._shard_index
+    shard_count = self._shard_count
     if "iterators_in_use_states" not in dataset_state:
-      next_index_in_cycle = 0
-      workers_state = [dataset_state]
+      last_worker_index = -1
+      last_seen_indices = {
+          "0": int(
+              shard_index + (dataset_state["next_index"] - 1) * shard_count
+          )
+      }
     else:
-      next_index_in_cycle = dataset_state["next_index_in_cycle"]
+      last_worker_index = dataset_state["next_index_in_cycle"] - 1
       workers_state = dataset_state["iterators_in_use_states"]
+      worker_count = len(workers_state)
+      if worker_count == 1:
+        last_seen_indices = {
+            "0": int(
+                shard_index + (workers_state[0]["next_index"] - 1) * shard_count
+            )
+        }
+      else:
+        if worker_count == self._worker_count:
+          global_worker_count = self._global_worker_count
+          local_offset = self._local_offset
+          keys = self._worker_index_keys
+        else:
+          global_worker_count = worker_count * shard_count
+          local_offset = shard_index - global_worker_count
+          keys = tuple(str(i) for i in range(worker_count))
+        last_seen_indices = {
+            keys[i]: int(
+                local_offset
+                + i * shard_count
+                + workers_state[i]["next_index"] * global_worker_count
+            )
+            for i in range(worker_count)
+        }
 
-    last_worker_index = next_index_in_cycle - 1
-    worker_count = len(workers_state)
-
-    shard_index = self._shard_options.shard_index if self._shard_options else 0
-    shard_count = self._shard_options.shard_count if self._shard_options else 1
-    global_worker_count = worker_count * shard_count
-
-    local_offset = shard_index - global_worker_count
-    last_seen_indices = {
-        str(i): int(
-            local_offset
-            + i * shard_count
-            + workers_state[i]["next_index"] * global_worker_count
-        )
-        for i in range(worker_count)
-    }
-
-    dataloader_state = {
+    return {
         _VERSION: _CHECKPOINT_VERSION_NUMBER,
         _LAST_SEEN_INDICES: last_seen_indices,
         _LAST_WORKER_INDEX: last_worker_index,
         _WORKER_COUNT: self._worker_count,
-        _SAMPLER: repr(self._sampler),
-        _DATA_SOURCE: _source_repr(self._data_source),
+        _SAMPLER: self._repr_cache.get_sampler_repr(self._sampler),
+        _DATA_SOURCE: self._repr_cache.get_data_source_repr(self._data_source),
     }
-    return dataloader_state
 
   def set_state(self, state):
     last_seen_indices = state[_LAST_SEEN_INDICES]
     last_worker_index = state[_LAST_WORKER_INDEX]
     worker_count = state[_WORKER_COUNT]
-    shard_count = self._shard_options.shard_count if self._shard_options else 1
-    shard_index = self._shard_options.shard_index if self._shard_options else 0
-    global_worker_count = worker_count * shard_count
+    shard_count = self._shard_count
+    shard_index = self._shard_index
 
     if worker_count == 0:
       dataset_state = {
           "next_index": (
-              (last_seen_indices[str(0)] + shard_count - shard_index)
+              (last_seen_indices["0"] + shard_count - shard_index)
               // shard_count
           )
       }
       self._parent.set_state(dataset_state)
       return
 
-    iterators_in_use_indices = list(range(worker_count))
+    if worker_count == self._worker_count:
+      global_worker_count = self._global_worker_count
+      keys = self._worker_index_keys
+    else:
+      global_worker_count = worker_count * shard_count
+      keys = tuple(str(i) for i in range(worker_count))
+
     iterators_in_use_states = [
         {
             "next_index": (
                 (
-                    last_seen_indices[str(worker_index)]
+                    last_seen_indices[keys[worker_index]]
                     + global_worker_count
                     - shard_index
                     - worker_index * shard_count
@@ -335,7 +496,7 @@ class _DataLoaderStateDatasetIterator(dataset.DatasetIterator[_T]):
     dataset_state = {
         "next_index_in_cycle": (last_worker_index + 1) % worker_count,
         "next_index_in_datasets": worker_count,
-        "iterators_in_use_indices": iterators_in_use_indices,
+        "iterators_in_use_indices": list(range(worker_count)),
         "iterators_in_use_states": iterators_in_use_states,
         "exhausted": [False] * worker_count,
     }
@@ -439,6 +600,7 @@ class DataLoader:
     self._use_native_dataset_checkpointing = any(
         isinstance(op, transforms.FlatMap) for op in self._operations
     )
+    self._state_repr_cache = _StateReprCache()
     self._dataset = self._create_dataset()
 
   @property
@@ -467,7 +629,7 @@ class DataLoader:
         ds, dataset_base.SupportsSharedMemoryOutput
     ):
       ds.enable_shared_memory_output()
-    ds = ds.map(lambda r: r.data)
+    ds = ds.map(_ExtractDataMapAdapter())
     if self.multiprocessing_options.num_workers > 0:
       ds = ds.mp_prefetch(self.multiprocessing_options)
     if not self._use_native_dataset_checkpointing:
@@ -477,6 +639,7 @@ class DataLoader:
           self._multiprocessing_options.num_workers,
           self._sampler,
           self._data_source,
+          repr_cache=self._state_repr_cache,
       )
     return _DataLoaderPipelineMarkerIterDataset(ds)
 
@@ -497,19 +660,23 @@ class DataLoader:
           f"worker count in checkpoint: {state[_WORKER_COUNT]}\n"
           f"worker count in dataloader: {expected_worker_count}"
       )
-    if state[_SAMPLER] != repr(self._sampler):
+    expected_sampler = self._state_repr_cache.get_sampler_repr(self._sampler)
+    if state[_SAMPLER] != expected_sampler:
       raise ValueError(
           "Sampler in checkpoint does not match dataloader sampler.\n"
           f"sampler in checkpoint: {state[_SAMPLER]}\n"
-          f"sampler in dataloader: {repr(self._sampler)}\n"
+          f"sampler in dataloader: {expected_sampler}\n"
           "Grain uses `repr(sampler)` to validate the sampler, so you "
           "may need to implement a custom `__repr__`."
       )
-    if state[_DATA_SOURCE] != _source_repr(self._data_source):
+    expected_source = self._state_repr_cache.get_data_source_repr(
+        self._data_source
+    )
+    if state[_DATA_SOURCE] != expected_source:
       raise ValueError(
           "DataSource in checkpoint does not match datasource in dataloader.\n"
           f"data source in checkpoint: {state[_DATA_SOURCE]}\n"
-          f"data source in dataloader: {_source_repr(self._data_source)}\n"
+          f"data source in dataloader: {expected_source}\n"
           "Grain uses `repr(data_source)` to validate the source, so you "
           "may need to implement a custom `__repr__`."
       )
@@ -650,6 +817,8 @@ def _source_repr(source: dataset_base.RandomAccessDataSource) -> str:
 class _FlatMapAdapter(transforms.FlatMap):
   """Data loader adapter to pass through correct metadata."""
 
+  __slots__ = ("_transform", "max_fan_out")
+
   def __init__(self, transform: transforms.FlatMap):
     self._transform = transform
     self.max_fan_out = transform.max_fan_out
@@ -668,68 +837,118 @@ class _FlatMapAdapter(transforms.FlatMap):
     return result
 
 
+@dataclasses.dataclass(slots=True, repr=False, eq=False)
+class _ExtractDataMapAdapter(transforms.Map):
+  """Extracts `data` payload from `record.Record` elements."""
+
+  def map(self, element: record.Record) -> Any:
+    return element.data
+
+
+@dataclasses.dataclass(slots=True, repr=False, eq=False)
+class _MapTransformAdapter(transforms.Map):
+  """Applies a `transforms.Map` to `record.Record.data`."""
+
+  transform: transforms.Map
+
+  def map(self, element: record.Record) -> record.Record:
+    return record.Record(
+        metadata=element.metadata, data=self.transform.map(element.data)
+    )
+
+  def __str__(self) -> str:
+    return f"_MapTransformAdapter({type(self.transform).__name__})"
+
+
+@dataclasses.dataclass(slots=True, repr=False, eq=False)
+class _RandomMapTransformAdapter(transforms.Map):
+  """Applies a `transforms.RandomMap` using `RecordMetadata.rng`."""
+
+  transform: transforms.RandomMap
+
+  def map(self, element: record.Record) -> record.Record:
+    return record.Record(
+        metadata=element.metadata,
+        data=self.transform.random_map(element.data, element.metadata.rng),  # pyrefly: ignore[bad-argument-type]
+    )
+
+  def __str__(self) -> str:
+    return f"_RandomMapTransformAdapter({type(self.transform).__name__})"
+
+
+@dataclasses.dataclass(slots=True, repr=False, eq=False)
+class _TfRandomMapTransformAdapter(transforms.Map):
+  """Applies a `transforms.TfRandomMap` using `RecordMetadata.rng`."""
+
+  transform: transforms.TfRandomMap
+
+  def map(self, element: record.Record) -> record.Record:
+    return record.Record(
+        metadata=element.metadata,
+        data=self.transform.np_random_map(element.data, element.metadata.rng),  # pyrefly: ignore[bad-argument-type]
+    )
+
+  def __str__(self) -> str:
+    return f"_TfRandomMapTransformAdapter({type(self.transform).__name__})"
+
+
+@dataclasses.dataclass(slots=True, repr=False, eq=False)
+class _FilterTransformAdapter(transforms.Filter):
+  """Applies a `transforms.Filter` to `record.Record.data`."""
+
+  transform: transforms.Filter
+
+  def filter(self, element: record.Record) -> bool:
+    return self.transform.filter(element.data)
+
+
+class _RecordBatchFn:
+  """A callable class to batch `record.Record` objects.
+
+  This class wraps a user-provided or default batching function to apply it
+  to the `data` field of `record.Record` instances, while preserving metadata.
+  """
+
+  __slots__ = ("values_batch_fn",)
+
+  def __init__(self, values_batch_fn: Callable[[Sequence[Any]], Any]):
+    self.values_batch_fn = values_batch_fn
+
+  def __call__(self, records: Sequence[record.Record[_T]]) -> record.Record[_T]:
+    values = []
+    last_metadata = records[0].metadata
+    for r in records:
+      last_metadata = r.metadata
+      values.append(r.data)
+    batch = self.values_batch_fn(values)
+    return record.Record(metadata=last_metadata.remove_record_key(), data=batch)
+
+  def enable_shared_memory_output(self):
+    if self.values_batch_fn is batch_ds.make_batch:
+      self.values_batch_fn = functools.partial(
+          batch_ds.make_batch, output_to_shared_memory=True
+      )
+    elif hasattr(self.values_batch_fn, "enable_shared_memory_output"):
+      self.values_batch_fn.enable_shared_memory_output()
+
+
 def _apply_transform_to_dataset(
     transform: transforms.Transformation | ops.Operation,
     ds: dataset.IterDataset,
 ) -> dataset.IterDataset:
   """Applies the `transform` to the dataset."""
   if isinstance(transform, transforms.Map):
-    return ds.map(
-        lambda r: record.Record(metadata=r.metadata, data=transform.map(r.data))
-    )
+    return ds.map(_MapTransformAdapter(transform))
   elif isinstance(transform, transforms.RandomMap):
-    return ds.map(
-        lambda r: record.Record(
-            metadata=r.metadata,
-            data=transform.random_map(r.data, r.metadata.rng),
-        )
-    )
+    return ds.map(_RandomMapTransformAdapter(transform))
   elif isinstance(transform, transforms.TfRandomMap):
-    return ds.map(
-        lambda r: record.Record(
-            metadata=r.metadata,
-            data=transform.np_random_map(r.data, r.metadata.rng),
-        )
-    )
+    return ds.map(_TfRandomMapTransformAdapter(transform))
   elif isinstance(transform, transforms.FlatMap):
     return flatmap.FlatMapIterDataset(ds, _FlatMapAdapter(transform))
   elif isinstance(transform, transforms.Filter):
-    return ds.filter(lambda r: transform.filter(r.data))
+    return ds.filter(_FilterTransformAdapter(transform))
   elif isinstance(transform, transforms.Batch):
     values_batch_fn = transform.batch_fn or batch_ds.make_batch
-
-    class _RecordBatchFn:
-      """A callable class to batch `record.Record` objects.
-
-      This class wraps a user-provided or default batching function to apply it
-      to the `data` field of `record.Record` instances, while preserving
-      metadata.
-      """
-
-      def __init__(self, values_batch_fn: Callable[[Sequence[Any]], Any]):
-        self.values_batch_fn = values_batch_fn
-
-      def __call__(
-          self, records: Sequence[record.Record[_T]]
-      ) -> record.Record[_T]:
-        values = []
-        last_metadata = records[0].metadata
-        for r in records:
-          last_metadata = r.metadata
-          values.append(r.data)
-        batch = self.values_batch_fn(values)
-        return record.Record(
-            metadata=last_metadata.remove_record_key(), data=batch
-        )
-
-      def enable_shared_memory_output(self):
-        if self.values_batch_fn is batch_ds.make_batch:
-          self.values_batch_fn = functools.partial(
-              batch_ds.make_batch, output_to_shared_memory=True
-          )
-        elif hasattr(self.values_batch_fn, "enable_shared_memory_output"):
-          self.values_batch_fn.enable_shared_memory_output()
-
     batch_fn = _RecordBatchFn(values_batch_fn)
 
     return ds.batch(
