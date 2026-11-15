@@ -15,8 +15,11 @@
 
 from collections.abc import Sequence
 import functools
+import inspect
+import json
 from multiprocessing import shared_memory
 import pathlib
+import pickle
 import platform
 import sys
 import threading
@@ -134,6 +137,57 @@ class DuplicateElementFlatMap(transforms.FlatMap):
   def flat_map(self, element: Any) -> Any:
     for _ in range(self.max_fan_out):
       yield element
+
+
+class PlusTfRandom(transforms.TfRandomMap):
+
+  def np_random_map(self, x: int, rng: np.random.Generator) -> int:
+    return x + int(rng.integers(10))
+
+
+class BrokenReprArrayMap(transforms.Map):
+
+  def __init__(self):
+    self.weights = np.array([1, 2, 3])
+
+  def map(self, x: int) -> int:
+    return x + int(self.weights[0])
+
+  def __repr__(self) -> str:
+    raise RuntimeError("broken map repr")
+
+  def __str__(self) -> str:
+    raise RuntimeError("broken map str")
+
+
+class BrokenReprArrayFilter(transforms.Filter):
+
+  def __init__(self):
+    self.mask = np.array([True, False])
+
+  def filter(self, x: int) -> bool:
+    return bool(self.mask[0]) and x >= 0
+
+  def __repr__(self) -> str:
+    raise RuntimeError("broken filter repr")
+
+  def __str__(self) -> str:
+    raise RuntimeError("broken filter str")
+
+
+class BrokenReprArrayRandomMap(transforms.RandomMap):
+
+  def __init__(self):
+    self.offsets = np.array([0, 1])
+
+  def random_map(self, x: int, rng: np.random.Generator) -> int:
+    return x + int(self.offsets[int(rng.integers(2))])
+
+  def __repr__(self) -> str:
+    raise RuntimeError("broken random_map repr")
+
+  def __str__(self) -> str:
+    raise RuntimeError("broken random_map str")
 
 
 class CopyNumPyArrayToSharedMemoryTest(absltest.TestCase):
@@ -873,6 +927,59 @@ class DataLoaderTest(absl_parameterized.TestCase):
     self.assertEqual(actual, [1, 4, 7])
     self.assertLen(actual, 3)
 
+  def test_dataloader_transforms_do_not_call_inspect_getsourcelines(self):
+    transformations = [
+        PlusOne(),
+        FilterEven(),
+        PlusRandom(),
+        PlusTfRandom(),
+        transforms.Batch(2),
+    ]
+    with mock.patch.object(
+        inspect,
+        "getsourcelines",
+        side_effect=AssertionError("getsourcelines should not be called"),
+    ):
+      dl_single = self._create_data_loader_for_short_sequence(
+          transformations, worker_count=0, seed=42
+      )
+      it_single = iter(dl_single)
+      _ = it_single._iterator._stats
+      out_single = list(it_single)
+      self.assertNotEmpty(out_single)
+
+      serialized = process_prefetch._serialize_dataset(dl_single._dataset)
+      self.assertNotEmpty(serialized)
+      for adapter in (
+          data_loader_lib._ExtractDataMapAdapter(),
+          data_loader_lib._MapTransformAdapter(PlusOne()),
+          data_loader_lib._RandomMapTransformAdapter(PlusRandom()),
+          data_loader_lib._TfRandomMapTransformAdapter(PlusTfRandom()),
+          data_loader_lib._FilterTransformAdapter(FilterEven()),
+          data_loader_lib._RecordBatchFn(batch.make_batch),
+      ):
+        _ = pickle.loads(pickle.dumps(adapter))  # pylint: disable=g-unsafe-pickle-load
+
+      dl_mp = self._create_data_loader_for_short_sequence(
+          transformations, worker_count=2, seed=42
+      )
+      out_mp = list(dl_mp)
+      np.testing.assert_equal(out_mp, out_single)
+
+  def test_adapter_does_not_call_broken_transform_repr(self):
+    transformations = [
+        BrokenReprArrayMap(),
+        BrokenReprArrayFilter(),
+        BrokenReprArrayRandomMap(),
+    ]
+    dl = self._create_data_loader_for_short_sequence(
+        transformations, worker_count=0, seed=7
+    )
+    self.assertNotEmpty(str(dl._dataset))
+    it = iter(dl)
+    _ = it._iterator._stats
+    self.assertLen(list(it), 8)
+
 
 class PyGrainDatasetIteratorTest(absltest.TestCase):
 
@@ -904,6 +1011,230 @@ class PyGrainDatasetIteratorTest(absltest.TestCase):
 })"""
 
     self.assertEqual(expected_str, str(itr))
+
+
+class _MutableReprSource(RangeDataSource):
+
+  def __init__(self, start: int, stop: int, step: int = 1, tag: str = "v1"):
+    super().__init__(start=start, stop=stop, step=step)
+    self.tag = tag
+    self.repr_calls = 0
+
+  def __repr__(self) -> str:
+    self.repr_calls += 1
+    return f"_MutableReprSource(stop={self._stop}, tag={self.tag})"
+
+
+class _MutableReprSampler(samplers.SequentialSampler):
+
+  def __init__(
+      self,
+      num_records: int,
+      shard_options: sharding.ShardOptions = sharding.NoSharding(),
+      tag: str = "v1",
+  ):
+    super().__init__(num_records=num_records, shard_options=shard_options)
+    self.tag = tag
+    self.repr_calls = 0
+
+  def __repr__(self) -> str:
+    self.repr_calls += 1
+    return f"_MutableReprSampler(n={self._num_records}, tag={self.tag})"
+
+
+class DataLoaderStateFastPathTest(absl_parameterized.TestCase):
+
+  def setUp(self):
+    super().setUp()
+    self.read_options = options.ReadOptions(
+        num_threads=0, prefetch_buffer_size=0
+    )
+    self.testdata_dir = pathlib.Path(FLAGS.test_srcdir) / "testdata"
+
+  def test_mutable_custom_source_and_sampler_never_serve_stale_repr(self):
+    src_v1 = _MutableReprSource(start=0, stop=8, tag="v1")
+    smp_v1 = _MutableReprSampler(num_records=8, tag="v1")
+    loader = data_loader_lib.DataLoader(
+        data_source=src_v1,
+        sampler=smp_v1,
+        worker_count=0,
+        read_options=self.read_options,
+    )
+    itr = iter(loader)
+    _ = next(itr)
+    ckpt_v1 = itr.get_state()
+    self.assertIn("tag=v1", ckpt_v1.decode())
+
+    # Mutate custom source in-place: old v1 ckpt must fail, new ckpt emits v2.
+    src_v1.tag = "v2"
+    with self.assertRaisesRegex(
+        ValueError, "DataSource in checkpoint does not match datasource"
+    ):
+      itr.set_state(ckpt_v1)
+    ckpt_src_v2 = itr.get_state()
+    self.assertIn("_MutableReprSource(stop=8, tag=v2)", ckpt_src_v2.decode())
+
+    # Mutate custom sampler in-place: old ckpt must fail, new ckpt emits v2.
+    smp_v1.tag = "v2"
+    with self.assertRaisesRegex(
+        ValueError, "Sampler in checkpoint does not match dataloader sampler"
+    ):
+      itr.set_state(ckpt_src_v2)
+    ckpt_both_v2 = itr.get_state()
+    self.assertIn("_MutableReprSampler(n=8, tag=v2)", ckpt_both_v2.decode())
+
+    # Fresh v2 loader accepts v2 checkpoint and continues identically.
+    loader_v2 = data_loader_lib.DataLoader(
+        data_source=_MutableReprSource(start=0, stop=8, tag="v2"),
+        sampler=_MutableReprSampler(num_records=8, tag="v2"),
+        worker_count=0,
+        read_options=self.read_options,
+    )
+    itr_v2 = iter(loader_v2)
+    itr_v2.set_state(ckpt_both_v2)
+    self.assertEqual(list(itr_v2), [1, 2, 3, 4, 5, 6, 7])
+
+  def test_builtin_array_record_and_index_sampler_cached_and_invalidated(self):
+    paths = [
+        str(self.testdata_dir / "digits.array_record-00000-of-00002"),
+        str(self.testdata_dir / "digits.array_record-00001-of-00002"),
+    ]
+    ar_source = ArrayRecordDataSource(paths)
+    sampler = samplers.IndexSampler(
+        num_records=len(ar_source),
+        shard_options=sharding.NoSharding(),
+        shuffle=True,
+        num_epochs=1,
+        seed=42,
+    )
+    with (
+        mock.patch.object(
+            ArrayRecordDataSource,
+            "__repr__",
+            autospec=True,
+            wraps=ArrayRecordDataSource.__repr__,
+        ) as mock_ar_repr,
+        mock.patch.object(
+            samplers.IndexSampler,
+            "__repr__",
+            autospec=True,
+            wraps=samplers.IndexSampler.__repr__,
+        ) as mock_smp_repr,
+    ):
+      loader = data_loader_lib.DataLoader(
+          data_source=ar_source,
+          sampler=sampler,
+          worker_count=0,
+          read_options=self.read_options,
+      )
+      itr = iter(loader)
+      _ = next(itr)
+      ckpt = b""
+      for _ in range(10):
+        ckpt = itr.get_state()
+      for _ in range(5):
+        itr.set_state(ckpt)
+      self.assertEqual(mock_ar_repr.call_count, 1)
+      self.assertEqual(mock_smp_repr.call_count, 1)
+
+      # In-place _paths mutation on ArrayRecordDataSource invalidates cache.
+      ar_source._paths[0] = paths[1]
+      with self.assertRaisesRegex(
+          ValueError, "DataSource in checkpoint does not match datasource"
+      ):
+        itr.set_state(ckpt)
+      self.assertEqual(mock_ar_repr.call_count, 2)
+
+  def test_set_state_encoding_and_malformed_json_rejection_parity(self):
+    loader = data_loader_lib.DataLoader(
+        data_source=RangeDataSource(start=0, stop=8, step=1),
+        sampler=samplers.SequentialSampler(
+            num_records=8, shard_options=sharding.NoSharding()
+        ),
+        worker_count=0,
+        read_options=self.read_options,
+    )
+    itr = iter(loader)
+    with self.assertRaises(json.JSONDecodeError):
+      itr.set_state(b"\xef\xbb\xbf{}")
+    with self.assertRaises(UnicodeDecodeError):
+      itr.set_state("{}".encode("utf-16"))
+    with self.assertRaises(UnicodeDecodeError):
+      itr.set_state(b"\xff")
+    with self.assertRaises(json.JSONDecodeError):
+      itr.set_state(b"{bad")
+
+  @absl_parameterized.product(
+      worker_count=[0, 1, 2],
+      shard=[(0, 1), (2, 3)],
+      steps=[0, 2],
+  )
+  def test_get_state_exact_json_parity_across_workers_and_shards(
+      self,
+      worker_count: int,
+      shard: tuple[int, int],
+      steps: int,
+  ):
+    shard_index, shard_count = shard
+    shard_opts = sharding.ShardOptions(
+        shard_index=shard_index, shard_count=shard_count, drop_remainder=True
+    )
+    source_obj = RangeDataSource(start=0, stop=24, step=1)
+    sampler_obj = samplers.SequentialSampler(
+        num_records=24, shard_options=shard_opts
+    )
+    loader = data_loader_lib.DataLoader(
+        data_source=source_obj,
+        sampler=sampler_obj,
+        worker_count=worker_count,
+        read_options=self.read_options,
+    )
+    full_expected = list(loader)
+    itr = iter(loader)
+    try:
+      prefix = [next(itr) for _ in range(steps)]
+      raw_state = itr.get_state()
+      actual_dict = json.loads(raw_state.decode())
+      parent_state = itr._iterator._parent.get_state()
+    finally:
+      itr._iterator.close()
+
+    if "iterators_in_use_states" not in parent_state:
+      next_index_in_cycle = 0
+      workers_state = [parent_state]
+    else:
+      next_index_in_cycle = parent_state["next_index_in_cycle"]
+      workers_state = parent_state["iterators_in_use_states"]
+    w_count = len(workers_state)
+    global_w_count = w_count * shard_count
+    local_offset = shard_index - global_w_count
+    expected_dict = {
+        "version": 2,
+        "last_seen_indices": {
+            str(i): int(
+                local_offset
+                + i * shard_count
+                + workers_state[i]["next_index"] * global_w_count
+            )
+            for i in range(w_count)
+        },
+        "last_worker_index": next_index_in_cycle - 1,
+        "worker_count": worker_count,
+        "sampler": repr(sampler_obj),
+        "data_source": repr(source_obj),
+    }
+    self.assertEqual(actual_dict, expected_dict)
+    self.assertEqual(raw_state, json.dumps(expected_dict, indent=4).encode())
+
+    restored_loader = data_loader_lib.DataLoader(
+        data_source=source_obj,
+        sampler=sampler_obj,
+        worker_count=worker_count,
+        read_options=self.read_options,
+    )
+    restored_itr = iter(restored_loader)
+    restored_itr.set_state(raw_state)
+    self.assertEqual(prefix + list(restored_itr), full_expected)
 
 
 if __name__ == "__main__":

@@ -263,6 +263,65 @@ class DefaultStatsTest(absltest.TestCase):
     self.assertIs(it._stats, stats._NULL_STATS)
     self.assertEmpty(stats._iter_weakref_registry)
 
+  def test_make_stats_flag_transitions_and_present_unparsed(self):
+    cfg = stats.StatsConfig(name="test_stats")
+    with _unparse_flags():
+      self.assertIsInstance(stats.make_stats(cfg, ()), stats._DefaultStats)
+      dbg_flag = flags.FLAGS["grain_py_debug_mode"]
+      orig_present = dbg_flag.present
+      orig_val = dbg_flag.value
+      try:
+        dbg_flag.value = True
+        dbg_flag.present = True
+        self.assertIsInstance(stats.make_stats(cfg, ()), stats._ExecutionStats)
+      finally:
+        dbg_flag.value = orig_val
+        dbg_flag.present = orig_present
+      self.assertIsInstance(stats.make_stats(cfg, ()), stats._DefaultStats)
+
+    with flagsaver.flagsaver(grain_py_permanently_disable_stats=True):
+      self.assertIs(stats.make_stats(cfg, ()), stats._NULL_STATS)
+    self.assertIsInstance(stats.make_stats(cfg, ()), stats._DefaultStats)
+
+    with flagsaver.flagsaver(grain_py_dataset_visualization_output_dir=""):
+      self.assertIsInstance(
+          stats.make_stats(cfg, ()), stats._VisualizationStats
+      )
+    with flagsaver.flagsaver(grain_py_dataset_visualization_output_dir="BAD"):
+      with self.assertRaises(NotImplementedError):
+        stats.make_stats(cfg, ())
+    self.assertIsInstance(stats.make_stats(cfg, ()), stats._DefaultStats)
+
+    with flagsaver.flagsaver(grain_py_debug_mode=True):
+      self.assertIsInstance(stats.make_stats(cfg, ()), stats._ExecutionStats)
+    self.assertIsInstance(stats.make_stats(cfg, ()), stats._DefaultStats)
+
+  def test_slots_and_shared_parent_registry_cleanup(self):
+    timer = stats.Timer()
+    self.assertFalse(hasattr(timer, "__dict__"))
+    with timer:
+      pass
+    self.assertGreaterEqual(
+        cloudpickle.loads(cloudpickle.dumps(timer)).value(), 0  # pylint: disable=g-unsafe-pickle-load
+    )
+
+    dummy = lambda: 1
+    hw = stats.HashableWeakRef(dummy)
+    self.assertFalse(hasattr(hw, "__dict__"))
+    self.assertIs(hw(), dummy)
+
+    stats._iter_weakref_registry.clear()
+    _ = stats.make_stats(stats.StatsConfig(name="no_ref"), ())
+    self.assertEmpty(stats._iter_weakref_registry)
+
+    stem = dataset.MapDataset.range(4).map(_identity)
+    branch_a = stem.map(_identity)
+    branch_b = stem.map(_identity)
+    mixed = dataset.MapDataset.mix([branch_a, branch_b])
+    it = mixed.to_iter_dataset().__iter__()
+    _ = list(it)
+    self.assertLen(stats._iter_weakref_registry, 1)
+
 
 class DebugModeStatsTest(absltest.TestCase):
 
