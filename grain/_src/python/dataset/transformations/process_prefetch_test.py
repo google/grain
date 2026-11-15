@@ -16,7 +16,10 @@ from concurrent import futures
 import dataclasses
 import logging as std_logging
 import os
+import signal
+import subprocess
 import sys
+import textwrap
 import time
 import traceback
 import types
@@ -43,6 +46,23 @@ _T = TypeVar('_T')
 def _process_prefetch_worker_init_fn():
   log_formatter = std_logging.Formatter('[Worker 0 out of 1] %(message)s')
   logging.get_absl_handler().setFormatter(log_formatter)
+
+
+def _is_process_running(pid: int) -> bool:
+  """Returns whether `pid` is running and has not exited as a zombie."""
+  if os.path.isdir('/proc'):
+    try:
+      with open(f'/proc/{pid}/stat') as f:
+        # The state follows the parenthesized command name.
+        state = f.read().rsplit(')', 1)[1].split()[0]
+    except FileNotFoundError:
+      return False
+    return state != 'Z'
+  try:
+    os.kill(pid, 0)
+  except ProcessLookupError:
+    return False
+  return True
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1096,6 +1116,56 @@ class MultiprocessingPrefetchTest(parameterized.TestCase):
     spec = dataset.get_element_spec(ds)
     self.assertEqual(spec.dtype, np.int64)
     self.assertEqual(spec.shape, ())
+
+  @parameterized.parameters('SIGKILL', 'SIGTERM')
+  def test_workers_exit_when_parent_is_killed(self, signal_name: str):
+    # The parent iterates an mp_prefetch pipeline with full worker buffers and
+    # reports the PIDs of its worker processes before it gets killed.
+    parent_code = textwrap.dedent("""
+        import multiprocessing as mp
+        import time
+        from grain._src.python import options
+        from grain._src.python.dataset import dataset
+
+        ds = (
+            dataset.MapDataset.range(1_000_000)
+            .to_iter_dataset()
+            .mp_prefetch(options.MultiprocessingOptions(num_workers=2))
+        )
+        it = iter(ds)
+        for _ in range(10):
+          next(it)
+        print(*(p.pid for p in mp.active_children()), flush=True)
+        while True:
+          next(it)
+          time.sleep(0.01)
+        """)
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join(sys.path))
+    parent = subprocess.Popen(
+        [sys.executable, '-c', parent_code],
+        stdout=subprocess.PIPE,
+        text=True,
+        env=env,
+    )
+    worker_pids = []
+    try:
+      worker_pids = [int(pid) for pid in parent.stdout.readline().split()]
+      self.assertLen(worker_pids, 2)
+      os.kill(parent.pid, getattr(signal, signal_name))
+      parent.wait()
+      deadline = time.monotonic() + 30
+      while time.monotonic() < deadline and any(
+          _is_process_running(pid) for pid in worker_pids
+      ):
+        time.sleep(0.1)
+      self.assertEmpty([pid for pid in worker_pids if _is_process_running(pid)])
+    finally:
+      parent.kill()
+      parent.wait()
+      parent.stdout.close()
+      for pid in worker_pids:
+        if _is_process_running(pid):
+          os.kill(pid, signal.SIGKILL)
 
 
 if __name__ == '__main__':

@@ -17,11 +17,14 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 import functools
+from multiprocessing import connection
 from multiprocessing import queues
 from multiprocessing import sharedctypes
 from multiprocessing import synchronize
 from multiprocessing import util
+import os
 import queue
+import threading
 import time
 from typing import Any, TypeVar
 import weakref
@@ -56,6 +59,12 @@ _PROCESS_KILL_TIMEOUT_S = 25
 _PARENT_EXHAUSTED_WAIT_S = 0.5
 # Timeout for getting an element from the worker process.
 _QUEUE_WAIT_TIMEOUT_S = 1
+# Time a worker process gives its prefetch loop to stop on its own after the
+# parent process dies, before it exits forcefully.
+_PARENT_DEATH_EXIT_TIMEOUT_S = 5
+# Exit code of a worker process that had to exit forcefully after the parent
+# process died.
+_PARENT_DEATH_EXIT_CODE = 1
 
 _is_in_worker_process = False
 
@@ -198,6 +207,53 @@ class ProcessPrefetchIterDataset(dataset.IterDataset[T]):
     return dataset.get_element_spec(self._parent)
 
 
+def _stop_when_parent_exits(should_stop: synchronize.Event) -> None:
+  """Stops the current worker process once its parent process exits.
+
+  Worker processes are started as daemons, but multiprocessing only terminates
+  daemonic children from the parent's atexit handler. That handler does not run
+  when the parent is killed by SIGKILL, by SIGTERM with the default handler, or
+  by the OOM killer, so without this the worker keeps running and holding its
+  memory after the parent is gone.
+
+  The parent's sentinel becomes ready when the parent process exits, regardless
+  of which of its threads started the worker. Once it does, a daemon thread sets
+  `should_stop` so that the prefetch loop exits and cleans up its buffer, and
+  exits the process forcefully if that has not happened after
+  `_PARENT_DEATH_EXIT_TIMEOUT_S`.
+
+  Args:
+    should_stop: The event the prefetch loop checks to know when to stop.
+  """
+  parent = mp.parent_process()
+  if parent is None:
+    return
+
+  def _exit_after_timeout():
+    time.sleep(_PARENT_DEATH_EXIT_TIMEOUT_S)
+    os._exit(_PARENT_DEATH_EXIT_CODE)  # pylint: disable=protected-access
+
+  def _watch_parent():
+    connection.wait([parent.sentinel])
+    logging.warning(
+        "Grain prefetch worker process %d: parent process %s exited, stopping.",
+        os.getpid(),
+        parent.pid,
+    )
+    # Start the forced exit first: if the parent died while holding the lock
+    # of `should_stop`, setting the event below would block forever.
+    threading.Thread(
+        target=_exit_after_timeout,
+        name="grain-parent-exit-timeout",
+        daemon=True,
+    ).start()
+    should_stop.set()
+
+  threading.Thread(
+      target=_watch_parent, name="grain-parent-watcher", daemon=True
+  ).start()
+
+
 def _put_dataset_elements_in_buffer(
     pickled_parse_debug_flags_fn: bytes,
     pickled_worker_init_fn: bytes,
@@ -222,6 +278,7 @@ def _put_dataset_elements_in_buffer(
   """Prefetches elements in a separate process."""
   global _is_in_worker_process
   _is_in_worker_process = True
+  _stop_when_parent_exits(should_stop)
   try:
     parse_debug_flags_fn = cloudpickle.loads(pickled_parse_debug_flags_fn)
     parse_debug_flags_fn(debug_flags)
