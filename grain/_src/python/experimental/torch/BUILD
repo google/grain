@@ -23,3 +23,27 @@ py_library(
     srcs_version = "PY3",
     deps = [":distributed"],
 )
+
+py_library(
+    name = "options",
+    srcs = ["options.py"],
+    srcs_version = "PY3",
+    deps = [
+        "//grain/_src/python:options",
+    ],
+)
+
+py_library(
+    name = "prefetch",
+    srcs = ["prefetch.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":options",
+        "//grain/_src/core:tree_lib",
+        "//grain/_src/python:options",
+        "//grain/_src/python/dataset",
+        "//grain/_src/python/dataset:base",
+        "//grain/_src/python/dataset:stats",
+        "@pypi//numpy:pkg",
+    ],
+)

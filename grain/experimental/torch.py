@@ -34,6 +34,12 @@ from grain._src.python.experimental.torch.checkpoint import (
 from grain._src.python.experimental.torch.distributed import (
     get_process_index_and_count,
 )
+from grain._src.python.experimental.torch.options import (
+    MultiprocessingOptions,
+)
+from grain._src.python.experimental.torch.prefetch import (
+    multiprocess_prefetch as mp_prefetch,
+)
 from grain._src.python.experimental.torch.random_map import (
     TorchStatelessRandomMap,
 )

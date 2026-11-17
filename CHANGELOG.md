@@ -19,6 +19,11 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     - `get_process_index_and_count`, which returns the process rank and count
       from `torch.distributed`, and `IteratorCheckpointWrapper`, which saves
       and restores iterator state per rank with `torch.distributed.checkpoint`.
+    - `MultiprocessingOptions` and `mp_prefetch`. Each worker process is
+      limited to one PyTorch intra-op thread by default
+      (`worker_intra_op_threads`), and CPU tensors are passed between processes
+      through Grain's shared memory, so `DatasetOptions.min_shm_size` applies
+      to them.
 
 * Breaking changes:
 
