@@ -585,6 +585,9 @@ class ProcessPrefetchDatasetIterator(dataset.DatasetIterator[T]):
           self._prefetch_process.kill()
           self._prefetch_process.join(timeout=_PROCESS_KILL_TIMEOUT_S)
         else:
+          # Only drain the buffer if the worker exited cleanly; killing a worker
+          # mid-`queue.put` can leave the underlying pipe/locks in an
+          # inconsistent state and cause `get_nowait()` to hang.
           _clear_queue_and_maybe_unlink_shm(self._buffer)
       finally:
         self._prefetch_process = None
@@ -711,6 +714,10 @@ def multiprocess_prefetch(
   if num_workers == 0:
     return ds
 
+  # Enable SharedMemoryArray outputs if the transform supports it.
+  if isinstance(ds, base.SupportsSharedMemoryOutput):
+    ds.enable_shared_memory_output()
+
   dataset_options = prefetch.get_dataset_options(ds)
 
   shards = []
@@ -718,10 +725,6 @@ def multiprocess_prefetch(
     if num_workers == 1:
       worker_ds = ds
     else:
-      # Enable SharedMemoryArray outputs if the transform supports it.
-      if isinstance(ds, base.SupportsSharedMemoryOutput):
-        ds.enable_shared_memory_output()
-
       worker_ds = _LazyWorkerSliceIterDataset(
           ds,
           slice(i, None, num_workers),
