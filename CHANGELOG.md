@@ -40,6 +40,10 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * Fixes closing a `ProcessPrefetchDatasetIterator` taking 25 seconds per
     worker when the worker had more buffered output than fits in a pipe. The
     worker could not exit and was killed after a timeout.
+  * Fixed `ThreadPrefetchDatasetIterator.start_prefetch` starting a prefetch
+    thread when `prefetch_buffer_size` is 0. The thread and `__next__` then
+    read from the parent iterator at the same time, which could, for example,
+    return an element twice.
 
 ## Grain 0.2.19 (November 13, 2026)
 
