@@ -828,6 +828,49 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
         parent=self, transform=transform, seed=seed
     )
 
+  def stateless_random_map(
+      self,
+      transform: transforms.StatelessRandomMap | Callable[[T, Any], S],
+      *,
+      seed: int | None = None,
+  ) -> MapDataset[Any]:
+    """Returns a dataset transformed with an immutable per-element PRNG key.
+
+    Unlike ``random_map`` (which passes a mutable ``np.random.Generator``),
+    ``stateless_random_map`` derives an immutable per-element PRNG key via
+    ``transform.make_key_for_index(seed)`` and passes ``(element, key)`` to
+    ``transform.stateless_random_map``. Plain callables ``fn(element, key)`` are
+    wrapped in ``JaxStatelessRandomMap`` by default; other stateless PRNG
+    backends (such as ``TorchStatelessRandomMap``) can be passed directly.
+
+    Example usage::
+
+      import jax
+      ds = MapDataset.range(5).seed(42)
+      ds = ds.stateless_random_map(
+          lambda x, key: x + int(jax.random.randint(key, (), 5, 10))
+      )
+      set(ds).issubset(set(range(5, 15)))
+
+    Args:
+      transform: Either a ``StatelessRandomMap`` implementation or a callable
+        ``fn(element, key)`` (wrapped in ``JaxStatelessRandomMap`` by default).
+      seed: An optional non-negative 64-bit integer seed. Defaults to the seed
+        derived from ``ds.seed(...)``.
+
+    Returns:
+      A ``MapDataset`` containing the transformed elements.
+    """
+    # Loaded lazily due to a circular dependency (dataset <-> random_map).
+    # pylint: disable=g-import-not-at-top
+    from grain._src.python.dataset.transformations import (
+        random_map as random_map_dataset,
+    )
+    # pylint: enable=g-import-not-at-top
+    return random_map_dataset.StatelessRandomMapMapDataset(
+        parent=self, transform=transform, seed=seed
+    )
+
   def repeat(
       self, num_epochs: int | None = None, *, reseed_each_epoch: bool = True
   ) -> MapDataset[T]:
@@ -1317,6 +1360,48 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
     )
     # pylint: enable=g-import-not-at-top
     return random_map_dataset.RandomMapIterDataset(
+        parent=self, transform=transform, seed=seed
+    )
+
+  def stateless_random_map(
+      self,
+      transform: transforms.StatelessRandomMap | Callable[[T, Any], S],
+      *,
+      seed: int | None = None,
+  ) -> IterDataset[Any]:
+    """Returns an iterable dataset transformed with an immutable PRNG key.
+
+    Unlike ``random_map`` (which passes a mutable ``np.random.Generator``),
+    ``stateless_random_map`` derives an immutable per-element PRNG key via
+    ``transform.make_key_for_index(seed)`` and passes ``(element, key)`` to
+    ``transform.stateless_random_map``. Plain callables ``fn(element, key)`` are
+    wrapped in ``JaxStatelessRandomMap`` by default.
+
+    Example usage::
+
+      import jax
+      ds = MapDataset.range(5).to_iter_dataset().seed(42)
+      ds = ds.stateless_random_map(
+          lambda x, key: x + int(jax.random.randint(key, (), 5, 10))
+      )
+      set(ds).issubset(set(range(5, 15)))
+
+    Args:
+      transform: Either a ``StatelessRandomMap`` implementation or a callable
+        ``fn(element, key)`` (wrapped in ``JaxStatelessRandomMap`` by default).
+      seed: An optional non-negative 64-bit integer seed. Defaults to the seed
+        derived from ``ds.seed(...)``.
+
+    Returns:
+      An ``IterDataset`` containing the transformed elements.
+    """
+    # Loaded lazily due to a circular dependency (dataset <-> random_map).
+    # pylint: disable=g-import-not-at-top
+    from grain._src.python.dataset.transformations import (
+        random_map as random_map_dataset,
+    )
+    # pylint: enable=g-import-not-at-top
+    return random_map_dataset.StatelessRandomMapIterDataset(
         parent=self, transform=transform, seed=seed
     )
 
@@ -1942,6 +2027,8 @@ def apply_transformations(
         ds = ds.map(transformation)  # pyrefly: ignore[bad-assignment]
       case transforms.RandomMap():
         ds = ds.random_map(transformation)  # pyrefly: ignore[bad-assignment]
+      case transforms.StatelessRandomMap():
+        ds = ds.stateless_random_map(transformation)  # pyrefly: ignore[bad-assignment]
       case transforms.MapWithIndex():
         ds = ds.map_with_index(transformation)  # pyrefly: ignore[bad-assignment]
       case transforms.FlatMap():

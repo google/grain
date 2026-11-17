@@ -311,5 +311,90 @@ class RandomMapIterDatasetTest(parameterized.TestCase):
       self.assertEqual(next(ds_iter), expected[i])
 
 
+class _ToyStatelessRandomMap:
+
+  def make_key_for_index(self, seed: int):
+    return lambda index: (seed * 1000) + index
+
+  def stateless_random_map(self, element: int, key: int) -> int:
+    return element + key
+
+
+class _ToyStatelessRandomMapWithSpec(_ToyStatelessRandomMap):
+
+  def output_spec(self, input_spec: Any) -> Any:
+    return {"val": input_spec}
+
+  def stateless_random_map(self, element: int, key: int) -> dict[str, int]:  # pyrefly: ignore[bad-override]
+    return {"val": element + key}
+
+
+class StatelessRandomMapDatasetTest(parameterized.TestCase):
+
+  def test_map_dataset_stateless_random_map_and_apply(self):
+    ds = dataset.MapDataset.range(4).stateless_random_map(
+        _ToyStatelessRandomMap(), seed=42
+    )
+    self.assertEqual(list(ds), [42000, 42002, 42004, 42006])
+
+    applied = (
+        dataset.MapDataset.range(4).seed(43).apply(_ToyStatelessRandomMap())
+    )
+    direct = (
+        dataset.MapDataset.range(4)
+        .seed(43)
+        .stateless_random_map(_ToyStatelessRandomMap())
+    )
+    self.assertEqual(list(applied), list(direct))
+
+  def test_iter_dataset_stateless_random_map_checkpointing_and_seeking(self):
+    iter_ds = (
+        dataset.MapDataset.range(10)
+        .to_iter_dataset()
+        .stateless_random_map(_ToyStatelessRandomMap(), seed=42)
+    )
+    assert_equal_output_after_checkpoint(iter_ds)
+
+    expected = list(iter_ds)
+    ds_iter = iter_ds.__iter__()
+    for i in reversed(range(10)):
+      dataset.set_next_index(ds_iter, i)
+      self.assertEqual(dataset.get_next_index(ds_iter), i)
+      self.assertEqual(next(ds_iter), expected[i])
+
+  def test_stateless_random_map_element_spec(self):
+    map_ds = dataset.MapDataset.range(4).stateless_random_map(
+        _ToyStatelessRandomMapWithSpec(), seed=42
+    )
+    iter_ds = (
+        dataset.MapDataset.range(4)
+        .to_iter_dataset()
+        .stateless_random_map(_ToyStatelessRandomMapWithSpec(), seed=42)
+    )
+    expected_spec = {
+        "val": base.ShapeDtypeStruct(shape=(), dtype=np.int64),
+    }
+    self.assertEqual(map_ds._element_spec, expected_spec)
+    self.assertEqual(iter_ds._element_spec, expected_spec)
+
+  def test_plain_callable_defaults_to_jax_stateless_without_eager_import(self):
+    ds = random_map_ds.StatelessRandomMapMapDataset(
+        dataset.MapDataset.range(4), lambda x, key: x, seed=42
+    )
+    self.assertIsInstance(
+        ds._stateless_transform, transforms.JaxStatelessRandomMap  # pylint: disable=protected-access
+    )
+
+  def test_rejects_non_stateless_transform(self):
+    with self.assertRaisesRegex(TypeError, "StatelessRandomMap"):
+      dataset.MapDataset.range(4).stateless_random_map(
+          RandomMapWithTransform(), seed=42  # pyrefly: ignore[bad-argument-type]
+      )
+    with self.assertRaisesRegex(TypeError, "StatelessRandomMap"):
+      dataset.MapDataset.range(4).to_iter_dataset().stateless_random_map(
+          RandomMapWithTransform(), seed=42  # pyrefly: ignore[bad-argument-type]
+      )
+
+
 if __name__ == "__main__":
   absltest.main()
