@@ -15,7 +15,11 @@ from collections.abc import Sequence
 from concurrent import futures
 import dataclasses
 import logging as std_logging
+from multiprocessing import reduction
+from multiprocessing import shared_memory
 import os
+import pickle
+import queue
 import sys
 import time
 import traceback
@@ -26,6 +30,7 @@ from unittest import mock
 from absl import logging
 from absl.testing import absltest
 from absl.testing import parameterized
+import cloudpickle
 from grain._src.core import config
 from grain._src.core import transforms
 import multiprocessing as mp
@@ -34,6 +39,7 @@ from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import process_prefetch
 from grain._src.python.dataset.transformations import testing_util
+from grain._src.python.ipc import shared_memory_array
 import numpy as np
 
 
@@ -60,6 +66,70 @@ class ProcessPrefetchIterDatasetTest(parameterized.TestCase):
         dataset.MapDataset.range(20)
         .to_iter_dataset()
         .filter(FilterKeepingOddElementsOnly())
+    )
+
+  def test_serializes_output_once(self):
+    reducer = mock.Mock(return_value=(int, (17,)))
+
+    class Output:
+
+      def __reduce__(self):
+        return reducer()
+
+    element = (Output(), {'index': 1}, 1, None, None)
+    serialized = process_prefetch._SerializedElement(element)
+    actual = reduction.ForkingPickler.loads(
+        reduction.ForkingPickler.dumps(serialized)
+    )
+    self.assertEqual(actual, (17, {'index': 1}, 1, None, None))
+    reducer.assert_called_once_with()
+
+  def test_unlinks_output_when_serialization_fails(self):
+    ds = (
+        dataset.MapDataset.range(1)
+        .map(lambda _: (np.ones(4), lambda: None))
+        .to_iter_dataset()
+    )
+    buffer = queue.Queue()
+    should_stop = mp.Event()
+    emitted = []
+
+    def record_error_and_stop(element, **unused_kwargs):
+      emitted.append(element)
+      should_stop.set()
+
+    with (
+        mock.patch.object(process_prefetch, '_is_in_worker_process', False),
+        mock.patch.object(buffer, 'put', side_effect=record_error_and_stop),
+        mock.patch.object(
+            shared_memory_array,
+            'unlink_shm',
+            wraps=shared_memory_array.unlink_shm,
+        ) as unlink,
+    ):
+      process_prefetch._put_dataset_elements_in_buffer(
+          cloudpickle.dumps(lambda _: None),
+          cloudpickle.dumps(None),
+          cloudpickle.dumps(ds),
+          buffer,
+          should_stop,
+          mp.Value('i', 0),
+          queue.Queue(),
+          None,
+          None,
+          None,
+          {},
+      )
+    unlink.assert_called_once()
+    metadata = unlink.call_args.args[0][0]
+    self.assertIsInstance(
+        metadata, shared_memory_array.SharedMemoryArrayMetadata
+    )
+    with self.assertRaises(FileNotFoundError):
+      shared_memory.SharedMemory(metadata.name)
+    self.assertLen(emitted, 1)
+    self.assertIsInstance(
+        emitted[0][3], (AttributeError, TypeError, pickle.PicklingError)
     )
 
   @parameterized.parameters(
@@ -360,6 +430,28 @@ class ProcessPrefetchIterDatasetTest(parameterized.TestCase):
         ValueError, 'UnpicklableObject is not picklable'
     ):
       list(ds)
+
+  @parameterized.parameters(1, 4)
+  def test_reports_unpicklable_output(self, buffer_size):
+    def transform(i):
+      extra = (lambda: i) if i == 2 else i
+      return np.full(4, i), {'extra': extra}
+
+    ds = dataset.MapDataset.range(5).map(transform).to_iter_dataset()
+    ds = process_prefetch.ProcessPrefetchIterDataset(
+        ds, buffer_size=buffer_size
+    )
+    iterator = iter(ds)
+    try:
+      self.assertEqual(int(next(iterator)[0][0]), 0)
+      self.assertEqual(int(next(iterator)[0][0]), 1)
+      with self.assertRaisesRegex(
+          (AttributeError, TypeError, pickle.PicklingError), 'lambda'
+      ):
+        next(iterator)
+      self.assertIsNone(iterator._prefetch_process)
+    finally:
+      iterator.close()
 
   def test_reports_worker_crash(self):
     def failing_transform(element):
