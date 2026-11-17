@@ -3,6 +3,16 @@ package(default_visibility = ["//grain:__subpackages__"])
 licenses(["notice"])
 
 py_library(
+    name = "batch",
+    srcs = ["batch.py"],
+    srcs_version = "PY3",
+    deps = [
+        "//grain/_src/core:tree_lib",
+        "//grain/_src/python/dataset:base",
+    ],
+)
+
+py_library(
     name = "random_map",
     srcs = ["random_map.py"],
     srcs_version = "PY3",
@@ -45,5 +55,22 @@ py_library(
         "//grain/_src/python/dataset:base",
         "//grain/_src/python/dataset:stats",
         "@pypi//numpy:pkg",
+    ],
+)
+
+py_library(
+    name = "dataset",
+    srcs = ["dataset.py"],
+    srcs_version = "PY3",
+    deps = [
+        ":batch",
+        ":checkpoint",
+        ":prefetch",
+        ":random_map",
+        "//grain/_src/core:transforms",
+        "//grain/_src/python:options",
+        "//grain/_src/python/dataset",
+        "//grain/_src/python/dataset:base",
+        "//grain/_src/python/dataset:stats",
     ],
 )

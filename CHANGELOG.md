@@ -24,6 +24,12 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
       (`worker_intra_op_threads`), and CPU tensors are passed between processes
       through Grain's shared memory, so `DatasetOptions.min_shm_size` applies
       to them.
+    - `MapDataset`, `IterDataset` and `DatasetIterator`, which provide the
+      Dataset API with PyTorch defaults: `stateless_random_map` passes PyTorch
+      keys, `random_map` is not supported because it passes a NumPy generator,
+      `batch` uses `torch.utils.data.default_collate`, `mp_prefetch`
+      applies the behavior above, and iterators implement `state_dict` and
+      `load_state_dict` for `torch.distributed.checkpoint`.
 
 * Breaking changes:
 

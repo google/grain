@@ -6,6 +6,27 @@
 List of Members
 ---------------
 
+.. autoclass:: MapDataset
+   :special-members: __init__, __len__, __getitem__, __iter__
+   :members:
+   :show-inheritance:
+   :inherited-members:
+   :undoc-members:
+
+.. autoclass:: IterDataset
+   :special-members: __init__, __iter__
+   :members:
+   :show-inheritance:
+   :inherited-members:
+   :undoc-members:
+
+.. autoclass:: DatasetIterator
+   :special-members: __init__, __iter__
+   :members:
+   :show-inheritance:
+   :inherited-members:
+   :undoc-members:
+
 .. autoclass:: TorchStatelessRandomMap
    :members:
 

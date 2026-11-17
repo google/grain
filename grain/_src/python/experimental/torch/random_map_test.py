@@ -335,19 +335,26 @@ class TorchStatelessRandomMapDatasetTest(parameterized.TestCase):
     def add_noise(x: Any, key: Any) -> Any:
       return x + torch_random.normal(key, x.shape)
 
+    grain_torch = grain.experimental.torch
     ds = (
-        grain.MapDataset.source([torch.zeros(2)] * 4)
-        .stateless_random_map(
-            grain.experimental.torch.TorchStatelessRandomMap(add_noise),
-            seed=42,
-        )
-        .batch(2, batch_fn=torch.utils.data.default_collate)  # pyrefly: ignore[bad-argument-type]
+        grain_torch.MapDataset.source([torch.zeros(2)] * 4)
+        .stateless_random_map(add_noise, seed=42)
+        .batch(2)
     )
     batch = ds[1]
     self.assertIsNotNone(batch)
     self.assertEqual(batch.shape, (2, 2))
     self.assertTrue(torch.equal(ds[1], ds[1]))
     self.assertFalse(torch.equal(ds[0], ds[1]))
+
+    # `grain.MapDataset` needs the explicit wrapper and produces the same
+    # values.
+    plain_ds = grain.MapDataset.source(
+        [torch.zeros(2)] * 4
+    ).stateless_random_map(
+        grain_torch.TorchStatelessRandomMap(add_noise), seed=42
+    )
+    self.assertTrue(torch.equal(torch.stack([plain_ds[2], plain_ds[3]]), ds[1]))
 
   def test_none_elements_are_not_mapped(self):
     ds = (

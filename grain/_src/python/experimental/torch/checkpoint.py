@@ -49,6 +49,16 @@ class IteratorCheckpointWrapper:
   Earlier releases write non-tensor values only from the coordinator rank, so
   the state of the other ranks is not saved and cannot be restored.
 
+  Iterators of ``grain.experimental.torch`` datasets
+  (``grain.experimental.torch.DatasetIterator``) implement ``Stateful`` on top
+  of this class, so they can be passed to ``dcp.save`` and ``dcp.load``
+  directly. Use ``IteratorCheckpointWrapper`` explicitly in two cases:
+
+  - To pass ``group``. The iterators above always use the default process
+    group.
+  - To checkpoint an iterator of a ``grain.MapDataset`` or
+    ``grain.IterDataset``, which does not implement ``Stateful``.
+
   ``IteratorCheckpointWrapper`` holds only a reference to the iterator:
   ``state_dict()`` reads the iterator's state when it is called, and nothing is
   cached. Create it at each save or load call, as in the example below, so that
@@ -56,12 +66,39 @@ class IteratorCheckpointWrapper:
   wraps the old iterator after the iterator is replaced.
 
   Example:
-    Saving and restoring iterator state with DCP::
+    An iterator of a ``grain.experimental.torch`` dataset needs no wrapper::
 
       import torch.distributed.checkpoint as dcp
+      from grain.experimental import torch as grain_torch
 
-      dcp.save({"data": IteratorCheckpointWrapper(it)}, checkpoint_id=path)
-      dcp.load({"data": IteratorCheckpointWrapper(it)}, checkpoint_id=path)
+      it = iter(grain_torch.MapDataset.range(8).to_iter_dataset())
+      dcp.save({"data": it}, checkpoint_id=path)
+      dcp.load({"data": it}, checkpoint_id=path)
+
+    A process group other than the default one (here ``dp_group``) is passed
+    through the wrapper::
+
+      dcp.save(
+          {"data": grain_torch.IteratorCheckpointWrapper(it, group=dp_group)},
+          checkpoint_id=path,
+      )
+      dcp.load(
+          {"data": grain_torch.IteratorCheckpointWrapper(it, group=dp_group)},
+          checkpoint_id=path,
+      )
+
+    An iterator of a ``grain.MapDataset`` or ``grain.IterDataset`` always needs
+    the wrapper, with or without ``group``::
+
+      plain_it = iter(grain.MapDataset.range(8).to_iter_dataset())
+      dcp.save(
+          {"data": grain_torch.IteratorCheckpointWrapper(plain_it)},
+          checkpoint_id=path,
+      )
+      dcp.load(
+          {"data": grain_torch.IteratorCheckpointWrapper(plain_it)},
+          checkpoint_id=path,
+      )
   """
 
   def __init__(self, iterator: Any, *, group: Any = None):

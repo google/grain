@@ -55,25 +55,33 @@ class TorchStatelessRandomMap:
   Example:
     Adding Gaussian noise drawn from each element's stateless PRNG key::
 
-      import grain
       import torch
       import torch.func._random as torch_random
+      from grain.experimental import torch as grain_torch
 
       def add_noise(x, key):
         return x + torch_random.normal(key, x.shape)
 
+      # `grain.experimental.torch` datasets wrap plain callables in
+      # `TorchStatelessRandomMap` automatically.
       ds = (
-          grain.MapDataset.source([torch.zeros(2)] * 4)
-          .stateless_random_map(
-              grain.experimental.torch.TorchStatelessRandomMap(add_noise),
-              seed=42,
-          )
-          .batch(2, batch_fn=torch.utils.data.default_collate)
+          grain_torch.MapDataset.source([torch.zeros(2)] * 4)
+          .stateless_random_map(add_noise, seed=42)
+          .batch(2)
       )
 
       # The same index always produces the same random values.
       print(torch.equal(ds[1], ds[1]))
       # True
+
+    ``grain.MapDataset`` and ``grain.IterDataset`` wrap plain callables in
+    ``JaxStatelessRandomMap``, so wrap the callable explicitly there::
+
+      import grain
+
+      ds = grain.MapDataset.source([torch.zeros(2)] * 4).stateless_random_map(
+          grain_torch.TorchStatelessRandomMap(add_noise), seed=42
+      )
   """
 
   def __init__(self, fn: Callable[[Any, Any], Any] | None = None):
