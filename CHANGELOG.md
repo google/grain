@@ -11,6 +11,11 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     stateless PRNG key to the transform, along with the
     `grain.transforms.StatelessRandomMap` protocol and
     `grain.transforms.JaxStatelessRandomMap` (the default for plain callables).
+  * Added the experimental `grain.experimental.torch` module for PyTorch
+    pipelines:
+    - `TorchStatelessRandomMap`, a `StatelessRandomMap` that passes a
+      deterministic per-element stateless PyTorch PRNG key
+      (`torch.func._random`) to the transform.
 
 * Breaking changes:
 
