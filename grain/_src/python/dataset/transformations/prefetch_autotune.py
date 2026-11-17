@@ -224,6 +224,8 @@ def pick_performance_config(
   Returns:
     A `PerformanceConfig` object containing the optimal number of workers.
   """
+  if ram_budget_mb is None or ram_budget_mb <= 0:
+    raise ValueError(f'`ram_budget_mb` must be positive, got {ram_budget_mb}.')
 
   num_workers = _get_num_workers(
       ds,
