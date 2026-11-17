@@ -17,6 +17,7 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 * Deprecations:
 
 * Bug fixes:
+  * Fix grouping of parsing transformation inserted by as_dataset
 
 ## Grain 0.2.19 (November 13, 2026)
 
