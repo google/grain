@@ -14,6 +14,7 @@
 from collections.abc import Sequence
 from concurrent import futures
 import dataclasses
+import gc
 import logging as std_logging
 import os
 import sys
@@ -34,6 +35,7 @@ from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import process_prefetch
 from grain._src.python.dataset.transformations import testing_util
+from grain._src.python.ipc import shared_memory_array
 import numpy as np
 
 
@@ -1085,6 +1087,37 @@ class MultiprocessingPrefetchTest(parameterized.TestCase):
             '[Worker 0 out of 2] processing element 0',
             '[Worker 1 out of 2] processing element 1',
         ],
+    )
+
+  def test_finished_iteration_leaves_no_cyclic_garbage(self):
+    ds = (
+        dataset.MapDataset.range(8)
+        .map(lambda x: np.full((64, 1024), x, dtype=np.float32))
+        .to_iter_dataset()
+    )
+    ds = process_prefetch.multiprocess_prefetch(ds, num_workers=2)
+    gc.collect()
+    gc.disable()
+    self.addCleanup(gc.enable)
+    ds_iter = ds.__iter__()
+    self.assertEqual([int(x[0, 0]) for x in ds_iter], list(range(8)))
+    ds_iter.close()
+    del ds_iter
+    gc.set_debug(gc.DEBUG_SAVEALL)
+    try:
+      gc.collect()
+      garbage_types = {type(obj) for obj in gc.garbage}
+    finally:
+      gc.set_debug(0)
+      gc.garbage.clear()
+      gc.collect()
+    self.assertNotIn(shared_memory_array.SharedMemoryArray, garbage_types)
+    self.assertNotIn(
+        process_prefetch.ProcessPrefetchDatasetIterator, garbage_types
+    )
+    self.assertFalse(
+        any(issubclass(t, BaseException) for t in garbage_types),
+        garbage_types,
     )
 
   def test_element_spec(self):

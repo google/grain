@@ -13,7 +13,9 @@
 # limitations under the License.
 """Tests for shared memory array."""
 
+import gc
 from multiprocessing import shared_memory
+import os
 import platform
 import threading
 import time
@@ -51,6 +53,13 @@ def _wait_for_deletion(metadata: SharedMemoryArrayMetadata) -> None:
       time.sleep(0.1)
     except FileNotFoundError:
       break
+
+
+def _unlink_if_exists(metadata: SharedMemoryArrayMetadata) -> None:
+  try:
+    metadata.close_and_unlink_shm()
+  except FileNotFoundError:
+    pass
 
 
 @absltest.skipIf(platform.system() == "Windows", "Timeouts on Windows.")
@@ -184,6 +193,42 @@ class SharedMemoryArrayTest(parameterized.TestCase):
         self.assertEqual(
             2 * max_outstanding_requests, mock_close_shm_async.call_count
         )
+
+  def test_cyclic_gc_closes_shm_once_with_async_del(self):
+    SharedMemoryArray._disable_async_del()
+    SharedMemoryArray.enable_async_del()
+    shm_array = SharedMemoryArray((1024,), np.uint8)
+    shm_array.unlink_on_del()
+    metadata = shm_array.metadata
+    fd = shm_array.shm._fd
+    # A collection while the array is alive moves its `SharedMemory` after the
+    # array in the garbage collector's list, so that the cyclic collection
+    # below finalizes the array first.
+    gc.collect()
+    # Make the array cyclic garbage.
+    shm_array.self_reference = shm_array
+    del shm_array
+
+    real_close = os.close
+    closes = []
+
+    def _close(fd_to_close: int) -> None:
+      closes.append(fd_to_close)
+      real_close(fd_to_close)
+      if fd_to_close == fd:
+        # Release the GIL between `os.close` and `SharedMemory._fd = -1`, as
+        # `os.close` itself does, so that a concurrent closer can run.
+        time.sleep(0.5)
+
+    self.addCleanup(_unlink_if_exists, metadata)
+    with mock.patch.object(os, "close", side_effect=_close):
+      gc.collect()
+      # The pool has a single thread, so this returns after the deletion
+      # request made by the collection above has finished.
+      SharedMemoryArray._del_thread_pool.apply(lambda: None)
+    self.assertEqual(closes.count(fd), 1)
+    with self.assertRaises(FileNotFoundError):
+      _ = shared_memory.SharedMemory(name=metadata.name, create=False)
 
   def test_copy_and_open_shm_single_array(self):
     arr = np.arange(10).astype(np.int32)
