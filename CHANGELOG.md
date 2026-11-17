@@ -16,6 +16,9 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     - `TorchStatelessRandomMap`, a `StatelessRandomMap` that passes a
       deterministic per-element stateless PyTorch PRNG key
       (`torch.func._random`) to the transform.
+    - `get_process_index_and_count`, which returns the process rank and count
+      from `torch.distributed`, and `IteratorCheckpointWrapper`, which saves
+      and restores iterator state per rank with `torch.distributed.checkpoint`.
 
 * Breaking changes:
 

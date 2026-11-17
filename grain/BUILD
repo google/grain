@@ -70,6 +70,8 @@ py_library(
         "//grain/_src/python/dataset/transformations:zip",
         "//grain/_src/python/experimental/device_put",
         "//grain/_src/python/experimental/example_packing:packing",
+        "//grain/_src/python/experimental/torch:checkpoint",
+        "//grain/_src/python/experimental/torch:distributed",
         "//grain/_src/python/experimental/torch:random_map",
         "//grain/_src/python/testing:experimental",
     ],

@@ -15,6 +15,9 @@
 
 PyTorch remains an optional dependency: importing `grain` or
 `grain.experimental.torch` never eagerly imports `torch`.
+
+`IteratorCheckpointWrapper` requires PyTorch 2.4 or later to checkpoint more
+than one rank with `torch.distributed.checkpoint`.
 """
 
 # pylint: disable=g-importing-member
@@ -24,6 +27,12 @@ PyTorch remains an optional dependency: importing `grain` or
 
 from grain._src.python.dataset.base import (
     DatasetOptions,
+)
+from grain._src.python.experimental.torch.checkpoint import (
+    IteratorCheckpointWrapper,
+)
+from grain._src.python.experimental.torch.distributed import (
+    get_process_index_and_count,
 )
 from grain._src.python.experimental.torch.random_map import (
     TorchStatelessRandomMap,

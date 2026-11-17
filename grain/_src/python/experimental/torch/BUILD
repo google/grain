@@ -10,3 +10,16 @@ py_library(
         "//grain/_src/core:transforms",
     ],
 )
+
+py_library(
+    name = "distributed",
+    srcs = ["distributed.py"],
+    srcs_version = "PY3",
+)
+
+py_library(
+    name = "checkpoint",
+    srcs = ["checkpoint.py"],
+    srcs_version = "PY3",
+    deps = [":distributed"],
+)
