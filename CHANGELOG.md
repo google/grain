@@ -10,7 +10,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
     `IterDataset.stateless_random_map`, which pass a deterministic per-element
     stateless PRNG key to the transform, along with the
     `grain.transforms.StatelessRandomMap` protocol and
-    `grain.transforms.JaxStatelessRandomMap` (the default for plain callables).
+    `grain.transforms.JaxStatelessRandomMap` (the default for plain callables).\
+    NOTE: These APIs are experimental and the API and implementation may change.
   * Added the experimental `grain.experimental.torch` module for PyTorch
     pipelines:
     - `TorchStatelessRandomMap`, a `StatelessRandomMap` that passes a

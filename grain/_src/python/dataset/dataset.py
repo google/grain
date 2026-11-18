@@ -836,6 +836,10 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
   ) -> MapDataset[Any]:
     """Returns a dataset transformed with an immutable per-element PRNG key.
 
+    NOTE: This transformation is still experimental and the API may change.
+    It's exposed to the public API just because there's no way to expose only to
+    experimental users.
+
     Unlike ``random_map`` (which passes a mutable ``np.random.Generator``),
     ``stateless_random_map`` derives an immutable per-element PRNG key via
     ``transform.make_key_for_index(seed)`` and passes ``(element, key)`` to
@@ -1370,6 +1374,10 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
       seed: int | None = None,
   ) -> IterDataset[Any]:
     """Returns an iterable dataset transformed with an immutable PRNG key.
+
+    NOTE: This transformation is still experimental and the API may change.
+    It's exposed to the public API just because there's no way to expose only to
+    experimental users.
 
     Unlike ``random_map`` (which passes a mutable ``np.random.Generator``),
     ``stateless_random_map`` derives an immutable per-element PRNG key via
