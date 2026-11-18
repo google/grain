@@ -92,12 +92,11 @@ class _MakeBatchParallel:
       return np.stack(xs)
 
     first_arg = np.asanyarray(xs[0])
-    shape, dtype = (len(xs),) + first_arg.shape, first_arg.dtype
+    shape = (len(xs),) + first_arg.shape
+    dtype = np.result_type(*(np.asanyarray(x).dtype for x in xs))
     if dtype.hasobject:
       return np.stack(xs)
-    # For string dtypes, np.stack with a pre-allocated out= array would
-    # silently truncate strings longer than the first element's width.
-    # Fall back to safe np.stack (which infers max-width dtype) + copy.
+    # Stack strings before copying them into shared memory.
     if dtype.kind in ("U", "S"):
       stacked = np.stack(xs)
       shm_arr = shared_memory_array.SharedMemoryArray(
@@ -119,10 +118,9 @@ class _MakeBatchParallel:
         return self._stack(xs)
       xs = cast(Sequence[np.ndarray], xs)  # pyrefly: ignore[bad-assignment]
       first_arg = xs[0]
-      shape, dtype = (len(xs),) + first_arg.shape, first_arg.dtype  # pyrefly: ignore[missing-attribute]
-      # For string dtypes, the parallel path would silently truncate strings
-      # because the output array dtype is inferred from the first element only.
-      # Fall back to the serial _stack path which handles strings correctly.
+      shape = (len(xs),) + first_arg.shape  # pyrefly: ignore[missing-attribute]
+      dtype = np.result_type(*(x.dtype for x in xs))  # pyrefly: ignore[missing-attribute]
+      # Use the serial stacking path for strings.
       if dtype.kind in ("U", "S"):
         return self._stack(xs)
       # Fall back to the standard serial `np.stack` operation if the size of
@@ -191,12 +189,11 @@ def make_batch(
 
     def shm_stacking_function(*args):
       first_arg = np.asanyarray(args[0])
-      shape, dtype = (len(args),) + first_arg.shape, first_arg.dtype
+      shape = (len(args),) + first_arg.shape
+      dtype = np.result_type(*(np.asanyarray(x).dtype for x in args))
       if dtype.hasobject:
         return np.stack(args)
-      # For string dtypes, np.stack with a pre-allocated out= array would
-      # silently truncate strings longer than the first element's width.
-      # Fall back to safe np.stack (which infers max-width dtype) + copy.
+      # Stack strings before copying them into shared memory.
       if dtype.kind in ("U", "S"):
         stacked = np.stack(args)
         shm_arr = shared_memory_array.SharedMemoryArray(
