@@ -6,6 +6,44 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features:
+  * Added `MapDataset.stateless_random_map` and
+    `IterDataset.stateless_random_map`, which pass a deterministic per-element
+    stateless PRNG key to the transform, along with the
+    `grain.transforms.StatelessRandomMap` protocol and
+    `grain.transforms.JaxStatelessRandomMap` (the default for plain callables).\
+    NOTE: These APIs are experimental and the API and implementation may change.
+  * Added the experimental `grain.experimental.torch` module for PyTorch
+    pipelines:
+    - `TorchStatelessRandomMap`, a `StatelessRandomMap` that passes a
+      deterministic per-element stateless PyTorch PRNG key
+      (`torch.func._random`) to the transform.
+    - `get_process_index_and_count`, which returns the process rank and count
+      from `torch.distributed`, and `IteratorCheckpointWrapper`, which saves
+      and restores iterator state per rank with `torch.distributed.checkpoint`.
+    - `MultiprocessingOptions` and `mp_prefetch`. Each worker process is
+      limited to one PyTorch intra-op thread by default
+      (`worker_intra_op_threads`), and CPU tensors are passed between processes
+      through Grain's shared memory, so `DatasetOptions.min_shm_size` applies
+      to them.
+    - `MapDataset`, `IterDataset` and `DatasetIterator`, which provide the
+      Dataset API with PyTorch defaults: `stateless_random_map` passes PyTorch
+      keys, `random_map` is not supported because it passes a NumPy generator,
+      `batch` uses `torch.utils.data.default_collate`, `mp_prefetch`
+      applies the behavior above, and iterators implement `state_dict` and
+      `load_state_dict` for `torch.distributed.checkpoint`.
+
+* Breaking changes:
+
+* Deprecations:
+
+* Bug fixes:
+  * Fixes closing a `ProcessPrefetchDatasetIterator` taking 25 seconds per
+    worker when the worker had more buffered output than fits in a pipe. The
+    worker could not exit and was killed after a timeout.
+
+## Grain 0.2.19 (November 13, 2026)
+
+* New features:
   * Added the `py_permanently_disable_stats` config option
     (`--grain_py_permanently_disable_stats`) to permanently disable dataset
     stats collection and avoid stats tree initialization overhead.
@@ -13,15 +51,13 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * `MapDataset.slice` now accepts a `Sequence[int]` (including a
     `MapDataset[int]`) in addition to a `slice` object, enabling arbitrary index
     remapping similarly to NumPy's advanced indexing.
-  * Support interleaves, mixtures, and zip datasets for `ElasticIterator`
+  * Added `ElasticIterDatasetIterator` (and Orbax `CheckpointHandler` support)
+    for scaling the number of shards up and down between checkpoints, with
+    support for interleaves, mixtures, and zip datasets in `ElasticIterator`.
   * Added the `/grain/python/dataset/source_read_time_us` telemetry metric,
     recording source read latency in microseconds. The existing
     `/grain/python/dataset/source_read_time_ns` histogram overflows at ~4s,
     which hid the tail of very slow reads.
-
-* Breaking changes:
-
-* Deprecations:
 
 * Bug fixes:
   * Added exponential bucketer for `/grain/python/data_loader/iterator_get_next`
@@ -96,7 +132,6 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
   * Exposes `SharedMemoryArrayMetadata` in a public API as a metadata descriptor
     for `SharedMemoryArray`.
   * `ParquetIterDataset` can read from multiple string paths interleaving reads.
-  * Add `ElasticIterDatasetIterator` for scaling up and down the number of shards between checkpoints.
 
 * Breaking changes:
   * Custom implementations of `RandomAccessDataSource` should accept `int`
