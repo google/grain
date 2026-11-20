@@ -2,8 +2,9 @@ name: Build and Publish Nightly
 
 on:
   schedule:
-    # At 04:00 every day.
-    - cron: '0 4 * * *'
+    # At 04:00 on Monday.
+    # Despite the name nightly, it uses weekly cadence to avoid hitting storage limits of PyPI.
+    - cron: '0 4 * * 1'
   workflow_dispatch:
     inputs:
       run_tests_with_bazel:
