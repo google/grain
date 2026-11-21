@@ -14,7 +14,6 @@
 from concurrent import futures
 import dataclasses
 import os
-import platform
 import sys
 import threading
 import time
@@ -447,6 +446,53 @@ class PrefetchIterDatasetTest(parameterized.TestCase):
       dataset.set_next_index(ds_iter, i)
       self.assertEqual(next(ds_iter), i)
 
+  @parameterized.parameters([True, False])
+  def test_early_break_continues_prefetching(self, close: bool):
+    num_elements = 16
+    count = 0
+    count_lock = threading.Lock()
+    release_workers = threading.Event()
+    all_fetched = threading.Event()
+
+    class CountingSource:
+
+      def __len__(self):
+        return num_elements
+
+      def __getitem__(self, index):
+        nonlocal count
+        # Block workers on subsequent elements when testing `close=True` so
+        # queued futures remain pending until `iterator.close()` cancels them.
+        if close and index > 0:
+          release_workers.wait(timeout=10.0)
+        with count_lock:
+          count += 1
+          if count == num_elements:
+            all_fetched.set()
+        return index
+
+    read_options = options.ReadOptions(num_threads=2)
+    ds = dataset.MapDataset.source(CountingSource()).to_iter_dataset(
+        read_options
+    )
+    iterator = cast(prefetch.PrefetchDatasetIterator, ds.__iter__())
+
+    self.assertEqual(count, 0)
+    if close:
+      next(iterator)
+      self.assertGreater(count, 0)
+      iterator.close()
+      release_workers.set()
+      iterator._executor.shutdown(wait=True)  # pylint: disable=protected-access
+      # Element 0 plus at most the 2 workers already running when `close()`
+      # cancelled the remaining pending futures.
+      self.assertLessEqual(count, 3)
+    else:
+      next(iterator)
+      self.assertTrue(all_fetched.wait(timeout=10.0))
+      self.assertEqual(count, num_elements)
+      iterator.close()
+
 
 @absltest.skipThisClass('Base class')
 class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
@@ -457,6 +503,26 @@ class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
         dataset.MapDataset.range(20)
         .to_iter_dataset()
         .filter(FilterKeepingOddElementsOnly())
+    )
+
+  def _make_prefetch_dataset(
+      self,
+      parent: dataset.IterDataset[_T],
+      prefetch_buffer_size: int | options.AutotuneParameter,
+  ) -> prefetch.ThreadPrefetchIterDataset[_T]:
+    """Creates a ThreadPrefetchIterDataset. Hook for subclass overrides."""
+    return prefetch.ThreadPrefetchIterDataset(
+        parent, prefetch_buffer_size=prefetch_buffer_size
+    )
+
+  def _make_prefetch_iterator(
+      self,
+      parent: prefetch.CheckpointableIterator[_T],
+      prefetch_buffer_size: int | options.AutotuneParameter,
+  ) -> prefetch.ThreadPrefetchDatasetIterator[_T]:
+    """Creates a ThreadPrefetchDatasetIterator. Hook for subclass overrides."""
+    return prefetch.ThreadPrefetchDatasetIterator(
+        parent, prefetch_buffer_size=prefetch_buffer_size
     )
 
   @parameterized.named_parameters(
@@ -487,7 +553,7 @@ class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
       ),
   )
   def test_prefetch_data(self, prefetch_buffer_size: int, warm_start: bool):
-    prefetch_lazy_iter_ds = prefetch.ThreadPrefetchIterDataset(
+    prefetch_lazy_iter_ds = self._make_prefetch_dataset(
         self.ds, prefetch_buffer_size=prefetch_buffer_size
     )
     ds = prefetch_lazy_iter_ds.__iter__()
@@ -499,7 +565,7 @@ class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
 
   @parameterized.parameters([False, True])
   def test_checkpoint(self, warm_start: bool):
-    ds = prefetch.ThreadPrefetchIterDataset(
+    ds = self._make_prefetch_dataset(
         self.ds,
         prefetch_buffer_size=500,
     )
@@ -521,7 +587,7 @@ class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
         self.assertEqual(value, values_without_interruption[i])
 
   def test_set_state_on_fresh_iterator(self):
-    ds = prefetch.ThreadPrefetchIterDataset(
+    ds = self._make_prefetch_dataset(
         self.ds,
         prefetch_buffer_size=2,
     )
@@ -549,7 +615,7 @@ class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
       return x
 
     ds = dataset.MapDataset.source([1, 2, 3]).map(f).to_iter_dataset()
-    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=10)
+    ds = self._make_prefetch_dataset(ds, prefetch_buffer_size=10)
     it = ds.__iter__()
     it.get_state()
     time.sleep(1)
@@ -573,7 +639,7 @@ class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
         return TestIterator()
 
     parent = TestDataset()
-    ds = prefetch.ThreadPrefetchIterDataset(parent, prefetch_buffer_size=1)
+    ds = self._make_prefetch_dataset(parent, prefetch_buffer_size=1)
     ds_iter = ds.__iter__()
     ds_iter.set_state({'test': 2})
     self.assertEqual(ds_iter.get_state(), {'test': 1})
@@ -582,19 +648,19 @@ class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
     with self.assertRaisesRegex(
         ValueError, '`prefetch_buffer_size` must be greater than or equal to 0'
     ):
-      prefetch.ThreadPrefetchIterDataset(self.ds, prefetch_buffer_size=-1)
+      self._make_prefetch_dataset(self.ds, prefetch_buffer_size=-1)
 
   def test_start_prefetch_with_mp_prefetch_but_no_read(self):
     ds = dataset.MapDataset.source([1, 2, 3]).repeat().to_iter_dataset()
     ds = ds.mp_prefetch(options.MultiprocessingOptions(num_workers=2))
-    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=10)
+    ds = self._make_prefetch_dataset(ds, prefetch_buffer_size=10)
     it = ds.__iter__()
     it.start_prefetch()
     del it
 
   def test_does_not_create_reference_to_itself(self):
     ds = dataset.MapDataset.source([1, 2, 3]).repeat(100).to_iter_dataset()
-    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=10)
+    ds = self._make_prefetch_dataset(ds, prefetch_buffer_size=10)
     it = ds.__iter__()
     refcount_before_iteration = sys.getrefcount(it)
     _ = next(it)
@@ -603,7 +669,7 @@ class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
 
   def test_does_not_hang_after_stop_iteration(self):
     ds = dataset.MapDataset.source([1, 2, 3]).repeat(100).to_iter_dataset()
-    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=10)
+    ds = self._make_prefetch_dataset(ds, prefetch_buffer_size=10)
     it = ds.__iter__()
     _ = list(it)
     self.assertEmpty(list(it))
@@ -631,9 +697,7 @@ class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
         self._counter = state['counter']
 
     test_iterator = TestIterator()
-    it = prefetch.ThreadPrefetchDatasetIterator(
-        test_iterator, prefetch_buffer_size=10
-    )
+    it = self._make_prefetch_iterator(test_iterator, prefetch_buffer_size=10)
     elements = []
     checkpoint_step = 5
     for _ in range(checkpoint_step):
@@ -651,7 +715,7 @@ class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
         .map(lambda x: x * np.ones((1000, 1000), dtype=np.int64))
         .to_iter_dataset(options.ReadOptions(prefetch_buffer_size=0))
     )
-    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=10)
+    ds = self._make_prefetch_dataset(ds, prefetch_buffer_size=10)
     # If buffered elements are not cleaned up when the iterator is gc'ed, this
     # test will OOM.
     for _ in range(1000):
@@ -667,9 +731,9 @@ class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
         .map(lambda x: x * np.ones((1000, 1000), dtype=np.int64))
         .to_iter_dataset(options.ReadOptions(prefetch_buffer_size=0))
     )
-    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=10)
+    ds = self._make_prefetch_dataset(ds, prefetch_buffer_size=10)
     ds = ds.map(lambda x: x + 1)
-    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=10)
+    ds = self._make_prefetch_dataset(ds, prefetch_buffer_size=10)
     # If buffered elements are not cleaned up when the iterator is gc'ed, this
     # test will OOM.
     for _ in range(1000):
@@ -679,53 +743,16 @@ class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
       if close:
         it.close()
 
-  @absltest.skipIf(platform.system() == 'Darwin', 'Fails on macos-14 runner.')
-  @parameterized.parameters([True, False])
-  def test_early_break_continues_prefetching(self, close: bool):
-    count = 0
-    count_lock = threading.Lock()
-
-    class SlowCountingSource:
-
-      def __len__(self):
-        return 16
-
-      def __getitem__(self, index):
-        nonlocal count
-        time.sleep(0.1)
-        with count_lock:
-          count += 1
-        return index
-
-    read_options = options.ReadOptions(num_threads=2)
-    ds = dataset.MapDataset.source(SlowCountingSource()).to_iter_dataset(
-        read_options
-    )
-    iterator = ds.__iter__()
-
-    assert count == 0
-    if close:
-      next(iterator)
-      self.assertGreater(count, 0)
-      iterator.close()
-      time.sleep(1)
-      self.assertLess(count, 8)
-    else:
-      next(iterator)
-      self.assertGreater(count, 0)
-      time.sleep(1)
-      self.assertGreater(count, 8)
-
   def test_element_spec(self):
     ds = dataset.MapDataset.range(2).to_iter_dataset()
-    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=1)
+    ds = self._make_prefetch_dataset(ds, prefetch_buffer_size=1)
     spec = dataset.get_element_spec(ds)
     self.assertEqual(spec.dtype, np.int64)
     self.assertEqual(spec.shape, ())
 
   def test_get_next_index(self):
     ds = dataset.MapDataset.range(20).to_iter_dataset()
-    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=10)
+    ds = self._make_prefetch_dataset(ds, prefetch_buffer_size=10)
     ds_iter = ds.__iter__()
     for i in range(20):
       self.assertEqual(dataset.get_next_index(ds_iter), i)
@@ -733,7 +760,7 @@ class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
 
   def test_set_next_index(self):
     ds = dataset.MapDataset.range(20).to_iter_dataset()
-    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=10)
+    ds = self._make_prefetch_dataset(ds, prefetch_buffer_size=10)
     ds_iter = ds.__iter__()
     for i in reversed(range(20)):
       dataset.set_next_index(ds_iter, i)
@@ -745,7 +772,7 @@ class _ThreadPrefetchIterDatasetTestBase(parameterized.TestCase):
     # iterator in its `get_state` implementation, not in the `set_next_index`
     # implementation.
     ds = dataset.MapDataset.range(20).to_iter_dataset()
-    ds = prefetch.ThreadPrefetchIterDataset(ds, prefetch_buffer_size=10)
+    ds = self._make_prefetch_dataset(ds, prefetch_buffer_size=10)
     get_state_counter = mock.Mock()
     get_state = prefetch.PrefetchDatasetIterator.get_state
 
@@ -795,6 +822,18 @@ class ThreadPrefetchIterDatasetTest(_ThreadPrefetchIterDatasetTestBase):
     self.assertEqual(next(ds_iter), 2)
     ds_iter.set_state(state)
     self.assertEqual(next(ds_iter), 1)
+
+  def test_start_prefetch_without_buffer_does_not_start_thread(self):
+    ds_iter = prefetch.ThreadPrefetchDatasetIterator(
+        self.ds.__iter__(), prefetch_buffer_size=0
+    )
+
+    ds_iter.start_prefetch()
+
+    # Without a buffer, the elements are read from the parent in `__next__`. A
+    # prefetch thread would read from the parent at the same time.
+    self.assertIsNone(ds_iter._prefetch_thread)  # pylint: disable=protected-access
+    self.assertEqual(list(ds_iter), list(range(1, 20, 2)))
 
 
 class _MpContextCheckIterDataset(dataset.IterDataset[_T]):
