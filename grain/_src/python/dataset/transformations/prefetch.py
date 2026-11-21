@@ -572,6 +572,10 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
       raise ValueError("Attempting to use a closed iterator.")
     if self._state is None:
       self._state = self._maybe_nonnative_parent.get_state()
+    if self._target_prefetch_buffer_size == 0:
+      # Without a buffer, `__next__` reads the elements from the parent. A
+      # prefetch thread would read from the parent at the same time.
+      return
     if self._prefetch_thread is not None:
       return
 
@@ -641,7 +645,8 @@ class ThreadPrefetchDatasetIterator(dataset.DatasetIterator[T]):
 
   def _stop_prefetch(self, clear_buffer: bool = True):
     """Stops the prefetching thread if it's currently running."""
-    if self._prefetch_thread is None:
+    has_active_prefetch = self._prefetch_thread is not None
+    if not has_active_prefetch:
       return
 
     self._prefetch_should_stop.set()

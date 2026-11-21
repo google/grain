@@ -342,5 +342,41 @@ class PrefetchAutotuneTest(absltest.TestCase):
     )
     self.assertEqual(performance_config.read_options.prefetch_buffer_size, 71)
 
+  def test_pick_performance_config_raises_when_ram_budget_is_none(self):
+    ds = dataset.MapDataset.source([1, 2, 3]).to_iter_dataset()
+    with self.assertRaisesRegex(
+        ValueError, '`ram_budget_mb` must be positive, got None.'
+    ):
+      prefetch_autotune.pick_performance_config(
+          ds=ds,
+          ram_budget_mb=None,
+          max_workers=8,
+          max_buffer_size=None,
+      )
+
+  def test_pick_performance_config_raises_when_ram_budget_is_zero(self):
+    ds = dataset.MapDataset.source([1, 2, 3]).to_iter_dataset()
+    with self.assertRaisesRegex(
+        ValueError, '`ram_budget_mb` must be positive, got 0.'
+    ):
+      prefetch_autotune.pick_performance_config(
+          ds=ds,
+          ram_budget_mb=0,
+          max_workers=8,
+          max_buffer_size=None,
+      )
+
+  def test_pick_performance_config_raises_when_ram_budget_is_negative(self):
+    ds = dataset.MapDataset.source([1, 2, 3]).to_iter_dataset()
+    with self.assertRaisesRegex(
+        ValueError, '`ram_budget_mb` must be positive, got -1.'
+    ):
+      prefetch_autotune.pick_performance_config(
+          ds=ds,
+          ram_budget_mb=-1,
+          max_workers=8,
+          max_buffer_size=None,
+      )
+
 if __name__ == '__main__':
   absltest.main()
