@@ -204,7 +204,7 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
         "iterators_in_use_indices": self._iterators_in_use_indices.copy(),
         "iterators_in_use_states": iterators_in_use_states,
         "exhausted": exhausted,
-        "future_states": self._future_states,
+        "future_states": self._future_states.copy(),
     }
     return state
 
@@ -294,8 +294,12 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     )
     self._next_index_in_cycle = state["next_index_in_cycle"]
     self._next_index_in_datasets = state["next_index_in_datasets"]
-    self._iterators_in_use_indices = state["iterators_in_use_indices"]
-    self._future_states = cast(dict[int, Any], state.get("future_states", {}))
+    # Copy these: `__next__` updates them in place and the same state may be
+    # restored again (`RepeatIterDataset` does so at every epoch).
+    self._iterators_in_use_indices = list(state["iterators_in_use_indices"])
+    self._future_states = cast(
+        dict[int, Any], dict(state.get("future_states", {}))
+    )
 
   def set_shard_states(self, shard_states: Sequence[Any]) -> None:
     active_states = []
