@@ -77,6 +77,23 @@ class ZipMapDatasetTest(parameterized.TestCase):
     actual_elements = ds._getitems(indices)
     self.assertEqual(expected_elements, actual_elements)
 
+  @parameterized.product(filtered_parent=(0, 1), batched=(False, True))
+  def test_filtered_parent(self, filtered_parent, batched):
+    parents = [dataset.MapDataset.range(4), dataset.MapDataset.range(10, 14)]
+    parents[filtered_parent] = parents[filtered_parent].filter(lambda x: x % 2 == 0)
+    ds = zip_ds.ZipMapDataset(parents)
+
+    if batched:
+      actual = ds._getitems(range(4))
+    else:
+      actual = [ds[i] for i in range(4)]
+    self.assertEqual(actual, [(0, 10), None, (2, 12), None])
+    if not batched:
+      self.assertEqual(
+          list(ds.map(lambda pair: pair[0] + pair[1]).to_iter_dataset()),
+          [10, 14],
+      )
+
   def test_example_docstring(self):
     inputs_ds = dataset.MapDataset.source([10, 20, 30])
     labels_ds = dataset.MapDataset.source([40, 50, 60])
@@ -95,7 +112,7 @@ class ZipMapDatasetTest(parameterized.TestCase):
 
   def test_dict(self):
     source1 = source.SourceMapDataset(
-        [{"a": [1, 2]}, {"b": [3]}, {"c": [4, 5, 6]}]  # pyrefly: ignore[bad-argument-type]
+        [{"a": [1, 2]}, {"b": None}, {"c": [4, 5, 6]}]  # pyrefly: ignore[bad-argument-type]
     )
     self.assertLen(list(source1), 3)
     source2 = source.SourceMapDataset(
@@ -109,7 +126,7 @@ class ZipMapDatasetTest(parameterized.TestCase):
         out,
         [
             ({"a": [1, 2]}, {"d": [7]}),
-            ({"b": [3]}, {"e": [8, 9]}),
+            ({"b": None}, {"e": [8, 9]}),
             ({"c": [4, 5, 6]}, {"f": [10, 11, 12]}),
         ],
     )
