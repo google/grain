@@ -194,10 +194,9 @@ class _FlatMapDatasetIterator(dataset.DatasetIterator[T]):
       self._buffer = self._flat_map(element)  # pyrefly: ignore[bad-assignment]
     except StopIteration:
       # Edge case: The iterator has run out of elements.
-      # We keep this EOF state.
-
+      # Discard any buffer from before the restore to keep this EOF state.
+      self._buffer = []
       self._next_index_in_buffer = 0
-      pass
 
   def __str__(self) -> str:
     return f"FlatMapDatasetIterator(transform={self._transform_name})"

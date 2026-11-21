@@ -19,6 +19,7 @@ import sys
 from typing import Any, Sequence
 
 from absl.testing import absltest
+from absl.testing import parameterized
 from grain._src.core import transforms
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset.transformations import flatmap
@@ -375,7 +376,7 @@ class MyDataSource:
     return self._data[index]
 
 
-class FlatMapIterDatasetTest(absltest.TestCase):
+class FlatMapIterDatasetTest(parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
@@ -409,6 +410,32 @@ class FlatMapIterDatasetTest(absltest.TestCase):
       ds_iter.set_state(checkpoints[starting_step])
       for i in range(starting_step, max_steps):
         self.assertEqual(next(ds_iter), values_without_interruption[i])
+
+  @parameterized.product(
+      trailing_empty_split=(False, True),
+      steps_before_restore=(0, 1, 4, 5),
+  )
+  def test_restore_exhausted_checkpoint(
+      self, trailing_empty_split, steps_before_restore
+  ):
+    data = [[0, 1], [], [2, 3]]
+    if trailing_empty_split:
+      data.append([])
+    ds = flatmap.FlatMapIterDataset(
+        dataset.MapDataset.source(data).to_iter_dataset(), self._unbatch
+    )
+    exhausted_iterator = iter(ds)
+    self.assertEqual(list(exhausted_iterator), [0, 1, 2, 3])
+    exhausted_state = exhausted_iterator.get_state()
+
+    # Restore into fresh, partially consumed, and exhausted iterators. Any
+    # buffered elements belong to the previous state and must not be replayed.
+    restored_iterator = iter(ds)
+    for _ in range(steps_before_restore):
+      next(restored_iterator, None)
+    for _ in range(2):
+      restored_iterator.set_state(exhausted_state)
+      self.assertEmpty(list(restored_iterator))
 
   def test_example_docstring(self):
     class DuplicateString(transforms.FlatMap):
