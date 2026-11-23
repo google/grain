@@ -97,6 +97,14 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
   @stats.trace_input_pipeline_next(stage_category=stats.IPL_CAT_PREPROCESSING)
   def __next__(self) -> T:
     self._assert_not_closed()
+    if not self._started:
+      # `get_state()` and `set_state()` before the first `__next__` create the
+      # iterators in use without starting them (e.g. a thread prefetch on top
+      # reads the state before it starts). Start them all now. Otherwise each
+      # would only start when first read from, i.e. one after another: with
+      # `mp_prefetch` (one iterator per worker process) every worker would
+      # only start after the previous one delivered its first element.
+      self.start_prefetch()
     self._started = True
     timer = stats.Timer()
     _ = self._stats  # eagerly initialize stats

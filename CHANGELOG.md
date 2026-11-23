@@ -37,6 +37,12 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 * Deprecations:
 
 * Bug fixes:
+  * Fixes `mp_prefetch` workers starting one after another instead of in
+    parallel when the iterator state is read or set before the first `next()`,
+    e.g. under a `ThreadPrefetchIterDataset` / `grain.experimental.device_put`
+    or when restoring a checkpoint. `InterleaveDatasetIterator` now starts all
+    the iterators created by `get_state()` / `set_state()` on its first
+    `next()`.
   * Fixes closing a `ProcessPrefetchDatasetIterator` taking 25 seconds per
     worker when the worker had more buffered output than fits in a pipe. The
     worker could not exit and was killed after a timeout.
