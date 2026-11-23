@@ -50,6 +50,23 @@ class FilterMapDataset(dataset.MapDataset[T]):
         self._filter_fn
     )
 
+  def _validate_parents(self, request: dataset.ValidationRequest) -> None:
+    # This dataset is sparse: it returns `None` for the elements that it
+    # discards.
+    if request.operation == "batch" and isinstance(
+        request.requester, dataset.MapDataset
+    ):
+      raise ValueError(
+          "`MapDataset.batch` can not follow `MapDataset.filter` "
+          "because `filter` can discard elements. Convert `MapDataset` to "
+          "`IterDataset` with `to_iter_dataset()` before calling `batch`."
+      )
+    if request.operation == "elastic_iterator":
+      raise ValueError(
+          "ElasticIterator does not support `filter` transformation."
+      )
+    super()._validate_parents(request)
+
   def __len__(self) -> int:
     return len(self._parent)
 

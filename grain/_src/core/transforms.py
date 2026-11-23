@@ -163,8 +163,15 @@ class TfRandomMap(abc.ABC):
 
 
 @runtime_checkable
-class StatelessRandomMap(Protocol):
-  """Protocol for stateless key-based random 1:1 transformations.
+class RandomMapWithKey(Protocol):
+  """Protocol for random 1:1 transformations that accept a PRNG key.
+
+  Unlike ``RandomMap``, which receives a ``np.random.Generator``, the
+  transformation receives a PRNG ``key`` for each element and passes it to the
+  random functions of its backend. A key is typically a pair of integer seeds
+  in a tensor: ``uint32[2]`` for the default JAX PRNG and ``uint64[2]`` for
+  PyTorch. The key is derived from the dataset seed and the index of the
+  element, so the random values of an element are reproducible.
 
   Implementations must be pure and thread-safe because transformations execute
   concurrently across prefetch threads and worker processes. Different backends
@@ -176,8 +183,8 @@ class StatelessRandomMap(Protocol):
     """Returns a pure function ``(index: int) -> key`` derived from ``seed``."""
     ...
 
-  def stateless_random_map(self, element: Any, key: Any) -> Any:
-    """Maps ``element`` deterministically using an immutable ``key``."""
+  def random_map_with_key(self, element: Any, key: Any) -> Any:
+    """Maps ``element``, drawing random values from the PRNG ``key``."""
     ...
 
 
@@ -186,24 +193,26 @@ def _split_uint64(value: int) -> tuple[np.uint32, np.uint32]:
   return np.uint32(value & 0xFFFFFFFF), np.uint32((value >> 32) & 0xFFFFFFFF)
 
 
-class JaxStatelessRandomMap:
-  """Stateless JAX random map implementing ``StatelessRandomMap``.
+class JaxRandomMapWithKey:
+  """``RandomMapWithKey`` that passes a JAX PRNG key to the transformation.
 
   Can be used in two ways:
-  1. Wrapping a callable ``fn(element, key)``: ``JaxStatelessRandomMap(fn)``
+  1. Wrapping a callable ``fn(element, key)``: ``JaxRandomMapWithKey(fn)``
      (used by default when passing a plain callable to
-     ``ds.stateless_random_map(fn)``).
-  2. Subclassing and overriding ``stateless_random_map(self, element, key)``.
+     ``ds.random_map_with_key(fn)``).
+  2. Subclassing and overriding ``random_map_with_key(self, element, key)``.
 
-  Each element receives an immutable JAX PRNG key derived lazily via
-  ``jax.random.key`` and ``jax.random.fold_in``.
+  Each element receives a JAX PRNG key derived lazily via ``jax.random.key``
+  and ``jax.random.fold_in``. With the default JAX PRNG, the key holds a pair
+  of ``uint32`` seeds. Pass ``key`` to the functions in ``jax.random``, and use
+  ``jax.random.split(key)`` to draw several independent random values.
   """
 
   def __init__(self, fn: Callable[[Any, Any], Any] | None = None):
     if fn is not None:
       if isinstance(fn, RandomMap) or not callable(fn):
         raise TypeError(
-            "`JaxStatelessRandomMap` expects a callable"
+            "`JaxRandomMapWithKey` expects a callable"
             f" `transform(element, key)`, got {type(fn).__name__}."
         )
     self._wrapped_fn = fn
@@ -235,12 +244,12 @@ class JaxStatelessRandomMap:
 
     return _key_for_index
 
-  def stateless_random_map(self, element: Any, key: Any) -> Any:
+  def random_map_with_key(self, element: Any, key: Any) -> Any:
     """Applies the wrapped callable or subclass override with ``key``."""
     if self._wrapped_fn is None:
       raise NotImplementedError(
-          "Subclasses of `JaxStatelessRandomMap` must override"
-          " `stateless_random_map` or pass `fn` to `__init__`."
+          "Subclasses of `JaxRandomMapWithKey` must override"
+          " `random_map_with_key` or pass `fn` to `__init__`."
       )
     return self._wrapped_fn(element, key)
 
@@ -327,7 +336,7 @@ Transformation = Union[
     Batch,
     Map,
     RandomMap,
-    StatelessRandomMap,
+    RandomMapWithKey,
     TfRandomMap,
     Filter,
     FlatMap,
@@ -354,7 +363,7 @@ def get_pretty_transform_name(
           Batch,
           Map,
           RandomMap,
-          StatelessRandomMap,
+          RandomMapWithKey,
           TfRandomMap,
           Filter,
           FlatMap,

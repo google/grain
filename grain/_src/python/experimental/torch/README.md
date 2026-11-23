@@ -26,7 +26,7 @@ ds = (
     grain_torch.MapDataset.source([torch.zeros(1024)] * 8)
     .seed(42)
     .shuffle()
-    .stateless_random_map(add_noise)
+    .random_map_with_key(add_noise)
     .batch(4)  # Collates with `torch.utils.data.default_collate`.
     .to_iter_dataset()
     .mp_prefetch(grain_torch.MultiprocessingOptions(num_workers=2))
@@ -46,12 +46,12 @@ with sharding across `torch.distributed` ranks and checkpointing.
 `grain.MapDataset`, `grain.IterDataset` and `grain.DatasetIterator`, which this
 document calls plain Grain. They behave the same except for the following:
 
-*   `stateless_random_map` wraps a plain callable `fn(element, key)` in
-    `TorchStatelessRandomMap` instead of `JaxStatelessRandomMap`, so `key` is a
+*   `random_map_with_key` wraps a plain callable `fn(element, key)` in
+    `TorchRandomMapWithKey` instead of `JaxRandomMapWithKey`, so `key` is a
     PyTorch PRNG key.
 *   `random_map` and `RandomMap` transformations are not supported, because they
     pass a NumPy random number generator to the transformation. Use
-    `stateless_random_map` instead.
+    `random_map_with_key` instead.
 *   `batch` collates with `torch.utils.data.default_collate` by default, so
     batches are `torch.Tensor`s.
 *   `mp_prefetch` limits each worker process to
@@ -73,7 +73,7 @@ The public module re-exports the public names of these modules:
 *   `dataset.py`: `MapDataset`, `IterDataset`, `DatasetIterator` and
     `mp_prefetch`. The classes are facades over the plain Grain classes that
     supply the PyTorch defaults.
-*   `random_map.py`: `TorchStatelessRandomMap`, a `StatelessRandomMap` that
+*   `random_map.py`: `TorchRandomMapWithKey`, a `RandomMapWithKey` that
     derives a PyTorch PRNG key for each element.
 *   `options.py`: `MultiprocessingOptions`, which is
     `grain.MultiprocessingOptions` with `worker_intra_op_threads`.

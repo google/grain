@@ -99,6 +99,19 @@ class FlatMapMapDataset(dataset.MapDataset[T]):
     super().__init__(parent)
     self._transform = transform
 
+  def _validate_parents(self, request: dataset.ValidationRequest) -> None:
+    # This dataset is sparse: it returns `None` for the fan-out slots that the
+    # transformation does not fill.
+    if request.operation == "batch" and isinstance(
+        request.requester, dataset.MapDataset
+    ):
+      raise ValueError(
+          "`MapDataset.batch` can not follow `FlatMapMapDataset` because"
+          " `FlatMapMapDataset` can discard elements. Convert `MapDataset` to"
+          " `IterDataset` with `to_iter_dataset()` before calling `batch`."
+      )
+    super()._validate_parents(request)
+
   def __len__(self) -> int:
     # If the parent dataset is on infinite repeat, its length is
     # sys.maxsize and would result in overflows if further increased.
