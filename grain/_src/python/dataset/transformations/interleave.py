@@ -580,6 +580,24 @@ class InterleaveIterDataset(dataset.IterDataset[T]):
     self._make_iter_buffer_size = make_iter_buffer_size
     self._iter_buffer_size = iter_buffer_size
 
+  def _validate_parents(self, request: dataset.ValidationRequest) -> None:
+    if request.operation == "elastic_iterator":
+      # `ElasticIterator` restricts the datasets between itself and this
+      # dataset, not the interleaved datasets.
+      return
+    # The interleaved datasets are not in `_parents`, but they validate
+    # `request` as parents do. Only the datasets of a list or tuple do:
+    # another sequence may create its datasets when they are read. A
+    # `MapDataset` of datasets validates `request` itself, not its elements.
+    if isinstance(self._datasets, (list, tuple)):
+      datasets = self._datasets
+    elif isinstance(self._datasets, (dataset.MapDataset, dataset.IterDataset)):
+      datasets = (self._datasets,)
+    else:
+      datasets = ()
+    for interleaved_ds in datasets:
+      interleaved_ds._validate_parents(request)  # pylint: disable=protected-access
+
   def __iter__(self) -> dataset.DatasetIterator[T]:
     return InterleaveDatasetIterator(
         self._datasets,

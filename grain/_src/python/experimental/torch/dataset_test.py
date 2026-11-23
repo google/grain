@@ -25,6 +25,9 @@ import multiprocessing as mp
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
+from grain._src.python.dataset.transformations import batch as batch_dataset
+from grain._src.python.dataset.transformations import process_prefetch
+from grain._src.python.dataset.transformations import random_map as random_map_dataset
 from grain._src.python.ipc import shared_memory_array
 import grain.experimental.torch as grain_torch
 import numpy as np
@@ -87,12 +90,12 @@ def _augment_bf16(sample: tuple[Any, int], key: Any) -> tuple[Any, int, int]:
 
 @absltest.skipIf(
     torch_lib is None or torch_random is None,
-    "PyTorch with stateless RNG is not available.",
+    "PyTorch with key-based RNG is not available.",
 )
 class TorchDatasetEndToEndTest(parameterized.TestCase):
 
   def test_default_seed_depth_matches_plain_grain_exactly(self):
-    add_random_int = grain_torch.TorchStatelessRandomMap(
+    add_random_int = grain_torch.TorchRandomMapWithKey(
         lambda x, key: x
         + torch_random.randint(
             key, (), low=0, high=100, dtype=torch_lib.int64
@@ -103,14 +106,14 @@ class TorchDatasetEndToEndTest(parameterized.TestCase):
         .seed(42)
         .shuffle()
         .slice(slice(0, 10))
-        .stateless_random_map(add_random_int)
+        .random_map_with_key(add_random_int)
     )
     torch_ds = (
         grain_torch.MapDataset.range(12)
         .seed(42)
         .shuffle()
         .slice(slice(0, 10))
-        .stateless_random_map(add_random_int)
+        .random_map_with_key(add_random_int)
     )
     self.assertIsInstance(torch_ds, grain.MapDataset)
     self.assertIsInstance(torch_ds, grain_torch.MapDataset)
@@ -120,18 +123,18 @@ class TorchDatasetEndToEndTest(parameterized.TestCase):
     map_ds = grain_torch.MapDataset.range(4)
     iter_ds = grain_torch.MapDataset.range(4).to_iter_dataset()
 
-    with self.assertRaisesRegex(NotImplementedError, "stateless_random_map"):
+    with self.assertRaisesRegex(NotImplementedError, "random_map_with_key"):
       map_ds.random_map(lambda x, rng: x + int(rng.integers(0, 100)))
-    with self.assertRaisesRegex(NotImplementedError, "stateless_random_map"):
+    with self.assertRaisesRegex(NotImplementedError, "random_map_with_key"):
       iter_ds.random_map(lambda x, rng: x + int(rng.integers(0, 100)))
 
   def test_apply_random_map_raises_not_implemented_error(self):
     map_ds = grain_torch.MapDataset.range(4)
     iter_ds = grain_torch.MapDataset.range(4).to_iter_dataset()
 
-    with self.assertRaisesRegex(NotImplementedError, "stateless_random_map"):
+    with self.assertRaisesRegex(NotImplementedError, "random_map_with_key"):
       map_ds.apply(_AddRandomInt())
-    with self.assertRaisesRegex(NotImplementedError, "stateless_random_map"):
+    with self.assertRaisesRegex(NotImplementedError, "random_map_with_key"):
       iter_ds.apply(_AddRandomInt())
 
   def test_pipe_function_gets_pytorch_defaults(self):
@@ -150,7 +153,7 @@ class TorchDatasetEndToEndTest(parameterized.TestCase):
   def test_pipe_function_cannot_use_random_map(self):
     torch_ds = grain_torch.MapDataset.range(4)
 
-    with self.assertRaisesRegex(NotImplementedError, "stateless_random_map"):
+    with self.assertRaisesRegex(NotImplementedError, "random_map_with_key"):
       torch_ds.pipe(lambda ds: ds.random_map(lambda x, rng: x, seed=1))
 
   def test_pipe_dataset_class_matches_plain_grain_exactly(self):
@@ -401,7 +404,7 @@ class TorchDatasetEndToEndTest(parameterized.TestCase):
         .seed(42)
         .shuffle()
         .repeat(2)[rank::world_size]
-        .stateless_random_map(_augment_bf16)
+        .random_map_with_key(_augment_bf16)
         .batch(4, drop_remainder=True)
         .to_iter_dataset()
         .with_options(grain_torch.DatasetOptions(min_shm_size=64))
@@ -442,10 +445,10 @@ class TorchDatasetEndToEndTest(parameterized.TestCase):
     else:
       it.close()
 
-  def test_apply_dispatches_stateless_random_map_and_torch_batch(self):
-    class AddTorchNoise(grain_torch.TorchStatelessRandomMap):
+  def test_apply_dispatches_random_map_with_key_and_torch_batch(self):
+    class AddTorchNoise(grain_torch.TorchRandomMapWithKey):
 
-      def stateless_random_map(self, element: int, key: Any) -> Any:
+      def random_map_with_key(self, element: int, key: Any) -> Any:
         return torch_lib.tensor(float(element)) + torch_random.uniform(key, ())
 
     map_ds = (
@@ -514,13 +517,13 @@ class TorchDatasetEndToEndTest(parameterized.TestCase):
     self.assertIsInstance(ds, grain_torch.IterDataset)
     self.assertTrue(all(isinstance(b, torch_lib.Tensor) for b in ds.batch(2)))
 
-    # `stateless_random_map`.
+    # `random_map_with_key`.
     def add_noise(x, key):
       return x + torch_random.normal(key, x.shape)
 
     ds = grain_torch.MapDataset.source([torch_lib.zeros(2)] * 4)
-    map_ds = ds.seed(42).stateless_random_map(add_noise)
-    iter_ds = ds.to_iter_dataset().seed(42).stateless_random_map(add_noise)
+    map_ds = ds.seed(42).random_map_with_key(add_noise)
+    iter_ds = ds.to_iter_dataset().seed(42).random_map_with_key(add_noise)
     for ds in (map_ds, iter_ds):
       first, second = list(ds), list(ds)
       self.assertLen(first, 4)
@@ -562,11 +565,11 @@ class TorchDatasetEndToEndTest(parameterized.TestCase):
     self.assertIsInstance(first_batch, shared_memory_array.SharedMemoryArray)
     first_batch.unlink_on_del()
 
-  def test_iter_dataset_stateless_random_map_and_state_dict_round_trip(self):
+  def test_iter_dataset_random_map_with_key_and_state_dict_round_trip(self):
     iter_ds = (
         grain_torch.MapDataset.range(8)
         .to_iter_dataset()
-        .stateless_random_map(
+        .random_map_with_key(
             lambda x, key: x
             + int(
                 torch_random.randint(
@@ -599,12 +602,200 @@ class TorchDatasetEndToEndTest(parameterized.TestCase):
       ds = (
           grain_torch.MapDataset.range(4)
           .seed(1)
-          .stateless_random_map(lambda x, key: x)
+          .random_map_with_key(lambda x, key: x)
           .batch(2)
       )
       self.assertLen(ds, 2)
       with self.assertRaises(ImportError):
         _ = ds[0]
+
+
+def _torch_iter_dataset(start: int = 0) -> Any:
+  return grain_torch.MapDataset.range(start, start + 4).to_iter_dataset()
+
+
+def _interleave(ds: Any) -> Any:
+  return grain.experimental.InterleaveIterDataset(
+      [ds, _torch_iter_dataset(10)], cycle_length=2
+  )
+
+
+def _interleave_map_dataset_of_datasets(ds: Any) -> Any:
+  del ds  # The interleaved datasets are made by the `map` below.
+  datasets: Any = grain_torch.MapDataset.source([0, 10]).map(
+      _torch_iter_dataset
+  )
+  return grain.experimental.InterleaveIterDataset(datasets, cycle_length=2)
+
+
+def _thread_prefetch(ds: Any) -> Any:
+  return grain.experimental.ThreadPrefetchIterDataset(
+      ds, prefetch_buffer_size=2
+  )
+
+
+def _worker_num_threads(_: Any) -> int:
+  return torch_lib.get_num_threads()
+
+
+@absltest.skipIf(
+    torch_lib is None or torch_random is None,
+    "PyTorch with key-based RNG is not available.",
+)
+class PlainDatasetOnTorchDatasetTest(parameterized.TestCase):
+  """Tests of `grain.MapDataset` and `grain.IterDataset` built on torch ones."""
+
+  @parameterized.named_parameters(
+      ("interleave", _interleave),
+      ("interleave_map_dataset", _interleave_map_dataset_of_datasets),
+      ("thread_prefetch", _thread_prefetch),
+      (
+          "nested",
+          lambda ds: _thread_prefetch(_interleave(ds)).map(_AddOneMap()),
+      ),
+  )
+  def test_batch_raises(self, make_plain_dataset):
+    ds = make_plain_dataset(_torch_iter_dataset())
+    self.assertNotIsInstance(ds, grain_torch.IterDataset)
+
+    with self.assertRaisesRegex(TypeError, "`batch`.*from_dataset"):
+      ds.batch(2)
+
+  def test_batch_raises_for_map_dataset(self):
+    torch_ds = grain_torch.MapDataset.range(4)
+    ds = grain.MapDataset.mix([torch_ds, grain.MapDataset.range(4)])
+    self.assertNotIsInstance(ds, grain_torch.MapDataset)
+
+    with self.assertRaisesRegex(TypeError, "`batch`.*from_dataset"):
+      ds.batch(2)
+    with self.assertRaisesRegex(TypeError, "`batch`.*from_dataset"):
+      ds.to_iter_dataset().batch(2)
+
+  def test_apply_batch_raises(self):
+    ds = _thread_prefetch(_torch_iter_dataset())
+
+    with self.assertRaisesRegex(TypeError, "`batch`.*from_dataset"):
+      ds.apply(transforms.Batch(batch_size=2))
+
+  def test_batch_with_batch_fn_does_not_raise(self):
+    ds = _thread_prefetch(_torch_iter_dataset())
+
+    batches = list(ds.batch(2, batch_fn=np.stack))
+
+    self.assertTrue(all(isinstance(b, np.ndarray) for b in batches))
+    self.assertEqual([b.tolist() for b in batches], [[0, 1], [2, 3]])
+
+  def test_random_map_with_key_raises_for_callable(self):
+    ds = _thread_prefetch(_torch_iter_dataset())
+
+    with self.assertRaisesRegex(
+        TypeError, "`random_map_with_key`.*from_dataset"
+    ):
+      ds.random_map_with_key(lambda x, key: x, seed=1)
+
+  def test_random_map_with_key_does_not_raise_for_transformation(self):
+    ds = _thread_prefetch(_torch_iter_dataset())
+
+    ds = ds.random_map_with_key(
+        grain_torch.TorchRandomMapWithKey(
+            lambda x, key: x
+            + int(torch_random.randint(key, (), low=10, high=20))
+        ),
+        seed=1,
+    )
+
+    self.assertTrue(all(10 <= x < 23 for x in ds))
+
+  @parameterized.named_parameters(
+      (
+          "torch_options",
+          lambda: grain_torch.MultiprocessingOptions(num_workers=2),
+      ),
+      ("grain_options", lambda: grain.MultiprocessingOptions(num_workers=2)),
+      ("default_options", lambda: None),
+  )
+  def test_mp_prefetch_raises(self, make_options):
+    ds = _thread_prefetch(_torch_iter_dataset())
+
+    with self.assertRaisesRegex(TypeError, "`mp_prefetch`.*from_dataset"):
+      ds.mp_prefetch(make_options())
+
+  def test_mp_prefetch_without_workers_does_not_raise(self):
+    # No worker process is started, so no PyTorch behavior is lost.
+    ds = _thread_prefetch(_torch_iter_dataset())
+
+    ds = ds.mp_prefetch(grain.MultiprocessingOptions(num_workers=0))
+
+    self.assertEqual(list(ds), [0, 1, 2, 3])
+
+  def test_dataset_classes_raise(self):
+    ds = _thread_prefetch(_torch_iter_dataset())
+
+    with self.assertRaisesRegex(
+        TypeError, "`batch`.*`BatchIterDataset`.*from_dataset"
+    ):
+      batch_dataset.BatchIterDataset(ds, batch_size=2)
+    with self.assertRaisesRegex(
+        TypeError, "`random_map_with_key`.*from_dataset"
+    ):
+      random_map_dataset.RandomMapWithKeyIterDataset(
+          ds, lambda x, key: x, seed=1
+      )
+    with self.assertRaisesRegex(TypeError, "`mp_prefetch`.*from_dataset"):
+      process_prefetch.ProcessPrefetchIterDataset(ds, buffer_size=1)
+
+  def test_batch_dataset_class_with_batch_fn_does_not_raise(self):
+    ds = _thread_prefetch(_torch_iter_dataset())
+
+    ds = batch_dataset.BatchIterDataset(ds, batch_size=2, batch_fn=np.stack)
+
+    self.assertEqual([b.tolist() for b in ds], [[0, 1], [2, 3]])
+
+  def test_from_dataset_keeps_pytorch_defaults(self):
+    ds = _thread_prefetch(_interleave(_torch_iter_dataset()))
+    ds = grain_torch.IterDataset.from_dataset(ds)
+
+    batches = list(ds.batch(2))
+
+    self.assertTrue(all(isinstance(b, torch_lib.Tensor) for b in batches))
+    self.assertEqual(
+        [b.tolist() for b in batches], [[0, 10], [1, 11], [2, 12], [3, 13]]
+    )
+
+  @parameterized.named_parameters(
+      (
+          "from_dataset",
+          lambda ds, options: grain_torch.IterDataset.from_dataset(
+              ds
+          ).mp_prefetch(options),
+      ),
+      ("function", grain_torch.mp_prefetch),
+      (
+          "function_through_pipe",
+          lambda ds, options: ds.pipe(grain_torch.mp_prefetch, options),
+      ),
+  )
+  def test_torch_mp_prefetch_limits_threads_of_workers(self, mp_prefetch):
+    ds = _thread_prefetch(_torch_iter_dataset().map(_worker_num_threads))
+
+    ds = mp_prefetch(ds, grain_torch.MultiprocessingOptions(num_workers=2))
+
+    it = iter(ds)
+    num_threads = list(it)
+    it.close()
+    self.assertEqual(num_threads, [1, 1, 1, 1])
+
+  def test_pipe_returns_torch_dataset(self):
+    ds = _torch_iter_dataset().pipe(
+        grain.experimental.ThreadPrefetchIterDataset, prefetch_buffer_size=2
+    )
+
+    self.assertIsInstance(ds, grain_torch.IterDataset)
+    self.assertEqual([b.tolist() for b in ds.batch(2)], [[0, 1], [2, 3]])
+
+  def test_pipe_function_cannot_use_plain_defaults(self):
+    with self.assertRaisesRegex(TypeError, "`batch`.*from_dataset"):
+      _torch_iter_dataset().pipe(lambda ds: _thread_prefetch(ds).batch(2))
 
 
 if __name__ == "__main__":

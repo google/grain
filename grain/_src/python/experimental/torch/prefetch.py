@@ -240,6 +240,14 @@ class _TorchIpcEncodeIterDataset(dataset.IterDataset[Any]):
   def set_slice(self, sl: slice, sequential_slice: bool = False) -> None:
     dataset.set_slice(self._parent, sl, sequential_slice)
 
+  def _validate_parents(self, request: dataset.ValidationRequest) -> None:
+    # `multiprocess_prefetch` puts this dataset between the pipeline and Grain's
+    # `mp_prefetch`, and adds the PyTorch thread limit. The parents need not
+    # validate that `mp_prefetch`: it has the PyTorch behavior.
+    if request.operation == "mp_prefetch":
+      return
+    super()._validate_parents(request)
+
   def __iter__(self) -> dataset.DatasetIterator[Any]:
     return _TorchIpcEncodeDatasetIterator(self._parent.__iter__())
 

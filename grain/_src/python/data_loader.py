@@ -691,11 +691,11 @@ def _apply_transform_to_dataset(
             data=transform.np_random_map(r.data, r.metadata.rng),
         )
     )
-  elif isinstance(transform, transforms.StatelessRandomMap):
+  elif isinstance(transform, transforms.RandomMapWithKey):
     raise NotImplementedError(
-        "`StatelessRandomMap` transformations are not supported by"
-        " `DataLoader`. Use `MapDataset.stateless_random_map` or"
-        " `IterDataset.stateless_random_map` instead."
+        "`RandomMapWithKey` transformations are not supported by"
+        " `DataLoader`. Use `MapDataset.random_map_with_key` or"
+        " `IterDataset.random_map_with_key` instead."
     )
   elif isinstance(transform, transforms.FlatMap):
     return flatmap.FlatMapIterDataset(ds, _FlatMapAdapter(transform))

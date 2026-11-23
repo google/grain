@@ -177,6 +177,18 @@ class ProcessPrefetchIterDataset(dataset.IterDataset[T]):
           f"`buffer_size` must be greater than 0, got {buffer_size}."
       )
     super().__init__(parent)
+    # A parent rejects it if its elements or transformations need more than
+    # what a Grain worker process provides.
+    parent._validate_parents(  # pylint: disable=protected-access
+        dataset.ValidationRequest(
+            operation="mp_prefetch",
+            requester=self,
+            arguments={
+                "buffer_size": buffer_size,
+                "worker_init_fn": worker_init_fn,
+            },
+        )
+    )
     self._buffer_size = buffer_size
     self._worker_init_fn = worker_init_fn
 

@@ -16,7 +16,7 @@
 ``grain.experimental.torch`` provides Grain's Dataset API with PyTorch defaults:
 
 - Random transformations receive PyTorch PRNG keys
-  (``stateless_random_map``).
+  (``random_map_with_key``).
 - ``batch`` collates elements into ``torch.Tensor``s.
 - ``mp_prefetch`` limits PyTorch threads in worker processes and passes CPU
   tensors between processes through shared memory.
@@ -53,7 +53,7 @@ Example usage::
       .shuffle()
       .repeat(num_epochs)
       [rank::world_size]  # Each rank reads its own part of the data.
-      .stateless_random_map(augment)  # `key` is a PyTorch PRNG key.
+      .random_map_with_key(augment)  # `key` is a PyTorch PRNG key.
       .batch(256, drop_remainder=True)  # `torch.utils.data.default_collate`.
       .to_iter_dataset()
       .with_options(grain_torch.DatasetOptions(min_shm_size=64 << 10))
@@ -74,6 +74,19 @@ Example usage::
 The datasets support the same methods as ``grain.MapDataset`` and
 ``grain.IterDataset``; see their documentation for the transformations that are
 not specific to PyTorch.
+
+Dataset classes of plain Grain, such as
+``grain.experimental.InterleaveIterDataset``, return plain Grain datasets, which
+do not have the PyTorch defaults. On a plain Grain dataset that is built on a
+``grain.experimental.torch`` dataset, ``batch``, ``random_map_with_key`` and
+``mp_prefetch`` raise an error rather than silently use the defaults of plain
+Grain. Apply such a class with ``pipe``, or convert its result with
+``from_dataset``, to keep the PyTorch defaults::
+
+  ds = ds.pipe(grain.experimental.WindowShuffleIterDataset, window_size=64)
+
+  ds = grain.experimental.InterleaveIterDataset(shards, cycle_length=4)
+  ds = grain_torch.IterDataset.from_dataset(ds)
 
 This module is experimental and its API may change. It relies on PyTorch's
 ``torch.func._random`` module, which is experimental as well.
@@ -103,5 +116,5 @@ from grain._src.python.experimental.torch.options import (
     MultiprocessingOptions,
 )
 from grain._src.python.experimental.torch.random_map import (
-    TorchStatelessRandomMap,
+    TorchRandomMapWithKey,
 )

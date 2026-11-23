@@ -282,8 +282,8 @@ class DataLoaderTest(absl_parameterized.TestCase):
     for i in range(4):
       self.assertEqual(actual[i].shape, (2,))
 
-  def test_data_loader_stateless_random_map_is_not_supported(self):
-    transformations = [transforms.JaxStatelessRandomMap(lambda x, key: x)]
+  def test_data_loader_random_map_with_key_is_not_supported(self):
+    transformations = [transforms.JaxRandomMapWithKey(lambda x, key: x)]
 
     with self.assertRaisesRegex(
         NotImplementedError, "not supported by `DataLoader`"
