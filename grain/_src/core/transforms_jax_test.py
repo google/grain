@@ -22,60 +22,58 @@ from grain._src.python.dataset import dataset
 import jax
 
 
-class _AddJaxRandomInt(transforms.JaxStatelessRandomMap):
+class _AddJaxRandomInt(transforms.JaxRandomMapWithKey):
 
-  def stateless_random_map(self, element: int, key: Any) -> int:
+  def random_map_with_key(self, element: int, key: Any) -> int:
     return element + int(jax.random.randint(key, (), 0, 100))
 
 
-class JaxStatelessRandomMapTest(parameterized.TestCase):
+class JaxRandomMapWithKeyTest(parameterized.TestCase):
 
   def test_docstring_example(self):
     map_ds = dataset.MapDataset.range(5).seed(42)
-    map_ds = map_ds.stateless_random_map(
+    map_ds = map_ds.random_map_with_key(
         lambda x, key: x + int(jax.random.randint(key, (), 5, 10))
     )
     self.assertTrue(set(map_ds).issubset(set(range(5, 15))))
 
     iter_ds = dataset.MapDataset.range(5).to_iter_dataset().seed(42)
-    iter_ds = iter_ds.stateless_random_map(
+    iter_ds = iter_ds.random_map_with_key(
         lambda x, key: x + int(jax.random.randint(key, (), 5, 10))
     )
     self.assertTrue(set(iter_ds).issubset(set(range(5, 15))))
 
-  def test_default_callable_wraps_in_jax_stateless_random_map(self):
+  def test_default_callable_wraps_in_jax_random_map_with_key(self):
     fn = lambda x, key: x + int(jax.random.randint(key, (), 0, 100))
-    direct_ds = dataset.MapDataset.range(6).seed(42).stateless_random_map(fn)
+    direct_ds = dataset.MapDataset.range(6).seed(42).random_map_with_key(fn)
     explicit_ds = (
         dataset.MapDataset.range(6)
         .seed(42)
-        .stateless_random_map(grain.transforms.JaxStatelessRandomMap(fn))
+        .random_map_with_key(grain.transforms.JaxRandomMapWithKey(fn))
     )
     self.assertIsInstance(
-        grain.transforms.JaxStatelessRandomMap(fn),
-        transforms.StatelessRandomMap,
+        grain.transforms.JaxRandomMapWithKey(fn),
+        transforms.RandomMapWithKey,
     )
     self.assertEqual(list(direct_ds), list(explicit_ds))
     self.assertEqual(direct_ds[3], direct_ds[3])
 
   def test_iter_dataset_and_apply_support(self):
     fn = lambda x, key: x + int(jax.random.randint(key, (), 0, 100))
-    map_vals = list(
-        dataset.MapDataset.range(5).stateless_random_map(fn, seed=7)
-    )
+    map_vals = list(dataset.MapDataset.range(5).random_map_with_key(fn, seed=7))
     iter_vals = list(
         dataset.MapDataset.range(5)
         .to_iter_dataset()
-        .stateless_random_map(fn, seed=7)
+        .random_map_with_key(fn, seed=7)
     )
     self.assertEqual(iter_vals, map_vals)
 
     applied = dataset.MapDataset.range(5).seed(7).apply(_AddJaxRandomInt())
-    seeded_direct = dataset.MapDataset.range(5).seed(7).stateless_random_map(fn)
+    seeded_direct = dataset.MapDataset.range(5).seed(7).random_map_with_key(fn)
     self.assertEqual(list(applied), list(seeded_direct))
 
   def test_supports_64bit_seeds_and_large_indices(self):
-    transform = transforms.JaxStatelessRandomMap(
+    transform = transforms.JaxRandomMapWithKey(
         lambda x, key: int(jax.random.randint(key, (), 0, 1000))
     )
     key_fn_a = transform.make_key_for_index(2**64 - 1)
@@ -96,13 +94,13 @@ class JaxStatelessRandomMapTest(parameterized.TestCase):
       def random_map(self, element: int, rng) -> int:
         return element + int(rng.integers(0, 10))
 
-    with self.assertRaisesRegex(TypeError, "JaxStatelessRandomMap"):
-      transforms.JaxStatelessRandomMap(StatefulAdd())  # pyrefly: ignore[bad-argument-type]
+    with self.assertRaisesRegex(TypeError, "JaxRandomMapWithKey"):
+      transforms.JaxRandomMapWithKey(StatefulAdd())  # pyrefly: ignore[bad-argument-type]
 
-    empty = transforms.JaxStatelessRandomMap()
+    empty = transforms.JaxRandomMapWithKey()
     key_fn = empty.make_key_for_index(0)
-    with self.assertRaisesRegex(NotImplementedError, "JaxStatelessRandomMap"):
-      empty.stateless_random_map(1, key_fn(0))
+    with self.assertRaisesRegex(NotImplementedError, "JaxRandomMapWithKey"):
+      empty.random_map_with_key(1, key_fn(0))
 
 
 if __name__ == "__main__":

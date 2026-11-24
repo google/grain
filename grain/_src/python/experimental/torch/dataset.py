@@ -36,7 +36,7 @@ S = TypeVar("S")
 _RANDOM_MAP_NOT_SUPPORTED_MESSAGE = (
     "`random_map` and `RandomMap` transformations are not supported by"
     " `grain.experimental.torch` datasets, because they pass a NumPy random"
-    " number generator to the transformation. Use `stateless_random_map`, which"
+    " number generator to the transformation. Use `random_map_with_key`, which"
     " passes a PyTorch PRNG key, instead."
 )
 
@@ -135,8 +135,8 @@ def _apply_torch_transformations(
         ds = ds.map(transformation)
       case transforms.RandomMap():
         raise NotImplementedError(_RANDOM_MAP_NOT_SUPPORTED_MESSAGE)
-      case transforms.StatelessRandomMap():
-        ds = ds.stateless_random_map(transformation)
+      case transforms.RandomMapWithKey():
+        ds = ds.random_map_with_key(transformation)
       case transforms.MapWithIndex():
         ds = ds.map_with_index(transformation)
       case transforms.FlatMap():
@@ -307,10 +307,10 @@ class MapDataset(dataset.MapDataset[T], metaclass=_TorchMapDatasetMeta):
   methods such as ``source`` and ``range``; see its documentation for the full
   reference and examples. Only the differences are documented here:
 
-  - ``stateless_random_map`` passes PyTorch PRNG keys to plain callables
-    (``TorchStatelessRandomMap``).
+  - ``random_map_with_key`` passes PyTorch PRNG keys to plain callables
+    (``TorchRandomMapWithKey``).
   - ``random_map`` is not supported, because it passes a NumPy generator to the
-    transformation. Use ``stateless_random_map`` instead.
+    transformation. Use ``random_map_with_key`` instead.
   - ``batch`` collates with ``torch.utils.data.default_collate`` by default.
   - Transformations return ``grain.experimental.torch.MapDataset``, and
     ``to_iter_dataset`` returns ``grain.experimental.torch.IterDataset``.
@@ -430,11 +430,11 @@ class MapDataset(dataset.MapDataset[T], metaclass=_TorchMapDatasetMeta):
       *,
       seed: int | None = None,
   ) -> NoReturn:
-    """Not supported; use ``stateless_random_map`` instead.
+    """Not supported; use ``random_map_with_key`` instead.
 
     ``grain.MapDataset.random_map`` passes a NumPy generator to ``transform``,
     which makes it easy to mix NumPy arrays into a PyTorch pipeline.
-    ``stateless_random_map`` passes a PyTorch PRNG key instead.
+    ``random_map_with_key`` passes a PyTorch PRNG key instead.
 
     Args:
       transform: Unused.
@@ -446,19 +446,19 @@ class MapDataset(dataset.MapDataset[T], metaclass=_TorchMapDatasetMeta):
     del transform, seed  # Unused.
     raise NotImplementedError(_RANDOM_MAP_NOT_SUPPORTED_MESSAGE)
 
-  def stateless_random_map(
+  def random_map_with_key(
       self,
-      transform: transforms.StatelessRandomMap | Callable[[T, Any], S],
+      transform: transforms.RandomMapWithKey | Callable[[T, Any], S],
       *,
       seed: int | None = None,
   ) -> MapDataset[Any]:
     """Returns a dataset transformed with a per-element PyTorch PRNG key.
 
-    Same as ``grain.MapDataset.stateless_random_map``, except that a plain
-    callable ``fn(element, key)`` is wrapped in ``TorchStatelessRandomMap``
-    instead of ``JaxStatelessRandomMap``: ``key`` is a key tensor for the
-    stateless random functions in ``torch.func._random``. A
-    ``StatelessRandomMap`` instance is used as is.
+    Same as ``grain.MapDataset.random_map_with_key``, except that a plain
+    callable ``fn(element, key)`` is wrapped in ``TorchRandomMapWithKey``
+    instead of ``JaxRandomMapWithKey``: ``key`` is a tensor holding a pair of
+    integer seeds for the random functions in ``torch.func._random``. A
+    ``RandomMapWithKey`` instance is used as is.
 
     Example usage::
 
@@ -470,24 +470,24 @@ class MapDataset(dataset.MapDataset[T], metaclass=_TorchMapDatasetMeta):
         return x + torch_random.normal(key, x.shape)
 
       ds = grain_torch.MapDataset.source([torch.zeros(2)] * 4)
-      ds = ds.seed(42).stateless_random_map(add_noise)
+      ds = ds.seed(42).random_map_with_key(add_noise)
       # The key depends only on the seed and the element's index, so the
       # output is the same on every run.
 
     Args:
       transform: A callable ``fn(element, key)`` (wrapped in
-        ``TorchStatelessRandomMap``) or a ``StatelessRandomMap`` implementation.
+        ``TorchRandomMapWithKey``) or a ``RandomMapWithKey`` implementation.
       seed: An optional non-negative 64-bit integer seed. Defaults to the seed
         derived from ``ds.seed(...)``.
 
     Returns:
       A ``MapDataset`` containing the transformed elements.
     """
-    stateless_transform = torch_random_map.as_torch_stateless_random_map(
-        transform, "stateless_random_map"
+    keyed_transform = torch_random_map.as_torch_random_map_with_key(
+        transform, "random_map_with_key"
     )
     return MapDataset(
-        self._inner.stateless_random_map(stateless_transform, seed=seed)
+        self._inner.random_map_with_key(keyed_transform, seed=seed)
     )
 
   def batch(
@@ -628,10 +628,10 @@ class IterDataset(dataset.IterDataset[T], metaclass=_TorchIterDatasetMeta):
   Supports the same methods as ``grain.IterDataset``; see its documentation for
   the full reference and examples. Only the differences are documented here:
 
-  - ``stateless_random_map`` passes PyTorch PRNG keys to plain callables
-    (``TorchStatelessRandomMap``).
+  - ``random_map_with_key`` passes PyTorch PRNG keys to plain callables
+    (``TorchRandomMapWithKey``).
   - ``random_map`` is not supported, because it passes a NumPy generator to the
-    transformation. Use ``stateless_random_map`` instead.
+    transformation. Use ``random_map_with_key`` instead.
   - ``batch`` collates with ``torch.utils.data.default_collate`` by default.
   - ``mp_prefetch`` limits PyTorch threads in worker processes and passes CPU
     tensors between processes through Grain's shared memory.
@@ -742,11 +742,11 @@ class IterDataset(dataset.IterDataset[T], metaclass=_TorchIterDatasetMeta):
       *,
       seed: int | None = None,
   ) -> NoReturn:
-    """Not supported; use ``stateless_random_map`` instead.
+    """Not supported; use ``random_map_with_key`` instead.
 
     ``grain.IterDataset.random_map`` passes a NumPy generator to ``transform``,
     which makes it easy to mix NumPy arrays into a PyTorch pipeline.
-    ``stateless_random_map`` passes a PyTorch PRNG key instead.
+    ``random_map_with_key`` passes a PyTorch PRNG key instead.
 
     Args:
       transform: Unused.
@@ -758,19 +758,19 @@ class IterDataset(dataset.IterDataset[T], metaclass=_TorchIterDatasetMeta):
     del transform, seed  # Unused.
     raise NotImplementedError(_RANDOM_MAP_NOT_SUPPORTED_MESSAGE)
 
-  def stateless_random_map(
+  def random_map_with_key(
       self,
-      transform: transforms.StatelessRandomMap | Callable[[T, Any], S],
+      transform: transforms.RandomMapWithKey | Callable[[T, Any], S],
       *,
       seed: int | None = None,
   ) -> IterDataset[Any]:
     """Returns a dataset transformed with a per-element PyTorch PRNG key.
 
-    Same as ``grain.IterDataset.stateless_random_map``, except that a plain
-    callable ``fn(element, key)`` is wrapped in ``TorchStatelessRandomMap``
-    instead of ``JaxStatelessRandomMap``: ``key`` is a key tensor for the
-    stateless random functions in ``torch.func._random``. A
-    ``StatelessRandomMap`` instance is used as is.
+    Same as ``grain.IterDataset.random_map_with_key``, except that a plain
+    callable ``fn(element, key)`` is wrapped in ``TorchRandomMapWithKey``
+    instead of ``JaxRandomMapWithKey``: ``key`` is a tensor holding a pair of
+    integer seeds for the random functions in ``torch.func._random``. A
+    ``RandomMapWithKey`` instance is used as is.
 
     Example usage::
 
@@ -782,24 +782,24 @@ class IterDataset(dataset.IterDataset[T], metaclass=_TorchIterDatasetMeta):
         return x + torch_random.normal(key, x.shape)
 
       ds = grain_torch.MapDataset.source([torch.zeros(2)] * 4).to_iter_dataset()
-      ds = ds.seed(42).stateless_random_map(add_noise)
+      ds = ds.seed(42).random_map_with_key(add_noise)
       # The key depends only on the seed and the element's index, so the
       # output is the same on every run.
 
     Args:
       transform: A callable ``fn(element, key)`` (wrapped in
-        ``TorchStatelessRandomMap``) or a ``StatelessRandomMap`` implementation.
+        ``TorchRandomMapWithKey``) or a ``RandomMapWithKey`` implementation.
       seed: An optional non-negative 64-bit integer seed. Defaults to the seed
         derived from ``ds.seed(...)``.
 
     Returns:
       An ``IterDataset`` containing the transformed elements.
     """
-    stateless_transform = torch_random_map.as_torch_stateless_random_map(
-        transform, "stateless_random_map"
+    keyed_transform = torch_random_map.as_torch_random_map_with_key(
+        transform, "random_map_with_key"
     )
     return IterDataset(
-        self._inner.stateless_random_map(stateless_transform, seed=seed)
+        self._inner.random_map_with_key(keyed_transform, seed=seed)
     )
 
   def batch(

@@ -87,12 +87,12 @@ def _augment_bf16(sample: tuple[Any, int], key: Any) -> tuple[Any, int, int]:
 
 @absltest.skipIf(
     torch_lib is None or torch_random is None,
-    "PyTorch with stateless RNG is not available.",
+    "PyTorch with key-based RNG is not available.",
 )
 class TorchDatasetEndToEndTest(parameterized.TestCase):
 
   def test_default_seed_depth_matches_plain_grain_exactly(self):
-    add_random_int = grain_torch.TorchStatelessRandomMap(
+    add_random_int = grain_torch.TorchRandomMapWithKey(
         lambda x, key: x
         + torch_random.randint(
             key, (), low=0, high=100, dtype=torch_lib.int64
@@ -103,14 +103,14 @@ class TorchDatasetEndToEndTest(parameterized.TestCase):
         .seed(42)
         .shuffle()
         .slice(slice(0, 10))
-        .stateless_random_map(add_random_int)
+        .random_map_with_key(add_random_int)
     )
     torch_ds = (
         grain_torch.MapDataset.range(12)
         .seed(42)
         .shuffle()
         .slice(slice(0, 10))
-        .stateless_random_map(add_random_int)
+        .random_map_with_key(add_random_int)
     )
     self.assertIsInstance(torch_ds, grain.MapDataset)
     self.assertIsInstance(torch_ds, grain_torch.MapDataset)
@@ -120,18 +120,18 @@ class TorchDatasetEndToEndTest(parameterized.TestCase):
     map_ds = grain_torch.MapDataset.range(4)
     iter_ds = grain_torch.MapDataset.range(4).to_iter_dataset()
 
-    with self.assertRaisesRegex(NotImplementedError, "stateless_random_map"):
+    with self.assertRaisesRegex(NotImplementedError, "random_map_with_key"):
       map_ds.random_map(lambda x, rng: x + int(rng.integers(0, 100)))
-    with self.assertRaisesRegex(NotImplementedError, "stateless_random_map"):
+    with self.assertRaisesRegex(NotImplementedError, "random_map_with_key"):
       iter_ds.random_map(lambda x, rng: x + int(rng.integers(0, 100)))
 
   def test_apply_random_map_raises_not_implemented_error(self):
     map_ds = grain_torch.MapDataset.range(4)
     iter_ds = grain_torch.MapDataset.range(4).to_iter_dataset()
 
-    with self.assertRaisesRegex(NotImplementedError, "stateless_random_map"):
+    with self.assertRaisesRegex(NotImplementedError, "random_map_with_key"):
       map_ds.apply(_AddRandomInt())
-    with self.assertRaisesRegex(NotImplementedError, "stateless_random_map"):
+    with self.assertRaisesRegex(NotImplementedError, "random_map_with_key"):
       iter_ds.apply(_AddRandomInt())
 
   def test_pipe_function_gets_pytorch_defaults(self):
@@ -150,7 +150,7 @@ class TorchDatasetEndToEndTest(parameterized.TestCase):
   def test_pipe_function_cannot_use_random_map(self):
     torch_ds = grain_torch.MapDataset.range(4)
 
-    with self.assertRaisesRegex(NotImplementedError, "stateless_random_map"):
+    with self.assertRaisesRegex(NotImplementedError, "random_map_with_key"):
       torch_ds.pipe(lambda ds: ds.random_map(lambda x, rng: x, seed=1))
 
   def test_pipe_dataset_class_matches_plain_grain_exactly(self):
@@ -401,7 +401,7 @@ class TorchDatasetEndToEndTest(parameterized.TestCase):
         .seed(42)
         .shuffle()
         .repeat(2)[rank::world_size]
-        .stateless_random_map(_augment_bf16)
+        .random_map_with_key(_augment_bf16)
         .batch(4, drop_remainder=True)
         .to_iter_dataset()
         .with_options(grain_torch.DatasetOptions(min_shm_size=64))
@@ -442,10 +442,10 @@ class TorchDatasetEndToEndTest(parameterized.TestCase):
     else:
       it.close()
 
-  def test_apply_dispatches_stateless_random_map_and_torch_batch(self):
-    class AddTorchNoise(grain_torch.TorchStatelessRandomMap):
+  def test_apply_dispatches_random_map_with_key_and_torch_batch(self):
+    class AddTorchNoise(grain_torch.TorchRandomMapWithKey):
 
-      def stateless_random_map(self, element: int, key: Any) -> Any:
+      def random_map_with_key(self, element: int, key: Any) -> Any:
         return torch_lib.tensor(float(element)) + torch_random.uniform(key, ())
 
     map_ds = (
@@ -514,13 +514,13 @@ class TorchDatasetEndToEndTest(parameterized.TestCase):
     self.assertIsInstance(ds, grain_torch.IterDataset)
     self.assertTrue(all(isinstance(b, torch_lib.Tensor) for b in ds.batch(2)))
 
-    # `stateless_random_map`.
+    # `random_map_with_key`.
     def add_noise(x, key):
       return x + torch_random.normal(key, x.shape)
 
     ds = grain_torch.MapDataset.source([torch_lib.zeros(2)] * 4)
-    map_ds = ds.seed(42).stateless_random_map(add_noise)
-    iter_ds = ds.to_iter_dataset().seed(42).stateless_random_map(add_noise)
+    map_ds = ds.seed(42).random_map_with_key(add_noise)
+    iter_ds = ds.to_iter_dataset().seed(42).random_map_with_key(add_noise)
     for ds in (map_ds, iter_ds):
       first, second = list(ds), list(ds)
       self.assertLen(first, 4)
@@ -562,11 +562,11 @@ class TorchDatasetEndToEndTest(parameterized.TestCase):
     self.assertIsInstance(first_batch, shared_memory_array.SharedMemoryArray)
     first_batch.unlink_on_del()
 
-  def test_iter_dataset_stateless_random_map_and_state_dict_round_trip(self):
+  def test_iter_dataset_random_map_with_key_and_state_dict_round_trip(self):
     iter_ds = (
         grain_torch.MapDataset.range(8)
         .to_iter_dataset()
-        .stateless_random_map(
+        .random_map_with_key(
             lambda x, key: x
             + int(
                 torch_random.randint(
@@ -599,7 +599,7 @@ class TorchDatasetEndToEndTest(parameterized.TestCase):
       ds = (
           grain_torch.MapDataset.range(4)
           .seed(1)
-          .stateless_random_map(lambda x, key: x)
+          .random_map_with_key(lambda x, key: x)
           .batch(2)
       )
       self.assertLen(ds, 2)
