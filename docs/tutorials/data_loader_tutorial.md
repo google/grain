@@ -26,11 +26,12 @@ kernelspec:
 ```{code-cell}
 :id: EZ9EXOZKehes
 
-!pip install grain tfds-nightly opencv-python matplotlib orbax-checkpoint
+!pip install grain-nightly tfds-nightly opencv-python matplotlib
+!pip install orbax-checkpoint importlib_resources
 
 import cv2
 import orbax.checkpoint as ocp
-import grain.python as grain
+import grain
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -71,10 +72,10 @@ outputId: e851d69c-0bfa-4af1-e4ad-bb14d07cd4a3
 ---
 # Setting `num_records` to 5 to limit results.
 # For full dataset, set to `len(data_source)`.
-index_sampler_example = grain.IndexSampler(
+index_sampler_example = grain.samplers.IndexSampler(
     num_records=5,
     num_epochs=2,
-    shard_options=grain.ShardOptions(
+    shard_options=grain.sharding.ShardOptions(
         shard_index=0, shard_count=1, drop_remainder=True),
     shuffle=True,
     seed=0)
@@ -84,10 +85,10 @@ for record_metadata in index_sampler_example:
   print(record_metadata)
 
 # Create new iterator.
-index_sampler = grain.IndexSampler(
+index_sampler = grain.samplers.IndexSampler(
     num_records=5,
     num_epochs=2,
-    shard_options=grain.ShardOptions(
+    shard_options=grain.sharding.ShardOptions(
         shard_index=0, shard_count=1, drop_remainder=True),
     shuffle=True,
     seed=0)
@@ -135,22 +136,28 @@ print(f"First record:\n{source[0]}")
 
 ## Transformations
 
-Grain `Transformations` represent transformations applied to input elements. We offer ready-to-use: `BatchTransform` and the following transformations in form of abstract classes:
-* `MapTransform`
-* `RandomMapTransform`
-* `FilterTransform`
+Grain `Transformations` represent transformations applied to input elements. We
+offer ready-to-use: :py:class:`grain.transforms.Batch` transform and the
+following transformations in form of abstract classes:
+
+* :py:class:`grain.transforms.Map` transform
+* :py:class:`grain.transforms.RandomMap` transform
+* :py:class:`grain.transforms.Filter` transform
 
 You'd need to create your concrete transformation by inheriting above classes.
 
 **Note:**
 
 1. Since Grain uses Python multiprocessing to parallelize work, transformation must be picklable, so they can be sent from the main process to the workers.
-2. When using `BatchTransform` the `batch_size` is the global batch size if it is done before sharding, if it is done after sharding it is the batch size *per host* (this is typically the case when using `IndexSampler` with `DataLoader`).
+2. When using :py:class:`grain.transforms.Batch` transform, the `batch_size` is
+   the global batch size if it is done before sharding, if it is done after
+   sharding it is the batch size *per host* (this is typically the case when
+   using `IndexSampler` with `DataLoader`).
 
 ```{code-cell}
 :id: lRKLPtMK8w1A
 
-class ResizeAndCrop(grain.MapTransform):
+class ResizeAndCrop(grain.transforms.Map):
 
   def map(self, element: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
     image = element["image"]
@@ -204,7 +211,7 @@ for element in data_loader:
 +++ {"id": "eODdpQcZeOfo"}
 
 ## Checkpointing
-We provide `GrainCheckpointHandler` to checkpoint the iterator returned by Grain. It is recommended to use it with [Orbax](https://orbax.readthedocs.io), which can checkpoint both input pipeline and model and handles the edge cases for distributed training.
+We provide `CheckpointHandler` to checkpoint the iterator returned by Grain. It is recommended to use it with [Orbax](https://orbax.readthedocs.io), which can checkpoint both input pipeline and model and handles the edge cases for distributed training.
 
 +++ {"id": "0JI0hvnUetWB"}
 
@@ -253,7 +260,7 @@ mngr = ocp.CheckpointManager("/tmp/orbax")
 
 # Save the checkpoint
 assert mngr.save(
-    step=num_steps, args=grain.GrainCheckpointSave(data_iter), force=True)
+    step=num_steps, args=grain.checkpoint.CheckpointSave(data_iter), force=True)
 # Checkpoint saving in Orbax is asynchronous by default, so we'll wait until
 # finished before examining checkpoint.
 mngr.wait_until_finished()
@@ -314,7 +321,7 @@ id: Js3hheiGnykN
 outputId: 31cc1d8d-9a89-4fa8-af7a-5c74650f118e
 ---
 # Restore iterator from previously saved checkpoint
-mngr.restore(num_steps, args=grain.GrainCheckpointRestore(data_iter))
+mngr.restore(num_steps, args=grain.checkpoint.CheckpointRestore(data_iter))
 ```
 
 ```{code-cell}
@@ -364,7 +371,7 @@ executionInfo:
 id: -0hJjr9UuNxR
 outputId: bd2e4198-9902-4003-f639-58020fa953a1
 ---
-in_memory_datasource = grain.InMemoryDataSource(range(5))
+in_memory_datasource = grain.sources.SharedMemoryDataSource(range(5))
 
 print(in_memory_datasource)
 print(f"First Record Read: {in_memory_datasource[0]}")
@@ -385,10 +392,10 @@ outputId: 349df7eb-e464-4164-ed0d-1dd683daf148
 ---
 data_loader = grain.DataLoader(
     data_source=in_memory_datasource,
-    sampler=grain.IndexSampler(
+    sampler=grain.samplers.IndexSampler(
       num_records=len(in_memory_datasource),
       num_epochs=2,
-      shard_options=grain.NoSharding(),
+      shard_options=grain.sharding.NoSharding(),
       shuffle=True,
       seed=0),
     worker_count=5)
@@ -412,10 +419,10 @@ You can configure per-worker data source read options (for example, number of th
 # Following configuration makes 8*10=80 threads reading data.
 data_loader = grain.DataLoader(
     data_source=source,
-    sampler=grain.IndexSampler(
+    sampler=grain.samplers.IndexSampler(
       num_records=len(source),
       num_epochs=2,
-      shard_options=grain.NoSharding(),
+      shard_options=grain.sharding.NoSharding(),
       shuffle=True,
       seed=0),
     worker_count=10,
