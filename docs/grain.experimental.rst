@@ -92,6 +92,8 @@ List of Members
 
 .. autofunction:: index_shuffle
 
+.. autofunction:: index_shuffle_range
+
 .. autofunction:: assert_equal_output_after_checkpoint
 
 .. autofunction:: device_put
