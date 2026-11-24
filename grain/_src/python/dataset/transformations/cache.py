@@ -26,10 +26,13 @@ T = TypeVar("T")
 
 
 class CacheIterDataset(dataset.IterDataset[T]):
-  """Caches elements of an IterDataset in memory."""
+  """Caches elements of an IterDataset."""
 
-  def __init__(self, parent: dataset.IterDataset[T]):
-    """Caches elements of an IterDataset in memory.
+  def __init__(
+      self,
+      parent: dataset.IterDataset[T],
+  ):
+    """Caches elements of an IterDataset.
 
     Args:
       parent: The parent IterDataset whose elements are to be cached.
@@ -40,11 +43,12 @@ class CacheIterDataset(dataset.IterDataset[T]):
     return _InMemoryCacheDatasetIterator(self._parent.__iter__())
 
   def __str__(self) -> str:
-    return f"CacheIterDataset(parent={self._parent})"
+    args = f"parent={self._parent}"
+    return f"CacheIterDataset({args})"
 
   @property
   def _element_spec(self) -> Any:
-    return self._parent._element_spec
+    return dataset.get_element_spec(self._parent)
 
 
 class _InMemoryCacheDatasetIterator(dataset.DatasetIterator[T]):
