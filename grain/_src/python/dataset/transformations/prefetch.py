@@ -106,6 +106,15 @@ class PrefetchIterDataset(dataset.IterDataset[T]):
     self._read_options = read_options
     self._allow_nones = allow_nones
 
+  def _validate_parents(self, request: dataset.ValidationRequest) -> None:
+    # The parents validate first, so that their errors take precedence.
+    super()._validate_parents(request)
+    if request.operation == "elastic_iterator":
+      raise ValueError(
+          "ElasticIterator for IterDataset does not support prefetch"
+          " transformation yet."
+      )
+
   def set_slice(self, sl: slice, sequential_slice: bool = False) -> None:
     """Replaces `MapDataset` parents with their sliced versions."""
     assert isinstance(self._parent, dataset.MapDataset), self._parent

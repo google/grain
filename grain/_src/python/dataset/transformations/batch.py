@@ -27,8 +27,6 @@ from grain._src.core import tree_lib
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats
-from grain._src.python.dataset.transformations import filter as filter_ds
-from grain._src.python.dataset.transformations import flatmap as flatmap_ds
 from grain._src.python.ipc import shared_memory_array
 import numpy as np
 
@@ -379,6 +377,27 @@ def _get_batch_element_spec(
   )
 
 
+def _validate_batch(
+    ds: dataset.MapDataset | dataset.IterDataset,
+    parent: dataset.MapDataset | dataset.IterDataset,
+    batch_size: int,
+    drop_remainder: bool,
+    batch_fn: Callable[..., Any] | None,
+) -> None:
+  """Has the parents of `ds`, recursively, validate its `batch` operation."""
+  parent._validate_parents(  # pylint: disable=protected-access
+      dataset.ValidationRequest(
+          operation="batch",
+          requester=ds,
+          arguments={
+              "batch_size": batch_size,
+              "drop_remainder": drop_remainder,
+              "batch_fn": batch_fn,
+          },
+      )
+  )
+
+
 class BatchMapDataset(dataset.MapDataset[T]):
   """Batch transformation for non-sparse MapDatasets."""
 
@@ -402,22 +421,8 @@ class BatchMapDataset(dataset.MapDataset[T]):
     super().__init__(parent)
     if batch_size <= 0:
       raise ValueError("batch_size must be positive.")
-    to_check = [parent]
-    while to_check:
-      next_ds = to_check.pop()
-      if isinstance(next_ds, filter_ds.FilterMapDataset):
-        raise ValueError(
-            "`MapDataset.batch` can not follow `MapDataset.filter` "
-            "because `filter` can discard elements. Convert `MapDataset` to "
-            "`IterDataset` with `to_iter_dataset()` before calling `batch`."
-        )
-      if isinstance(next_ds, flatmap_ds.FlatMapMapDataset):
-        raise ValueError(
-            "`MapDataset.batch` can not follow `FlatMapMapDataset` because"
-            " `FlatMapMapDataset` can discard elements. Convert `MapDataset` to"
-            " `IterDataset` with `to_iter_dataset()` before calling `batch`."
-        )
-      to_check.extend(next_ds.parents)
+    # A sparse parent, such as `FilterMapDataset`, rejects it.
+    _validate_batch(self, parent, batch_size, drop_remainder, batch_fn)
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
     self._batch_fn = make_batch if batch_fn is None else batch_fn  # pyrefly: ignore[invalid-type-var]
@@ -518,6 +523,7 @@ class BatchIterDataset(dataset.IterDataset[T]):
     super().__init__(parent)
     if batch_size <= 0:
       raise ValueError("batch_size must be positive.")
+    _validate_batch(self, parent, batch_size, drop_remainder, batch_fn)
     self._batch_size = batch_size
     self._drop_remainder = drop_remainder
     self._batch_fn = make_batch if batch_fn is None else batch_fn  # pyrefly: ignore[invalid-type-var]

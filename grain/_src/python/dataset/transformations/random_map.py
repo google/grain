@@ -297,8 +297,8 @@ class RandomMapIterDataset(
     return f"RandomMapIterDataset(transform={self._transform_name})"
 
 
-def _validate_stateless_seed(seed: int | None, name: str) -> int:
-  """Validates a non-negative 64-bit integer seed for stateless PRNGs."""
+def _validate_key_seed(seed: int | None, name: str) -> int:
+  """Validates a non-negative 64-bit integer seed for deriving PRNG keys."""
   if seed is None:
     raise ValueError(
         f"`{name}` requires a seed. Please either provide it with"
@@ -311,44 +311,60 @@ def _validate_stateless_seed(seed: int | None, name: str) -> int:
   return seed
 
 
-def _unwrap_spec_target(transform: transforms.StatelessRandomMap) -> Any:
+def _unwrap_spec_target(transform: transforms.RandomMapWithKey) -> Any:
   wrapped_fn = getattr(transform, "_wrapped_fn", None)
   return wrapped_fn if wrapped_fn is not None else transform
 
 
-def _as_stateless_random_map(
-    transform: transforms.StatelessRandomMap | Callable[[Any, Any], Any],
+def _as_random_map_with_key(
+    transform: transforms.RandomMapWithKey | Callable[[Any, Any], Any],
     owner_name: str,
-) -> transforms.StatelessRandomMap:
-  """Normalizes a `StatelessRandomMap` or callable (defaulting to JAX)."""
-  if isinstance(transform, transforms.StatelessRandomMap):
+) -> transforms.RandomMapWithKey:
+  """Normalizes a `RandomMapWithKey` or callable (defaulting to JAX)."""
+  if isinstance(transform, transforms.RandomMapWithKey):
     return transform
   if isinstance(transform, transforms.RandomMap) or not callable(transform):
     raise TypeError(
         f"`{owner_name}` expects a callable `transform(element, key)` or"
-        f" `StatelessRandomMap`, got {type(transform).__name__}."
+        f" `RandomMapWithKey`, got {type(transform).__name__}."
     )
-  return transforms.JaxStatelessRandomMap(transform)
+  return transforms.JaxRandomMapWithKey(transform)
 
 
-class StatelessRandomMapMapDataset(
+def _validate_random_map_with_key(
+    ds: dataset.MapDataset | dataset.IterDataset,
+    parent: dataset.MapDataset | dataset.IterDataset,
+    transform: transforms.RandomMapWithKey | Callable[[Any, Any], Any],
+    seed: int | None,
+) -> None:
+  """Has the parents of `ds`, recursively, validate `random_map_with_key`."""
+  parent._validate_parents(  # pylint: disable=protected-access
+      dataset.ValidationRequest(
+          operation="random_map_with_key",
+          requester=ds,
+          # `transform` as it was passed: a callable is not wrapped yet.
+          arguments={"transform": transform, "seed": seed},
+      )
+  )
+
+
+class RandomMapWithKeyMapDataset(
     map_dataset._ElementSpecFromTransformMapDatasetMixin[T]  # pylint: disable=protected-access
 ):
-  """Stateless key-based random map transformation for ``MapDataset``."""
+  """Random map transformation with a PRNG key for ``MapDataset``."""
 
   def __init__(
       self,
       parent: dataset.MapDataset,
-      transform: transforms.StatelessRandomMap | Callable[[Any, Any], T],
+      transform: transforms.RandomMapWithKey | Callable[[Any, Any], T],
       seed: int | None = None,
   ):
-    stateless_transform = _as_stateless_random_map(
-        transform, "stateless_random_map"
-    )
-    super().__init__(parent, _unwrap_spec_target(stateless_transform))
-    self._stateless_transform = stateless_transform
+    keyed_transform = _as_random_map_with_key(transform, "random_map_with_key")
+    super().__init__(parent, _unwrap_spec_target(keyed_transform))
+    _validate_random_map_with_key(self, parent, transform, seed)
+    self._keyed_transform = keyed_transform
     resolved_seed = self._default_seed if seed is None else seed
-    self._seed = _validate_stateless_seed(resolved_seed, "stateless_random_map")
+    self._seed = _validate_key_seed(resolved_seed, "random_map_with_key")
 
   def __getstate__(self) -> dict[str, Any]:
     state = self.__dict__.copy()
@@ -359,16 +375,16 @@ class StatelessRandomMapMapDataset(
     return len(self._parent)
 
   def __str__(self) -> str:
-    return f"StatelessRandomMapMapDataset(transform={self._transform_name})"
+    return f"RandomMapWithKeyMapDataset(transform={self._transform_name})"
 
   @functools.cached_property
   def _key_for_index(self) -> Callable[[int], Any]:
-    return self._stateless_transform.make_key_for_index(self._seed)
+    return self._keyed_transform.make_key_for_index(self._seed)
 
   def _random_map_element(self, element: Any, index: int) -> T | None:
     if element is None:
       return None
-    return self._stateless_transform.stateless_random_map(
+    return self._keyed_transform.random_map_with_key(
         element, self._key_for_index(index)
     )
 
@@ -394,25 +410,25 @@ class StatelessRandomMapMapDataset(
     return self._stats.record_output_spec_for_batch(processed_elements)
 
 
-class _StatelessRandomMapDatasetIterator(dataset.DatasetIterator[T]):
-  """Iterator that applies a stateless random map transformation to elements."""
+class _RandomMapWithKeyDatasetIterator(dataset.DatasetIterator[T]):
+  """Iterator that applies a random map with a PRNG key to elements."""
 
   def __init__(
       self,
       parent: dataset.DatasetIterator,
-      stateless_transform: transforms.StatelessRandomMap,
+      keyed_transform: transforms.RandomMapWithKey,
       seed: int,
       transform_name: str,
   ):
     super().__init__(parent)
-    self._stateless_transform = stateless_transform
+    self._keyed_transform = keyed_transform
     self._index_for_rng = 0
     self._seed = seed
     self._transform_name = transform_name
 
   @functools.cached_property
   def _key_for_index(self) -> Callable[[int], Any]:
-    return self._stateless_transform.make_key_for_index(self._seed)
+    return self._keyed_transform.make_key_for_index(self._seed)
 
   @stats.record_next_duration_if_output
   @stats.trace_input_pipeline_next(stage_category=stats.IPL_CAT_PREPROCESSING)
@@ -424,7 +440,7 @@ class _StatelessRandomMapDatasetIterator(dataset.DatasetIterator[T]):
             self._ctx.mp_context.process_index
             + self._index_for_rng * self._ctx.mp_context.process_count
         )
-        element = self._stateless_transform.stateless_random_map(
+        element = self._keyed_transform.random_map_with_key(
             element, self._key_for_index(index_for_rng)
         )
       self._index_for_rng += 1
@@ -448,37 +464,34 @@ class _StatelessRandomMapDatasetIterator(dataset.DatasetIterator[T]):
     self._index_for_rng = next_index
 
   def __str__(self) -> str:
-    return (
-        f"StatelessRandomMapDatasetIterator(transform={self._transform_name})"
-    )
+    return f"RandomMapWithKeyDatasetIterator(transform={self._transform_name})"
 
 
-class StatelessRandomMapIterDataset(
+class RandomMapWithKeyIterDataset(
     map_dataset._ElementSpecFromTransformIterDatasetMixin[T]  # pylint: disable=protected-access
 ):
-  """Stateless key-based random map transformation for ``IterDataset``."""
+  """Random map transformation with a PRNG key for ``IterDataset``."""
 
   def __init__(
       self,
       parent: dataset.IterDataset,
-      transform: transforms.StatelessRandomMap | Callable[[Any, Any], T],
+      transform: transforms.RandomMapWithKey | Callable[[Any, Any], T],
       seed: int | None = None,
   ):
-    stateless_transform = _as_stateless_random_map(
-        transform, "stateless_random_map"
-    )
-    super().__init__(parent, _unwrap_spec_target(stateless_transform))
-    self._stateless_transform = stateless_transform
+    keyed_transform = _as_random_map_with_key(transform, "random_map_with_key")
+    super().__init__(parent, _unwrap_spec_target(keyed_transform))
+    _validate_random_map_with_key(self, parent, transform, seed)
+    self._keyed_transform = keyed_transform
     resolved_seed = self._default_seed if seed is None else seed
-    self._seed = _validate_stateless_seed(resolved_seed, "stateless_random_map")
+    self._seed = _validate_key_seed(resolved_seed, "random_map_with_key")
 
-  def __iter__(self) -> _StatelessRandomMapDatasetIterator[T]:
-    return _StatelessRandomMapDatasetIterator(
+  def __iter__(self) -> _RandomMapWithKeyDatasetIterator[T]:
+    return _RandomMapWithKeyDatasetIterator(
         self._parent.__iter__(),
-        stateless_transform=self._stateless_transform,
+        keyed_transform=self._keyed_transform,
         seed=self._seed,
         transform_name=self._transform_name,
     )
 
   def __str__(self) -> str:
-    return f"StatelessRandomMapIterDataset(transform={self._transform_name})"
+    return f"RandomMapWithKeyIterDataset(transform={self._transform_name})"

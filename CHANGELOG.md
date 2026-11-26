@@ -6,17 +6,17 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features:
-  * Added `MapDataset.stateless_random_map` and
-    `IterDataset.stateless_random_map`, which pass a deterministic per-element
-    stateless PRNG key to the transform, along with the
-    `grain.transforms.StatelessRandomMap` protocol and
-    `grain.transforms.JaxStatelessRandomMap` (the default for plain callables).\
+  * Added `MapDataset.random_map_with_key` and
+    `IterDataset.random_map_with_key`, which pass a deterministic per-element
+    PRNG key (typically a pair of integer seeds in a tensor) to the transform,
+    along with the `grain.transforms.RandomMapWithKey` protocol and
+    `grain.transforms.JaxRandomMapWithKey` (the default for plain callables).\
     NOTE: These APIs are experimental and the API and implementation may change.
   * Added the experimental `grain.experimental.torch` module for PyTorch
     pipelines:
-    - `TorchStatelessRandomMap`, a `StatelessRandomMap` that passes a
-      deterministic per-element stateless PyTorch PRNG key
-      (`torch.func._random`) to the transform.
+    - `TorchRandomMapWithKey`, a `RandomMapWithKey` that passes a
+      deterministic per-element PyTorch PRNG key (`torch.func._random`) to the
+      transform.
     - `get_process_index_and_count`, which returns the process rank and count
       from `torch.distributed`, and `IteratorCheckpointWrapper`, which saves
       and restores iterator state per rank with `torch.distributed.checkpoint`.
@@ -26,11 +26,16 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
       through Grain's shared memory, so `DatasetOptions.min_shm_size` applies
       to them.
     - `MapDataset`, `IterDataset` and `DatasetIterator`, which provide the
-      Dataset API with PyTorch defaults: `stateless_random_map` passes PyTorch
+      Dataset API with PyTorch defaults: `random_map_with_key` passes PyTorch
       keys, `random_map` is not supported because it passes a NumPy generator,
       `batch` uses `torch.utils.data.default_collate`, `mp_prefetch`
       applies the behavior above, and iterators implement `state_dict` and
       `load_state_dict` for `torch.distributed.checkpoint`.
+    - `batch`, `random_map_with_key` and `mp_prefetch` raise an error on a
+      `grain.MapDataset` or `grain.IterDataset` that is built on a
+      `grain.experimental.torch` dataset, for example by
+      `InterleaveIterDataset`, rather than silently use the defaults of plain
+      Grain. Use `pipe` or `from_dataset` to keep the PyTorch defaults.
 
 * Breaking changes:
 

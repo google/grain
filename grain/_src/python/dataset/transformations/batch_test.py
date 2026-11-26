@@ -526,6 +526,11 @@ class BatchMapDatasetTest(parameterized.TestCase):
     ):
       _ = batch.BatchMapDataset(ds, batch_size=3, drop_remainder=True)
 
+  def test_iter_dataset_batch_after_map_dataset_filter(self):
+    ds = dataset.MapDataset.range(0, 10).filter(lambda x: x % 2 == 0)
+    ds = batch.BatchIterDataset(ds.to_iter_dataset(), batch_size=3)
+    self.assertEqual([b.tolist() for b in ds], [[0, 2, 4], [6, 8]])
+
   def test_batch_after_flatmap_raises_error(self):
     @dataclasses.dataclass(frozen=True)
     class TestFlatMap(transforms.FlatMap):
