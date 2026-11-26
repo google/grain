@@ -349,6 +349,40 @@ class _InterleaveIterDatasetTestBase(parameterized.TestCase):
     with self.assertRaises(StopIteration):
       next(ds_iter)
 
+  def test_set_state_twice_with_same_state(self):
+    datasets = [
+        dataset.MapDataset.range(10 * i, 10 * i + i + 1).to_iter_dataset()
+        for i in range(5)
+    ]
+    ds = self._create_dataset(datasets, cycle_length=2)
+    ds = self._maybe_wrap_ds(ds)
+    ds_iter = ds.__iter__()
+    state = ds_iter.get_state()
+    expected = list(ds_iter)
+    for _ in range(2):
+      ds_iter.set_state(state)
+      self.assertEqual(list(ds_iter), expected)
+
+  def test_future_states_not_modified_by_iteration(self):
+    datasets = [
+        dataset.MapDataset.source([1, 2]).to_iter_dataset(),
+        dataset.MapDataset.source([3, 4]).to_iter_dataset(),
+    ]
+    ds = self._create_dataset(datasets, cycle_length=1)
+    ds = self._maybe_wrap_ds(ds)
+    ds_iter = ds.__iter__()
+    state = ds_iter.get_state()
+    ds1_iter = datasets[1].__iter__()
+    next(ds1_iter)
+    state["future_states"] = {1: ds1_iter.get_state()}
+    ds_iter.set_state(state)
+    saved_state = ds_iter.get_state()
+    self.assertEqual(list(ds_iter), [1, 2, 4])
+    ds_iter.set_state(saved_state)
+    self.assertEqual(list(ds_iter), [1, 2, 4])
+    ds_iter.set_state(state)
+    self.assertEqual(list(ds_iter), [1, 2, 4])
+
   @parameterized.named_parameters(
       dict(
           testcase_name="cycle_length_equals_num_datasets",

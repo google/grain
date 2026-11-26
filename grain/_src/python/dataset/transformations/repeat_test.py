@@ -21,6 +21,7 @@ from absl.testing import parameterized
 import multiprocessing as mp
 from grain._src.python import options as grain_options
 from grain._src.python.dataset import dataset
+from grain._src.python.dataset.transformations import interleave
 from grain._src.python.dataset.transformations import process_prefetch
 from grain._src.python.dataset.transformations import repeat
 from grain._src.python.testing import experimental as testing
@@ -220,6 +221,16 @@ class RepeatIterDatasetTest(parameterized.TestCase):
     ds = dataset.MapDataset.range(3).to_iter_dataset()
     ds = repeat.RepeatIterDataset(ds, num_epochs=num_epochs)
     testing.assert_equal_output_after_checkpoint(ds)
+
+  def test_repeat_interleave_with_more_datasets_than_cycle_length(self):
+    datasets = [
+        dataset.MapDataset.range(10 * i, 10 * i + i + 1).to_iter_dataset()
+        for i in range(5)
+    ]
+    ds = interleave.InterleaveIterDataset(datasets, cycle_length=2)
+    expected = list(ds)
+    ds = repeat.RepeatIterDataset(ds, num_epochs=3)
+    self.assertEqual(list(ds), expected * 3)
 
   def test_element_spec(self):
     ds = dataset.MapDataset.range(2).to_iter_dataset()
