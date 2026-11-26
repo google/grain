@@ -130,8 +130,12 @@ class WindowShuffleMapDataset(dataset.MapDataset[T]):
         window.
     """
     super().__init__(parent)
+    if seed < 0 or seed >= 2**32:
+      raise ValueError(
+          f"Seed must be an integer between 0 and 2**32-1 (got {seed=})."
+      )
     self._window_size = window_size
-    self._seed = seed
+    self._seed = int(seed)
 
   def __len__(self) -> int:
     return len(self._parent)
@@ -142,7 +146,7 @@ class WindowShuffleMapDataset(dataset.MapDataset[T]):
   def _shuffled_index(self, index: int) -> int:
     index = int(index)
     window_index, index_in_window = divmod(index, self._window_size)
-    seed = self._seed + window_index
+    seed = (self._seed + window_index) % 2**32
     shuffled_index_in_window = index_shuffle.index_shuffle(
         index_in_window,
         max_index=self._window_size - 1,
@@ -255,8 +259,12 @@ class WindowShuffleIterDataset(dataset.IterDataset[T]):
         as `WindowShuffleMapDataset`.
     """
     super().__init__(parent)
+    if seed < 0 or seed >= 2**32:
+      raise ValueError(
+          f"Seed must be an integer between 0 and 2**32-1 (got {seed=})."
+      )
     self._window_size = window_size
-    self._seed = seed
+    self._seed = int(seed)
     self._reverse = reverse
 
   def __iter__(self) -> dataset.DatasetIterator[T]:
@@ -320,7 +328,8 @@ class _WindowShuffleDatasetIterator(dataset.DatasetIterator[T]):
       # End of the parent iterator, nothing else to process.
       self._parent_exhausted = True
     self._window = _reshuffle_window(
-        window=self._window, seed=self._global_seed + self._window_index
+        window=self._window,
+        seed=(self._global_seed + self._window_index) % 2**32,
     )
 
   @stats.record_next_duration_if_output

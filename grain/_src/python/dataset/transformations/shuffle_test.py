@@ -252,6 +252,42 @@ class WindowShuffleMapDatasetTest(absltest.TestCase):
       index = dtype(5)
       _ = ds._shuffled_index(index)  # pyrefly: ignore[bad-argument-type]
 
+  def _assert_window_seed_normalized(self, seed):
+    # Per-window seeds are derived as seed + window_index and must be valid
+    # uint32 values for the C++ index_shuffle binding. Without normalization
+    # the second window overflows (TypeError) for a max uint32 seed, and a
+    # narrow numpy seed wraps to a negative value.
+    window_size = 4
+    length = window_size * 3  # At least two windows.
+
+    def make_ds():
+      return shuffle.WindowShuffleMapDataset(
+          dataset.MapDataset.range(length), window_size=window_size, seed=seed
+      )
+
+    ds = make_ds()
+    result = [ds[i] for i in range(length)]
+    for start in range(0, length, window_size):
+      self.assertCountEqual(
+          result[start : start + window_size],
+          list(range(start, start + window_size)),
+      )
+    ds2 = make_ds()
+    self.assertEqual(result, [ds2[i] for i in range(length)])
+
+  def test_window_seed_overflow_max_uint32_seed_is_normalized(self):
+    self._assert_window_seed_normalized(2**32 - 1)
+
+  def test_window_seed_overflow_narrow_numpy_seed_is_normalized(self):
+    self._assert_window_seed_normalized(np.int32(2**31 - 1))
+
+  def test_init_with_invalid_seed_raises_value_error(self):
+    for seed in (-1, 2**32):
+      with self.subTest(seed=seed), self.assertRaises(ValueError):
+        shuffle.WindowShuffleMapDataset(
+            dataset.MapDataset.range(10), window_size=4, seed=seed
+        )
+
 
 class WindowShuffleInterDatasetTest(parameterized.TestCase):
   _DATASET_SIZE = 30
@@ -613,6 +649,44 @@ class WindowShuffleInterDatasetTest(parameterized.TestCase):
     spec = dataset.get_element_spec(ds)
     self.assertEqual(spec.dtype, np.int64)
     self.assertEqual(spec.shape, ())
+
+  def _assert_window_seed_normalized(self, seed):
+    # Per-window seeds are derived as seed + window_index and must be valid
+    # uint32 values for the C++ index_shuffle binding. Without normalization
+    # the second window overflows (TypeError) for a max uint32 seed, and a
+    # narrow numpy seed wraps to a negative value.
+    window_size = 4
+    length = window_size * 3  # At least two windows.
+
+    def make_ds():
+      return shuffle.WindowShuffleIterDataset(
+          dataset.MapDataset.range(length).to_iter_dataset(),
+          window_size=window_size,
+          seed=seed,
+          reverse=False,
+      )
+
+    result = list(make_ds())
+    self.assertLen(result, length)
+    for start in range(0, length, window_size):
+      self.assertCountEqual(
+          result[start : start + window_size],
+          list(range(start, start + window_size)),
+      )
+    self.assertEqual(result, list(make_ds()))
+
+  def test_window_seed_overflow_max_uint32_seed_is_normalized(self):
+    self._assert_window_seed_normalized(2**32 - 1)
+
+  def test_window_seed_overflow_narrow_numpy_seed_is_normalized(self):
+    self._assert_window_seed_normalized(np.int32(2**31 - 1))
+
+  def test_init_with_invalid_seed_raises_value_error(self):
+    for seed in (-1, 2**32):
+      with self.subTest(seed=seed), self.assertRaises(ValueError):
+        shuffle.WindowShuffleIterDataset(
+            self.range_iter_ds, window_size=4, seed=seed
+        )
 
 
 if __name__ == "__main__":
