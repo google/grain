@@ -27,7 +27,7 @@ List of Members
    :inherited-members:
    :undoc-members:
 
-.. autoclass:: TorchStatelessRandomMap
+.. autoclass:: TorchRandomMapWithKey
    :members:
 
 .. autoclass:: MultiprocessingOptions

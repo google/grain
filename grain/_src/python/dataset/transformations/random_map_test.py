@@ -311,47 +311,45 @@ class RandomMapIterDatasetTest(parameterized.TestCase):
       self.assertEqual(next(ds_iter), expected[i])
 
 
-class _ToyStatelessRandomMap:
+class _ToyRandomMapWithKey:
 
   def make_key_for_index(self, seed: int):
     return lambda index: (seed * 1000) + index
 
-  def stateless_random_map(self, element: int, key: int) -> int:
+  def random_map_with_key(self, element: int, key: int) -> int:
     return element + key
 
 
-class _ToyStatelessRandomMapWithSpec(_ToyStatelessRandomMap):
+class _ToyRandomMapWithKeyAndSpec(_ToyRandomMapWithKey):
 
   def output_spec(self, input_spec: Any) -> Any:
     return {"val": input_spec}
 
-  def stateless_random_map(self, element: int, key: int) -> dict[str, int]:  # pyrefly: ignore[bad-override]
+  def random_map_with_key(self, element: int, key: int) -> dict[str, int]:  # pyrefly: ignore[bad-override]
     return {"val": element + key}
 
 
-class StatelessRandomMapDatasetTest(parameterized.TestCase):
+class RandomMapWithKeyDatasetTest(parameterized.TestCase):
 
-  def test_map_dataset_stateless_random_map_and_apply(self):
-    ds = dataset.MapDataset.range(4).stateless_random_map(
-        _ToyStatelessRandomMap(), seed=42
+  def test_map_dataset_random_map_with_key_and_apply(self):
+    ds = dataset.MapDataset.range(4).random_map_with_key(
+        _ToyRandomMapWithKey(), seed=42
     )
     self.assertEqual(list(ds), [42000, 42002, 42004, 42006])
 
-    applied = (
-        dataset.MapDataset.range(4).seed(43).apply(_ToyStatelessRandomMap())
-    )
+    applied = dataset.MapDataset.range(4).seed(43).apply(_ToyRandomMapWithKey())
     direct = (
         dataset.MapDataset.range(4)
         .seed(43)
-        .stateless_random_map(_ToyStatelessRandomMap())
+        .random_map_with_key(_ToyRandomMapWithKey())
     )
     self.assertEqual(list(applied), list(direct))
 
-  def test_iter_dataset_stateless_random_map_checkpointing_and_seeking(self):
+  def test_iter_dataset_random_map_with_key_checkpointing_and_seeking(self):
     iter_ds = (
         dataset.MapDataset.range(10)
         .to_iter_dataset()
-        .stateless_random_map(_ToyStatelessRandomMap(), seed=42)
+        .random_map_with_key(_ToyRandomMapWithKey(), seed=42)
     )
     assert_equal_output_after_checkpoint(iter_ds)
 
@@ -362,14 +360,14 @@ class StatelessRandomMapDatasetTest(parameterized.TestCase):
       self.assertEqual(dataset.get_next_index(ds_iter), i)
       self.assertEqual(next(ds_iter), expected[i])
 
-  def test_stateless_random_map_element_spec(self):
-    map_ds = dataset.MapDataset.range(4).stateless_random_map(
-        _ToyStatelessRandomMapWithSpec(), seed=42
+  def test_random_map_with_key_element_spec(self):
+    map_ds = dataset.MapDataset.range(4).random_map_with_key(
+        _ToyRandomMapWithKeyAndSpec(), seed=42
     )
     iter_ds = (
         dataset.MapDataset.range(4)
         .to_iter_dataset()
-        .stateless_random_map(_ToyStatelessRandomMapWithSpec(), seed=42)
+        .random_map_with_key(_ToyRandomMapWithKeyAndSpec(), seed=42)
     )
     expected_spec = {
         "val": base.ShapeDtypeStruct(shape=(), dtype=np.int64),
@@ -377,21 +375,21 @@ class StatelessRandomMapDatasetTest(parameterized.TestCase):
     self.assertEqual(map_ds._element_spec, expected_spec)
     self.assertEqual(iter_ds._element_spec, expected_spec)
 
-  def test_plain_callable_defaults_to_jax_stateless_without_eager_import(self):
-    ds = random_map_ds.StatelessRandomMapMapDataset(
+  def test_plain_callable_defaults_to_jax_without_eager_import(self):
+    ds = random_map_ds.RandomMapWithKeyMapDataset(
         dataset.MapDataset.range(4), lambda x, key: x, seed=42
     )
     self.assertIsInstance(
-        ds._stateless_transform, transforms.JaxStatelessRandomMap  # pylint: disable=protected-access
+        ds._keyed_transform, transforms.JaxRandomMapWithKey  # pylint: disable=protected-access
     )
 
-  def test_rejects_non_stateless_transform(self):
-    with self.assertRaisesRegex(TypeError, "StatelessRandomMap"):
-      dataset.MapDataset.range(4).stateless_random_map(
+  def test_rejects_transform_without_key(self):
+    with self.assertRaisesRegex(TypeError, "RandomMapWithKey"):
+      dataset.MapDataset.range(4).random_map_with_key(
           RandomMapWithTransform(), seed=42  # pyrefly: ignore[bad-argument-type]
       )
-    with self.assertRaisesRegex(TypeError, "StatelessRandomMap"):
-      dataset.MapDataset.range(4).to_iter_dataset().stateless_random_map(
+    with self.assertRaisesRegex(TypeError, "RandomMapWithKey"):
+      dataset.MapDataset.range(4).to_iter_dataset().random_map_with_key(
           RandomMapWithTransform(), seed=42  # pyrefly: ignore[bad-argument-type]
       )
 

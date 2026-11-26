@@ -21,11 +21,11 @@
 from grain._src.core.transforms import (
     Batch,
     Filter,
-    JaxStatelessRandomMap,
+    JaxRandomMapWithKey,
     Map,
     MapWithIndex,
     RandomMap,
-    StatelessRandomMap,
+    RandomMapWithKey,
     TfRandomMap,
     Transformation,
     Transformations,
