@@ -1633,6 +1633,25 @@ class DatasetIterator(Iterator[T], abc.ABC):
     """Returns the iterator instance itself."""
     return self
 
+  def __init_subclass__(cls, **kwargs):
+    """Wraps each concrete ``__next__`` with the closed-iterator check.
+
+    Enforces the post-``close()`` contract documented on :meth:`close` for
+    every iterator implementation, including transformations defined in other
+    modules, without requiring each subclass to call ``_assert_not_closed``.
+    """
+    super().__init_subclass__(**kwargs)
+    next_impl = cls.__dict__.get("__next__")
+    if next_impl is None:
+      return
+
+    @functools.wraps(next_impl)
+    def next_with_closed_check(self):
+      self._assert_not_closed()
+      return next_impl(self)
+
+    cls.__next__ = next_with_closed_check
+
   # __next__ abstract method since we inherit from Iterator[T].
 
   @abc.abstractmethod
@@ -1753,7 +1772,10 @@ class DatasetIterator(Iterator[T], abc.ABC):
       parent.close()
 
   def _assert_not_closed(self) -> None:
-    if self._closed:
+    # `getattr` keeps this robust for lightweight iterator subclasses that do
+    # not call `super().__init__` (and therefore never set `_closed`). Such
+    # iterators are not considered closed.
+    if getattr(self, "_closed", False):
       raise ValueError(f"Trying to advance a closed iterator: '{self}'.")
 
   # pylint: disable=protected-access

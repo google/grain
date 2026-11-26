@@ -1243,6 +1243,50 @@ class DatasetTest(parameterized.TestCase):
       mock_multithread_prefetch.assert_not_called()
 
 
+class _PlainSourceDatasetIterator(dataset.DatasetIterator[int]):
+  """Source iterator that does not call `_assert_not_closed` on its own."""
+
+  def __init__(self):
+    super().__init__()
+    self._values = iter(range(10))
+
+  def __next__(self) -> int:
+    return next(self._values)
+
+  def get_state(self) -> dict[str, Any]:
+    return {}
+
+  def set_state(self, state: dict[str, Any]) -> None:
+    pass
+
+
+class _PlainSourceIterDataset(dataset.IterDataset[int]):
+
+  def __iter__(self) -> dataset.DatasetIterator[int]:
+    return _PlainSourceDatasetIterator()
+
+
+class DatasetIteratorCloseTest(parameterized.TestCase):
+
+  @parameterized.named_parameters(
+      ("map", lambda: _PlainSourceIterDataset().map(lambda x: x + 1)),
+      (
+          "filter",
+          lambda: _PlainSourceIterDataset().filter(lambda x: x % 2 == 0),
+      ),
+      ("batch", lambda: _PlainSourceIterDataset().batch(2)),
+  )
+  def test_next_after_close_raises_value_error(self, make_dataset):
+    it = iter(make_dataset())
+    # Control: iteration works before the iterator is closed.
+    self.assertIsNotNone(next(it))
+    it.close()
+    with self.assertRaisesRegex(
+        ValueError, "Trying to advance a closed iterator"
+    ):
+      next(it)
+
+
 class TfRandomMapAlwaysAddingOne(transforms.TfRandomMap):
 
   def np_random_map(self, x, rng):
