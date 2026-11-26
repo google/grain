@@ -39,7 +39,7 @@ try:
 except ImportError:
   pass
 
-_TorchStatelessRandomMap = torch_random_map.TorchStatelessRandomMap
+_TorchRandomMapWithKey = torch_random_map.TorchRandomMapWithKey
 
 
 def _draw(key: Any, n: int = 4) -> list[int]:
@@ -55,8 +55,8 @@ def _with_random_ints(element: int, key: Any) -> tuple[int, list[int]]:
 def _make_dataset(
     seed: int = 42, num_elements: int = 8
 ) -> dataset.MapDataset[tuple[int, list[int]]]:
-  return dataset.MapDataset.range(num_elements).stateless_random_map(
-      _TorchStatelessRandomMap(_with_random_ints), seed=seed
+  return dataset.MapDataset.range(num_elements).random_map_with_key(
+      _TorchRandomMapWithKey(_with_random_ints), seed=seed
   )
 
 
@@ -106,23 +106,23 @@ class TorchRandomMapWithElementSpecInference:
 
 
 @absltest.skipIf(
-    torch_random is None, "PyTorch stateless RNG is not available."
+    torch_random is None, "PyTorch key-based RNG is not available."
 )
-class TorchStatelessRandomMapDatasetTest(parameterized.TestCase):
+class TorchRandomMapWithKeyDatasetTest(parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
     self.range_ds = dataset.MapDataset.range(0, 10)
 
   def test_map_size(self):
-    ds = self.range_ds.stateless_random_map(
-        _TorchStatelessRandomMap(TorchRandomMapWithTransform()), seed=0
+    ds = self.range_ds.random_map_with_key(
+        _TorchRandomMapWithKey(TorchRandomMapWithTransform()), seed=0
     )
     self.assertLen(ds, len(self.range_ds))
 
   def test_map_picklable(self):
-    ds = self.range_ds.stateless_random_map(
-        _TorchStatelessRandomMap(TorchRandomMapWithTransform()), seed=0
+    ds = self.range_ds.random_map_with_key(
+        _TorchRandomMapWithKey(TorchRandomMapWithTransform()), seed=0
     )
     restored_before = cloudpickle.loads(cloudpickle.dumps(ds))  # pylint: disable=g-unsafe-pickle-load
     self.assertLen(restored_before, len(self.range_ds))
@@ -134,8 +134,8 @@ class TorchStatelessRandomMapDatasetTest(parameterized.TestCase):
     self.assertEqual(list(restored_after), list(ds))
 
   def test_torch_random_map_data_with_transform(self):
-    ds = self.range_ds.stateless_random_map(
-        _TorchStatelessRandomMap(TorchRandomMapWithTransform()), seed=0
+    ds = self.range_ds.random_map_with_key(
+        _TorchRandomMapWithKey(TorchRandomMapWithTransform()), seed=0
     )
     expected_data = list(range(10))
     actual_data = list(ds)
@@ -143,28 +143,28 @@ class TorchStatelessRandomMapDatasetTest(parameterized.TestCase):
 
   def test_torch_random_map_with_default_seed(self):
     seed = 42
-    ds1 = self.range_ds.seed(seed).stateless_random_map(
-        _TorchStatelessRandomMap(TorchRandomMapWithTransform())
+    ds1 = self.range_ds.seed(seed).random_map_with_key(
+        _TorchRandomMapWithKey(TorchRandomMapWithTransform())
     )
-    ds2 = self.range_ds.seed(seed).stateless_random_map(
-        _TorchStatelessRandomMap(TorchRandomMapWithTransform())
+    ds2 = self.range_ds.seed(seed).random_map_with_key(
+        _TorchRandomMapWithKey(TorchRandomMapWithTransform())
     )
     np.testing.assert_equal(list(ds1), list(ds2))
 
   def test_torch_random_map_overrides_default_seed(self):
     seed = 42
-    ds1 = self.range_ds.seed(seed).stateless_random_map(
-        _TorchStatelessRandomMap(TorchRandomMapWithTransform())
+    ds1 = self.range_ds.seed(seed).random_map_with_key(
+        _TorchRandomMapWithKey(TorchRandomMapWithTransform())
     )
-    ds2 = self.range_ds.seed(seed).stateless_random_map(
-        _TorchStatelessRandomMap(TorchRandomMapWithTransform()), seed=seed + 1
+    ds2 = self.range_ds.seed(seed).random_map_with_key(
+        _TorchRandomMapWithKey(TorchRandomMapWithTransform()), seed=seed + 1
     )
     np.testing.assert_array_compare(operator.__ne__, list(ds1), list(ds2))
 
   def test_torch_random_map_raises_with_no_seed(self):
     with self.assertRaisesRegex(ValueError, "requires a seed"):
-      self.range_ds.stateless_random_map(
-          _TorchStatelessRandomMap(TorchRandomMapWithTransform())
+      self.range_ds.random_map_with_key(
+          _TorchRandomMapWithKey(TorchRandomMapWithTransform())
       )
 
   @parameterized.parameters(
@@ -174,8 +174,8 @@ class TorchStatelessRandomMapDatasetTest(parameterized.TestCase):
       dict(indices=[5, 1, 5]),
   )
   def test_torch_random_map_data_with_get_items(self, indices):
-    ds = self.range_ds.stateless_random_map(
-        _TorchStatelessRandomMap(TorchRandomMapWithDeterminismTransform()),
+    ds = self.range_ds.random_map_with_key(
+        _TorchRandomMapWithKey(TorchRandomMapWithDeterminismTransform()),
         seed=42,
     )
     expected_data = [ds[i] for i in indices]
@@ -197,8 +197,8 @@ class TorchStatelessRandomMapDatasetTest(parameterized.TestCase):
     self.assertEqual(actual, expected)
 
   def test_torch_random_map_element_spec_inference(self):
-    ds = self.range_ds.stateless_random_map(
-        _TorchStatelessRandomMap(TorchRandomMapWithElementSpecInference()),
+    ds = self.range_ds.random_map_with_key(
+        _TorchRandomMapWithKey(TorchRandomMapWithElementSpecInference()),
         seed=0,
     )
     self.assertEqual(
@@ -211,8 +211,8 @@ class TorchStatelessRandomMapDatasetTest(parameterized.TestCase):
     )
 
   def test_torch_random_map_element_spec_inference_raises_error(self):
-    ds = self.range_ds.stateless_random_map(
-        _TorchStatelessRandomMap(TorchRandomMapWithTransform()), seed=0
+    ds = self.range_ds.random_map_with_key(
+        _TorchRandomMapWithKey(TorchRandomMapWithTransform()), seed=0
     )
     with self.assertRaisesRegex(ValueError, "does not implement `output_spec`"):
       _ = ds._element_spec  # pylint: disable=protected-access
@@ -226,15 +226,15 @@ class TorchStatelessRandomMapDatasetTest(parameterized.TestCase):
     ds = (
         dataset.MapDataset.range(10)
         .seed(41)
-        .stateless_random_map(
-            _TorchStatelessRandomMap(TorchRandomMapWithDeterminismTransform())
+        .random_map_with_key(
+            _TorchRandomMapWithKey(TorchRandomMapWithDeterminismTransform())
         )
     )
     self.assertEqual(list(ds), [5, 5, 3, 4, 5, 11, 9, 7, 11, 15])
 
   def test_transform_receives_cpu_uint64_philox_key(self):
-    ds = dataset.MapDataset.range(3).stateless_random_map(
-        _TorchStatelessRandomMap(lambda element, key: (element, key)),
+    ds = dataset.MapDataset.range(3).random_map_with_key(
+        _TorchRandomMapWithKey(lambda element, key: (element, key)),
         seed=42,
     )
     items = list(ds)
@@ -248,7 +248,7 @@ class TorchStatelessRandomMapDatasetTest(parameterized.TestCase):
       self.assertEqual(key.device.type, "cpu")
       self.assertTrue(torch.equal(key, torch_random.fold_in(op_key, index)))
 
-  def test_key_is_stateless_and_splittable(self):
+  def test_key_is_immutable_and_splittable(self):
     def split_and_draw(element: int, key: Any) -> tuple[int, bool, bool]:
       same_draw = torch.equal(
           torch_random.normal(key, (4,)),
@@ -261,8 +261,8 @@ class TorchStatelessRandomMapDatasetTest(parameterized.TestCase):
       )
       return element, same_draw, different_split_draws
 
-    ds = dataset.MapDataset.range(4).stateless_random_map(
-        _TorchStatelessRandomMap(split_and_draw), seed=42
+    ds = dataset.MapDataset.range(4).random_map_with_key(
+        _TorchRandomMapWithKey(split_and_draw), seed=42
     )
     self.assertEqual(
         list(ds),
@@ -294,8 +294,8 @@ class TorchStatelessRandomMapDatasetTest(parameterized.TestCase):
   )
   def test_out_of_range_seed_raises(self, seed: int):
     with self.assertRaisesRegex(ValueError, r"Seed must be in \[0, 2\*\*64\)"):
-      dataset.MapDataset.range(4).stateless_random_map(
-          _TorchStatelessRandomMap(_with_random_ints), seed=seed
+      dataset.MapDataset.range(4).random_map_with_key(
+          _TorchRandomMapWithKey(_with_random_ints), seed=seed
       )
 
   def test_random_access_matches_iteration(self):
@@ -324,11 +324,11 @@ class TorchStatelessRandomMapDatasetTest(parameterized.TestCase):
         return element
 
     with self.assertRaisesRegex(TypeError, "expects a callable"):
-      _TorchStatelessRandomMap(LegacyTransform())  # pyrefly: ignore[bad-argument-type]
+      _TorchRandomMapWithKey(LegacyTransform())  # pyrefly: ignore[bad-argument-type]
 
     with self.assertRaisesRegex(TypeError, "expects a callable"):
-      torch_random_map.as_torch_stateless_random_map(
-          LegacyTransform(), "stateless_random_map"  # pyrefly: ignore[bad-argument-type]
+      torch_random_map.as_torch_random_map_with_key(
+          LegacyTransform(), "random_map_with_key"  # pyrefly: ignore[bad-argument-type]
       )
 
   def test_docstring_example(self):
@@ -338,7 +338,7 @@ class TorchStatelessRandomMapDatasetTest(parameterized.TestCase):
     grain_torch = grain.experimental.torch
     ds = (
         grain_torch.MapDataset.source([torch.zeros(2)] * 4)
-        .stateless_random_map(add_noise, seed=42)
+        .random_map_with_key(add_noise, seed=42)
         .batch(2)
     )
     batch = ds[1]
@@ -351,17 +351,15 @@ class TorchStatelessRandomMapDatasetTest(parameterized.TestCase):
     # values.
     plain_ds = grain.MapDataset.source(
         [torch.zeros(2)] * 4
-    ).stateless_random_map(
-        grain_torch.TorchStatelessRandomMap(add_noise), seed=42
-    )
+    ).random_map_with_key(grain_torch.TorchRandomMapWithKey(add_noise), seed=42)
     self.assertTrue(torch.equal(torch.stack([plain_ds[2], plain_ds[3]]), ds[1]))
 
   def test_none_elements_are_not_mapped(self):
     ds = (
         dataset.MapDataset.range(6)
         .filter(lambda x: x % 2 == 0)
-        .stateless_random_map(
-            _TorchStatelessRandomMap(lambda element, key: element + 10),
+        .random_map_with_key(
+            _TorchRandomMapWithKey(lambda element, key: element + 10),
             seed=1,
         )
     )
@@ -389,10 +387,10 @@ class TorchStatelessRandomMapDatasetTest(parameterized.TestCase):
     )
 
   def test_str(self):
-    ds = self.range_ds.stateless_random_map(
-        _TorchStatelessRandomMap(TorchRandomMapWithTransform()), seed=0
+    ds = self.range_ds.random_map_with_key(
+        _TorchRandomMapWithKey(TorchRandomMapWithTransform()), seed=0
     )
-    self.assertStartsWith(str(ds), "StatelessRandomMapMapDataset(transform=")
+    self.assertStartsWith(str(ds), "RandomMapWithKeyMapDataset(transform=")
     self.assertIn("TorchRandomMapWithTransform", str(ds))
 
   def test_exported_exclusively_under_grain_experimental_torch(self):
@@ -401,8 +399,8 @@ class TorchStatelessRandomMapDatasetTest(parameterized.TestCase):
     grain_torch = importlib.import_module("grain.experimental.torch")
     self.assertIs(grain.experimental.torch, grain_torch)
     self.assertIs(
-        grain_torch.TorchStatelessRandomMap,
-        _TorchStatelessRandomMap,
+        grain_torch.TorchRandomMapWithKey,
+        _TorchRandomMapWithKey,
     )
     self.assertFalse(hasattr(grain.experimental, "TorchRandomMapMapDataset"))
     self.assertFalse(hasattr(grain.experimental, "TorchRandomMapIterDataset"))
@@ -412,16 +410,16 @@ class TorchStatelessRandomMapDatasetTest(parameterized.TestCase):
         "sys.modules",
         {"torch": None, "torch.func": None, "torch.func._random": None},
     ):
-      ds = dataset.MapDataset.range(4).stateless_random_map(
-          _TorchStatelessRandomMap(lambda x, key: x), seed=42
+      ds = dataset.MapDataset.range(4).random_map_with_key(
+          _TorchRandomMapWithKey(lambda x, key: x), seed=42
       )
       with self.assertRaises(ImportError):
         _ = ds[0]
 
   def test_subclassing_and_apply(self):
-    class SubclassedAugment(_TorchStatelessRandomMap):
+    class SubclassedAugment(_TorchRandomMapWithKey):
 
-      def stateless_random_map(self, element: int, key: Any) -> int:
+      def random_map_with_key(self, element: int, key: Any) -> int:
         return (
             element
             + torch_random.randint(
@@ -429,11 +427,11 @@ class TorchStatelessRandomMapDatasetTest(parameterized.TestCase):
             ).item()
         )
 
-    wrapped = _TorchStatelessRandomMap(TorchRandomMapWithDeterminismTransform())
-    ds_wrapped = dataset.MapDataset.range(10).stateless_random_map(
+    wrapped = _TorchRandomMapWithKey(TorchRandomMapWithDeterminismTransform())
+    ds_wrapped = dataset.MapDataset.range(10).random_map_with_key(
         wrapped, seed=41
     )
-    ds_subclassed = dataset.MapDataset.range(10).stateless_random_map(
+    ds_subclassed = dataset.MapDataset.range(10).random_map_with_key(
         SubclassedAugment(), seed=41
     )
     ds_applied = (
@@ -447,21 +445,21 @@ class TorchStatelessRandomMapDatasetTest(parameterized.TestCase):
 
 
 @absltest.skipIf(
-    torch_random is None, "PyTorch stateless RNG is not available."
+    torch_random is None, "PyTorch key-based RNG is not available."
 )
-class TorchStatelessRandomMapIterDatasetTest(parameterized.TestCase):
+class TorchRandomMapWithKeyIterDatasetTest(parameterized.TestCase):
 
   def setUp(self):
     super().setUp()
     self.range_iter_ds = dataset.MapDataset.range(0, 10).to_iter_dataset()
 
   def test_deterministic_and_matches_map_dataset(self):
-    ds_iter = self.range_iter_ds.stateless_random_map(
-        _TorchStatelessRandomMap(TorchRandomMapWithDeterminismTransform()),
+    ds_iter = self.range_iter_ds.random_map_with_key(
+        _TorchRandomMapWithKey(TorchRandomMapWithDeterminismTransform()),
         seed=42,
     )
-    ds_map = dataset.MapDataset.range(0, 10).stateless_random_map(
-        _TorchStatelessRandomMap(TorchRandomMapWithDeterminismTransform()),
+    ds_map = dataset.MapDataset.range(0, 10).random_map_with_key(
+        _TorchRandomMapWithKey(TorchRandomMapWithDeterminismTransform()),
         seed=42,
     )
     self.assertEqual(list(ds_iter), list(ds_map))
@@ -469,8 +467,8 @@ class TorchStatelessRandomMapIterDatasetTest(parameterized.TestCase):
 
   @parameterized.parameters(0, 1, 42)
   def test_checkpointing(self, seed: int):
-    ds = self.range_iter_ds.stateless_random_map(
-        _TorchStatelessRandomMap(TorchRandomMapWithDeterminismTransform()),
+    ds = self.range_iter_ds.random_map_with_key(
+        _TorchRandomMapWithKey(TorchRandomMapWithDeterminismTransform()),
         seed=seed,
     )
     assert_equal_output_after_checkpoint(ds)
@@ -479,9 +477,7 @@ class TorchStatelessRandomMapIterDatasetTest(parameterized.TestCase):
     ds = (
         dataset.MapDataset.range(16)
         .to_iter_dataset()
-        .stateless_random_map(
-            _TorchStatelessRandomMap(_with_random_ints), seed=7
-        )
+        .random_map_with_key(_TorchRandomMapWithKey(_with_random_ints), seed=7)
         .mp_prefetch(options.MultiprocessingOptions(num_workers=2))
     )
     items = list(ds)
@@ -490,8 +486,8 @@ class TorchStatelessRandomMapIterDatasetTest(parameterized.TestCase):
     self.assertEqual(list(ds), items)
 
   def test_get_and_set_next_index(self):
-    ds = self.range_iter_ds.stateless_random_map(
-        _TorchStatelessRandomMap(TorchRandomMapWithDeterminismTransform()),
+    ds = self.range_iter_ds.random_map_with_key(
+        _TorchRandomMapWithKey(TorchRandomMapWithDeterminismTransform()),
         seed=0,
     )
     expected = list(ds)

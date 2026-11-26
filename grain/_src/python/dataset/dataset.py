@@ -48,6 +48,7 @@ from __future__ import annotations
 import abc
 import builtins
 from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Sequence
+import dataclasses
 import functools
 import json
 import sys
@@ -76,6 +77,25 @@ _api_usage_counter = monitoring.Counter(
 
 T = TypeVar("T")
 S = TypeVar("S")
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class ValidationRequest:
+  """A request to validate an operation, as passed to `_validate_parents`.
+
+  Attributes:
+    operation: The name of the operation, such as `"batch"`. It is the name of
+      the dataset method that applies the operation, if there is one.
+    requester: The dataset or iterator that performs the operation and has its
+      parents validate it. It passes itself while it is constructed, so only its
+      type can be relied on: its attributes may not be set yet.
+    arguments: The arguments of the operation by name, as they were passed to
+      the requester. An argument that was not passed has its default value.
+  """
+
+  operation: str
+  requester: MapDataset | IterDataset | DatasetIterator
+  arguments: Mapping[str, Any] = dataclasses.field(default_factory=dict)
 
 
 class _Dataset:
@@ -113,6 +133,30 @@ class _Dataset:
       return None
     seed_sequence = np.random.SeedSequence(aggregated_seed)
     return seed_sequence.generate_state(1, dtype=np.uint32)[0]
+
+  def _validate_parents(self, request: ValidationRequest) -> None:
+    """Validates `request` on this dataset and, recursively, on its parents.
+
+    A dataset or iterator that performs an operation calls this method on its
+    parent, when it is constructed. This implementation only forwards
+    `request` to the parents of this dataset, so the parent of the requester,
+    its parents, and so on get to validate it.
+
+    A dataset overrides this method to reject an operation that must not be
+    performed on a dataset that is built on it: the override raises an error
+    for it. Otherwise, it calls `super()._validate_parents(request)`, so that
+    its parents validate `request` too. For example, `FilterMapDataset`
+    rejects the `batch` of a `MapDataset`, because it can discard elements.
+
+    An override that returns without calling `super()` accepts `request` for
+    its parents.
+
+    Args:
+      request: The request to validate.
+    """
+    # Some datasets do not call `__init__` and thus do not have `_parents`.
+    for parent in getattr(self, "_parents", ()):
+      parent._validate_parents(request)  # pylint: disable=protected-access
 
   @property
   def _element_spec(self) -> Any:  # PyTree[ShapeDtypeStructProtocol]
@@ -828,37 +872,39 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
         parent=self, transform=transform, seed=seed
     )
 
-  def stateless_random_map(
+  def random_map_with_key(
       self,
-      transform: transforms.StatelessRandomMap | Callable[[T, Any], S],
+      transform: transforms.RandomMapWithKey | Callable[[T, Any], S],
       *,
       seed: int | None = None,
   ) -> MapDataset[Any]:
-    """Returns a dataset transformed with an immutable per-element PRNG key.
+    """Returns a dataset transformed by a random map that accepts a PRNG key.
 
     NOTE: This transformation is still experimental and the API may change.
     It's exposed to the public API just because there's no way to expose only to
     experimental users.
 
-    Unlike ``random_map`` (which passes a mutable ``np.random.Generator``),
-    ``stateless_random_map`` derives an immutable per-element PRNG key via
+    Unlike ``random_map`` (which passes a ``np.random.Generator``),
+    ``random_map_with_key`` derives a PRNG key for each element via
     ``transform.make_key_for_index(seed)`` and passes ``(element, key)`` to
-    ``transform.stateless_random_map``. Plain callables ``fn(element, key)`` are
-    wrapped in ``JaxStatelessRandomMap`` by default; other stateless PRNG
-    backends (such as ``TorchStatelessRandomMap``) can be passed directly.
+    ``transform.random_map_with_key``. A key is typically a pair of integer
+    seeds in a tensor, which the transform passes to the random functions of
+    its backend. Plain callables ``fn(element, key)`` are wrapped in
+    ``JaxRandomMapWithKey`` by default; transforms for other backends (such as
+    ``TorchRandomMapWithKey``) can be passed directly.
 
     Example usage::
 
       import jax
       ds = MapDataset.range(5).seed(42)
-      ds = ds.stateless_random_map(
+      ds = ds.random_map_with_key(
           lambda x, key: x + int(jax.random.randint(key, (), 5, 10))
       )
       set(ds).issubset(set(range(5, 15)))
 
     Args:
-      transform: Either a ``StatelessRandomMap`` implementation or a callable
-        ``fn(element, key)`` (wrapped in ``JaxStatelessRandomMap`` by default).
+      transform: Either a ``RandomMapWithKey`` implementation or a callable
+        ``fn(element, key)`` (wrapped in ``JaxRandomMapWithKey`` by default).
       seed: An optional non-negative 64-bit integer seed. Defaults to the seed
         derived from ``ds.seed(...)``.
 
@@ -871,7 +917,7 @@ class MapDataset(_Dataset, Generic[T], metaclass=MapDatasetMeta):
         random_map as random_map_dataset,
     )
     # pylint: enable=g-import-not-at-top
-    return random_map_dataset.StatelessRandomMapMapDataset(
+    return random_map_dataset.RandomMapWithKeyMapDataset(
         parent=self, transform=transform, seed=seed
     )
 
@@ -1367,36 +1413,38 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
         parent=self, transform=transform, seed=seed
     )
 
-  def stateless_random_map(
+  def random_map_with_key(
       self,
-      transform: transforms.StatelessRandomMap | Callable[[T, Any], S],
+      transform: transforms.RandomMapWithKey | Callable[[T, Any], S],
       *,
       seed: int | None = None,
   ) -> IterDataset[Any]:
-    """Returns an iterable dataset transformed with an immutable PRNG key.
+    """Returns a dataset transformed by a random map that accepts a PRNG key.
 
     NOTE: This transformation is still experimental and the API may change.
     It's exposed to the public API just because there's no way to expose only to
     experimental users.
 
-    Unlike ``random_map`` (which passes a mutable ``np.random.Generator``),
-    ``stateless_random_map`` derives an immutable per-element PRNG key via
+    Unlike ``random_map`` (which passes a ``np.random.Generator``),
+    ``random_map_with_key`` derives a PRNG key for each element via
     ``transform.make_key_for_index(seed)`` and passes ``(element, key)`` to
-    ``transform.stateless_random_map``. Plain callables ``fn(element, key)`` are
-    wrapped in ``JaxStatelessRandomMap`` by default.
+    ``transform.random_map_with_key``. A key is typically a pair of integer
+    seeds in a tensor, which the transform passes to the random functions of
+    its backend. Plain callables ``fn(element, key)`` are wrapped in
+    ``JaxRandomMapWithKey`` by default.
 
     Example usage::
 
       import jax
       ds = MapDataset.range(5).to_iter_dataset().seed(42)
-      ds = ds.stateless_random_map(
+      ds = ds.random_map_with_key(
           lambda x, key: x + int(jax.random.randint(key, (), 5, 10))
       )
       set(ds).issubset(set(range(5, 15)))
 
     Args:
-      transform: Either a ``StatelessRandomMap`` implementation or a callable
-        ``fn(element, key)`` (wrapped in ``JaxStatelessRandomMap`` by default).
+      transform: Either a ``RandomMapWithKey`` implementation or a callable
+        ``fn(element, key)`` (wrapped in ``JaxRandomMapWithKey`` by default).
       seed: An optional non-negative 64-bit integer seed. Defaults to the seed
         derived from ``ds.seed(...)``.
 
@@ -1409,7 +1457,7 @@ class IterDataset(_Dataset, Iterable[T], metaclass=IterDatasetMeta):
         random_map as random_map_dataset,
     )
     # pylint: enable=g-import-not-at-top
-    return random_map_dataset.StatelessRandomMapIterDataset(
+    return random_map_dataset.RandomMapWithKeyIterDataset(
         parent=self, transform=transform, seed=seed
     )
 
@@ -2035,8 +2083,8 @@ def apply_transformations(
         ds = ds.map(transformation)  # pyrefly: ignore[bad-assignment]
       case transforms.RandomMap():
         ds = ds.random_map(transformation)  # pyrefly: ignore[bad-assignment]
-      case transforms.StatelessRandomMap():
-        ds = ds.stateless_random_map(transformation)  # pyrefly: ignore[bad-assignment]
+      case transforms.RandomMapWithKey():
+        ds = ds.random_map_with_key(transformation)  # pyrefly: ignore[bad-assignment]
       case transforms.MapWithIndex():
         ds = ds.map_with_index(transformation)  # pyrefly: ignore[bad-assignment]
       case transforms.FlatMap():

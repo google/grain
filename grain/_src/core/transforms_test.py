@@ -134,23 +134,23 @@ class MapandRandomMapTest(parameterized.TestCase):
     transformed_ds = parent_ds.random_map(AddRandomOffset())
     self.assertEqual(list(transformed_ds), [2, 5, 5, 4, 9])
 
-  def test_stateless_random_map_protocol(self):
+  def test_random_map_with_key_protocol(self):
     class AddKeyedOffset:
 
       def make_key_for_index(self, seed: int):
         return lambda index: (seed, index)
 
-      def stateless_random_map(
+      def random_map_with_key(
           self, element: int, key: tuple[int, int]
       ) -> tuple[int, int, int]:
         return (element, key[0], key[1])
 
     transform = AddKeyedOffset()
-    self.assertIsInstance(transform, transforms.StatelessRandomMap)
+    self.assertIsInstance(transform, transforms.RandomMapWithKey)
     self.assertIn(
         "AddKeyedOffset", transforms.get_pretty_transform_name(transform)
     )
-    transformed_ds = dataset.MapDataset.range(3).stateless_random_map(
+    transformed_ds = dataset.MapDataset.range(3).random_map_with_key(
         transform, seed=7
     )
     self.assertEqual(list(transformed_ds), [(0, 7, 0), (1, 7, 1), (2, 7, 2)])

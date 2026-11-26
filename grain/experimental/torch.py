@@ -16,7 +16,7 @@
 ``grain.experimental.torch`` provides Grain's Dataset API with PyTorch defaults:
 
 - Random transformations receive PyTorch PRNG keys
-  (``stateless_random_map``).
+  (``random_map_with_key``).
 - ``batch`` collates elements into ``torch.Tensor``s.
 - ``mp_prefetch`` limits PyTorch threads in worker processes and passes CPU
   tensors between processes through shared memory.
@@ -53,7 +53,7 @@ Example usage::
       .shuffle()
       .repeat(num_epochs)
       [rank::world_size]  # Each rank reads its own part of the data.
-      .stateless_random_map(augment)  # `key` is a PyTorch PRNG key.
+      .random_map_with_key(augment)  # `key` is a PyTorch PRNG key.
       .batch(256, drop_remainder=True)  # `torch.utils.data.default_collate`.
       .to_iter_dataset()
       .with_options(grain_torch.DatasetOptions(min_shm_size=64 << 10))
@@ -103,5 +103,5 @@ from grain._src.python.experimental.torch.options import (
     MultiprocessingOptions,
 )
 from grain._src.python.experimental.torch.random_map import (
-    TorchStatelessRandomMap,
+    TorchRandomMapWithKey,
 )

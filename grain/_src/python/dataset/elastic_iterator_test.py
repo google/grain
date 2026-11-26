@@ -290,6 +290,23 @@ class ElasticMapDatasetTest(parameterized.TestCase):
     ):
       elastic_iterator.ElasticIterator(ds, 5, sharding.NoSharding()).__iter__()
 
+  def test_filter_before_to_iter_dataset_raises_filter_error(self):
+    ds = dataset.MapDataset.range(10).filter(lambda x: x % 2 == 0)
+    with self.assertRaisesRegex(
+        ValueError,
+        "ElasticIterator does not support `filter` transformation.",
+    ):
+      elastic_iterator.ElasticIterator(
+          ds.to_iter_dataset(), 5, sharding.NoSharding()
+      )
+
+  def test_prefetch_raises_error(self):
+    ds = dataset.MapDataset.range(10).to_iter_dataset()
+    with self.assertRaisesRegex(
+        ValueError, "does not support prefetch transformation yet"
+    ):
+      elastic_iterator.ElasticIterator(ds, 5, sharding.NoSharding())
+
   def test_shard_state_not_implemented(self):
     ds = dataset.MapDataset.range(10).map(lambda x: x + 1)
     it = elastic_iterator.ElasticIterator(ds, 5, sharding.NoSharding())

@@ -31,6 +31,7 @@ from grain._src.python import options
 from grain._src.python.dataset import base
 from grain._src.python.dataset import dataset
 from grain._src.python.dataset import stats as dataset_stats
+from grain._src.python.dataset.transformations import batch
 from grain._src.python.dataset.transformations import prefetch
 from grain._src.python.dataset.transformations import process_prefetch
 import grain._src.python.testing.experimental as test_util
@@ -1566,6 +1567,112 @@ class ReferenceCycleTest(parameterized.TestCase):
       gc.garbage.clear()
       gc.collect()
       gc.enable()
+
+
+class _RecordingMapDataset(IdentityMapDataset[_T]):
+  """Dataset that records the requests that it validates."""
+
+  def __init__(self, parent: dataset.MapDataset[_T]):
+    super().__init__(parent)
+    self.requests: list[dataset.ValidationRequest] = []
+
+  @override
+  def _validate_parents(self, request: dataset.ValidationRequest) -> None:
+    self.requests.append(request)
+    super()._validate_parents(request)
+
+
+class _RejectingMapDataset(IdentityMapDataset[_T]):
+  """Dataset that rejects the requests that it validates."""
+
+  @override
+  def _validate_parents(self, request: dataset.ValidationRequest) -> None:
+    raise TypeError(
+        f"`{request.operation}` of {type(request.requester).__name__}."
+    )
+
+
+class _AcceptingMapDataset(IdentityMapDataset[_T]):
+  """Dataset that accepts all requests for its parents."""
+
+  @override
+  def _validate_parents(self, request: dataset.ValidationRequest) -> None:
+    pass
+
+
+class ValidateParentsTest(parameterized.TestCase):
+
+  def test_batch_is_validated_by_parents(self):
+    recording_ds = _RecordingMapDataset(dataset.MapDataset.range(4))
+    map_ds = recording_ds.map(MapAddingOne())
+
+    map_batch_ds = map_ds.batch(2)
+
+    self.assertLen(recording_ds.requests, 1)
+    map_request = recording_ds.requests[0]
+    self.assertEqual(map_request.operation, "batch")
+    self.assertIs(map_request.requester, map_batch_ds)
+    self.assertEqual(
+        map_request.arguments,
+        {"batch_size": 2, "drop_remainder": False, "batch_fn": None},
+    )
+
+  def test_batch_dataset_class_is_validated_by_parents(self):
+    recording_ds = _RecordingMapDataset(dataset.MapDataset.range(4))
+    map_ds = recording_ds.map(MapAddingOne())
+
+    map_batch_ds = batch.BatchMapDataset(map_ds, batch_size=2)
+
+    self.assertEqual(
+        [(r.operation, r.requester) for r in recording_ds.requests],
+        [("batch", map_batch_ds)],
+    )
+
+  def test_apply_batch_is_validated_by_parents(self):
+    recording_ds = _RecordingMapDataset(dataset.MapDataset.range(4))
+
+    recording_ds.map(MapAddingOne()).apply(transforms.Batch(batch_size=2))
+
+    self.assertEqual([r.operation for r in recording_ds.requests], ["batch"])
+
+  def test_request_is_validated_by_all_parents(self):
+    recording_ds = _RecordingMapDataset(dataset.MapDataset.range(4))
+    other_recording_ds = _RecordingMapDataset(recording_ds)
+    ds = dataset.MapDataset.mix(
+        [dataset.MapDataset.range(4), other_recording_ds]
+    )
+
+    ds.batch(2)
+
+    self.assertLen(recording_ds.requests, 1)
+    self.assertEqual(other_recording_ds.requests, recording_ds.requests)
+
+  def test_other_transformations_are_not_validated(self):
+    recording_ds = _RecordingMapDataset(dataset.MapDataset.range(4))
+
+    ds = recording_ds.map(MapAddingOne()).shuffle(seed=1).to_iter_dataset()
+    ds = ds.filter(FilterKeepingOddElementsOnly())
+
+    self.assertEmpty(recording_ds.requests)
+    self.assertCountEqual(list(ds), [1, 3])
+
+  def test_error_of_parent_is_raised(self):
+    ds = _RejectingMapDataset(dataset.MapDataset.range(4)).map(MapAddingOne())
+
+    with self.assertRaisesRegex(TypeError, "`batch` of BatchMapDataset"):
+      ds.batch(2)
+    with self.assertRaisesRegex(TypeError, "`batch` of BatchMapDataset"):
+      ds.apply(transforms.Batch(batch_size=2))
+    with self.assertRaisesRegex(TypeError, "`batch` of BatchMapDataset"):
+      batch.BatchMapDataset(ds, batch_size=2)
+
+  def test_dataset_can_accept_request_for_its_parents(self):
+    rejecting_ds = _RejectingMapDataset(dataset.MapDataset.range(4))
+    ds = _AcceptingMapDataset(rejecting_ds.map(MapAddingOne()))
+
+    ds = ds.batch(2)
+
+    self.assertEqual([b.tolist() for b in ds], [[1, 2], [3, 4]])
 
 
 if __name__ == "__main__":

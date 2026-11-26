@@ -20,38 +20,11 @@ from typing import Any, TypeVar
 from grain._src.core import sharding
 from grain._src.python import options
 from grain._src.python.dataset import dataset
-from grain._src.python.dataset.transformations import (
-    filter as filter_dataset,
-)
 from grain._src.python.dataset.transformations import interleave
-from grain._src.python.dataset.transformations import prefetch
 
 T = TypeVar("T")
 
 _GLOBAL_NEXT_INDEX_STATE_KEY = "global_next_index"
-
-
-def _verify_transformations_supported(ds: dataset.IterDataset) -> None:
-  """Checks for unsupported transformations in the dataset graph.
-
-  Args:
-    ds: The dataset to check.
-
-  Raises:
-    ValueError: If an unsupported transformation is found in the dataset graph.
-  """
-  to_check = [ds]
-  while to_check:
-    next_ds = to_check.pop()
-    if isinstance(
-        next_ds,
-        (prefetch.PrefetchIterDataset,),
-    ):
-      raise ValueError(
-          "ElasticIterator for IterDataset does not support prefetch"
-          " transformation yet."
-      )
-    to_check.extend(next_ds.parents)  # pyrefly: ignore[bad-argument-type]
 
 
 def _find_sliceable_dataset(
@@ -408,26 +381,22 @@ class ElasticIterator(dataset.DatasetIterator):
       multiprocessing_options: The multiprocessing options.
     """
     super().__init__()
-    to_check = [ds]
-    while to_check:
-      next_ds = to_check.pop()
-      if isinstance(next_ds, filter_dataset.FilterMapDataset):
-        raise ValueError(
-            "ElasticIterator does not support `filter` transformation."
-        )
-      to_check.extend(next_ds.parents)
+    if isinstance(ds, dataset.IterDataset) and multiprocessing_options:
+      raise NotImplementedError(
+          "ElasticIterator does not support multiprocess prefetching for"
+          " IterDataset."
+      )
+    # The datasets that this iterator does not support, such as
+    # `FilterMapDataset`, reject it.
+    ds._validate_parents(  # pylint: disable=protected-access
+        dataset.ValidationRequest(operation="elastic_iterator", requester=self)
+    )
 
     self._shard_options = shard_options
     self._global_batch_size = global_batch_size
     self._read_options = read_options
     self._multiprocessing_options = multiprocessing_options
     if isinstance(ds, dataset.IterDataset):
-      if multiprocessing_options:
-        raise NotImplementedError(
-            "ElasticIterator does not support multiprocess prefetching for"
-            " IterDataset."
-        )
-      _verify_transformations_supported(ds)
       # We must set the slice on the original dataset so that the interleave
       # iterator is created with the correct (sliced) datasets.
       self._ds = copy.deepcopy(ds)
