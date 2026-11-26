@@ -37,7 +37,6 @@ py_library(
         "@platforms//os:windows": ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.pyd"],
        "//conditions:default": ["//grain/_src/python/experimental/index_shuffle/python:index_shuffle_module.so"],
     }),
-    # Implicit build flag
     visibility = ["//visibility:public"],
     deps = [
         "//grain/_src/core:config",
