@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import copy
+import os
 from typing import Any, Sequence, TypeVar
 
 from grain._src.python.dataset import dataset
@@ -49,16 +50,36 @@ class ShuffleMapDataset(dataset.MapDataset[T]):
           f"Seed must be an integer between 0 and 2**32-1 (got {seed=})."
       )
     self._seed = int(seed)
+    self._fast_shuffle = (
+        os.environ.get("GRAIN_FAST_SHUFFLE_GETITEM", "1") != "0"
+    )
+    self._cached_len: int | None = None
+    self._getitem_parent = (
+        parent._parent  # pylint: disable=protected-access
+        if self._fast_shuffle and type(parent).__name__ == "_WithSeedMapDataset"
+        else parent
+    )
 
   def __len__(self) -> int:
+    if self._fast_shuffle:
+      if self._cached_len is None:
+        self._cached_len = len(self._parent)
+      return self._cached_len
     return len(self._parent)
 
   def __str__(self) -> str:
     return "ShuffleMapDataset"
 
   def _shuffled_index(self, index: int) -> int:
-    index = int(index)
-    length = len(self._parent)
+    if type(index) is not int:  # pylint: disable=unidiomatic-typecheck
+      index = int(index)
+    if self._fast_shuffle:
+      length = self._cached_len
+      if length is None:
+        length = len(self._parent)
+        self._cached_len = length
+    else:
+      length = len(self._parent)
     epoch, index_in_epoch = divmod(index, length)
     # Note:
     #   - index_shuffle expects 32-bit integers
@@ -71,6 +92,29 @@ class ShuffleMapDataset(dataset.MapDataset[T]):
     return shuffled_index_in_epoch + epoch * length
 
   def __getitem__(self, index):
+    if self._fast_shuffle and type(index) is int:  # pylint: disable=unidiomatic-typecheck
+      with self._stats.record_self_time():
+        length = self._cached_len
+        if length is None:
+          length = len(self._getitem_parent)
+          self._cached_len = length
+        if index < length and index >= 0:
+          shuffled_index = index_shuffle.index_shuffle(
+              index, max_index=length - 1, seed=self._seed, rounds=4
+          )
+        else:
+          epoch, index_in_epoch = divmod(index, length)
+          per_epoch_seed = (self._seed + epoch) % 2**32
+          shuffled_index = (
+              index_shuffle.index_shuffle(
+                  index_in_epoch,
+                  max_index=length - 1,
+                  seed=per_epoch_seed,
+                  rounds=4,
+              )
+              + epoch * length
+          )
+      return self._getitem_parent[shuffled_index]
     if isinstance(index, slice):
       return self.slice(index)
     with self._stats.record_self_time():
