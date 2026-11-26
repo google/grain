@@ -30,6 +30,8 @@ class ZipMapDataset(dataset.MapDataset[T]):
   At each index, returns a tuple containing the corresponding element from
   each parent dataset. All parent datasets must have the same length;
   otherwise, raises a ``ValueError``.
+  If any parent has filtered out an element, the zipped element at that index
+  is also ``None``.
 
   Examples:
     Combining corresponding elements from multiple map-style datasets::
@@ -75,7 +77,8 @@ class ZipMapDataset(dataset.MapDataset[T]):
   def __getitem__(self, index):
     if isinstance(index, slice):
       return self.slice(index)
-    return tuple(p[index] for p in self._parents)  # pyrefly: ignore[bad-index]
+    elements = tuple(p[index] for p in self._parents)  # pyrefly: ignore[bad-index]
+    return None if any(element is None for element in elements) else elements
 
   def _getitems(self, indices: Sequence[int]):
     # p._getitems(indices) returns a list of elements of the requested indices.
@@ -83,7 +86,10 @@ class ZipMapDataset(dataset.MapDataset[T]):
     parent_elements = [
         p._getitems(indices) for p in self.parents  # pylint: disable=protected-access
     ]
-    return list(zip(*parent_elements))
+    return [
+        None if any(element is None for element in elements) else elements
+        for elements in zip(*parent_elements)
+    ]
 
   def __str__(self) -> str:
     return f"ZipMapDataset(parents={self._parents}"
