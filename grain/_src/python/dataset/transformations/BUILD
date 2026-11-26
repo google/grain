@@ -126,6 +126,7 @@ py_test(
         "//grain/_src/core:transforms",
         "//grain/_src/python/dataset",
         "@abseil-py//absl/testing:absltest",
+        "@abseil-py//absl/testing:parameterized",
     ],
 )
 
