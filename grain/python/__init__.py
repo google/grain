@@ -52,6 +52,7 @@ from grain._src.python.data_loader import (
 )
 from grain._src.python.data_sources import (
     ArrayRecordDataSource,
+    BagzDataSource,
     SharedMemoryDataSource as InMemoryDataSource,
     RangeDataSource,
 )
