@@ -6,6 +6,8 @@ changes. Best viewed [here](https://google-grain.readthedocs.io/en/latest/change
 ## Unreleased
 
 * New features:
+  * Added `grain.experimental.index_shuffle_range` to shuffle a contiguous
+    half-open index range `[start, stop)` in a single C++ call.
   * Added `MapDataset.stateless_random_map` and
     `IterDataset.stateless_random_map`, which pass a deterministic per-element
     stateless PRNG key to the transform, along with the

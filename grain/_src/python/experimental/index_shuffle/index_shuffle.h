@@ -16,8 +16,8 @@ limitations under the License.
 #ifndef GRAIN_RANDOM_RANDOM_INDEX_SHUFFLE_H_
 #define GRAIN_RANDOM_RANDOM_INDEX_SHUFFLE_H_
 
-#include <array>
 #include <cstdint>
+#include <vector>
 
 namespace grain {
 namespace random {
@@ -37,6 +37,18 @@ namespace random {
 // For more details on the algorithm see the top of the cc file.
 uint64_t index_shuffle(uint64_t index, uint64_t max_index, uint32_t seed,
                        uint32_t rounds);
+
+// Returns the positions of indices in `[start, stop)` in a permutation of
+// `[0, ..., max_index]`.
+//
+// Produces the exact same sequence as calling
+// `index_shuffle(i, max_index, seed, rounds)` for each `i` in `[start, stop)`,
+// while computing the block size and cipher round keys once per call. Returns
+// an empty vector when `start >= stop`. When `start < stop`, `stop - 1` must be
+// in `[0, max_index]`. `rounds` must be an even integer in `[4, 1024]`.
+std::vector<uint64_t> index_shuffle_range(uint64_t start, uint64_t stop,
+                                          uint64_t max_index, uint32_t seed,
+                                          uint32_t rounds);
 
 }  // namespace random
 }  // namespace grain

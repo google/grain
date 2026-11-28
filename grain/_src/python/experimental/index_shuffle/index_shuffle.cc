@@ -34,26 +34,21 @@ limitations under the License.
 #include <assert.h>
 
 #include <algorithm>
-#include <bitset>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <random>
+#include <type_traits>
 #include <vector>
 
 namespace grain {
 namespace random {
-// Some of the macros below require a minimum word size of 8
-// (2 word size = block size).
-// Smaller block sizes might give poor results in terms of randomness.
+namespace {
+
+// Minimum block size (2 * word size). simon_f requires word size >= 8, and
+// smaller block sizes give poor randomness.
 constexpr int kMinBlockSize = 16;
-
-namespace impl {
-
-#define ROTL(x, r, W) (((x) << (r)) | (x >> (W - (r))))
-#define ROTR(x, r, W) (((x) >> (r)) | ((x) << (W - (r))))
-#define SIMON_F(x, W) ((ROTL(x, 1, W) & ROTL(x, 8, W) ^ ROTL(x, 2, W)))
-#define SIMON_Rx2(x, y, k1, k2, W) \
-  (y ^= SIMON_F(x, W), y ^= k1, x ^= SIMON_F(y, W), x ^= k2)
 
 // Returns the keys per round for the cipher.
 // This is not the proposed key schedule for a Simon cipher but simply uses
@@ -66,20 +61,30 @@ std::vector<uint32_t> generate_keys(const uint32_t seed,
   return rk;
 }
 
-// Encrypts the given value using the Simon chipher.
-// This is should not be used to encrypt data. It's not secure. We only use it
+template <int W>
+uint32_t simon_f(const uint32_t x) {
+  static_assert(W >= 8 && W <= 32, "Word size must be in [8, 32] bits.");
+  const uint32_t rotl_1 = (x << 1) | (x >> (W - 1));
+  const uint32_t rotl_8 = (x << 8) | (x >> (W - 8));
+  const uint32_t rotl_2 = (x << 2) | (x >> (W - 2));
+  return (rotl_1 & rotl_8) ^ rotl_2;
+}
+
+// Encrypts the given value using the Simon cipher.
+// This should not be used to encrypt data. It is not secure. We only use it
 // to generate pseudorandom permutations.
 template <int W>
-uint64_t simon_encrypt(const uint64_t value,
-                       const std::vector<uint32_t>& round_keys) {
-  // Required by ROTR/ROTL
-  static_assert(W >= 8, "Minimum word size is 8 bits.");
-  std::bitset<W> left(value >> W);
-  std::bitset<W> right(value);
-  for (int i = 0; i < round_keys.size();) {
-    SIMON_Rx2(right, left, round_keys[i++], round_keys[i++], W);
+uint64_t simon_encrypt(const uint64_t value, const uint32_t* round_keys,
+                       const uint32_t rounds) {
+  static_assert(W >= 8 && W <= 32, "Word size must be in [8, 32] bits.");
+  constexpr uint32_t kWordMask = static_cast<uint32_t>((uint64_t{1} << W) - 1);
+  uint32_t left = static_cast<uint32_t>(value >> W) & kWordMask;
+  uint32_t right = static_cast<uint32_t>(value) & kWordMask;
+  for (uint32_t i = 0; i < rounds; i += 2) {
+    left = (left ^ simon_f<W>(right) ^ round_keys[i]) & kWordMask;
+    right = (right ^ simon_f<W>(left) ^ round_keys[i + 1]) & kWordMask;
   }
-  return (left.to_ullong() << W) | right.to_ullong();
+  return (static_cast<uint64_t>(left) << W) | static_cast<uint64_t>(right);
 }
 
 // In the original implementation the number of rounds depends on the block
@@ -88,43 +93,32 @@ uint64_t simon_encrypt(const uint64_t value,
 // W = word size
 // B = 2 * W = block size
 template <int B>
-uint64_t index_shuffle(const uint64_t index, const uint64_t max_index,
-                       const uint32_t seed, const uint32_t rounds) {
-  const auto round_keys = generate_keys(seed, rounds);
+uint64_t shuffle_element(const uint64_t index, const uint64_t max_index,
+                         const uint32_t* round_keys, const uint32_t rounds) {
   uint64_t new_index = index;
   while (true) {
-    new_index = simon_encrypt<B / 2>(new_index, round_keys);
+    new_index = simon_encrypt<B / 2>(new_index, round_keys, rounds);
     if (new_index <= max_index) {
       return new_index;
     }
   }
 }
 
-#undef ROTL
-#undef ROTR
-#undef SIMON_F
-#undef SIMON_RxC
-
-}  // namespace impl
-
-uint64_t index_shuffle(const uint64_t index, const uint64_t max_index,
-                       const uint32_t seed, const uint32_t rounds) {
-  if (max_index == 0) {
-    return 0;
-  }
+int compute_block_size(const uint64_t max_index) {
   // Block size must be large enough to represent max_index and even (since
   // word size is half of it). We force at least 16 bits as minimum block size
   // since we observed pattern in the permutations below.
   int block_size = static_cast<int>(std::ceil(std::log2(max_index)));
   block_size = std::max(block_size + block_size % 2, kMinBlockSize);
   assert(block_size > 0 && block_size % 2 == 0 && block_size <= 64);
-  // rounds should be in [4, 1024] and number of rounds must be even.
-  assert(rounds >= 4 && rounds <= 1024 && rounds % 2 == 0);
-  // Assert the index is bounded by [0, max_index].
-  assert(index >= 0 && index <= max_index);
+  return block_size;
+}
+
+template <typename Fn>
+decltype(auto) dispatch_block_size(const int block_size, Fn&& fn) {
 #define HANDLE_BLOCK_SIZE(B) \
   case B:                    \
-    return impl::index_shuffle<B>(index, max_index, seed, rounds);
+    return fn(std::integral_constant<int, B>{});
 
   switch (block_size) {
     HANDLE_BLOCK_SIZE(16);
@@ -152,9 +146,59 @@ uint64_t index_shuffle(const uint64_t index, const uint64_t max_index,
     HANDLE_BLOCK_SIZE(60);
     HANDLE_BLOCK_SIZE(62);
     default:
-      return impl::index_shuffle<64>(index, max_index, seed, rounds);
+      return fn(std::integral_constant<int, 64>{});
   }
 #undef HANDLE_BLOCK_SIZE
+}
+
+}  // namespace
+
+uint64_t index_shuffle(const uint64_t index, const uint64_t max_index,
+                       const uint32_t seed, const uint32_t rounds) {
+  // rounds should be in [4, 1024] and number of rounds must be even.
+  assert(rounds >= 4 && rounds <= 1024 && rounds % 2 == 0);
+  // Assert the index is bounded by [0, max_index].
+  assert(index <= max_index);
+  if (max_index == 0) {
+    return 0;
+  }
+  const int block_size = compute_block_size(max_index);
+  const std::vector<uint32_t> round_keys = generate_keys(seed, rounds);
+  const uint32_t* keys_ptr = round_keys.data();
+  return dispatch_block_size(block_size, [&](auto block_size_tag) {
+    constexpr int kBlockSize = decltype(block_size_tag)::value;
+    return shuffle_element<kBlockSize>(index, max_index, keys_ptr, rounds);
+  });
+}
+
+std::vector<uint64_t> index_shuffle_range(const uint64_t start,
+                                          const uint64_t stop,
+                                          const uint64_t max_index,
+                                          const uint32_t seed,
+                                          const uint32_t rounds) {
+  // rounds should be in [4, 1024] and number of rounds must be even.
+  assert(rounds >= 4 && rounds <= 1024 && rounds % 2 == 0);
+  if (start >= stop) {
+    return {};
+  }
+  assert(stop - 1 <= max_index);
+  const uint64_t count = stop - start;
+  assert(count <= std::numeric_limits<size_t>::max());
+  if (max_index == 0) {
+    return std::vector<uint64_t>(static_cast<size_t>(count), 0);
+  }
+  const int block_size = compute_block_size(max_index);
+  const std::vector<uint32_t> round_keys = generate_keys(seed, rounds);
+  const uint32_t* keys_ptr = round_keys.data();
+  return dispatch_block_size(block_size, [&](auto block_size_tag) {
+    constexpr int kBlockSize = decltype(block_size_tag)::value;
+    std::vector<uint64_t> shuffled(static_cast<size_t>(count));
+    for (size_t offset = 0; offset < shuffled.size(); ++offset) {
+      shuffled[offset] = shuffle_element<kBlockSize>(start + offset, max_index,
+                                                     keys_ptr, rounds);
+    }
+    return shuffled;
+  });
 }
 
 }  // namespace random

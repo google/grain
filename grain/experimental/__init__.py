@@ -81,6 +81,7 @@ from grain._src.python.experimental.example_packing.packing import (
 )
 from grain._src.python.experimental.index_shuffle.python.index_shuffle_module import (
     index_shuffle,
+    index_shuffle_range,
 )
 
 # This should eventually live under grain.testing.
