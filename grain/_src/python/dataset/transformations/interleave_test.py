@@ -579,6 +579,95 @@ class _InterleaveIterDatasetTestBase(parameterized.TestCase):
     ):
       list(ds_with_options2)
 
+  @parameterized.named_parameters(
+      dict(
+          testcase_name="after_start_prefetch_then_next",
+          trigger_before_set_state="start_prefetch",
+          trigger_after_set_state="next",
+      ),
+      dict(
+          testcase_name="after_next_then_next",
+          trigger_before_set_state="next",
+          trigger_after_set_state="next",
+      ),
+      dict(
+          testcase_name="after_start_prefetch_then_start_prefetch",
+          trigger_before_set_state="start_prefetch",
+          trigger_after_set_state="start_prefetch",
+      ),
+  )
+  def test_set_state_after_start_restarts_all_iterators(
+      self, trigger_before_set_state, trigger_after_set_state
+  ):
+    num_iterators = 4
+    restored_read = [threading.Event() for _ in range(num_iterators)]
+
+    class StatefulReadRecordingIterator(dataset.DatasetIterator[int]):
+
+      def __init__(self, index: int):
+        super().__init__()
+        self._index = index
+        self._step = 0
+        self._restored = False
+
+      def __next__(self) -> int:
+        if self._restored:
+          restored_read[self._index].set()
+        val = self._index + 10 * self._step
+        self._step += 1
+        return val
+
+      def get_state(self):
+        return {"step": self._step}
+
+      def set_state(self, state):
+        self._step = state["step"]
+        self._restored = True
+
+    class StatefulReadRecordingDataset(dataset.IterDataset[int]):
+
+      def __init__(self, index: int):
+        super().__init__()
+        self._index = index
+
+      def __iter__(self) -> dataset.DatasetIterator[int]:
+        return StatefulReadRecordingIterator(self._index)
+
+    ds = self._create_dataset(
+        [StatefulReadRecordingDataset(i) for i in range(num_iterators)],
+        cycle_length=num_iterators,
+        num_make_iter_threads=num_iterators,
+        make_iter_buffer_size=num_iterators,
+    )
+    ds = self._maybe_wrap_ds(ds)
+
+    src_iter = ds.__iter__()
+    self.addCleanup(src_iter.close)
+    for _ in range(num_iterators):
+      _ = next(src_iter)
+    saved_state = src_iter.get_state()
+    src_iter.close()
+
+    ds_iter = ds.__iter__()
+    self.addCleanup(ds_iter.close)
+    if trigger_before_set_state == "start_prefetch":
+      ds_iter.start_prefetch()
+    else:
+      _ = next(ds_iter)
+
+    ds_iter.set_state(saved_state)
+
+    if trigger_after_set_state == "next":
+      self.assertEqual(next(ds_iter), 10)
+    else:
+      ds_iter.start_prefetch()
+
+    for i, event in enumerate(restored_read):
+      self.assertTrue(
+          event.wait(timeout=10),
+          msg=f"Iterator {i} did not start prefetching after set_state.",
+      )
+
 
 if __name__ == "__main__":
   absltest.main()
