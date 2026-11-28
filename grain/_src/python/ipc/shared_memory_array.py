@@ -24,6 +24,7 @@ from multiprocessing import shared_memory
 import threading
 from typing import Any, Iterable
 
+from absl import logging
 from grain._src.core import tree_lib
 import numpy as np
 import numpy.typing as npt
@@ -40,6 +41,14 @@ class SharedMemoryArrayMetadata:
     shm = shared_memory.SharedMemory(self.name)
     shm.close()
     shm.unlink()
+
+
+@dataclasses.dataclass(slots=True, frozen=True)
+class AsyncDelSettings:
+  """The settings in effect for asynchronous deletion of shared memory."""
+
+  num_threads: int
+  max_outstanding_requests: int
 
 
 def _del_shm(shm: shared_memory.SharedMemory, unlink: bool) -> None:
@@ -63,6 +72,7 @@ class SharedMemoryArray(np.ndarray):
   _lock: threading.Lock = threading.Lock()
   _del_thread_pool: pool.ThreadPool | None = None
   _outstanding_del_requests: threading.Semaphore | None = None
+  _async_del_settings: AsyncDelSettings | None = None
 
   def __new__(
       cls,
@@ -142,20 +152,54 @@ class SharedMemoryArray(np.ndarray):
         faster, but it may also lead to OOM errors or hitting file descriptor
         limits, since `max_outstanding_requests` shared memory objects and their
         associated file descriptors may be buffered before deletion.
+
+    The settings are process-wide and only the first call in a process takes
+    effect. A later call with the same settings is a no-op. A later call with
+    different settings logs a warning and leaves the settings in effect
+    unchanged; use `async_del_settings` to read them.
     """
+    requested = AsyncDelSettings(
+        num_threads=num_threads,
+        max_outstanding_requests=max(max_outstanding_requests, num_threads),
+    )
     with SharedMemoryArray._lock:
-      if not SharedMemoryArray._del_thread_pool:
-        max_outstanding_requests = max(max_outstanding_requests, num_threads)
-        SharedMemoryArray._del_thread_pool = pool.ThreadPool(num_threads)
-        SharedMemoryArray._outstanding_del_requests = threading.Semaphore(
-            max_outstanding_requests
-        )
+      if SharedMemoryArray._del_thread_pool:
+        in_effect = SharedMemoryArray._async_del_settings
+        if in_effect is not None and requested != in_effect:
+          logging.warning(
+              "enable_async_del(num_threads=%d, max_outstanding_requests=%d) "
+              "has no effect: asynchronous deletion is already enabled with "
+              "num_threads=%d, max_outstanding_requests=%d, and only the "
+              "first call in a process takes effect.",
+              requested.num_threads,
+              requested.max_outstanding_requests,
+              in_effect.num_threads,
+              in_effect.max_outstanding_requests,
+          )
+        return
+      SharedMemoryArray._del_thread_pool = pool.ThreadPool(num_threads)
+      SharedMemoryArray._outstanding_del_requests = threading.Semaphore(
+          requested.max_outstanding_requests
+      )
+      SharedMemoryArray._async_del_settings = requested
+
+  @classmethod
+  def async_del_settings(cls) -> AsyncDelSettings | None:
+    """Returns the async deletion settings in effect.
+
+    Returns:
+      The settings applied by the first `enable_async_del` call in this
+      process, or None while deletion is synchronous (async deletion has not
+      been enabled).
+    """
+    return cls._async_del_settings
 
   # For use in tests.
   @classmethod
   def _disable_async_del(cls) -> None:
     cls._del_thread_pool = None
     cls._outstanding_del_requests = None
+    cls._async_del_settings = None
 
   # Mocked in tests, so be careful refactoring.
   @classmethod

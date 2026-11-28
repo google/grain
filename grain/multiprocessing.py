@@ -19,6 +19,7 @@
 # pylint: disable=unused-import
 
 from grain._src.python.ipc.shared_memory_array import (
+    AsyncDelSettings,
     SharedMemoryArray,
     SharedMemoryArrayMetadata,
 )

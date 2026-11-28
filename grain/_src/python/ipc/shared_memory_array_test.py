@@ -203,6 +203,84 @@ class SharedMemoryArrayTest(parameterized.TestCase):
 
     self.assertTrue(outstanding_del_requests.acquire(blocking=False))
 
+  def test_async_del_settings_none_until_enabled(self):
+    SharedMemoryArray._disable_async_del()
+    self.assertIsNone(SharedMemoryArray.async_del_settings())
+
+  def test_async_del_settings_first_enable(self):
+    SharedMemoryArray._disable_async_del()
+    self.addCleanup(SharedMemoryArray._disable_async_del)
+    SharedMemoryArray.enable_async_del(
+        num_threads=2, max_outstanding_requests=8
+    )
+    self.assertEqual(
+        SharedMemoryArray.async_del_settings(),
+        shared_memory_array.AsyncDelSettings(
+            num_threads=2, max_outstanding_requests=8
+        ),
+    )
+
+  def test_async_del_settings_records_bound_raised_to_num_threads(self):
+    SharedMemoryArray._disable_async_del()
+    self.addCleanup(SharedMemoryArray._disable_async_del)
+    # The bound in effect is raised to at least num_threads; the recorded
+    # settings are the ones actually applied.
+    SharedMemoryArray.enable_async_del(
+        num_threads=4, max_outstanding_requests=2
+    )
+    self.assertEqual(
+        SharedMemoryArray.async_del_settings(),
+        shared_memory_array.AsyncDelSettings(
+            num_threads=4, max_outstanding_requests=4
+        ),
+    )
+
+  def test_async_del_reenable_same_settings_is_quiet_noop(self):
+    SharedMemoryArray._disable_async_del()
+    self.addCleanup(SharedMemoryArray._disable_async_del)
+    SharedMemoryArray.enable_async_del(
+        num_threads=2, max_outstanding_requests=8
+    )
+    with self.assertNoLogs(level="WARNING"):
+      SharedMemoryArray.enable_async_del(
+          num_threads=2, max_outstanding_requests=8
+      )
+    self.assertEqual(
+        SharedMemoryArray.async_del_settings(),
+        shared_memory_array.AsyncDelSettings(
+            num_threads=2, max_outstanding_requests=8
+        ),
+    )
+
+  def test_async_del_reenable_conflicting_settings_warns_and_keeps_first(self):
+    SharedMemoryArray._disable_async_del()
+    self.addCleanup(SharedMemoryArray._disable_async_del)
+    SharedMemoryArray.enable_async_del(max_outstanding_requests=8)
+    with self.assertLogs(level="WARNING") as logs:
+      SharedMemoryArray.enable_async_del(max_outstanding_requests=200)
+    self.assertTrue(
+        any(
+            "max_outstanding_requests=200" in line
+            and "max_outstanding_requests=8" in line
+            for line in logs.output
+        ),
+        logs.output,
+    )
+    # The first call still wins.
+    self.assertEqual(
+        SharedMemoryArray.async_del_settings(),
+        shared_memory_array.AsyncDelSettings(
+            num_threads=1, max_outstanding_requests=8
+        ),
+    )
+
+  def test_async_del_settings_cleared_on_disable(self):
+    SharedMemoryArray._disable_async_del()
+    SharedMemoryArray.enable_async_del(max_outstanding_requests=8)
+    self.assertIsNotNone(SharedMemoryArray.async_del_settings())
+    SharedMemoryArray._disable_async_del()
+    self.assertIsNone(SharedMemoryArray.async_del_settings())
+
   def test_copy_and_open_shm_single_array(self):
     arr = np.arange(10).astype(np.int32)
     shm_struct = copy_to_shm(arr)
