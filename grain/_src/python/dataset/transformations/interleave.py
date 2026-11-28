@@ -98,12 +98,14 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
   def __next__(self) -> T:
     self._assert_not_closed()
     if not self._started:
-      # `get_state()` and `set_state()` before the first `__next__` create the
-      # iterators in use without starting them (e.g. a thread prefetch on top
-      # reads the state before it starts). Start them all now. Otherwise each
-      # would only start when first read from, i.e. one after another: with
-      # `mp_prefetch` (one iterator per worker process) every worker would
-      # only start after the previous one delivered its first element.
+      # `get_state()` before the first `__next__` and `set_state()` create (or
+      # stop prefetch on) the iterators in use without starting them (e.g. a
+      # thread prefetch on top reads the state before it starts, or a
+      # checkpoint restore runs after `start_prefetch()`). Start them all now.
+      # Otherwise each would only start when first read from, i.e. one after
+      # another: with `mp_prefetch` (one iterator per worker process) every
+      # worker would only start after the previous one delivered its first
+      # element.
       self.start_prefetch()
     self._started = True
     timer = stats.Timer()
@@ -304,6 +306,7 @@ class InterleaveDatasetIterator(dataset.DatasetIterator[T]):
     self._next_index_in_datasets = state["next_index_in_datasets"]
     self._iterators_in_use_indices = state["iterators_in_use_indices"]
     self._future_states = cast(dict[int, Any], state.get("future_states", {}))
+    self._started = False
 
   def set_shard_states(self, shard_states: Sequence[Any]) -> None:
     active_states = []
